@@ -1,0 +1,31 @@
+cc_library_static {
+    name: "libpixelhealth",
+    vendor_available: true,
+    export_include_dirs: ["include"],
+
+    srcs: [
+        "LowBatteryShutdownMetrics.cpp",
+        "CycleCountBackupRestore.cpp",
+        "DeviceHealth.cpp",
+        "BatteryMetricsLogger.cpp",
+    ],
+
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+
+    static_libs: [
+        "libbatterymonitor",
+    ],
+
+    shared_libs: [
+        "hardware.google.pixelstats@1.0",
+        "libbase",
+        "libcutils",
+        "libhidlbase",
+        "libhidltransport",
+        "libhwbinder",
+        "libutils",
+    ],
+}
