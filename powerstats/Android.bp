@@ -1,0 +1,19 @@
+cc_library_static {
+    name: "libpixelpowerstats",
+    vendor_available: true,
+    export_include_dirs: ["include"],
+
+    srcs: [
+        "Debugging.cpp",
+    ],
+
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+
+    shared_libs: [
+        "android.hardware.power@1.1",
+
+    ],
+}
