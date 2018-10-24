@@ -40,7 +40,7 @@ template <typename T>
 // Return false when failed parsing
 bool getTypeFromString(const std::string &str, T *out) {
     auto types = hidl_enum_range<T>();
-    for (auto type : types) {
+    for (const auto &type : types) {
         if (toString(type) == str) {
             *out = type;
             return true;
@@ -99,39 +99,94 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
         }
 
         const size_t count = static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
-        std::array<float, count> hot_thresholds = {NAN};
-        std::array<float, count> cold_thresholds = {NAN};
+        std::array<float, count> hot_thresholds;
+        hot_thresholds.fill(NAN);
+        std::array<float, count> cold_thresholds;
+        cold_thresholds.fill(NAN);
+        std::array<float, count> hot_hysteresis;
+        hot_hysteresis.fill(0.0);
+        std::array<float, count> cold_hysteresis;
+        cold_hysteresis.fill(0.0);
 
         Json::Value hot_values = sensors[i]["HotThreshold"];
-        Json::Value cold_values = sensors[i]["ColdThreshold"];
         if (hot_values.size() != count) {
             LOG(ERROR) << "Invalid "
                        << "Sensor[" << name << "]'s HotThreshold count" << hot_values.size();
             sensors_parsed.clear();
             return sensors_parsed;
+        } else {
+            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+                if (hot_values[j].isString()) {
+                    hot_thresholds[j] = std::stof(hot_values[j].asString());
+                } else {
+                    hot_thresholds[j] = hot_values[j].asFloat();
+                }
+                LOG(INFO) << "Sensor[" << name << "]'s HotThreshold[" << j
+                          << "]: " << hot_thresholds[j];
+            }
         }
+
+        hot_values = sensors[i]["HotHysteresis"];
+        if (hot_values.size() != count) {
+            LOG(INFO) << "Cannot find valid"
+                      << "Sensor[" << name << "]'s HotHysteresis, default all to 0.0";
+        } else {
+            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+                if (hot_values[j].isString()) {
+                    hot_hysteresis[j] = std::stof(hot_values[j].asString());
+                } else {
+                    hot_hysteresis[j] = hot_values[j].asFloat();
+                }
+                if (std::isnan(hot_hysteresis[j])) {
+                    LOG(ERROR) << "Invalid "
+                               << "Sensor[" << name << "]'s HotHysteresis: " << hot_hysteresis[j];
+                    sensors_parsed.clear();
+                    return sensors_parsed;
+                }
+                LOG(INFO) << "Sensor[" << name << "]'s HotHysteresis[" << j
+                          << "]: " << hot_hysteresis[j];
+            }
+        }
+
+        Json::Value cold_values = sensors[i]["ColdThreshold"];
         if (cold_values.size() != count) {
-            LOG(ERROR) << "Invalid "
-                       << "Sensor[" << name << "]'s HotThreshold count" << cold_values.size();
-            sensors_parsed.clear();
-            return sensors_parsed;
-        }
-        for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
-            if (hot_values[j].isString()) {
-                hot_thresholds[j] = std::stof(hot_values[j].asString());
-            } else {
-                hot_thresholds[j] = hot_values[j].asFloat();
+            LOG(INFO) << "Cannot findvalid"
+                      << "Sensor[" << name << "]'s ColdThreshold, default all to NAN";
+        } else {
+            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+                if (cold_values[j].isString()) {
+                    cold_thresholds[j] = std::stof(cold_values[j].asString());
+                } else {
+                    cold_thresholds[j] = cold_values[j].asFloat();
+                }
+                LOG(INFO) << "Sensor[" << name << "]'s ColdThreshold[" << j
+                          << "]: " << cold_thresholds[j];
             }
-            if (cold_values[j].isString()) {
-                cold_thresholds[j] = std::stof(cold_values[j].asString());
-            } else {
-                cold_thresholds[j] = cold_values[j].asFloat();
-            }
-            LOG(INFO) << "Sensor[" << name << "]'s HotThreshold[" << j
-                      << "]: " << hot_thresholds[j];
-            LOG(INFO) << "Sensor[" << name << "]'s ColdThreshold[" << j
-                      << "]: " << cold_thresholds[j];
         }
+
+        cold_values = sensors[i]["ColdHysteresis"];
+        if (cold_values.size() != count) {
+            LOG(INFO) << "Cannot find valid"
+                      << "Sensor[" << name << "]'s ColdHysteresis, default all to 0.0";
+        } else {
+            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+                if (cold_values[j].isString()) {
+                    cold_hysteresis[j] = std::stof(cold_values[j].asString());
+                } else {
+                    cold_hysteresis[j] = cold_values[j].asFloat();
+                }
+                if (std::isnan(cold_hysteresis[j])) {
+                    LOG(ERROR) << "Invalid "
+                               << "Sensor[" << name
+                               << "]'s ColdHysteresis: " << cold_hysteresis[j];
+                    sensors_parsed.clear();
+                    return sensors_parsed;
+                }
+                LOG(INFO) << "Sensor[" << name << "]'s ColdHysteresis[" << j
+                          << "]: " << cold_hysteresis[j];
+            }
+        }
+
         float vr_threshold = NAN;
         if (sensors[i]["VrThreshold"].isString()) {
             vr_threshold = std::stof(sensors[i]["VrThreshold"].asString());
@@ -143,12 +198,24 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
         float multiplier = sensors[i]["Multiplier"].asFloat();
         LOG(INFO) << "Sensor[" << name << "]'s Multiplier: " << multiplier;
 
+        bool is_monitor = false;
+        if (sensors[i]["Monitor"].empty() || !sensors[i]["Monitor"].isBool()) {
+            LOG(INFO) << "Failed to read Sensor[" << name << "]'s Monitor, set to 'false'";
+        } else {
+            is_monitor = sensors[i]["Monitor"].asBool();
+        }
+        LOG(INFO) << "Sensor[" << name << "]'s Monitor: " << std::boolalpha << is_monitor
+                  << std::noboolalpha;
+
         sensors_parsed[name] = {
             .type = sensor_type,
             .hot_thresholds = hot_thresholds,
             .cold_thresholds = cold_thresholds,
+            .hot_hysteresis = hot_hysteresis,
+            .cold_hysteresis = cold_hysteresis,
             .vr_threshold = vr_threshold,
             .multiplier = multiplier,
+            .is_monitor = is_monitor,
         };
         ++total_parsed;
     }

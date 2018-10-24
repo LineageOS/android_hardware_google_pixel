@@ -38,6 +38,7 @@ constexpr char kThermalSensorsRoot[] = "/sys/devices/virtual/thermal";
 constexpr char kCpuOnlineRoot[] = "/sys/devices/system/cpu";
 constexpr char kCpuUsageFile[] = "/proc/stat";
 constexpr char kCpuOnlineFileSuffix[] = "online";
+constexpr char kCpuPresentFile[] = "/sys/devices/system/cpu/present";
 
 namespace {
 using android::base::StringPrintf;
@@ -49,23 +50,26 @@ using android::base::StringPrintf;
 // are 8 cores number from 0 to 7.
 // For Android systems this approach is safer than using cpufeatures, see bug
 // b/36941727.
-unsigned int getNumberOfCores() {
-    FILE *file = fopen("/sys/devices/system/cpu/present", "r");
-    if (file == NULL) {
-        return 1;
+std::size_t getNumberOfCores() {
+    std::string file;
+    if (!android::base::ReadFileToString(kCpuPresentFile, &file)) {
+        LOG(ERROR) << "Error reading Cpu present file: " << kCpuPresentFile;
+        return 0;
     }
-
-    int min_core = 0;
-    int max_core = 0;
-    int num_digits = fscanf(file, "%d-%d", &min_core, &max_core);
-    fclose(file);
-
-    if (num_digits < 2 || max_core < min_core) {
-        return 1;
+    std::vector<std::string> pieces = android::base::Split(file, "-");
+    if (pieces.size() != 2) {
+        LOG(ERROR) << "Error parsing Cpu present file content: " << file;
+        return 0;
     }
-    return max_core - min_core + 1;
+    auto min_core = std::stoul(pieces[0]);
+    auto max_core = std::stoul(pieces[1]);
+    if (max_core < min_core) {
+        LOG(ERROR) << "Error parsing Cpu present min and max: " << min_core << " - " << max_core;
+        return 0;
+    }
+    return static_cast<std::size_t>(max_core - min_core + 1);
 }
-const unsigned int kMaxCpus = getNumberOfCores();
+const std::size_t kMaxCpus = getNumberOfCores();
 
 void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
     uint64_t cpu_num, user, nice, system, idle;
@@ -122,17 +126,19 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
  */
 ThermalHelper::ThermalHelper(NotificationCallback cb)
     : thermal_watcher_(new ThermalWatcher()),
-      cb_(cb),
+      cb_(std::move(cb)),
       cooling_device_info_map_(ParseCoolingDevice(
           "/vendor/etc/" +
           android::base::GetProperty("vendor.thermal.config", "thermal_info_config.json"))),
       sensor_info_map_(ParseSensorInfo(
           "/vendor/etc/" +
           android::base::GetProperty("vendor.thermal.config", "thermal_info_config.json"))) {
-    for (auto const &e : sensor_info_map_) {
-        thermal_watcher_sensor_status_[e.first] = {
+    for (auto const &name_status_pair : sensor_info_map_) {
+        sensor_status_map_[name_status_pair.first] = {
             .severity = ThrottlingSeverity::NONE,
-            .last_notify_time = std::chrono::steady_clock::now()};
+            .prev_hot_severity = ThrottlingSeverity::NONE,
+            .prev_cold_severity = ThrottlingSeverity::NONE,
+        };
     }
 
     is_initialized_ = initializeSensorMap() && initializeCoolingDevices();
@@ -219,7 +225,9 @@ bool ThermalHelper::readTemperature(const std::string &sensor_name, Temperature_
     return true;
 }
 
-bool ThermalHelper::readTemperature(const std::string &sensor_name, Temperature_2_0 *out) const {
+bool ThermalHelper::readTemperature(
+    const std::string &sensor_name, Temperature_2_0 *out,
+    std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string temp;
     std::string path;
@@ -238,9 +246,25 @@ bool ThermalHelper::readTemperature(const std::string &sensor_name, Temperature_
     out->type = sensor_info.type;
     out->name = sensor_name;
     out->value = std::stof(temp) * sensor_info.multiplier;
-    out->throttlingStatus = getSeverityFromThresholds(sensor_info.hot_thresholds,
-                                                      sensor_info.cold_thresholds, out->value);
 
+    ThrottlingSeverity prev_hot_severity, prev_cold_severity;
+    {
+        // reader lock, readTemperature will be called in Binder call and the watcher thread.
+        std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
+        prev_hot_severity = sensor_status_map_.at(sensor_name).prev_hot_severity;
+        prev_cold_severity = sensor_status_map_.at(sensor_name).prev_cold_severity;
+    }
+
+    std::pair<ThrottlingSeverity, ThrottlingSeverity> status = getSeverityFromThresholds(
+        sensor_info.hot_thresholds, sensor_info.cold_thresholds, sensor_info.hot_hysteresis,
+        sensor_info.cold_hysteresis, prev_hot_severity, prev_cold_severity, out->value);
+
+    out->throttlingStatus = static_cast<size_t>(status.first) > static_cast<size_t>(status.second)
+                                ? status.first
+                                : status.second;
+    if (throtting_status) {
+        *throtting_status = status;
+    }
     return true;
 }
 
@@ -265,34 +289,45 @@ bool ThermalHelper::readTemperatureThreshold(const std::string &sensor_name,
     return true;
 }
 
-ThrottlingSeverity ThermalHelper::getSeverityFromThresholds(
-    std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>
-        hot_thresholds,
-    std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>
-        cold_thresholds,
+std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFromThresholds(
+    const ThrottlingArray &hot_thresholds, const ThrottlingArray &cold_thresholds,
+    const ThrottlingArray &hot_hysteresis, const ThrottlingArray &cold_hysteresis,
+    ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
     float value) const {
-    size_t i = static_cast<size_t>(ThrottlingSeverity::SHUTDOWN);
     ThrottlingSeverity ret_hot = ThrottlingSeverity::NONE;
-    while (i > static_cast<size_t>(ThrottlingSeverity::NONE)) {
-        if (!std::isnan(hot_thresholds[i]) && hot_thresholds[i] <= value) {
-            ret_hot = static_cast<ThrottlingSeverity>(i);
-            break;
-        }
-        --i;
-    }
-    i = static_cast<size_t>(ThrottlingSeverity::SHUTDOWN);
+    ThrottlingSeverity ret_hot_hysteresis = ThrottlingSeverity::NONE;
     ThrottlingSeverity ret_cold = ThrottlingSeverity::NONE;
-    while (i > static_cast<size_t>(ThrottlingSeverity::NONE)) {
-        if (!std::isnan(cold_thresholds[i]) && cold_thresholds[i] >= value) {
-            ret_cold = static_cast<ThrottlingSeverity>(i);
-            break;
+    ThrottlingSeverity ret_cold_hysteresis = ThrottlingSeverity::NONE;
+
+    // Here we want to control the iteration from high to low, and hidl_enum_range doesn't support
+    // a reverse iterator yet.
+    for (size_t i = static_cast<size_t>(ThrottlingSeverity::SHUTDOWN);
+         i > static_cast<size_t>(ThrottlingSeverity::NONE); --i) {
+        if (!std::isnan(hot_thresholds[i]) && hot_thresholds[i] <= value &&
+            ret_hot == ThrottlingSeverity::NONE) {
+            ret_hot = static_cast<ThrottlingSeverity>(i);
         }
-        --i;
+        if (!std::isnan(hot_thresholds[i]) && (hot_thresholds[i] - hot_hysteresis[i]) < value &&
+            ret_hot_hysteresis == ThrottlingSeverity::NONE) {
+            ret_hot_hysteresis = static_cast<ThrottlingSeverity>(i);
+        }
+        if (!std::isnan(cold_thresholds[i]) && cold_thresholds[i] >= value &&
+            ret_cold == ThrottlingSeverity::NONE) {
+            ret_cold = static_cast<ThrottlingSeverity>(i);
+        }
+        if (!std::isnan(cold_thresholds[i]) && (cold_thresholds[i] + cold_hysteresis[i]) > value &&
+            ret_cold_hysteresis == ThrottlingSeverity::NONE) {
+            ret_cold_hysteresis = static_cast<ThrottlingSeverity>(i);
+        }
+    }
+    if (static_cast<size_t>(ret_hot) < static_cast<size_t>(prev_hot_severity)) {
+        ret_hot = ret_hot_hysteresis;
+    }
+    if (static_cast<size_t>(ret_cold) < static_cast<size_t>(prev_cold_severity)) {
+        ret_cold = ret_cold_hysteresis;
     }
 
-    ThrottlingSeverity ret =
-        static_cast<size_t>(ret_cold) > static_cast<size_t>(ret_hot) ? ret_cold : ret_hot;
-    return ret;
+    return std::make_pair(ret_hot, ret_cold);
 }
 
 bool ThermalHelper::initializeSensorMap() {
@@ -411,29 +446,21 @@ bool ThermalHelper::fillCpuUsages(hidl_vec<CpuUsage> *cpu_usages) const {
     return true;
 }
 
-// This is called in the different thread context and is updating sensor_status.severity
-// and sensor_status.last_notify_time
+// This is called in the different thread context and will update sensor_status
 void ThermalHelper::thermalWatcherCallbackFunc(const std::string &, const int) {
     std::vector<Temperature_2_0> temps;
-    for (auto &name_status_pair : thermal_watcher_sensor_status_) {
+    for (auto &name_status_pair : sensor_status_map_) {
         Temperature_2_0 temp;
         TemperatureThreshold threshold;
         SensorStatus &sensor_status = name_status_pair.second;
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
-        // Only send SKIN type notification can be extended per need
-        if (sensor_info.type != TemperatureType_2_0::SKIN) {
-            continue;
-        }
-        // Rate limit to 20s for each sensor type notification
-        static constexpr int kMaxUpdateIntervalMs = 20000;
-        auto now = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - sensor_status.last_notify_time);
-        if (duration <= std::chrono::milliseconds(kMaxUpdateIntervalMs)) {
+        // Only send notification on whitelisted sensors
+        if (!sensor_info.is_monitor) {
             continue;
         }
 
-        if (!readTemperature(name_status_pair.first, &temp)) {
+        std::pair<ThrottlingSeverity, ThrottlingSeverity> throtting_status;
+        if (!readTemperature(name_status_pair.first, &temp, &throtting_status)) {
             LOG(ERROR) << __func__
                        << ": error reading temperature for sensor: " << name_status_pair.first;
             continue;
@@ -443,10 +470,20 @@ void ThermalHelper::thermalWatcherCallbackFunc(const std::string &, const int) {
                        << name_status_pair.first;
             continue;
         }
-        if (temp.throttlingStatus != sensor_status.severity) {
-            temps.push_back(temp);
-            sensor_status.severity = temp.throttlingStatus;
-            sensor_status.last_notify_time = now;
+
+        {
+            // writer lock
+            std::unique_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
+            if (throtting_status.first != sensor_status.prev_hot_severity) {
+                sensor_status.prev_hot_severity = throtting_status.first;
+            }
+            if (throtting_status.second != sensor_status.prev_cold_severity) {
+                sensor_status.prev_cold_severity = throtting_status.second;
+            }
+            if (temp.throttlingStatus != sensor_status.severity) {
+                temps.push_back(temp);
+                sensor_status.severity = temp.throttlingStatus;
+            }
         }
     }
     if (!temps.empty() && cb_) {

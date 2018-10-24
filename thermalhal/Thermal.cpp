@@ -340,6 +340,35 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                              << std::endl;
                 }
             }
+            {
+                dump_buf << "getHysteresis:" << std::endl;
+                const auto &map = thermal_helper_.GetSensorInfoMap();
+                for (const auto &name_info_pair : map) {
+                    dump_buf << " Name: " << name_info_pair.first;
+                    dump_buf << " hotHysteresis: [";
+                    for (size_t i = 0;
+                         i < static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
+                         ++i) {
+                        dump_buf << name_info_pair.second.hot_hysteresis[i] << " ";
+                    }
+                    dump_buf << "] coldHysteresis: [";
+                    for (size_t i = 0;
+                         i < static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
+                         ++i) {
+                        dump_buf << name_info_pair.second.cold_hysteresis[i] << " ";
+                    }
+                    dump_buf << "]" << std::endl;
+                }
+            }
+            {
+                dump_buf << "Monitor:" << std::endl;
+                const auto &map = thermal_helper_.GetSensorInfoMap();
+                for (const auto &name_info_pair : map) {
+                    dump_buf << " Name: " << name_info_pair.first;
+                    dump_buf << " Monitor: " << std::boolalpha << name_info_pair.second.is_monitor
+                             << std::noboolalpha << std::endl;
+                }
+            }
         }
         std::string buf = dump_buf.str();
         if (!android::base::WriteStringToFd(buf, fd)) {

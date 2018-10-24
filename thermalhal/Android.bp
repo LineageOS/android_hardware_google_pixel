@@ -1,5 +1,6 @@
 cc_binary {
   name: "android.hardware.thermal@2.0-service.pixel",
+  cpp_std: "c++17",
   defaults: [
     "hidl_defaults",
   ],
@@ -32,5 +33,14 @@ cc_binary {
   cflags: [
     "-Wall",
     "-Werror",
+  ],
+  tidy: true,
+  tidy_checks: [
+    "android-*",
+    "cert-*",
+    "clang-analyzer-security*",
+  ],
+  tidy_flags: [
+      "-warnings-as-errors=android-*,clang-analyzer-security*,cert-*"
   ],
 }

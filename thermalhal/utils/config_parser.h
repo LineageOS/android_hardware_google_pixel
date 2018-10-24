@@ -31,15 +31,18 @@ namespace implementation {
 using ::android::hardware::thermal::V2_0::CoolingType;
 using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
 using ::android::hardware::thermal::V2_0::ThrottlingSeverityCount;
+using ThrottlingArray =
+    std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>;
 
 struct SensorInfo {
     TemperatureType_2_0 type;
-    std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>
-        hot_thresholds;
-    std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>
-        cold_thresholds;
+    ThrottlingArray hot_thresholds;
+    ThrottlingArray cold_thresholds;
+    ThrottlingArray hot_hysteresis;
+    ThrottlingArray cold_hysteresis;
     float vr_threshold;
     float multiplier;
+    bool is_monitor;
 };
 
 std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path);

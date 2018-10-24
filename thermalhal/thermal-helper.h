@@ -33,6 +33,7 @@
 #include <array>
 #include <chrono>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -70,7 +71,8 @@ using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
 
 struct SensorStatus {
     ThrottlingSeverity severity;
-    NotificationTime last_notify_time;
+    ThrottlingSeverity prev_hot_severity;
+    ThrottlingSeverity prev_cold_severity;
 };
 
 class ThermalHelper {
@@ -99,19 +101,25 @@ class ThermalHelper {
 
     // Read the temperature of a single sensor.
     bool readTemperature(const std::string &sensor_name, Temperature_1_0 *out) const;
-    bool readTemperature(const std::string &sensor_name, Temperature_2_0 *out) const;
+    bool readTemperature(
+        const std::string &sensor_name, Temperature_2_0 *out,
+        std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr) const;
     bool readTemperatureThreshold(const std::string &sensor_name, TemperatureThreshold *out) const;
     // Read the value of a single cooling device.
     bool readCoolingDevice(const std::string &cooling_device, CoolingDevice_2_0 *out) const;
+    // Get SensorInfo Map
+    const std::map<std::string, SensorInfo> &GetSensorInfoMap() const { return sensor_info_map_; }
 
   private:
     bool initializeSensorMap();
     bool initializeCoolingDevices();
-    ThrottlingSeverity getSeverityFromThresholds(
-        std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>
-            hot_thresholds,
-        std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>
-            cold_thresholds,
+    // For thermal_watcher_'s polling thread
+    void thermalWatcherCallbackFunc(const std::string &, const int);
+    // Return hot and cold severity status as std::pair
+    std::pair<ThrottlingSeverity, ThrottlingSeverity> getSeverityFromThresholds(
+        const ThrottlingArray &hot_thresholds, const ThrottlingArray &cold_thresholds,
+        const ThrottlingArray &hot_hysteresis, const ThrottlingArray &cold_hysteresis,
+        ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
         float value) const;
 
     sp<ThermalWatcher> thermal_watcher_;
@@ -122,9 +130,8 @@ class ThermalHelper {
     const std::map<std::string, CoolingType> cooling_device_info_map_;
     const std::map<std::string, SensorInfo> sensor_info_map_;
 
-    // used in thermalWatcherCallbackFunc only
-    std::map<std::string, SensorStatus> thermal_watcher_sensor_status_;
-    void thermalWatcherCallbackFunc(const std::string &, const int);
+    mutable std::shared_mutex sensor_status_map_mutex_;
+    std::map<std::string, SensorStatus> sensor_status_map_;
 };
 
 }  // namespace implementation
