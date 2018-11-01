@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <android/frameworks/stats/1.0/IStats.h>
 #include <pixelhealth/BatteryMetricsLogger.h>
 
 namespace hardware {
@@ -22,10 +23,10 @@ namespace google {
 namespace pixel {
 namespace health {
 
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
-using BatteryHealthSnapshotArgs =
-    ::hardware::google::pixelstats::V1_0::IPixelStats::BatteryHealthSnapshotArgs;
 using android::sp;
+using android::frameworks::stats::V1_0::BatteryHealthSnapshotArgs;
+using android::frameworks::stats::V1_0::IStats;
+using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 BatteryMetricsLogger::BatteryMetricsLogger(const char *const batt_res, const char *const batt_ocv,
                                            int sample_period, int upload_period)
@@ -47,30 +48,57 @@ int64_t BatteryMetricsLogger::getTime(void) {
     return nanoseconds_to_seconds(systemTime(SYSTEM_TIME_BOOTTIME));
 }
 
-bool BatteryMetricsLogger::uploadOutlierMetric(sp<IPixelStats> client, sampleType type) {
-    BatteryHealthSnapshotArgs min_ss = {static_cast<BatterySnapshotType>(0),
-                                        min_[type][TEMP],
-                                        min_[type][VOLT],
-                                        min_[type][CURR],
-                                        min_[type][OCV],
-                                        min_[type][RES],
-                                        min_[type][SOC]};
-    BatteryHealthSnapshotArgs max_ss = {static_cast<BatterySnapshotType>(0),
-                                        max_[type][TEMP],
-                                        max_[type][VOLT],
-                                        max_[type][CURR],
-                                        max_[type][OCV],
-                                        max_[type][RES],
-                                        max_[type][SOC]};
+bool BatteryMetricsLogger::uploadOutlierMetric(sp<IPixelStats> client, sp<IStats> stats_client,
+                                               sampleType type) {
+    IPixelStats::BatteryHealthSnapshotArgs min_ss = {
+        .type = static_cast<IPixelStats::BatterySnapshotType>(0),
+        .temperatureDeciC = min_[type][TEMP],
+        .voltageMicroV = min_[type][VOLT],
+        .currentMicroA = min_[type][CURR],
+        .openCircuitVoltageMicroV = min_[type][OCV],
+        .resistanceMicroOhm = min_[type][RES],
+        .levelPercent = min_[type][SOC]};
+    IPixelStats::BatteryHealthSnapshotArgs max_ss = {
+        .type = static_cast<IPixelStats::BatterySnapshotType>(0),
+        .temperatureDeciC = max_[type][TEMP],
+        .voltageMicroV = max_[type][VOLT],
+        .currentMicroA = max_[type][CURR],
+        .openCircuitVoltageMicroV = max_[type][OCV],
+        .resistanceMicroOhm = max_[type][RES],
+        .levelPercent = max_[type][SOC]};
 
+    BatteryHealthSnapshotArgs min_stats_ss = {
+        .type = static_cast<BatteryHealthSnapshotArgs::BatterySnapshotType>(0),
+        .temperatureDeciC = min_[type][TEMP],
+        .voltageMicroV = min_[type][VOLT],
+        .currentMicroA = min_[type][CURR],
+        .openCircuitVoltageMicroV = min_[type][OCV],
+        .resistanceMicroOhm = min_[type][RES],
+        .levelPercent = min_[type][SOC]};
+    BatteryHealthSnapshotArgs max_stats_ss = {
+        .type = static_cast<BatteryHealthSnapshotArgs::BatterySnapshotType>(0),
+        .temperatureDeciC = max_[type][TEMP],
+        .voltageMicroV = max_[type][VOLT],
+        .currentMicroA = max_[type][CURR],
+        .openCircuitVoltageMicroV = max_[type][OCV],
+        .resistanceMicroOhm = max_[type][RES],
+        .levelPercent = max_[type][SOC]};
     if (kSnapshotType[type] < 0)
         return false;
 
-    min_ss.type = (BatterySnapshotType)kSnapshotType[type];
-    max_ss.type = (BatterySnapshotType)(kSnapshotType[type] + 1);
+    min_ss.type = (IPixelStats::BatterySnapshotType)kSnapshotType[type];
+    max_ss.type = (IPixelStats::BatterySnapshotType)(kSnapshotType[type] + 1);
+
+    min_stats_ss.type = (BatteryHealthSnapshotArgs::BatterySnapshotType)kStatsSnapshotType[type];
+    max_stats_ss.type =
+        (BatteryHealthSnapshotArgs::BatterySnapshotType)(kStatsSnapshotType[type] + 1);
 
     client->reportBatteryHealthSnapshot(min_ss);
     client->reportBatteryHealthSnapshot(max_ss);
+
+    stats_client->reportBatteryHealthSnapshot(min_stats_ss);
+    stats_client->reportBatteryHealthSnapshot(max_stats_ss);
+
     return true;
 }
 
@@ -87,7 +115,13 @@ bool BatteryMetricsLogger::uploadMetrics(void) {
     if (num_res_samples_)
         avg_resistance = accum_resistance_ / num_res_samples_;
 
-    LOG(INFO) << "Logging metrics to tron";
+    LOG(INFO) << "Logging metrics";
+
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (!stats_client) {
+        LOG(ERROR) << "Unable to connect to Stats service";
+        return false;
+    }
 
     sp<IPixelStats> client = IPixelStats::tryGetService();
     if (!client) {
@@ -108,14 +142,30 @@ bool BatteryMetricsLogger::uploadMetrics(void) {
         LOG(INFO) << log_min;
         LOG(INFO) << log_max;
         // Upload min/max metrics
-        uploadOutlierMetric(client, static_cast<sampleType>(metric));
+        uploadOutlierMetric(client, stats_client, static_cast<sampleType>(metric));
     }
 
     // Upload average metric
-    BatteryHealthSnapshotArgs avg_res_ss = {
-        BatterySnapshotType::AVG_RESISTANCE, 0, 0, 0, 0, avg_resistance, 0};
-    if (num_res_samples_)
+    IPixelStats::BatteryHealthSnapshotArgs avg_res_ss = {
+        .type = IPixelStats::BatterySnapshotType::AVG_RESISTANCE,
+        .temperatureDeciC = 0,
+        .voltageMicroV = 0,
+        .currentMicroA = 0,
+        .openCircuitVoltageMicroV = 0,
+        .resistanceMicroOhm = avg_resistance,
+        .levelPercent = 0};
+    BatteryHealthSnapshotArgs avg_res_ss_stats = {
+        .type = BatteryHealthSnapshotArgs::BatterySnapshotType::AVG_RESISTANCE,
+        .temperatureDeciC = 0,
+        .voltageMicroV = 0,
+        .currentMicroA = 0,
+        .openCircuitVoltageMicroV = 0,
+        .resistanceMicroOhm = avg_resistance,
+        .levelPercent = 0};
+    if (num_res_samples_) {
         client->reportBatteryHealthSnapshot(avg_res_ss);
+        stats_client->reportBatteryHealthSnapshot(avg_res_ss_stats);
+    }
 
     // Clear existing data
     memset(min_, 0, sizeof(min_));
@@ -149,13 +199,13 @@ bool BatteryMetricsLogger::recordSample(struct android::BatteryProperties *props
         LOG(ERROR) << "Can't parse open-circuit voltage (ocv) value " << ocv_str;
     }
 
-    int32_t sample[NUM_FIELDS] = {time,
-                                  resistance,
-                                  props->batteryCurrent,
-                                  props->batteryVoltage,
-                                  props->batteryTemperature,
-                                  props->batteryLevel,
-                                  ocv};
+    int32_t sample[NUM_FIELDS] = {[TIME] = time,
+                                  [RES] = resistance,
+                                  [CURR] = props->batteryCurrent,
+                                  [VOLT] = props->batteryVoltage,
+                                  [TEMP] = props->batteryTemperature,
+                                  [SOC] = props->batteryLevel,
+                                  [OCV] = ocv};
     if (props->batteryStatus != android::BATTERY_STATUS_CHARGING) {
         accum_resistance_ += resistance;
         num_res_samples_++;

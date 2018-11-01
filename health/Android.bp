@@ -1,6 +1,6 @@
-cc_library_static {
+cc_library {
     name: "libpixelhealth",
-    vendor_available: true,
+    vendor: true,
     export_include_dirs: ["include"],
 
     srcs: [
@@ -19,7 +19,12 @@ cc_library_static {
         "libbatterymonitor",
     ],
 
+    export_shared_lib_headers: [
+        "android.frameworks.stats@1.0",
+    ],
+
     shared_libs: [
+        "android.frameworks.stats@1.0",
         "hardware.google.pixelstats@1.0",
         "libbase",
         "libcutils",
