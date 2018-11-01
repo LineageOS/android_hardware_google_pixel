@@ -21,6 +21,7 @@
 #include <android-base/file.h>
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
+#include <android/frameworks/stats/1.0/IStats.h>
 #include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #include <utils/Log.h>
 #include <utils/StrongPointer.h>
@@ -36,6 +37,11 @@ namespace pixel {
 
 using android::sp;
 using android::base::ReadFileToString;
+using android::frameworks::stats::V1_0::ChargeCycles;
+using android::frameworks::stats::V1_0::HardwareFailed;
+using android::frameworks::stats::V1_0::IStats;
+using android::frameworks::stats::V1_0::SlowIo;
+using android::frameworks::stats::V1_0::SpeakerImpedance;
 using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
@@ -83,13 +89,18 @@ void SysfsCollector::logCodecFailed() {
     if (file_contents == "0") {
         return;
     } else {
+        HardwareFailed failed = {.hardwareType = HardwareFailed::HardwareType::CODEC,
+                                 .hardwareLocation = 0,
+                                 .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
+        stats_->reportHardwareFailed(failed);
         pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 0,
                                           IPixelStats::HardwareErrorCode::COMPLETE);
     }
 }
 
 void SysfsCollector::reportSlowIoFromFile(const char *path,
-                                          const IPixelStats::IoOperation &operation) {
+                                          const IPixelStats::IoOperation &operation,
+                                          const SlowIo::IoOperation &operation_s) {
     std::string file_contents;
     if (strlen(path) == 0) {
         ALOGV("slow_io path not specified");
@@ -103,6 +114,8 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
         if (sscanf(file_contents.c_str(), "%d", &slow_io_count) != 1) {
             ALOGE("Unable to parse %s from file %s to int.", file_contents.c_str(), path);
         } else if (slow_io_count > 0) {
+            SlowIo slowio = {.operation = operation_s, .count = slow_io_count};
+            stats_->reportSlowIo(slowio);
             pixelstats_->reportSlowIo(operation, slow_io_count);
         }
         // Clear the stats
@@ -116,10 +129,14 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
  * Check for slow IO operations.
  */
 void SysfsCollector::logSlowIO() {
-    reportSlowIoFromFile(kSlowioReadCntPath, IPixelStats::IoOperation::READ);
-    reportSlowIoFromFile(kSlowioWriteCntPath, IPixelStats::IoOperation::WRITE);
-    reportSlowIoFromFile(kSlowioUnmapCntPath, IPixelStats::IoOperation::UNMAP);
-    reportSlowIoFromFile(kSlowioSyncCntPath, IPixelStats::IoOperation::SYNC);
+    reportSlowIoFromFile(kSlowioReadCntPath, IPixelStats::IoOperation::READ,
+                         SlowIo::IoOperation::READ);
+    reportSlowIoFromFile(kSlowioWriteCntPath, IPixelStats::IoOperation::WRITE,
+                         SlowIo::IoOperation::WRITE);
+    reportSlowIoFromFile(kSlowioUnmapCntPath, IPixelStats::IoOperation::UNMAP,
+                         SlowIo::IoOperation::UNMAP);
+    reportSlowIoFromFile(kSlowioSyncCntPath, IPixelStats::IoOperation::SYNC,
+                         SlowIo::IoOperation::SYNC);
 }
 
 /**
@@ -141,11 +158,22 @@ void SysfsCollector::logSpeakerImpedance() {
         ALOGE("Unable to parse speaker impedance %s", file_contents.c_str());
         return;
     }
+    SpeakerImpedance left_obj = {.speakerLocation = 0,
+                                 .milliOhms = static_cast<int32_t>(left * 1000)};
+    SpeakerImpedance right_obj = {.speakerLocation = 0,
+                                  .milliOhms = static_cast<int32_t>(right * 1000)};
+    stats_->reportSpeakerImpedance(left_obj);
+    stats_->reportSpeakerImpedance(right_obj);
     pixelstats_->reportSpeakerImpedance(0, left * 1000);
     pixelstats_->reportSpeakerImpedance(1, right * 1000);
 }
 
 void SysfsCollector::logAll() {
+    stats_ = IStats::tryGetService();
+    if (!stats_) {
+        ALOGE("Unable to connect to Stats service");
+        return;
+    }
     pixelstats_ = IPixelStats::tryGetService();
     if (!pixelstats_) {
         ALOGE("Unable to connect to PixelStats service");

@@ -28,6 +28,7 @@ cc_library {
     "-Werror",
   ],
   shared_libs: [
+    "android.frameworks.stats@1.0",
     "hardware.google.pixelstats@1.0",
     "libbase",
     "libbinder",
@@ -36,6 +37,9 @@ cc_library {
     "libhidltransport",
     "liblog",
     "libutils",
+  ],
+  export_shared_lib_headers: [
+    "android.frameworks.stats@1.0",
   ],
   static_libs: ["chre_client"],
   header_libs: ["chre_api"],
