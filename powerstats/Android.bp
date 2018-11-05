@@ -5,6 +5,7 @@ cc_library_static {
 
     srcs: [
         "Debugging.cpp",
+        "PowerStats.cpp"
     ],
 
     cflags: [
@@ -14,6 +15,6 @@ cc_library_static {
 
     shared_libs: [
         "android.hardware.power@1.1",
-
+        "android.hardware.power.stats@1.0"
     ],
 }
