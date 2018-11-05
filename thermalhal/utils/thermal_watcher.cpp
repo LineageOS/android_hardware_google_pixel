@@ -35,12 +35,10 @@ namespace implementation {
 
 using std::chrono_literals::operator""ms;
 
-void ThermalWatcher::registerFilesToWatch(const std::vector<std::string> files_to_watch) {
+void ThermalWatcher::registerFilesToWatch(const std::vector<std::string> &files_to_watch) {
     int flags = O_RDONLY | O_CLOEXEC | O_BINARY;
 
     for (const auto &path : files_to_watch) {
-        std::lock_guard<std::mutex> _lock(watcher_mutex_);
-
         android::base::unique_fd fd(TEMP_FAILURE_RETRY(open(path.c_str(), flags)));
         if (fd == -1) {
             PLOG(ERROR) << "failed to watch: " << path;
@@ -66,11 +64,6 @@ bool ThermalWatcher::startWatchingDeviceFiles() {
     return false;
 }
 
-void ThermalWatcher::registerCallback(WatcherCallback cb) {
-    std::lock_guard<std::mutex> _lock(watcher_mutex_);
-    cb_ = cb;
-}
-
 void ThermalWatcher::wake() {
     looper_->wake();
 }
@@ -84,10 +77,7 @@ bool ThermalWatcher::threadLoop() {
     if (fd > 0) {
         path = watch_to_file_path_map_.at(fd);
     }
-    {
-        std::lock_guard<std::mutex> _lock(watcher_mutex_);
-        cb_(path, fd);
-    }
+    cb_(path, fd);
     return true;
 }
 

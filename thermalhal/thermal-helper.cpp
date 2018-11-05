@@ -124,9 +124,11 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
  * reading the type file and assigning the temp file path to the map.  If we do
  * not succeed, abort.
  */
-ThermalHelper::ThermalHelper(NotificationCallback cb)
-    : thermal_watcher_(new ThermalWatcher()),
-      cb_(std::move(cb)),
+ThermalHelper::ThermalHelper(const NotificationCallback &cb)
+    : thermal_watcher_(
+          new ThermalWatcher(std::bind(&ThermalHelper::thermalWatcherCallbackFunc, this,
+                                       std::placeholders::_1, std::placeholders::_2))),
+      cb_(cb),
       cooling_device_info_map_(ParseCoolingDevice(
           "/vendor/etc/" +
           android::base::GetProperty("vendor.thermal.config", "thermal_info_config.json"))),
@@ -153,8 +155,6 @@ ThermalHelper::ThermalHelper(NotificationCallback cb)
         }
     }
     thermal_watcher_->registerFilesToWatch(paths);
-    thermal_watcher_->registerCallback(std::bind(&ThermalHelper::thermalWatcherCallbackFunc, this,
-                                                 std::placeholders::_1, std::placeholders::_2));
     // Need start watching after status map initialized
     is_initialized_ = thermal_watcher_->startWatchingDeviceFiles();
     if (!is_initialized_) {

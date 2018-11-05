@@ -42,7 +42,8 @@ using WatcherCallback = std::function<void(const std::string &path, const int fd
 /* A helper class to watch modifications to files. */
 class ThermalWatcher : public ::android::Thread {
   public:
-    ThermalWatcher() : Thread(false), looper_(new Looper(true)) {}
+    ThermalWatcher(const WatcherCallback &cb)
+        : Thread(false), cb_(cb), looper_(new Looper(true)) {}
     ~ThermalWatcher() = default;
 
     // Disallow copy and assign.
@@ -53,10 +54,8 @@ class ThermalWatcher : public ::android::Thread {
     bool startWatchingDeviceFiles();
     // Give the file watcher a list of files to start watching. This helper
     // class will by default wait for modifications to the file with a looper.
-    void registerFilesToWatch(const std::vector<std::string> files_to_watch);
-    // Give the file watcher a callback to be called when processing the data
-    // read from the watched changes list.
-    void registerCallback(WatcherCallback cb);
+    // This should be called before starting watcher thread.
+    void registerFilesToWatch(const std::vector<std::string> &files_to_watch);
     // Wake up the looper thus the worker thread, immediately. This can be called
     // in any thread.
     void wake();
@@ -76,10 +75,7 @@ class ThermalWatcher : public ::android::Thread {
     // function passed in should expect a pair of strings in the form
     // (path, data). Where path is the path of the file that saw a modification
     // and data was the modification. Callback will return a time for next polling.
-    WatcherCallback cb_;
-
-    // Variables shared between the watcher and consumer threads.
-    std::mutex watcher_mutex_;
+    const WatcherCallback cb_;
 
     sp<Looper> looper_;
 };
