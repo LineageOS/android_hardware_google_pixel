@@ -10,13 +10,16 @@ namespace google {
 namespace pixel {
 namespace powerstats {
 
-using ::android::hardware::hidl_vec;
-using ::android::hardware::Return;
-using ::android::hardware::Void;
-using ::android::hardware::power::stats::V1_0::EnergyData;
-using ::android::hardware::power::stats::V1_0::IPowerStats;
-using ::android::hardware::power::stats::V1_0::RailInfo;
-using ::android::hardware::power::stats::V1_0::Status;
+using android::hardware::hidl_vec;
+using android::hardware::Return;
+using android::hardware::Void;
+using android::hardware::power::stats::V1_0::EnergyData;
+using android::hardware::power::stats::V1_0::IPowerStats;
+using android::hardware::power::stats::V1_0::PowerEntityInfo;
+using android::hardware::power::stats::V1_0::PowerEntityStateInfo;
+using android::hardware::power::stats::V1_0::PowerEntityType;
+using android::hardware::power::stats::V1_0::RailInfo;
+using android::hardware::power::stats::V1_0::Status;
 
 class IRailDataProvider {
   public:
@@ -28,6 +31,12 @@ class IRailDataProvider {
                                           IPowerStats::streamEnergyData_cb _hidl_cb) = 0;
 };
 
+class PowerEntityConfig {
+  public:
+    PowerEntityConfig(std::vector<PowerEntityInfo> infos);
+    std::vector<PowerEntityInfo> mPowerEntityInfos;
+};
+
 }  // namespace powerstats
 }  // namespace pixel
 }  // namespace google
@@ -37,12 +46,14 @@ namespace stats {
 namespace V1_0 {
 namespace implementation {
 
-using ::android::hardware::google::pixel::powerstats::IRailDataProvider;
+using android::hardware::google::pixel::powerstats::IRailDataProvider;
+using android::hardware::google::pixel::powerstats::PowerEntityConfig;
 
 class PowerStats : public IPowerStats {
   public:
     PowerStats();
     void setRailDataProvider(std::unique_ptr<IRailDataProvider> r);
+    void setPowerEntityConfig(std::unique_ptr<PowerEntityConfig> c);
 
     // Methods from ::android::hardware::power::stats::V1_0::IPowerStats follow.
     Return<void> getRailInfo(getRailInfo_cb _hidl_cb) override;
@@ -59,6 +70,7 @@ class PowerStats : public IPowerStats {
 
   private:
     std::unique_ptr<IRailDataProvider> mRailDataProvider;
+    std::unique_ptr<PowerEntityConfig> mPowerEntityCfg;
 };
 
 }  // namespace implementation
