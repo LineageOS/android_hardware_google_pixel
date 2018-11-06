@@ -77,7 +77,7 @@ struct SensorStatus {
 
 class ThermalHelper {
   public:
-    ThermalHelper(NotificationCallback cb);
+    ThermalHelper(const NotificationCallback &cb);
     ~ThermalHelper() = default;
 
     bool fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) const;
@@ -126,7 +126,7 @@ class ThermalHelper {
     Sensors thermal_sensors_;
     CoolingDevices cooling_devices_;
     bool is_initialized_;
-    NotificationCallback cb_;
+    const NotificationCallback cb_;
     const std::map<std::string, CoolingType> cooling_device_info_map_;
     const std::map<std::string, SensorInfo> sensor_info_map_;
 
