@@ -21,18 +21,6 @@
 
 namespace android {
 namespace hardware {
-
-namespace google {
-namespace pixel {
-namespace powerstats {
-
-PowerEntityConfig::PowerEntityConfig(std::vector<PowerEntityInfo> infos)
-    : mPowerEntityInfos(infos) {}
-
-}  // namespace powerstats
-}  // namespace pixel
-}  // namespace google
-
 namespace power {
 namespace stats {
 namespace V1_0 {
@@ -40,12 +28,28 @@ namespace implementation {
 
 PowerStats::PowerStats() = default;
 
-void PowerStats::setRailDataProvider(std::unique_ptr<IRailDataProvider> r) {
-    mRailDataProvider = std::move(r);
+void PowerStats::setRailDataProvider(std::unique_ptr<IRailDataProvider> dataProvider) {
+    mRailDataProvider = std::move(dataProvider);
 }
 
-void PowerStats::setPowerEntityConfig(std::unique_ptr<PowerEntityConfig> c) {
-    mPowerEntityCfg = std::move(c);
+void PowerStats::setPowerEntityConfig(const std::vector<PowerEntityConfig> &configs) {
+    for (uint32_t i = 0; i < configs.size(); ++i) {
+        auto &entityConfig = configs[i];
+
+        // Inserting each PowerEntityInfo into mPowerEntityInfos
+        mPowerEntityInfos.push_back({i, entityConfig.name, entityConfig.type});
+
+        if (!entityConfig.states.empty()) {
+            // Inserting each PowerEntityStateSpace into mPowerEntityStateSpaces
+            mPowerEntityStateSpaces[i] = {i, {}};
+
+            // Inserting each PowerEntityStateInfo into its corresponding PowerEntityStateSpace
+            mPowerEntityStateSpaces[i].states.resize(entityConfig.states.size());
+            for (uint32_t j = 0; j < entityConfig.states.size(); ++j) {
+                mPowerEntityStateSpaces[i].states[j] = {j, entityConfig.states[j]};
+            }
+        }
+    }
 }
 
 Return<void> PowerStats::getRailInfo(getRailInfo_cb _hidl_cb) {
@@ -78,18 +82,39 @@ Return<void> PowerStats::streamEnergyData(uint32_t timeMs, uint32_t samplingRate
 }
 
 Return<void> PowerStats::getPowerEntityInfo(getPowerEntityInfo_cb _hidl_cb) {
-    if (mPowerEntityCfg) {
-        _hidl_cb(mPowerEntityCfg->mPowerEntityInfos, Status::SUCCESS);
-    } else {
-        _hidl_cb({}, Status::NOT_SUPPORTED);
-    }
+    _hidl_cb(mPowerEntityInfos,
+             mPowerEntityInfos.empty() ? Status::NOT_SUPPORTED : Status::SUCCESS);
     return Void();
 }
 
 Return<void> PowerStats::getPowerEntityStateInfo(const hidl_vec<uint32_t> &powerEntityIds,
                                                  getPowerEntityStateInfo_cb _hidl_cb) {
-    (void)powerEntityIds;
-    _hidl_cb({}, Status::NOT_SUPPORTED);
+    // If not configured, return NOT_SUPPORTED
+    if (mPowerEntityStateSpaces.empty()) {
+        _hidl_cb({}, Status::NOT_SUPPORTED);
+        return Void();
+    }
+
+    std::vector<PowerEntityStateSpace> s;
+
+    // If powerEntityIds is empty then return state space info for all entities
+    if (powerEntityIds.size() == 0) {
+        s.reserve(mPowerEntityStateSpaces.size());
+        for (auto i : mPowerEntityStateSpaces) {
+            s.push_back(i.second);
+        }
+        _hidl_cb(s, Status::SUCCESS);
+        return Void();
+    }
+
+    // Return state space information only for valid ids
+    for (const uint32_t i : powerEntityIds) {
+        if (mPowerEntityStateSpaces.count(i) != 0) {
+            s.push_back(mPowerEntityStateSpaces[i]);
+        }
+    }
+
+    _hidl_cb(s, s.empty() ? Status::INVALID_INPUT : Status::SUCCESS);
     return Void();
 }
 
