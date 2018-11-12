@@ -41,7 +41,7 @@ class DropDetect : public android::chre::SocketClient::ICallbacks,
   private:
     DropDetect(const uint64_t drop_detect_app_id);
 
-    const int64_t kDropDetectAppId;
+    const uint64_t kDropDetectAppId;
 };
 
 }  // namespace pixel
