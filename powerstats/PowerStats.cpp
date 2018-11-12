@@ -14,10 +14,25 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "libpixelpowerstats"
+
+#include <log/log.h>
 #include <pixelpowerstats/PowerStats.h>
 
 namespace android {
 namespace hardware {
+
+namespace google {
+namespace pixel {
+namespace powerstats {
+
+PowerEntityConfig::PowerEntityConfig(std::vector<PowerEntityInfo> infos)
+    : mPowerEntityInfos(infos) {}
+
+}  // namespace powerstats
+}  // namespace pixel
+}  // namespace google
+
 namespace power {
 namespace stats {
 namespace V1_0 {
@@ -27,6 +42,10 @@ PowerStats::PowerStats() = default;
 
 void PowerStats::setRailDataProvider(std::unique_ptr<IRailDataProvider> r) {
     mRailDataProvider = std::move(r);
+}
+
+void PowerStats::setPowerEntityConfig(std::unique_ptr<PowerEntityConfig> c) {
+    mPowerEntityCfg = std::move(c);
 }
 
 Return<void> PowerStats::getRailInfo(getRailInfo_cb _hidl_cb) {
@@ -59,7 +78,11 @@ Return<void> PowerStats::streamEnergyData(uint32_t timeMs, uint32_t samplingRate
 }
 
 Return<void> PowerStats::getPowerEntityInfo(getPowerEntityInfo_cb _hidl_cb) {
-    _hidl_cb({}, Status::NOT_SUPPORTED);
+    if (mPowerEntityCfg) {
+        _hidl_cb(mPowerEntityCfg->mPowerEntityInfos, Status::SUCCESS);
+    } else {
+        _hidl_cb({}, Status::NOT_SUPPORTED);
+    }
     return Void();
 }
 
