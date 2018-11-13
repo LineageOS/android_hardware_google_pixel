@@ -17,14 +17,8 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #include <utils/StrongPointer.h>
-
-using android::sp;
-using android::frameworks::stats::V1_0::IStats;
-using android::frameworks::stats::V1_0::SlowIo;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 namespace android {
 namespace hardware {
@@ -54,8 +48,9 @@ class SysfsCollector {
     void logSlowIO();
     void logSpeakerImpedance();
 
-    void reportSlowIoFromFile(const char *path, const IPixelStats::IoOperation &operation,
-                              const SlowIo::IoOperation &operation_s);
+    void reportSlowIoFromFile(
+        const char *path,
+        const ::hardware::google::pixelstats::V1_0::IPixelStats::IoOperation &operation);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -64,8 +59,7 @@ class SysfsCollector {
     const char *const kCycleCountBinsPath;
     const char *const kImpedancePath;
     const char *const kCodecPath;
-    sp<IPixelStats> pixelstats_;
-    sp<IStats> stats_;
+    android::sp<::hardware::google::pixelstats::V1_0::IPixelStats> pixelstats_;
 };
 
 }  // namespace pixel
