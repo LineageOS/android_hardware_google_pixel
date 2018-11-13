@@ -2,6 +2,7 @@
 #define HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
 
 #include <android/hardware/power/stats/1.0/IPowerStats.h>
+#include <unordered_map>
 
 namespace android {
 namespace hardware {
@@ -17,6 +18,7 @@ using android::hardware::power::stats::V1_0::EnergyData;
 using android::hardware::power::stats::V1_0::IPowerStats;
 using android::hardware::power::stats::V1_0::PowerEntityInfo;
 using android::hardware::power::stats::V1_0::PowerEntityStateInfo;
+using android::hardware::power::stats::V1_0::PowerEntityStateSpace;
 using android::hardware::power::stats::V1_0::PowerEntityType;
 using android::hardware::power::stats::V1_0::RailInfo;
 using android::hardware::power::stats::V1_0::Status;
@@ -33,8 +35,9 @@ class IRailDataProvider {
 
 class PowerEntityConfig {
   public:
-    PowerEntityConfig(std::vector<PowerEntityInfo> infos);
-    std::vector<PowerEntityInfo> mPowerEntityInfos;
+    std::string name;
+    PowerEntityType type;
+    std::vector<std::string> states;
 };
 
 }  // namespace powerstats
@@ -52,8 +55,8 @@ using android::hardware::google::pixel::powerstats::PowerEntityConfig;
 class PowerStats : public IPowerStats {
   public:
     PowerStats();
-    void setRailDataProvider(std::unique_ptr<IRailDataProvider> r);
-    void setPowerEntityConfig(std::unique_ptr<PowerEntityConfig> c);
+    void setRailDataProvider(std::unique_ptr<IRailDataProvider> dataProvider);
+    void setPowerEntityConfig(const std::vector<PowerEntityConfig> &configs);
 
     // Methods from ::android::hardware::power::stats::V1_0::IPowerStats follow.
     Return<void> getRailInfo(getRailInfo_cb _hidl_cb) override;
@@ -70,7 +73,8 @@ class PowerStats : public IPowerStats {
 
   private:
     std::unique_ptr<IRailDataProvider> mRailDataProvider;
-    std::unique_ptr<PowerEntityConfig> mPowerEntityCfg;
+    std::vector<PowerEntityInfo> mPowerEntityInfos;
+    std::unordered_map<uint32_t, PowerEntityStateSpace> mPowerEntityStateSpaces;
 };
 
 }  // namespace implementation
