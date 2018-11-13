@@ -21,7 +21,6 @@
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
 #include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #include <log/log.h>
@@ -29,11 +28,6 @@
 
 #include <unistd.h>
 #include <thread>
-
-using android::sp;
-using android::frameworks::stats::V1_0::HardwareFailed;
-using android::frameworks::stats::V1_0::IStats;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 namespace android {
 namespace hardware {
@@ -44,6 +38,7 @@ constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
 
 // Report connection & disconnection of devices into the USB-C connector.
 void UeventListener::ReportUsbConnectorUevents(const char *power_supply_typec_mode) {
+    using ::hardware::google::pixelstats::V1_0::IPixelStats;
     if (!power_supply_typec_mode) {
         // No mode reported -> No reporting.
         return;
@@ -56,7 +51,7 @@ void UeventListener::ReportUsbConnectorUevents(const char *power_supply_typec_mo
     }
     is_usb_attached_ = attached;
 
-    sp<IPixelStats> client = IPixelStats::tryGetService();
+    android::sp<IPixelStats> client = IPixelStats::tryGetService();
     if (!client) {
         ALOGE("Unable to connect to PixelStats service");
         return;
@@ -110,6 +105,7 @@ void UeventListener::ReportUsbAudioUevents(const char *driver, const char *produ
      * it on disconnect.  This also means we will only report the first USB audio device attached
      * to the system. Only attempt to connect to the HAL when reporting an event.
      */
+    using ::hardware::google::pixelstats::V1_0::IPixelStats;
     if (!attached_product_ && !strcmp(action, "ACTION=add")) {
         if (!driver || strcmp(driver, "DRIVER=snd-usb-audio")) {
             return;
@@ -117,7 +113,7 @@ void UeventListener::ReportUsbAudioUevents(const char *driver, const char *produ
         usb_audio_connect_time_ = android::base::Timer();
         attached_product_ = strdup(product);
 
-        sp<IPixelStats> client = IPixelStats::tryGetService();
+        android::sp<IPixelStats> client = IPixelStats::tryGetService();
         if (!client) {
             ALOGE("Couldn't connect to PixelStats service for audio connect");
             return;
@@ -131,7 +127,7 @@ void UeventListener::ReportUsbAudioUevents(const char *driver, const char *produ
         free(attached_product_);
         attached_product_ = NULL;
 
-        sp<IPixelStats> client = IPixelStats::tryGetService();
+        android::sp<IPixelStats> client = IPixelStats::tryGetService();
         if (!client) {
             ALOGE("Couldn't connect to PixelStats service for audio disconnect");
             return;
@@ -145,18 +141,8 @@ void UeventListener::ReportMicBroken(const char *devpath, const char *mic_break_
         return;
     if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str()) &&
         !strcmp(mic_break_status, "MIC_BREAK_STATUS=true")) {
-        sp<IStats> stats_client = IStats::tryGetService();
-        if (stats_client) {
-            HardwareFailed failure = {.hardwareType = HardwareFailed::HardwareType::MICROPHONE,
-                                      .hardwareLocation = 0,
-                                      .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
-            Return<void> ret = stats_client->reportHardwareFailed(failure);
-            if (!ret.isOk())
-                ALOGE("Unable to report physical drop to Stats service");
-        } else
-            ALOGE("Unable to connect to Stats service");
-
-        sp<IPixelStats> client = IPixelStats::tryGetService();
+        using ::hardware::google::pixelstats::V1_0::IPixelStats;
+        android::sp<IPixelStats> client = IPixelStats::tryGetService();
         if (!client) {
             ALOGE("Couldn't connect to PixelStats service for mic break");
             return;

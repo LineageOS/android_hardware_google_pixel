@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#include <android/frameworks/stats/1.0/IStats.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #include <pixelhealth/LowBatteryShutdownMetrics.h>
 
 namespace hardware {
@@ -29,8 +27,6 @@ using android::sp;
 using android::base::GetProperty;
 using android::base::ReadFileToString;
 using android::base::SetProperty;
-using android::frameworks::stats::V1_0::BatteryCausedShutdown;
-using android::frameworks::stats::V1_0::IStats;
 using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 LowBatteryShutdownMetrics::LowBatteryShutdownMetrics(const char *const voltage_avg,
@@ -45,12 +41,6 @@ bool LowBatteryShutdownMetrics::uploadVoltageAvg(void) {
     LOG(INFO) << kPersistProp << " property contents: " << prop_contents;
     if (prop_contents.size() == 0) {  // we don't have anything to upload
         prop_empty_ = true;
-        return false;
-    }
-
-    sp<IStats> stats_client = IStats::tryGetService();
-    if (!stats_client) {
-        LOG(ERROR) << "Unable to connect to Stats service";
         return false;
     }
 
@@ -69,8 +59,6 @@ bool LowBatteryShutdownMetrics::uploadVoltageAvg(void) {
         }
         LOG(INFO) << "Uploading voltage_avg: " << std::to_string(voltage_avg);
         client->reportBatteryCausedShutdown(voltage_avg);
-        BatteryCausedShutdown shutdown = {.voltageMicroV = voltage_avg};
-        stats_client->reportBatteryCausedShutdown(shutdown);
     }
 
     // Clear property now that we've uploaded its contents

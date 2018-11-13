@@ -27,6 +27,8 @@
 #include <utils/Timers.h>
 #include <string>
 
+#include <hardware/google/pixelstats/1.0/IPixelStats.h>
+
 namespace hardware {
 namespace google {
 namespace pixel {
