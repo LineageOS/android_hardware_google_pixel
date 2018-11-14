@@ -149,13 +149,13 @@ bool BatteryMetricsLogger::recordSample(struct android::BatteryProperties *props
         LOG(ERROR) << "Can't parse open-circuit voltage (ocv) value " << ocv_str;
     }
 
-    int32_t sample[NUM_FIELDS] = {time,
-                                  resistance,
-                                  props->batteryCurrent,
-                                  props->batteryVoltage,
-                                  props->batteryTemperature,
-                                  props->batteryLevel,
-                                  ocv};
+    int32_t sample[NUM_FIELDS] = {[TIME] = time,
+                                  [RES] = resistance,
+                                  [CURR] = props->batteryCurrent,
+                                  [VOLT] = props->batteryVoltage,
+                                  [TEMP] = props->batteryTemperature,
+                                  [SOC] = props->batteryLevel,
+                                  [OCV] = ocv};
     if (props->batteryStatus != android::BATTERY_STATUS_CHARGING) {
         accum_resistance_ += resistance;
         num_res_samples_++;
