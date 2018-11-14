@@ -5,7 +5,8 @@ cc_library_static {
 
     srcs: [
         "Debugging.cpp",
-        "PowerStats.cpp"
+        "PowerStats.cpp",
+        "GenericStateResidencyDataProvider.cpp"
     ],
 
     cflags: [

@@ -1,8 +1,13 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
 #define HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
 
-#include <android/hardware/power/stats/1.0/IPowerStats.h>
+#include <functional>
+#include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
+
+#include <android/hardware/power/stats/1.0/IPowerStats.h>
 
 namespace android {
 namespace hardware {
@@ -18,6 +23,8 @@ using android::hardware::power::stats::V1_0::EnergyData;
 using android::hardware::power::stats::V1_0::IPowerStats;
 using android::hardware::power::stats::V1_0::PowerEntityInfo;
 using android::hardware::power::stats::V1_0::PowerEntityStateInfo;
+using android::hardware::power::stats::V1_0::PowerEntityStateResidencyData;
+using android::hardware::power::stats::V1_0::PowerEntityStateResidencyResult;
 using android::hardware::power::stats::V1_0::PowerEntityStateSpace;
 using android::hardware::power::stats::V1_0::PowerEntityType;
 using android::hardware::power::stats::V1_0::RailInfo;
@@ -33,11 +40,11 @@ class IRailDataProvider {
                                           IPowerStats::streamEnergyData_cb _hidl_cb) = 0;
 };
 
-class PowerEntityConfig {
+class IStateResidencyDataProvider {
   public:
-    std::string name;
-    PowerEntityType type;
-    std::vector<std::string> states;
+    virtual ~IStateResidencyDataProvider() = default;
+    virtual bool getResults(std::map<uint32_t, PowerEntityStateResidencyResult> &results) = 0;
+    virtual std::vector<PowerEntityStateSpace> getStateSpaces() = 0;
 };
 
 }  // namespace powerstats
@@ -50,13 +57,14 @@ namespace V1_0 {
 namespace implementation {
 
 using android::hardware::google::pixel::powerstats::IRailDataProvider;
-using android::hardware::google::pixel::powerstats::PowerEntityConfig;
+using android::hardware::google::pixel::powerstats::IStateResidencyDataProvider;
 
 class PowerStats : public IPowerStats {
   public:
-    PowerStats();
+    PowerStats() = default;
     void setRailDataProvider(std::unique_ptr<IRailDataProvider> dataProvider);
-    void setPowerEntityConfig(const std::vector<PowerEntityConfig> &configs);
+    uint32_t addPowerEntity(std::string name, PowerEntityType type);
+    void addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p);
 
     // Methods from ::android::hardware::power::stats::V1_0::IPowerStats follow.
     Return<void> getRailInfo(getRailInfo_cb _hidl_cb) override;
@@ -75,6 +83,8 @@ class PowerStats : public IPowerStats {
     std::unique_ptr<IRailDataProvider> mRailDataProvider;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
     std::unordered_map<uint32_t, PowerEntityStateSpace> mPowerEntityStateSpaces;
+    std::unordered_map<uint32_t, std::shared_ptr<IStateResidencyDataProvider>>
+        mStateResidencyDataProviders;
 };
 
 }  // namespace implementation
