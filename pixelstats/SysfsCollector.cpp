@@ -61,6 +61,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
  */
 void SysfsCollector::logBatteryChargeCycles() {
     std::string file_contents;
+    int val;
+    std::vector<int> charge_cycles;
     if (kCycleCountBinsPath == nullptr || strlen(kCycleCountBinsPath) == 0) {
         ALOGV("Battery charge cycle path not specified");
         return;
@@ -70,8 +72,16 @@ void SysfsCollector::logBatteryChargeCycles() {
         return;
     }
 
+    std::stringstream stream(file_contents);
+    while (stream >> val) {
+        charge_cycles.push_back(val);
+    }
+    ChargeCycles cycles;
+    cycles.cycleBucket = charge_cycles;
+
     std::replace(file_contents.begin(), file_contents.end(), ' ', ',');
     pixelstats_->reportChargeCycles(android::base::Trim(file_contents));
+    stats_->reportChargeCycles(cycles);
 }
 
 /**
