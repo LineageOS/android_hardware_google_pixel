@@ -18,6 +18,7 @@
 
 #include <android-base/logging.h>
 #include <pixelpowerstats/GenericStateResidencyDataProvider.h>
+#include <pixelpowerstats/PowerStatsUtils.h>
 #include <fstream>
 
 namespace android {
@@ -37,19 +38,8 @@ PowerEntityConfig::PowerEntityConfig(std::string header,
     }
 }
 
-bool extractStat(const std::string &line, const std::string &prefix, uint64_t &stat) {
-    size_t found = line.find(prefix);
-    if (found == std::string::npos) {
-        // Did not find the given prefix
-        return false;
-    }
-
-    stat = static_cast<uint64_t>(std::stoull(line.substr(found + prefix.length()), nullptr, 0));
-    return true;
-}
-
-bool parseState(PowerEntityStateResidencyData &data, const StateResidencyConfig &config,
-                std::istream &inFile) {
+static bool parseState(PowerEntityStateResidencyData &data, const StateResidencyConfig &config,
+                       std::istream &inFile) {
     size_t numFieldsRead = 0;
     const size_t numFields =
         config.entryCountSupported + config.totalTimeSupported + config.lastEntrySupported;
@@ -57,18 +47,20 @@ bool parseState(PowerEntityStateResidencyData &data, const StateResidencyConfig 
     while (numFieldsRead < numFields && std::getline(inFile, line)) {
         uint64_t stat = 0;
         // Attempt to extract data from the current line
-        if (config.entryCountSupported && extractStat(line, config.entryCountPrefix, stat)) {
+        if (config.entryCountSupported && utils::extractStat(line, config.entryCountPrefix, stat)) {
             data.totalStateEntryCount =
                 config.entryCountTransform ? config.entryCountTransform(stat) : stat;
-            numFieldsRead++;
-        } else if (config.totalTimeSupported && extractStat(line, config.totalTimePrefix, stat)) {
+            ++numFieldsRead;
+        } else if (config.totalTimeSupported &&
+                   utils::extractStat(line, config.totalTimePrefix, stat)) {
             data.totalTimeInStateMs =
                 config.totalTimeTransform ? config.totalTimeTransform(stat) : stat;
-            numFieldsRead++;
-        } else if (config.lastEntrySupported && extractStat(line, config.lastEntryPrefix, stat)) {
+            ++numFieldsRead;
+        } else if (config.lastEntrySupported &&
+                   utils::extractStat(line, config.lastEntryPrefix, stat)) {
             data.lastEntryTimestampMs =
                 config.lastEntryTransform ? config.lastEntryTransform(stat) : stat;
-            numFieldsRead++;
+            ++numFieldsRead;
         }
     }
 
@@ -83,8 +75,9 @@ bool parseState(PowerEntityStateResidencyData &data, const StateResidencyConfig 
 }
 
 template <class T>
-auto findNext(const std::vector<T> &collection, std::istream &inFile,
-              const std::function<bool(T const &, std::string)> &pred) {
+static auto findNext(const std::vector<T> &collection, std::istream &inFile,
+                     const std::function<bool(T const &, std::string)> &pred) {
+    // handling the case when there is no header to look for
     if (pred(collection.front(), "")) {
         return collection.cbegin();
     }
@@ -101,9 +94,10 @@ auto findNext(const std::vector<T> &collection, std::istream &inFile,
     return collection.cend();
 }
 
-bool getStateData(PowerEntityStateResidencyResult &result,
-                  std::vector<std::pair<uint32_t, StateResidencyConfig>> stateResidencyConfigs,
-                  std::istream &inFile) {
+static bool getStateData(
+    PowerEntityStateResidencyResult &result,
+    std::vector<std::pair<uint32_t, StateResidencyConfig>> stateResidencyConfigs,
+    std::istream &inFile) {
     size_t numStatesRead = 0;
     size_t numStates = stateResidencyConfigs.size();
     auto nextState = stateResidencyConfigs.cbegin();
@@ -152,10 +146,10 @@ bool GenericStateResidencyDataProvider::getResults(
     while ((numEntitiesRead < numEntities) &&
            (nextConfig = findNext<decltype(mPowerEntityConfigs)::value_type>(
                 mPowerEntityConfigs, inFile, pred)) != endConfig) {
-        // Found a matching header. Retreive its state data
+        // Found a matching header. Retrieve its state data
         PowerEntityStateResidencyResult result = {.powerEntityId = nextConfig->first};
         if (getStateData(result, nextConfig->second.mStateResidencyConfigs, inFile)) {
-            results[nextConfig->first] = result;
+            results.insert(std::make_pair(nextConfig->first, result));
             ++numEntitiesRead;
         } else {
             break;
@@ -177,6 +171,7 @@ void GenericStateResidencyDataProvider::addEntity(uint32_t id, PowerEntityConfig
 
 std::vector<PowerEntityStateSpace> GenericStateResidencyDataProvider::getStateSpaces() {
     std::vector<PowerEntityStateSpace> stateSpaces;
+    stateSpaces.reserve(mPowerEntityConfigs.size());
     for (auto config : mPowerEntityConfigs) {
         PowerEntityStateSpace s = {.powerEntityId = config.first};
         s.states.resize(config.second.mStateResidencyConfigs.size());

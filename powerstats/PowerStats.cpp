@@ -92,31 +92,31 @@ Return<void> PowerStats::getPowerEntityStateInfo(const hidl_vec<uint32_t> &power
         return Void();
     }
 
-    std::vector<PowerEntityStateSpace> s;
+    std::vector<PowerEntityStateSpace> stateSpaces;
 
     // If powerEntityIds is empty then return state space info for all entities
     if (powerEntityIds.size() == 0) {
+        stateSpaces.reserve(mPowerEntityStateSpaces.size());
         for (auto i : mPowerEntityStateSpaces) {
-            s.push_back(i.second);
+            stateSpaces.push_back(i.second);
         }
-        _hidl_cb(s, Status::SUCCESS);
+        _hidl_cb(stateSpaces, Status::SUCCESS);
         return Void();
     }
 
     // Return state space information only for valid ids
     auto ret = Status::SUCCESS;
-    for (const uint32_t i : powerEntityIds) {
-        if (mPowerEntityStateSpaces.find(i) != mPowerEntityStateSpaces.end()) {
-            s.push_back(mPowerEntityStateSpaces.at(i));
+    stateSpaces.reserve(powerEntityIds.size());
+    for (const uint32_t id : powerEntityIds) {
+        auto stateSpace = mPowerEntityStateSpaces.find(id);
+        if (stateSpace != mPowerEntityStateSpaces.end()) {
+            stateSpaces.push_back(stateSpace->second);
         } else {
             ret = Status::INVALID_INPUT;
-            // TODO(117887759) should we bail here?
-            // s.resize(0);
-            // break;
         }
     }
 
-    _hidl_cb(s, ret);
+    _hidl_cb(stateSpaces, ret);
     return Void();
 }
 
@@ -131,38 +131,38 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
     // If powerEntityIds is empty then return data for all supported entities
     if (powerEntityIds.size() == 0) {
         std::vector<uint32_t> ids;
-        for (auto i : mPowerEntityStateSpaces) {
-            ids.push_back(i.first);
+        for (auto stateSpace : mPowerEntityStateSpaces) {
+            ids.push_back(stateSpace.first);
         }
         return getPowerEntityStateResidencyData(ids, _hidl_cb);
     }
 
     std::map<uint32_t, PowerEntityStateResidencyResult> stateResidencies;
     std::vector<PowerEntityStateResidencyResult> results;
+    results.reserve(powerEntityIds.size());
 
     // return results for only the given powerEntityIds
     bool invalidInput = false;
     bool filesystemError = false;
     for (auto id : powerEntityIds) {
+        auto dataProvider = mStateResidencyDataProviders.find(id);
         // skip if the given powerEntityId does not have an associated StateResidencyDataProvider
-        if (mStateResidencyDataProviders.find(id) == mStateResidencyDataProviders.end()) {
+        if (dataProvider == mStateResidencyDataProviders.end()) {
             invalidInput = true;
-            // TODO(117887759) should we bail here?
-            // results.resize(0);
-            // break;
             continue;
         }
 
         // get the results if we have not already done so.
         if (stateResidencies.find(id) == stateResidencies.end()) {
-            if (!mStateResidencyDataProviders.at(id)->getResults(stateResidencies)) {
+            if (!dataProvider->second->getResults(stateResidencies)) {
                 filesystemError = true;
             }
         }
 
         // append results
-        if (stateResidencies.find(id) != stateResidencies.end()) {
-            results.push_back(stateResidencies.at(id));
+        auto stateResidency = stateResidencies.find(id);
+        if (stateResidency != stateResidencies.end()) {
+            results.push_back(stateResidency->second);
         }
     }
 
