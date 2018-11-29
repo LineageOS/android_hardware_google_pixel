@@ -5,7 +5,7 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     thermal_symlinks
 
-ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
+ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
 PRODUCT_PACKAGES += \
     thermal_logd
 endif
