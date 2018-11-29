@@ -19,17 +19,17 @@ PRODUCT_PRODUCT_PROPERTIES += \
 
 # Pixel Experience
 
-ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
+ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
 ifeq (,$(filter aosp_%,$(TARGET_PRODUCT)))
 PRODUCT_PACKAGES_DEBUG += wifi_diagnostic
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_diagnostic
 endif
 endif
 
-PRODUCT_PACKAGES_DEBUG += wifi_sniffer
+PRODUCT_PACKAGES_ENG += wifi_sniffer
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
 
-PRODUCT_PACKAGES_DEBUG += wifi_perf_diag
+PRODUCT_PACKAGES_ENG += wifi_perf_diag
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_perf_diag
 
 # Enable whole-program R8 Java optimizations for SystemUI and system_server,
