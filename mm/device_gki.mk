@@ -3,7 +3,7 @@ PRODUCT_COPY_FILES += \
       hardware/google/pixel/mm/fstab.zram.2g:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.zram.2g \
       hardware/google/pixel/mm/fstab.zram.3g:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.zram.3g
 
-ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
+ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
 PRODUCT_PACKAGES += \
     mm_logd
 endif
