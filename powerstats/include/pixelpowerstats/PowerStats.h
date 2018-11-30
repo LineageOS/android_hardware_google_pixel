@@ -81,6 +81,9 @@ class PowerStats : public IPowerStats {
         const hidl_vec<uint32_t> &powerEntityIds,
         getPowerEntityStateResidencyData_cb _hidl_cb) override;
 
+    // Methods from ::android::hidl::base::V1_0::IBase follow.
+    Return<void> debug(const hidl_handle &fd, const hidl_vec<hidl_string> &args) override;
+
   private:
     std::unique_ptr<IRailDataProvider> mRailDataProvider;
     std::vector<PowerEntityInfo> mPowerEntityInfos;

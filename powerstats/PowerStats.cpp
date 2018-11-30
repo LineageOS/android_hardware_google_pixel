@@ -16,7 +16,13 @@
 
 #define LOG_TAG "libpixelpowerstats"
 
+#include <inttypes.h>
+
+#include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/stringprintf.h>
+
+#include <pixelpowerstats/Debugging.h>
 #include <pixelpowerstats/PowerStats.h>
 
 namespace android {
@@ -67,9 +73,9 @@ uint32_t PowerStats::addPowerEntity(std::string name, PowerEntityType type) {
 
 void PowerStats::addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p) {
     std::vector<PowerEntityStateSpace> stateSpaces = p->getStateSpaces();
-    for (auto it : stateSpaces) {
-        mPowerEntityStateSpaces[it.powerEntityId] = it;
-        mStateResidencyDataProviders[it.powerEntityId] = p;
+    for (auto stateSpace : stateSpaces) {
+        mPowerEntityStateSpaces.insert(std::make_pair(stateSpace.powerEntityId, stateSpace));
+        mStateResidencyDataProviders.insert(std::make_pair(stateSpace.powerEntityId, p));
     }
 }
 
@@ -174,6 +180,102 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
     }
 
     _hidl_cb(results, ret);
+    return Void();
+}
+
+bool DumpResidencyDataToFd(const hidl_vec<PowerEntityInfo> &infos,
+                           const hidl_vec<PowerEntityStateSpace> &stateSpaces,
+                           const hidl_vec<PowerEntityStateResidencyResult> &results, int fd) {
+    // construct lookup table of powerEntityId to name
+    std::unordered_map<uint32_t, std::string> entityNames;
+    for (auto info : infos) {
+        entityNames.insert(std::make_pair(info.powerEntityId, info.powerEntityName));
+    }
+
+    // construct lookup table of powerEntityId, powerEntityStateId to state name
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames;
+    for (auto stateSpace : stateSpaces) {
+        stateNames.insert(
+            std::make_pair(stateSpace.powerEntityId, std::unordered_map<uint32_t, std::string>()));
+        for (auto state : stateSpace.states) {
+            stateNames.at(stateSpace.powerEntityId)
+                .insert(std::make_pair(state.powerEntityStateId, state.powerEntityStateName));
+        }
+    }
+
+    std::ostringstream dumpStats;
+    dumpStats << "\n========== PowerStats HAL 1.0 state residencies ==========\n";
+
+    const char *headerFormat = "  %14s   %14s   %16s   %15s   %16s\n";
+    const char *dataFormat =
+        "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %13" PRIu64 " ms\n";
+    dumpStats << android::base::StringPrintf(headerFormat, "Subsystem", "State", "Total time",
+                                             "Total entries", "Last entry timestamp");
+
+    for (auto result : results) {
+        for (auto stateResidency : result.stateResidencyData) {
+            dumpStats << android::base::StringPrintf(
+                dataFormat, entityNames.at(result.powerEntityId).c_str(),
+                stateNames.at(result.powerEntityId).at(stateResidency.powerEntityStateId).c_str(),
+                stateResidency.totalTimeInStateMs, stateResidency.totalStateEntryCount,
+                stateResidency.lastEntryTimestampMs);
+        }
+    }
+
+    dumpStats << "========== End of PowerStats HAL 1.0 state residencies ==========\n";
+
+    return android::base::WriteStringToFd(dumpStats.str(), fd);
+}
+
+Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_string> &) {
+    if (handle == nullptr || handle->numFds < 1) {
+        return Void();
+    }
+
+    int fd = handle->data[0];
+    Status status;
+    hidl_vec<PowerEntityInfo> infos;
+
+    // Get power entity information
+    getPowerEntityInfo([&status, &infos](auto rInfos, auto rStatus) {
+        status = rStatus;
+        infos = rInfos;
+    });
+    if (status != Status::SUCCESS) {
+        LOG(ERROR) << "Error getting power entity info";
+        return Void();
+    }
+
+    // Get power entity state information
+    hidl_vec<PowerEntityStateSpace> stateSpaces;
+    getPowerEntityStateInfo({}, [&status, &stateSpaces](auto rStateSpaces, auto rStatus) {
+        status = rStatus;
+        stateSpaces = rStateSpaces;
+    });
+    if (status != Status::SUCCESS) {
+        LOG(ERROR) << "Error getting state info";
+        return Void();
+    }
+
+    // Get power entity state residency data
+    hidl_vec<PowerEntityStateResidencyResult> results;
+    getPowerEntityStateResidencyData({}, [&status, &results](auto rResults, auto rStatus) {
+        status = rStatus;
+        results = rResults;
+    });
+
+    // This implementation of getPowerEntityStateResidencyData supports the
+    // return of partial results if status == FILESYSTEM_ERROR.
+    if (status != Status::SUCCESS) {
+        LOG(ERROR) << "Error getting residency data -- Some results missing";
+    }
+
+    if (!DumpResidencyDataToFd(infos, stateSpaces, results, fd)) {
+        PLOG(ERROR) << "Failed to dump residency data to fd";
+    }
+
+    fsync(fd);
+
     return Void();
 }
 

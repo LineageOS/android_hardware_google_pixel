@@ -37,7 +37,7 @@ bool WlanStateResidencyDataProvider::getResults(
     const std::string path = "/d/wlan0/power_stats";
     std::ifstream inFile(path, std::ifstream::in);
     if (!inFile.is_open()) {
-        LOG(ERROR) << __func__ << ":Failed to open file " << path;
+        PLOG(ERROR) << __func__ << ":Failed to open file " << path;
         return false;
     }
 

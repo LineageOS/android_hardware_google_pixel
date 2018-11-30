@@ -132,7 +132,7 @@ bool GenericStateResidencyDataProvider::getResults(
     std::map<uint32_t, PowerEntityStateResidencyResult> &results) {
     std::ifstream inFile(mPath, std::ifstream::in);
     if (!inFile.is_open()) {
-        LOG(ERROR) << __func__ << ":Failed to open file " << mPath;
+        PLOG(ERROR) << __func__ << ":Failed to open file " << mPath;
         return false;
     }
 
