@@ -65,7 +65,7 @@ Return<void> PowerStats::streamEnergyData(uint32_t timeMs, uint32_t samplingRate
     return mRailDataProvider->streamEnergyData(timeMs, samplingRate, _hidl_cb);
 }
 
-uint32_t PowerStats::addPowerEntity(std::string name, PowerEntityType type) {
+uint32_t PowerStats::addPowerEntity(const std::string &name, PowerEntityType type) {
     uint32_t id = mPowerEntityInfos.size();
     mPowerEntityInfos.push_back({id, name, type});
     return id;
@@ -74,8 +74,8 @@ uint32_t PowerStats::addPowerEntity(std::string name, PowerEntityType type) {
 void PowerStats::addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p) {
     std::vector<PowerEntityStateSpace> stateSpaces = p->getStateSpaces();
     for (auto stateSpace : stateSpaces) {
-        mPowerEntityStateSpaces.insert(std::make_pair(stateSpace.powerEntityId, stateSpace));
-        mStateResidencyDataProviders.insert(std::make_pair(stateSpace.powerEntityId, p));
+        mPowerEntityStateSpaces.emplace(stateSpace.powerEntityId, stateSpace);
+        mStateResidencyDataProviders.emplace(stateSpace.powerEntityId, p);
     }
 }
 
@@ -104,7 +104,7 @@ Return<void> PowerStats::getPowerEntityStateInfo(const hidl_vec<uint32_t> &power
     if (powerEntityIds.size() == 0) {
         stateSpaces.reserve(mPowerEntityStateSpaces.size());
         for (auto i : mPowerEntityStateSpaces) {
-            stateSpaces.push_back(i.second);
+            stateSpaces.emplace_back(i.second);
         }
         _hidl_cb(stateSpaces, Status::SUCCESS);
         return Void();
@@ -116,7 +116,7 @@ Return<void> PowerStats::getPowerEntityStateInfo(const hidl_vec<uint32_t> &power
     for (const uint32_t id : powerEntityIds) {
         auto stateSpace = mPowerEntityStateSpaces.find(id);
         if (stateSpace != mPowerEntityStateSpaces.end()) {
-            stateSpaces.push_back(stateSpace->second);
+            stateSpaces.emplace_back(stateSpace->second);
         } else {
             ret = Status::INVALID_INPUT;
         }
@@ -138,7 +138,7 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
     if (powerEntityIds.size() == 0) {
         std::vector<uint32_t> ids;
         for (auto stateSpace : mPowerEntityStateSpaces) {
-            ids.push_back(stateSpace.first);
+            ids.emplace_back(stateSpace.first);
         }
         return getPowerEntityStateResidencyData(ids, _hidl_cb);
     }
@@ -168,7 +168,7 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
         // append results
         auto stateResidency = stateResidencies.find(id);
         if (stateResidency != stateResidencies.end()) {
-            results.push_back(stateResidency->second);
+            results.emplace_back(stateResidency->second);
         }
     }
 
@@ -189,17 +189,16 @@ bool DumpResidencyDataToFd(const hidl_vec<PowerEntityInfo> &infos,
     // construct lookup table of powerEntityId to name
     std::unordered_map<uint32_t, std::string> entityNames;
     for (auto info : infos) {
-        entityNames.insert(std::make_pair(info.powerEntityId, info.powerEntityName));
+        entityNames.emplace(info.powerEntityId, info.powerEntityName);
     }
 
     // construct lookup table of powerEntityId, powerEntityStateId to state name
     std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames;
     for (auto stateSpace : stateSpaces) {
-        stateNames.insert(
-            std::make_pair(stateSpace.powerEntityId, std::unordered_map<uint32_t, std::string>()));
+        stateNames.emplace(stateSpace.powerEntityId, std::unordered_map<uint32_t, std::string>());
         for (auto state : stateSpace.states) {
             stateNames.at(stateSpace.powerEntityId)
-                .insert(std::make_pair(state.powerEntityStateId, state.powerEntityStateName));
+                .emplace(state.powerEntityStateId, state.powerEntityStateName);
         }
     }
 
