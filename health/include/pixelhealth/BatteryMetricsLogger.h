@@ -26,7 +26,6 @@
 #include <utils/Timers.h>
 #include <string>
 
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <hardware/google/pixelstats/1.0/IPixelStats.h>
 
 namespace hardware {
@@ -34,10 +33,7 @@ namespace google {
 namespace pixel {
 namespace health {
 
-using android::sp;
-using android::frameworks::stats::V1_0::BatteryHealthSnapshotArgs;
-using android::frameworks::stats::V1_0::IStats;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
+using BatterySnapshotType = ::hardware::google::pixelstats::V1_0::IPixelStats::BatterySnapshotType;
 
 class BatteryMetricsLogger {
   public:
@@ -59,21 +55,11 @@ class BatteryMetricsLogger {
 
     const int kSnapshotType[NUM_FIELDS] = {
         -1,
-        (int)IPixelStats::BatterySnapshotType::MIN_CURRENT,
-        (int)IPixelStats::BatterySnapshotType::MIN_VOLTAGE,
-        (int)IPixelStats::BatterySnapshotType::MIN_TEMP,
-        (int)IPixelStats::BatterySnapshotType::MIN_BATT_LEVEL,
-        (int)IPixelStats::BatterySnapshotType::MIN_RESISTANCE,
-        -1,
-    };
-
-    const int kStatsSnapshotType[NUM_FIELDS] = {
-        -1,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_CURRENT,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_VOLTAGE,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_TEMP,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_BATT_LEVEL,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_RESISTANCE,
+        (int)BatterySnapshotType::MIN_CURRENT,
+        (int)BatterySnapshotType::MIN_VOLTAGE,
+        (int)BatterySnapshotType::MIN_TEMP,
+        (int)BatterySnapshotType::MIN_BATT_LEVEL,
+        (int)BatterySnapshotType::MIN_RESISTANCE,
         -1,
     };
 
@@ -99,7 +85,8 @@ class BatteryMetricsLogger {
     int64_t getTime();
     bool recordSample(struct android::BatteryProperties *props);
     bool uploadMetrics();
-    bool uploadOutlierMetric(sp<IPixelStats> client, sp<IStats> stats_client, sampleType type);
+    bool uploadOutlierMetric(android::sp<::hardware::google::pixelstats::V1_0::IPixelStats> client,
+                             sampleType type);
 };
 
 }  // namespace health
