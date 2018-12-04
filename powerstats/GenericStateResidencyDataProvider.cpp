@@ -17,6 +17,7 @@
 #define LOG_TAG "libpixelpowerstats"
 
 #include <android-base/logging.h>
+#include <android-base/strings.h>
 #include <pixelpowerstats/GenericStateResidencyDataProvider.h>
 #include <pixelpowerstats/PowerStatsUtils.h>
 #include <fstream>
@@ -102,7 +103,7 @@ static bool getStateData(
     size_t numStates = stateResidencyConfigs.size();
     auto nextState = stateResidencyConfigs.cbegin();
     auto endState = stateResidencyConfigs.cend();
-    auto pred = [](auto a, std::string b) { return a.second.header == b; };
+    auto pred = [](auto a, std::string b) { return (base::Trim(b) == a.second.header); };
 
     result.stateResidencyData.resize(numStates);
 
@@ -140,7 +141,7 @@ bool GenericStateResidencyDataProvider::getResults(
     size_t numEntities = mPowerEntityConfigs.size();
     auto nextConfig = mPowerEntityConfigs.cbegin();
     auto endConfig = mPowerEntityConfigs.cend();
-    auto pred = [](auto a, std::string b) { return a.second.mHeader == b; };
+    auto pred = [](auto a, std::string b) { return (base::Trim(b) == a.second.mHeader); };
 
     // Search for entity headers until we have found them all or can't find anymore
     while ((numEntitiesRead < numEntities) &&
