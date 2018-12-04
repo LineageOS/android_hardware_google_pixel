@@ -45,7 +45,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSlowioSyncCntPath(sysfs_paths.SlowioSyncCntPath),
       kCycleCountBinsPath(sysfs_paths.CycleCountBinsPath),
       kImpedancePath(sysfs_paths.ImpedancePath),
-      kCodecPath(sysfs_paths.CodecPath) {}
+      kCodecPath(sysfs_paths.CodecPath),
+      kCodec1Path(sysfs_paths.Codec1Path) {}
 
 /**
  * Read the contents of kCycleCountBinsPath and report them via IPixelStats HAL.
@@ -84,6 +85,28 @@ void SysfsCollector::logCodecFailed() {
         return;
     } else {
         pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 0,
+                                          IPixelStats::HardwareErrorCode::COMPLETE);
+    }
+}
+
+/**
+ * Check the codec1 for failures over the past 24hr.
+ */
+void SysfsCollector::logCodec1Failed() {
+    std::string file_contents;
+    if (strlen(kCodec1Path) == 0) {
+        ALOGV("Audio codec1 path not specified");
+        return;
+    }
+    if (!ReadFileToString(kCodec1Path, &file_contents)) {
+        ALOGE("Unable to read codec1 state %s - %s", kCodec1Path, strerror(errno));
+        return;
+    }
+    if (file_contents == "0") {
+        return;
+    } else {
+        ALOGE("%s report hardware fail", kCodec1Path);
+        pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 1,
                                           IPixelStats::HardwareErrorCode::COMPLETE);
     }
 }
@@ -154,6 +177,7 @@ void SysfsCollector::logAll() {
 
     logBatteryChargeCycles();
     logCodecFailed();
+    logCodec1Failed();
     logSlowIO();
     logSpeakerImpedance();
 
