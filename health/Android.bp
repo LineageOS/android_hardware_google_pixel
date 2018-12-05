@@ -19,12 +19,7 @@ cc_library {
         "libbatterymonitor",
     ],
 
-    export_shared_lib_headers: [
-        "android.frameworks.stats@1.0",
-    ],
-
     shared_libs: [
-        "android.frameworks.stats@1.0",
         "hardware.google.pixelstats@1.0",
         "libbase",
         "libcutils",
