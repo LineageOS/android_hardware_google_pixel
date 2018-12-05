@@ -29,8 +29,9 @@ class StateResidencyConfig {
 
 class PowerEntityConfig {
   public:
-    PowerEntityConfig(std::vector<StateResidencyConfig> stateResidencyConfigs);
-    PowerEntityConfig(std::string header, std::vector<StateResidencyConfig> stateResidencyConfigs);
+    PowerEntityConfig(const std::vector<StateResidencyConfig> &stateResidencyConfigs);
+    PowerEntityConfig(const std::string &header,
+                      const std::vector<StateResidencyConfig> &stateResidencyConfigs);
     std::string mHeader;
     std::vector<std::pair<uint32_t, StateResidencyConfig>> mStateResidencyConfigs;
 };
@@ -39,7 +40,7 @@ class GenericStateResidencyDataProvider : public IStateResidencyDataProvider {
   public:
     GenericStateResidencyDataProvider(std::string path) : mPath(std::move(path)){};
     ~GenericStateResidencyDataProvider() = default;
-    void addEntity(uint32_t id, PowerEntityConfig config);
+    void addEntity(uint32_t id, const PowerEntityConfig &config);
     bool getResults(std::map<uint32_t, PowerEntityStateResidencyResult> &results) override;
     std::vector<PowerEntityStateSpace> getStateSpaces() override;
 
@@ -47,6 +48,10 @@ class GenericStateResidencyDataProvider : public IStateResidencyDataProvider {
     std::string mPath;
     std::vector<std::pair<uint32_t, PowerEntityConfig>> mPowerEntityConfigs;
 };
+
+std::vector<StateResidencyConfig> generateGenericStateResidencyConfigs(
+    const StateResidencyConfig &stateConfig,
+    const std::vector<std::pair<std::string, std::string>> &stateHeaders);
 
 }  // namespace powerstats
 }  // namespace pixel

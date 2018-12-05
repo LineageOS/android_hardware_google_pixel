@@ -28,14 +28,29 @@ namespace google {
 namespace pixel {
 namespace powerstats {
 
-PowerEntityConfig::PowerEntityConfig(std::vector<StateResidencyConfig> stateResidencyConfigs)
+std::vector<StateResidencyConfig> generateGenericStateResidencyConfigs(
+    const StateResidencyConfig &stateConfig,
+    const std::vector<std::pair<std::string, std::string>> &stateHeaders) {
+    std::vector<StateResidencyConfig> stateResidencyConfigs;
+    stateResidencyConfigs.reserve(stateHeaders.size());
+    for (auto h : stateHeaders) {
+        StateResidencyConfig cfg = {stateConfig};
+        cfg.name = h.first;
+        cfg.header = h.second;
+        stateResidencyConfigs.emplace_back(cfg);
+    }
+    return stateResidencyConfigs;
+}
+
+PowerEntityConfig::PowerEntityConfig(const std::vector<StateResidencyConfig> &stateResidencyConfigs)
     : PowerEntityConfig("", stateResidencyConfigs) {}
 
-PowerEntityConfig::PowerEntityConfig(std::string header,
-                                     std::vector<StateResidencyConfig> stateResidencyConfigs)
+PowerEntityConfig::PowerEntityConfig(const std::string &header,
+                                     const std::vector<StateResidencyConfig> &stateResidencyConfigs)
     : mHeader(header) {
+    mStateResidencyConfigs.reserve(stateResidencyConfigs.size());
     for (uint32_t i = 0; i < stateResidencyConfigs.size(); ++i) {
-        mStateResidencyConfigs.push_back(std::make_pair(i, stateResidencyConfigs[i]));
+        mStateResidencyConfigs.emplace_back(i, stateResidencyConfigs[i]);
     }
 }
 
@@ -97,7 +112,7 @@ static auto findNext(const std::vector<T> &collection, std::istream &inFile,
 
 static bool getStateData(
     PowerEntityStateResidencyResult &result,
-    std::vector<std::pair<uint32_t, StateResidencyConfig>> stateResidencyConfigs,
+    const std::vector<std::pair<uint32_t, StateResidencyConfig>> &stateResidencyConfigs,
     std::istream &inFile) {
     size_t numStatesRead = 0;
     size_t numStates = stateResidencyConfigs.size();
@@ -109,7 +124,7 @@ static bool getStateData(
 
     // Search for state headers until we have found them all or can't find anymore
     while ((numStatesRead < numStates) &&
-           (nextState = findNext<decltype(stateResidencyConfigs)::value_type>(
+           (nextState = findNext<std::pair<uint32_t, StateResidencyConfig>>(
                 stateResidencyConfigs, inFile, pred)) != endState) {
         // Found a matching state header. Parse the contents
         PowerEntityStateResidencyData data = {.powerEntityStateId = nextState->first};
@@ -150,7 +165,7 @@ bool GenericStateResidencyDataProvider::getResults(
         // Found a matching header. Retrieve its state data
         PowerEntityStateResidencyResult result = {.powerEntityId = nextConfig->first};
         if (getStateData(result, nextConfig->second.mStateResidencyConfigs, inFile)) {
-            results.insert(std::make_pair(nextConfig->first, result));
+            results.emplace(nextConfig->first, result);
             ++numEntitiesRead;
         } else {
             break;
@@ -166,8 +181,8 @@ bool GenericStateResidencyDataProvider::getResults(
     return true;
 }
 
-void GenericStateResidencyDataProvider::addEntity(uint32_t id, PowerEntityConfig config) {
-    mPowerEntityConfigs.push_back(std::make_pair(id, std::move(config)));
+void GenericStateResidencyDataProvider::addEntity(uint32_t id, const PowerEntityConfig &config) {
+    mPowerEntityConfigs.emplace_back(id, config);
 }
 
 std::vector<PowerEntityStateSpace> GenericStateResidencyDataProvider::getStateSpaces() {
@@ -182,7 +197,7 @@ std::vector<PowerEntityStateSpace> GenericStateResidencyDataProvider::getStateSp
                 .powerEntityStateId = config.second.mStateResidencyConfigs[i].first,
                 .powerEntityStateName = config.second.mStateResidencyConfigs[i].second.name};
         }
-        stateSpaces.push_back(s);
+        stateSpaces.emplace_back(s);
     }
     return stateSpaces;
 }

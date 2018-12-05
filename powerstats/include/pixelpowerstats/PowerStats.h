@@ -63,7 +63,7 @@ class PowerStats : public IPowerStats {
   public:
     PowerStats() = default;
     void setRailDataProvider(std::unique_ptr<IRailDataProvider> dataProvider);
-    uint32_t addPowerEntity(std::string name, PowerEntityType type);
+    uint32_t addPowerEntity(const std::string &name, PowerEntityType type);
     // Using shared_ptr here because multiple power entities could depend on the
     // same IStateResidencyDataProvider.
     void addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p);
