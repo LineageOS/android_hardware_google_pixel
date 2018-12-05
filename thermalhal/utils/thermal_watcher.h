@@ -39,7 +39,8 @@ namespace implementation {
 using android::base::unique_fd;
 using WatcherCallback = std::function<void(const std::string &path, const int fd)>;
 
-/* A helper class to watch modifications to files. */
+// A helper class for polling thermal files for changes.
+// TODO: change to use uevent (b/119189816)
 class ThermalWatcher : public ::android::Thread {
   public:
     ThermalWatcher(const WatcherCallback &cb)
