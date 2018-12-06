@@ -18,7 +18,10 @@
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_UEVENTLISTENER_H
 
 #include <android-base/chrono_utils.h>
+#include <android/frameworks/stats/1.0/IStats.h>
 #include <hardware/google/pixelstats/1.0/IPixelStats.h>
+
+using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
 
 namespace android {
 namespace hardware {
@@ -33,17 +36,23 @@ namespace pixel {
  */
 class UeventListener {
   public:
-    UeventListener(const std::string audio_uevent);
+    UeventListener(const std::string audio_uevent,
+                   const std::string overheat_path =
+                       "/sys/devices/platform/soc/soc:google,overheat_mitigation");
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
   private:
+    bool ReadFileToInt(const std::string &path, int *val);
+    bool ReadFileToInt(const char *path, int *val);
     void ReportUsbConnectorUevents(const char *power_supply_typec_mode);
     void ReportUsbAudioUevents(const char *driver, const char *product, const char *action);
     void ReportMicStatusUevents(const char *devpath, const char *mic_status);
     void ReportMicBrokenOrDegraded(const int mic, const bool isBroken);
+    void ReportUsbPortOverheatEvent(const char *driver);
 
     const std::string kAudioUevent;
+    const std::string kUsbPortOverheatPath;
 
     int uevent_fd_;
 

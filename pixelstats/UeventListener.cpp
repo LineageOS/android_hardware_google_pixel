@@ -18,6 +18,7 @@
 
 #include <pixelstats/UeventListener.h>
 
+#include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
@@ -31,8 +32,10 @@
 #include <thread>
 
 using android::sp;
+using android::base::ReadFileToString;
 using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
+using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
 using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 namespace android {
@@ -41,6 +44,23 @@ namespace google {
 namespace pixel {
 
 constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
+
+bool UeventListener::ReadFileToInt(const std::string &path, int *val) {
+    return ReadFileToInt(path.c_str(), val);
+}
+
+bool UeventListener::ReadFileToInt(const char *const path, int *val) {
+    std::string file_contents;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read %s - %s", path, strerror(errno));
+        return false;
+    } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
+        ALOGE("Unable to convert %s to int - %s", path, strerror(errno));
+        return false;
+    }
+    return true;
+}
 
 // Report connection & disconnection of devices into the USB-C connector.
 void UeventListener::ReportUsbConnectorUevents(const char *power_supply_typec_mode) {
@@ -205,6 +225,27 @@ void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic
     }
 }
 
+void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
+    UsbPortOverheatEvent event = {};
+    std::string file_contents;
+
+    if (!driver || strcmp(driver, "DRIVER=google,overheat_mitigation")) {
+        return;
+    }
+
+    ReadFileToInt((kUsbPortOverheatPath + "/plug_temp"), &event.plugTemperatureDeciC);
+    ReadFileToInt((kUsbPortOverheatPath + "/max_temp"), &event.maxTemperatureDeciC);
+    ReadFileToInt((kUsbPortOverheatPath + "/trip_time"), &event.timeToOverheat);
+    ReadFileToInt((kUsbPortOverheatPath + "/hysteresis_time"), &event.timeToHysteresis);
+    ReadFileToInt((kUsbPortOverheatPath + "/cleared_time"), &event.timeToInactive);
+
+    sp<IStats> stats_client = IStats::tryGetService();
+
+    if (stats_client) {
+        stats_client->reportUsbPortOverheatEvent(event);
+    }
+}
+
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
@@ -265,12 +306,14 @@ bool UeventListener::ProcessUevent() {
     ReportUsbAudioUevents(driver, product, action);
     ReportMicStatusUevents(devpath, mic_break_status);
     ReportMicStatusUevents(devpath, mic_degrade_status);
+    ReportUsbPortOverheatEvent(driver);
 
     return true;
 }
 
-UeventListener::UeventListener(const std::string audio_uevent)
+UeventListener::UeventListener(const std::string audio_uevent, const std::string overheat_path)
     : kAudioUevent(audio_uevent),
+      kUsbPortOverheatPath(overheat_path),
       uevent_fd_(-1),
       is_usb_attached_(false),
       attached_product_(nullptr) {}
