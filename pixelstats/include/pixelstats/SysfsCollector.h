@@ -35,6 +35,7 @@ class SysfsCollector {
         const char *const CycleCountBinsPath;
         const char *const ImpedancePath;
         const char *const CodecPath;
+        const char *const Codec1Path;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -45,6 +46,7 @@ class SysfsCollector {
 
     void logBatteryChargeCycles();
     void logCodecFailed();
+    void logCodec1Failed();
     void logSlowIO();
     void logSpeakerImpedance();
 
@@ -59,6 +61,7 @@ class SysfsCollector {
     const char *const kCycleCountBinsPath;
     const char *const kImpedancePath;
     const char *const kCodecPath;
+    const char *const kCodec1Path;
     android::sp<::hardware::google::pixelstats::V1_0::IPixelStats> pixelstats_;
 };
 
