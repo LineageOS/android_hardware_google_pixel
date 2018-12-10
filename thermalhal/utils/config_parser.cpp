@@ -107,25 +107,24 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
             return sensors_parsed;
         }
 
-        const size_t count = static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
-        std::array<float, count> hot_thresholds;
+        std::array<float, kThrottlingSeverityCount> hot_thresholds;
         hot_thresholds.fill(NAN);
-        std::array<float, count> cold_thresholds;
+        std::array<float, kThrottlingSeverityCount> cold_thresholds;
         cold_thresholds.fill(NAN);
-        std::array<float, count> hot_hysteresis;
+        std::array<float, kThrottlingSeverityCount> hot_hysteresis;
         hot_hysteresis.fill(0.0);
-        std::array<float, count> cold_hysteresis;
+        std::array<float, kThrottlingSeverityCount> cold_hysteresis;
         cold_hysteresis.fill(0.0);
 
         Json::Value values = sensors[i]["HotThreshold"];
-        if (values.size() != count) {
+        if (values.size() != kThrottlingSeverityCount) {
             LOG(ERROR) << "Invalid "
                        << "Sensor[" << name << "]'s HotThreshold count" << values.size();
             sensors_parsed.clear();
             return sensors_parsed;
         } else {
             float min = std::numeric_limits<float>::min();
-            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+            for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
                 hot_thresholds[j] = getFloatFromValue(values[j]);
                 if (!std::isnan(hot_thresholds[j])) {
                     if (hot_thresholds[j] < min) {
@@ -143,11 +142,11 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
         }
 
         values = sensors[i]["HotHysteresis"];
-        if (values.size() != count) {
+        if (values.size() != kThrottlingSeverityCount) {
             LOG(INFO) << "Cannot find valid "
                       << "Sensor[" << name << "]'s HotHysteresis, default all to 0.0";
         } else {
-            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+            for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
                 hot_hysteresis[j] = getFloatFromValue(values[j]);
                 if (std::isnan(hot_hysteresis[j])) {
                     LOG(ERROR) << "Invalid "
@@ -161,12 +160,12 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
         }
 
         values = sensors[i]["ColdThreshold"];
-        if (values.size() != count) {
+        if (values.size() != kThrottlingSeverityCount) {
             LOG(INFO) << "Cannot find valid "
                       << "Sensor[" << name << "]'s ColdThreshold, default all to NAN";
         } else {
             float max = std::numeric_limits<float>::max();
-            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+            for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
                 cold_thresholds[j] = getFloatFromValue(values[j]);
                 if (!std::isnan(cold_thresholds[j])) {
                     if (cold_thresholds[j] > max) {
@@ -184,11 +183,11 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
         }
 
         values = sensors[i]["ColdHysteresis"];
-        if (values.size() != count) {
+        if (values.size() != kThrottlingSeverityCount) {
             LOG(INFO) << "Cannot find valid "
                       << "Sensor[" << name << "]'s ColdHysteresis, default all to 0.0";
         } else {
-            for (Json::Value::ArrayIndex j = 0; j < count; ++j) {
+            for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
                 cold_hysteresis[j] = getFloatFromValue(values[j]);
                 if (std::isnan(cold_hysteresis[j])) {
                     LOG(ERROR) << "Invalid "

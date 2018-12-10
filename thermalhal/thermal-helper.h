@@ -64,7 +64,6 @@ using TemperatureType_1_0 = ::android::hardware::thermal::V1_0::TemperatureType;
 using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
 using ::android::hardware::thermal::V2_0::TemperatureThreshold;
 using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
-using ::android::hardware::thermal::V2_0::ThrottlingSeverityCount;
 
 using NotificationCallback = std::function<void(const std::vector<Temperature_2_0> &temps)>;
 using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
