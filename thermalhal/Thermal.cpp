@@ -304,15 +304,11 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                     dump_buf << " Type: " << android::hardware::thermal::V2_0::toString(t.type)
                              << " Name: " << t.name;
                     dump_buf << " hotThrottlingThreshold: [";
-                    for (size_t i = 0;
-                         i < static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
-                         ++i) {
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         dump_buf << t.hotThrottlingThresholds[i] << " ";
                     }
                     dump_buf << "] coldThrottlingThreshold: [";
-                    for (size_t i = 0;
-                         i < static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
-                         ++i) {
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         dump_buf << t.coldThrottlingThresholds[i] << " ";
                     }
                     dump_buf << "] vrThrottlingThreshold: " << t.vrThrottlingThreshold;
@@ -346,15 +342,11 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 for (const auto &name_info_pair : map) {
                     dump_buf << " Name: " << name_info_pair.first;
                     dump_buf << " hotHysteresis: [";
-                    for (size_t i = 0;
-                         i < static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
-                         ++i) {
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         dump_buf << name_info_pair.second.hot_hysteresis[i] << " ";
                     }
                     dump_buf << "] coldHysteresis: [";
-                    for (size_t i = 0;
-                         i < static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS);
-                         ++i) {
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         dump_buf << name_info_pair.second.cold_hysteresis[i] << " ";
                     }
                     dump_buf << "]" << std::endl;

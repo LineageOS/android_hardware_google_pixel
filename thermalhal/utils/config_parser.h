@@ -28,11 +28,13 @@ namespace thermal {
 namespace V2_0 {
 namespace implementation {
 
+using ::android::hardware::hidl_enum_range;
 using ::android::hardware::thermal::V2_0::CoolingType;
 using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
-using ::android::hardware::thermal::V2_0::ThrottlingSeverityCount;
-using ThrottlingArray =
-    std::array<float, static_cast<size_t>(ThrottlingSeverityCount::NUM_THROTTLING_LEVELS)>;
+using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
+constexpr size_t kThrottlingSeverityCount = std::distance(
+    hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
+using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
 
 struct SensorInfo {
     TemperatureType_2_0 type;
