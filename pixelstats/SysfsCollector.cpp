@@ -61,7 +61,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
  */
 void SysfsCollector::logBatteryChargeCycles() {
     std::string file_contents;
-    if (strlen(kCycleCountBinsPath) == 0) {
+    if (kCycleCountBinsPath == nullptr || strlen(kCycleCountBinsPath) == 0) {
         ALOGV("Battery charge cycle path not specified");
         return;
     }
@@ -79,7 +79,7 @@ void SysfsCollector::logBatteryChargeCycles() {
  */
 void SysfsCollector::logCodecFailed() {
     std::string file_contents;
-    if (strlen(kCodecPath) == 0) {
+    if (kCodecPath == nullptr || strlen(kCodecPath) == 0) {
         ALOGV("Audio codec path not specified");
         return;
     }
@@ -104,7 +104,7 @@ void SysfsCollector::logCodecFailed() {
  */
 void SysfsCollector::logCodec1Failed() {
     std::string file_contents;
-    if (strlen(kCodec1Path) == 0) {
+    if (kCodec1Path == nullptr || strlen(kCodec1Path) == 0) {
         ALOGV("Audio codec1 path not specified");
         return;
     }
@@ -125,7 +125,7 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
                                           const IPixelStats::IoOperation &operation,
                                           const SlowIo::IoOperation &operation_s) {
     std::string file_contents;
-    if (strlen(path) == 0) {
+    if (path == nullptr || strlen(path) == 0) {
         ALOGV("slow_io path not specified");
         return;
     }
@@ -167,7 +167,7 @@ void SysfsCollector::logSlowIO() {
  */
 void SysfsCollector::logSpeakerImpedance() {
     std::string file_contents;
-    if (strlen(kImpedancePath) == 0) {
+    if (kImpedancePath == nullptr || strlen(kImpedancePath) == 0) {
         ALOGV("Audio impedance path not specified");
         return;
     }
