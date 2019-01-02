@@ -22,6 +22,10 @@ using namespace android::pixel::perfstatsd;
 
 perfstatsd_t::perfstatsd_t(void) {
     mRefreshPeriod = DEFAULT_DATA_COLLECT_PERIOD;
+
+    std::unique_ptr<statstype> cpuUsage(new cpu_usage);
+    cpuUsage->setBufferSize(CPU_USAGE_BUFFER_SIZE);
+    mStats.emplace_back(std::move(cpuUsage));
 }
 
 void perfstatsd_t::refresh(void) {
