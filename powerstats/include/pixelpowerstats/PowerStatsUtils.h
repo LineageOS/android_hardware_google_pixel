@@ -11,7 +11,7 @@ namespace pixel {
 namespace powerstats {
 namespace utils {
 
-bool extractStat(const std::string &line, const std::string &prefix, uint64_t &stat);
+bool extractStat(const char *line, const std::string &prefix, uint64_t &stat);
 
 }  // namespace utils
 }  // namespace powerstats

@@ -17,10 +17,10 @@
 #define LOG_TAG "libpixelpowerstats"
 
 #include <android-base/logging.h>
-#include <android-base/strings.h>
 #include <pixelpowerstats/GenericStateResidencyDataProvider.h>
 #include <pixelpowerstats/PowerStatsUtils.h>
-#include <fstream>
+#include <cstdio>
+#include <cstring>
 
 namespace android {
 namespace hardware {
@@ -55,12 +55,12 @@ PowerEntityConfig::PowerEntityConfig(const std::string &header,
 }
 
 static bool parseState(PowerEntityStateResidencyData &data, const StateResidencyConfig &config,
-                       std::istream &inFile) {
+                       FILE *fp, char *&line, size_t &len) {
     size_t numFieldsRead = 0;
     const size_t numFields =
         config.entryCountSupported + config.totalTimeSupported + config.lastEntrySupported;
-    std::string line;
-    while (numFieldsRead < numFields && std::getline(inFile, line)) {
+
+    while ((numFieldsRead < numFields) && (getline(&line, &len, fp) != -1)) {
         uint64_t stat = 0;
         // Attempt to extract data from the current line
         if (config.entryCountSupported && utils::extractStat(line, config.entryCountPrefix, stat)) {
@@ -90,16 +90,15 @@ static bool parseState(PowerEntityStateResidencyData &data, const StateResidency
     return true;
 }
 
-template <class T>
-static auto findNext(const std::vector<T> &collection, std::istream &inFile,
-                     const std::function<bool(T const &, std::string)> &pred) {
+template <class T, class Func>
+static auto findNext(const std::vector<T> &collection, FILE *fp, char *&line, size_t &len,
+                     Func pred) {
     // handling the case when there is no header to look for
     if (pred(collection.front(), "")) {
         return collection.cbegin();
     }
 
-    std::string line;
-    while (std::getline(inFile, line)) {
+    while (getline(&line, &len, fp) != -1) {
         for (auto it = collection.cbegin(); it != collection.cend(); ++it) {
             if (pred(*it, line)) {
                 return it;
@@ -112,23 +111,27 @@ static auto findNext(const std::vector<T> &collection, std::istream &inFile,
 
 static bool getStateData(
     PowerEntityStateResidencyResult &result,
-    const std::vector<std::pair<uint32_t, StateResidencyConfig>> &stateResidencyConfigs,
-    std::istream &inFile) {
+    const std::vector<std::pair<uint32_t, StateResidencyConfig>> &stateResidencyConfigs, FILE *fp,
+    char *&line, size_t &len) {
     size_t numStatesRead = 0;
     size_t numStates = stateResidencyConfigs.size();
     auto nextState = stateResidencyConfigs.cbegin();
     auto endState = stateResidencyConfigs.cend();
-    auto pred = [](auto a, std::string b) { return (base::Trim(b) == a.second.header); };
+    auto pred = [](auto a, char const *b) {
+        // return true if b matches the header contained in a, ignoring whitespace
+        size_t begin = strspn(b, " \t");
+        return (!strncmp(b + begin, a.second.header.c_str(), a.second.header.length()));
+    };
 
     result.stateResidencyData.resize(numStates);
 
     // Search for state headers until we have found them all or can't find anymore
     while ((numStatesRead < numStates) &&
            (nextState = findNext<std::pair<uint32_t, StateResidencyConfig>>(
-                stateResidencyConfigs, inFile, pred)) != endState) {
+                stateResidencyConfigs, fp, line, len, pred)) != endState) {
         // Found a matching state header. Parse the contents
         PowerEntityStateResidencyData data = {.powerEntityStateId = nextState->first};
-        if (parseState(data, nextState->second, inFile)) {
+        if (parseState(data, nextState->second, fp, line, len)) {
             result.stateResidencyData[numStatesRead] = data;
             ++numStatesRead;
         } else {
@@ -146,31 +149,41 @@ static bool getStateData(
 
 bool GenericStateResidencyDataProvider::getResults(
     std::map<uint32_t, PowerEntityStateResidencyResult> &results) {
-    std::ifstream inFile(mPath, std::ifstream::in);
-    if (!inFile.is_open()) {
-        PLOG(ERROR) << __func__ << ":Failed to open file " << mPath;
+    // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
+    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
+    if (!fp) {
+        PLOG(ERROR) << __func__ << ":Failed to open file " << mPath
+                    << " Error = " << strerror(errno);
         return false;
     }
 
+    size_t len = 0;
+    char *line = nullptr;
     size_t numEntitiesRead = 0;
     size_t numEntities = mPowerEntityConfigs.size();
     auto nextConfig = mPowerEntityConfigs.cbegin();
     auto endConfig = mPowerEntityConfigs.cend();
-    auto pred = [](auto a, std::string b) { return (base::Trim(b) == a.second.mHeader); };
+    auto pred = [](auto a, char const *b) {
+        // return true if b matches the header contained in a, ignoring whitespace
+        size_t begin = strspn(b, " \t");
+        return (!strncmp(b + begin, a.second.mHeader.c_str(), a.second.mHeader.length()));
+    };
 
     // Search for entity headers until we have found them all or can't find anymore
     while ((numEntitiesRead < numEntities) &&
            (nextConfig = findNext<decltype(mPowerEntityConfigs)::value_type>(
-                mPowerEntityConfigs, inFile, pred)) != endConfig) {
+                mPowerEntityConfigs, fp.get(), line, len, pred)) != endConfig) {
         // Found a matching header. Retrieve its state data
         PowerEntityStateResidencyResult result = {.powerEntityId = nextConfig->first};
-        if (getStateData(result, nextConfig->second.mStateResidencyConfigs, inFile)) {
+        if (getStateData(result, nextConfig->second.mStateResidencyConfigs, fp.get(), line, len)) {
             results.emplace(nextConfig->first, result);
             ++numEntitiesRead;
         } else {
             break;
         }
     }
+
+    free(line);
 
     // There was a problem gathering state residency data for one or more entities
     if (numEntitiesRead != numEntities) {

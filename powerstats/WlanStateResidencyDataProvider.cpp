@@ -19,7 +19,8 @@
 #include <android-base/logging.h>
 #include <pixelpowerstats/PowerStatsUtils.h>
 #include <pixelpowerstats/WlanStateResidencyDataProvider.h>
-#include <fstream>
+#include <cstdio>
+#include <cstring>
 
 namespace android {
 namespace hardware {
@@ -35,9 +36,11 @@ WlanStateResidencyDataProvider::WlanStateResidencyDataProvider(uint32_t id) : mP
 bool WlanStateResidencyDataProvider::getResults(
     std::map<uint32_t, PowerEntityStateResidencyResult> &results) {
     const std::string path = "/d/wlan0/power_stats";
-    std::ifstream inFile(path, std::ifstream::in);
-    if (!inFile.is_open()) {
-        PLOG(ERROR) << __func__ << ":Failed to open file " << path;
+    // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
+    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(path.c_str(), "r"), fclose);
+    if (!fp) {
+        PLOG(ERROR) << __func__ << ":Failed to open file " << path
+                    << " Error = " << strerror(errno);
         return false;
     }
 
@@ -48,8 +51,10 @@ bool WlanStateResidencyDataProvider::getResults(
 
     size_t numFieldsRead = 0;
     const size_t numFields = 4;
-    std::string line;
-    while ((numFieldsRead < numFields) && std::getline(inFile, line)) {
+    size_t len = 0;
+    char *line = nullptr;
+
+    while ((numFieldsRead < numFields) && (getline(&line, &len, fp.get()) != -1)) {
         uint64_t stat = 0;
         if (utils::extractStat(line, "cumulative_sleep_time_ms:", stat)) {
             result.stateResidencyData[1].totalTimeInStateMs = stat;
@@ -66,6 +71,8 @@ bool WlanStateResidencyDataProvider::getResults(
             ++numFieldsRead;
         }
     }
+
+    free(line);
 
     // End of file was reached and not all state data was parsed. Something
     // went wrong

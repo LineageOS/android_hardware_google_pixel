@@ -23,14 +23,14 @@ namespace pixel {
 namespace powerstats {
 namespace utils {
 
-bool extractStat(const std::string &line, const std::string &prefix, uint64_t &stat) {
-    size_t found = line.find(prefix);
-    if (found == std::string::npos) {
+bool extractStat(const char *line, const std::string &prefix, uint64_t &stat) {
+    char const *prefixStart = strstr(line, prefix.c_str());
+    if (prefixStart == nullptr) {
         // Did not find the given prefix
         return false;
     }
 
-    stat = static_cast<uint64_t>(std::stoull(line.substr(found + prefix.length()), nullptr, 0));
+    stat = strtoull(prefixStart + prefix.length(), nullptr, 0);
     return true;
 }
 
