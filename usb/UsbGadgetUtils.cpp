@@ -99,7 +99,8 @@ std::string getVendorFunctions() {
 
     if (vendorFunctions != "") {
         ret = vendorFunctions;
-    } else if (bootMode == "usbradio" || bootMode == "factory") {
+    } else if (bootMode == "usbradio" || bootMode == "factory" || bootMode == "ffbm-00" ||
+               bootMode == "ffbm-01") {
         if (persistVendorFunctions != "")
             ret = persistVendorFunctions;
         else
