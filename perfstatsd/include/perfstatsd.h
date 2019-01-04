@@ -17,6 +17,7 @@
 #ifndef _PERFSTATSD_H_
 #define _PERFSTATSD_H_
 
+#include "cpu_usage.h"
 #include "statstype.h"
 
 #define DEFAULT_DATA_COLLECT_PERIOD (10)  // seconds
