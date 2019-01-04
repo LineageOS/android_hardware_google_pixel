@@ -14,10 +14,10 @@ LOCAL_SHARED_LIBRARIES := libbase libbinder libcutils libhwbinder liblog libutil
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
-LOCAL_SRC_FILES := perfstatsd.cpp perfstatsd_service.cpp perfstats_buffer.cpp cpu_usage.cpp
+LOCAL_SRC_FILES := perfstatsd.cpp perfstatsd_service.cpp perfstats_buffer.cpp cpu_usage.cpp io_usage.cpp
 LOCAL_SRC_FILES += $(call all-Iaidl-files-under, binder)
 LOCAL_SRC_FILES += $(call all-Iaidl-files-under, ../../../../frameworks/native/libs/binder/aidl)
-LOCAL_C_INCLUDES := $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/include $(TOP)/system/core/include
 LOCAL_MODULE := libperfstatsd
 LOCAL_AIDL_INCLUDES := $(LOCAL_PATH)/binder
 LOCAL_VENDOR_MODULE := true
