@@ -39,10 +39,10 @@ using ::android::hardware::thermal::V1_0::ThermalStatusCode;
 using ::android::hidl::base::V1_0::IBase;
 
 template <typename T, typename U>
-Return<void> setFailureAndCallback(T _hidl_cb, hidl_vec<U> data, const std::string &debug_msg) {
+Return<void> setFailureAndCallback(T _hidl_cb, hidl_vec<U> data, std::string_view debug_msg) {
     ThermalStatus status;
     status.code = ThermalStatusCode::FAILURE;
-    status.debugMessage = debug_msg;
+    status.debugMessage = debug_msg.data();
     _hidl_cb(status, data);
     return Void();
 }

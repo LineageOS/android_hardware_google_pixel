@@ -27,14 +27,15 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __THERMAL_HELPER_H__
-#define __THERMAL_HELPER_H__
+#ifndef THERMAL_THERMAL_HELPER_H__
+#define THERMAL_THERMAL_HELPER_H__
 
 #include <array>
 #include <chrono>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -94,21 +95,23 @@ class ThermalHelper {
     bool isInitializedOk() const { return is_initialized_; }
 
     // Read the temperature of a single sensor.
-    bool readTemperature(const std::string &sensor_name, Temperature_1_0 *out) const;
+    bool readTemperature(std::string_view sensor_name, Temperature_1_0 *out) const;
     bool readTemperature(
-        const std::string &sensor_name, Temperature_2_0 *out,
-        std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr) const;
-    bool readTemperatureThreshold(const std::string &sensor_name, TemperatureThreshold *out) const;
+            std::string_view sensor_name, Temperature_2_0 *out,
+            std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr) const;
+    bool readTemperatureThreshold(std::string_view sensor_name, TemperatureThreshold *out) const;
     // Read the value of a single cooling device.
-    bool readCoolingDevice(const std::string &cooling_device, CoolingDevice_2_0 *out) const;
+    bool readCoolingDevice(std::string_view cooling_device, CoolingDevice_2_0 *out) const;
     // Get SensorInfo Map
     const std::map<std::string, SensorInfo> &GetSensorInfoMap() const { return sensor_info_map_; }
 
   private:
     bool initializeSensorMap(const std::map<std::string, std::string> &path_map);
     bool initializeCoolingDevices(const std::map<std::string, std::string> &path_map);
+    bool initializeTrip(const std::map<std::string, std::string> &path_map);
+
     // For thermal_watcher_'s polling thread
-    void thermalWatcherCallbackFunc(const std::string &, const int);
+    bool thermalWatcherCallbackFunc(const std::set<std::string> &uevent_sensors);
     // Return hot and cold severity status as std::pair
     std::pair<ThrottlingSeverity, ThrottlingSeverity> getSeverityFromThresholds(
         const ThrottlingArray &hot_thresholds, const ThrottlingArray &cold_thresholds,
@@ -134,4 +137,4 @@ class ThermalHelper {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // __THERMAL_HELPER_H__
+#endif  // THERMAL_THERMAL_HELPER_H__

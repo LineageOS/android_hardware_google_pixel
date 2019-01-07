@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __THERMAL_FILES_H__
-#define __THERMAL_FILES_H__
+#ifndef THERMAL_UTILS_THERMAL_FILES_H_
+#define THERMAL_UTILS_THERMAL_FILES_H_
 
 #include <string>
 #include <unordered_map>
@@ -33,13 +33,13 @@ class ThermalFiles {
     ThermalFiles(const ThermalFiles &) = delete;
     void operator=(const ThermalFiles &) = delete;
 
-    std::string getThermalFilePath(const std::string &thermal_name) const;
+    std::string getThermalFilePath(std::string_view thermal_name) const;
     // Returns true if add was successful, false otherwise.
-    bool addThermalFile(const std::string &thermal_name, const std::string &path);
+    bool addThermalFile(std::string_view thermal_name, std::string_view path);
     // If thermal_name is not found in the thermal names to path map, this will set
     // data to empty and return false. If the thermal_name is found and its content
     // is read, this function will fill in data accordingly then return true.
-    bool readThermalFile(const std::string &thermal_name, std::string *data) const;
+    bool readThermalFile(std::string_view thermal_name, std::string *data) const;
     size_t getNumThermalFiles() const { return thermal_name_to_path_map_.size(); }
 
   private:
@@ -52,4 +52,4 @@ class ThermalFiles {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // __THERMAL_FILES_H__
+#endif  // THERMAL_UTILS_THERMAL_FILES_H_

@@ -38,7 +38,7 @@ namespace {
 
 template <typename T>
 // Return false when failed parsing
-bool getTypeFromString(const std::string &str, T *out) {
+bool getTypeFromString(std::string_view str, T *out) {
     auto types = hidl_enum_range<T>();
     for (const auto &type : types) {
         if (toString(type) == str) {
@@ -59,10 +59,10 @@ float getFloatFromValue(const Json::Value &value) {
 
 }  // namespace
 
-std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path) {
+std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) {
     std::string json_doc;
     std::map<std::string, SensorInfo> sensors_parsed;
-    if (!android::base::ReadFileToString(config_path, &json_doc)) {
+    if (!android::base::ReadFileToString(config_path.data(), &json_doc)) {
         LOG(ERROR) << "Failed to read JSON config from " << config_path;
         return sensors_parsed;
     }
@@ -218,14 +218,14 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
                   << std::noboolalpha;
 
         sensors_parsed[name] = {
-            .type = sensor_type,
-            .hot_thresholds = hot_thresholds,
-            .cold_thresholds = cold_thresholds,
-            .hot_hysteresis = hot_hysteresis,
-            .cold_hysteresis = cold_hysteresis,
-            .vr_threshold = vr_threshold,
-            .multiplier = multiplier,
-            .is_monitor = is_monitor,
+                .type = sensor_type,
+                .hot_thresholds = hot_thresholds,
+                .cold_thresholds = cold_thresholds,
+                .hot_hysteresis = hot_hysteresis,
+                .cold_hysteresis = cold_hysteresis,
+                .vr_threshold = vr_threshold,
+                .multiplier = multiplier,
+                .is_monitor = is_monitor,
         };
         ++total_parsed;
     }
@@ -234,10 +234,10 @@ std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path
     return sensors_parsed;
 }
 
-std::map<std::string, CoolingType> ParseCoolingDevice(const std::string &config_path) {
+std::map<std::string, CoolingType> ParseCoolingDevice(std::string_view config_path) {
     std::string json_doc;
     std::map<std::string, CoolingType> cooling_devices_parsed;
-    if (!android::base::ReadFileToString(config_path, &json_doc)) {
+    if (!android::base::ReadFileToString(config_path.data(), &json_doc)) {
         LOG(ERROR) << "Failed to read JSON config from " << config_path;
         return cooling_devices_parsed;
     }
@@ -264,7 +264,7 @@ std::map<std::string, CoolingType> ParseCoolingDevice(const std::string &config_
             return cooling_devices_parsed;
         }
 
-        auto result = cooling_devices_name_parsed.insert(name);
+        auto result = cooling_devices_name_parsed.insert(name.data());
         if (!result.second) {
             LOG(ERROR) << "Duplicate CoolingDevice[" << i << "]'s Name";
             cooling_devices_parsed.clear();
