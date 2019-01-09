@@ -11,13 +11,14 @@ namespace powerstats {
 
 class WlanStateResidencyDataProvider : public IStateResidencyDataProvider {
   public:
-    WlanStateResidencyDataProvider(uint32_t id);
+    WlanStateResidencyDataProvider(uint32_t id, std::string path);
     ~WlanStateResidencyDataProvider() = default;
     bool getResults(std::map<uint32_t, PowerEntityStateResidencyResult> &results) override;
     std::vector<PowerEntityStateSpace> getStateSpaces() override;
 
   private:
-    uint32_t mPowerEntityId;
+    const std::string mPath;
+    const uint32_t mPowerEntityId;
 };
 
 }  // namespace powerstats

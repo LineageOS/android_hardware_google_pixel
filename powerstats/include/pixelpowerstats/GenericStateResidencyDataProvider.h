@@ -45,7 +45,7 @@ class GenericStateResidencyDataProvider : public IStateResidencyDataProvider {
     std::vector<PowerEntityStateSpace> getStateSpaces() override;
 
   private:
-    std::string mPath;
+    const std::string mPath;
     std::vector<std::pair<uint32_t, PowerEntityConfig>> mPowerEntityConfigs;
 };
 

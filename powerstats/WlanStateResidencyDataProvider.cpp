@@ -31,15 +31,15 @@ namespace powerstats {
 const uint32_t ACTIVE_ID = 0;
 const uint32_t DEEPSLEEP_ID = 1;
 
-WlanStateResidencyDataProvider::WlanStateResidencyDataProvider(uint32_t id) : mPowerEntityId(id) {}
+WlanStateResidencyDataProvider::WlanStateResidencyDataProvider(uint32_t id, std::string path)
+    : mPath(std::move(path)), mPowerEntityId(id) {}
 
 bool WlanStateResidencyDataProvider::getResults(
     std::map<uint32_t, PowerEntityStateResidencyResult> &results) {
-    const std::string path = "/d/wlan0/power_stats";
     // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
-    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(path.c_str(), "r"), fclose);
+    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
     if (!fp) {
-        PLOG(ERROR) << __func__ << ":Failed to open file " << path
+        PLOG(ERROR) << __func__ << ":Failed to open file " << mPath
                     << " Error = " << strerror(errno);
         return false;
     }
