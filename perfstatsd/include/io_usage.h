@@ -148,7 +148,7 @@ class IoStats {
     bool dump(std::stringstream *output);
 };
 
-class io_usage : public statstype {
+class io_usage : public StatsType {
   private:
     IoStats mStats;
 

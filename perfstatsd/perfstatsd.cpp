@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,33 +20,33 @@
 
 using namespace android::pixel::perfstatsd;
 
-perfstatsd_t::perfstatsd_t(void) {
+Perfstatsd::Perfstatsd(void) {
     mRefreshPeriod = DEFAULT_DATA_COLLECT_PERIOD;
 
-    std::unique_ptr<statstype> cpuUsage(new cpu_usage);
+    std::unique_ptr<StatsType> cpuUsage(new CpuUsage);
     cpuUsage->setBufferSize(CPU_USAGE_BUFFER_SIZE);
     mStats.emplace_back(std::move(cpuUsage));
 
-    std::unique_ptr<statstype> ioUsage(new io_usage);
+    std::unique_ptr<StatsType> ioUsage(new io_usage);
     ioUsage->setBufferSize(IO_USAGE_BUFFER_SIZE);
     mStats.emplace_back(std::move(ioUsage));
 }
 
-void perfstatsd_t::refresh(void) {
+void Perfstatsd::refresh(void) {
     for (auto const &stats : mStats) {
         stats->refresh();
     }
     return;
 }
 
-void perfstatsd_t::get_history(std::string *ret) {
-    std::priority_queue<statsdata, std::vector<statsdata>, StatsdataCompare> mergedQueue;
+void Perfstatsd::getHistory(std::string *ret) {
+    std::priority_queue<StatsData, std::vector<StatsData>, StatsdataCompare> mergedQueue;
     for (auto const &stats : mStats) {
         stats->dump(&mergedQueue);
     }
 
     while (!mergedQueue.empty()) {
-        statsdata data = mergedQueue.top();
+        StatsData data = mergedQueue.top();
         auto raw_time = data.getTime();
         auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(raw_time);
         auto d = raw_time - seconds;
@@ -68,7 +68,7 @@ void perfstatsd_t::get_history(std::string *ret) {
                                 << *ret;
 }
 
-void perfstatsd_t::setOptions(const std::string &key, const std::string &value) {
+void Perfstatsd::setOptions(const std::string &key, const std::string &value) {
     if (key == PERFSTATSD_PERIOD) {
         uint32_t val = 0;
         if (!base::ParseUint(value, &val) || val < 1) {

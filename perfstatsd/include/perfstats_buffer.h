@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef _PERFSTATS_BUFFER_H_
 #define _PERFSTATS_BUFFER_H_
 
@@ -47,7 +48,7 @@ constexpr auto operator""_KiB(unsigned long long const num) {
     return num * 1024;
 }
 
-class statsdata {
+class StatsData {
   public:
     std::chrono::system_clock::time_point getTime() const { return mTime; }
     std::string getData() const { return mData; }
@@ -65,17 +66,17 @@ class PerfstatsBuffer {
     size_t count() { return mStorage.size(); }
 
     void setSize(size_t size) { mBufferSize = size; }
-    void emplace(statsdata &&data);
-    const std::queue<statsdata> &dump(void);
+    void emplace(StatsData &&data);
+    const std::queue<StatsData> &dump(void);
 
   private:
     size_t mBufferSize = 0U;
-    std::queue<statsdata> mStorage;
+    std::queue<StatsData> mStorage;
 };
 
 struct StatsdataCompare {
     // sort time in ascending order
-    bool operator()(const statsdata &a, const statsdata &b) const {
+    bool operator()(const StatsData &a, const StatsData &b) const {
         return a.getTime() > b.getTime();
     }
 };
