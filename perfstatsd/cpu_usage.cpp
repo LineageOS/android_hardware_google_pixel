@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,10 @@ using namespace android::pixel::perfstatsd;
 static bool cDebug = false;
 static constexpr char FMT_CPU_TOTAL[] =
     "[CPU: %lld.%03llds][T:%.2f%%,U:%.2f%%,S:%.2f%%,IO:%.2f%%]";
-static constexpr char TOP_HEADER[] = "[CPU_TOP]  PID, PROCESS NAME, USR_TIME, SYS_TIME\n";
+static constexpr char TOP_HEADER[] = "[CPU_TOP]  PID, PROCESS_NAME, USR_TIME, SYS_TIME\n";
 static constexpr char FMT_TOP_PROFILE[] = "%6.2f%%   %5d %s %" PRIu64 " %" PRIu64 "\n";
 
-cpu_usage::cpu_usage(void) {
+CpuUsage::CpuUsage(void) {
     std::string procstat;
     if (android::base::ReadFileToString("/proc/stat", &procstat)) {
         std::istringstream stream(procstat);
@@ -36,7 +36,7 @@ cpu_usage::cpu_usage(void) {
         while (getline(stream, line)) {
             std::vector<std::string> fields = android::base::Split(line, " ");
             if (fields[0].find("cpu") != std::string::npos && fields[0] != "cpu") {
-                cpudata data;
+                CpuData data;
                 mPrevCoresUsage.push_back(data);
             }
         }
@@ -46,7 +46,7 @@ cpu_usage::cpu_usage(void) {
     mTopcount = TOP_PROCESS_COUNT;
 }
 
-void cpu_usage::setOptions(const std::string &key, const std::string &value) {
+void CpuUsage::setOptions(const std::string &key, const std::string &value) {
     if (key == PROCPROF_THRESHOLD || key == CPU_DISABLED || key == CPU_DEBUG ||
         key == CPU_TOPCOUNT) {
         uint32_t val = 0;
@@ -71,22 +71,22 @@ void cpu_usage::setOptions(const std::string &key, const std::string &value) {
     }
 }
 
-void cpu_usage::profileProcess(uint64_t diffcpu, std::string *out) {
+void CpuUsage::profileProcess(std::string *out) {
     // Read cpu usage per process and find the top ones
     DIR *dir;
     struct dirent *ent;
-    std::unordered_map<uint32_t, procdata> proc_usage;
-    std::priority_queue<procdata, std::vector<procdata>, ProcdataCompare> proclist;
+    std::unordered_map<uint32_t, ProcData> procUsage;
+    std::priority_queue<ProcData, std::vector<ProcData>, ProcdataCompare> procList;
     if ((dir = opendir("/proc/")) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
             if (ent->d_type == DT_DIR) {
-                std::string pid_str = ent->d_name;
-                std::string::const_iterator it = pid_str.begin();
-                while (it != pid_str.end() && isdigit(*it)) ++it;
-                if (!pid_str.empty() && it == pid_str.end()) {
-                    std::string pid_stat;
-                    if (android::base::ReadFileToString("/proc/" + pid_str + "/stat", &pid_stat)) {
-                        std::vector<std::string> fields = android::base::Split(pid_stat, " ");
+                std::string pidStr = ent->d_name;
+                std::string::const_iterator it = pidStr.begin();
+                while (it != pidStr.end() && isdigit(*it)) ++it;
+                if (!pidStr.empty() && it == pidStr.end()) {
+                    std::string pidStat;
+                    if (android::base::ReadFileToString("/proc/" + pidStr + "/stat", &pidStat)) {
+                        std::vector<std::string> fields = android::base::Split(pidStat, " ");
                         uint32_t pid = 0;
                         uint64_t utime = 0;
                         uint64_t stime = 0;
@@ -98,7 +98,7 @@ void cpu_usage::profileProcess(uint64_t diffcpu, std::string *out) {
                             !base::ParseUint(fields[14], &stime) ||
                             !base::ParseUint(fields[15], &cutime) ||
                             !base::ParseUint(fields[16], &cstime)) {
-                            LOG_TO(SYSTEM, ERROR) << "Invalid proc data\n" << pid_stat;
+                            LOG_TO(SYSTEM, ERROR) << "Invalid proc data\n" << pidStat;
                             continue;
                         }
                         std::string proc = fields[1];
@@ -106,45 +106,44 @@ void cpu_usage::profileProcess(uint64_t diffcpu, std::string *out) {
                             proc.length() > 2 ? proc.substr(1, proc.length() - 2) : "";
                         uint64_t user = utime + cutime;
                         uint64_t system = stime + cstime;
-                        uint64_t totalusage = user + system;
+                        uint64_t totalUsage = user + system;
 
-                        uint64_t diffuser = user - mPrevProcdata[pid].user;
-                        uint64_t diffsystem = system - mPrevProcdata[pid].system;
-                        uint64_t diffusage = totalusage - mPrevProcdata[pid].usage;
+                        uint64_t diffUser = user - mPrevProcdata[pid].user;
+                        uint64_t diffSystem = system - mPrevProcdata[pid].system;
+                        uint64_t diffUsage = totalUsage - mPrevProcdata[pid].usage;
 
-                        procdata ldata;
+                        ProcData ldata;
                         ldata.user = user;
                         ldata.system = system;
-                        ldata.usage = totalusage;
-                        proc_usage[pid] = ldata;
+                        ldata.usage = totalUsage;
+                        procUsage[pid] = ldata;
 
-                        float usage_ratio = (float)(diffusage * 100.0 / diffcpu);
-                        if (cDebug && usage_ratio > 100) {
-                            LOG_TO(SYSTEM, INFO) << "pid: " << pid << " , ratio: " << usage_ratio
+                        float usageRatio = (float)(diffUsage * 100.0 / mDiffCpu);
+                        if (cDebug && usageRatio > 100) {
+                            LOG_TO(SYSTEM, INFO) << "pid: " << pid << " , ratio: " << usageRatio
                                                  << " , prev usage: " << mPrevProcdata[pid].usage
-                                                 << " , cur usage: " << totalusage
-                                                 << " , total cpu diff: " << diffcpu;
+                                                 << " , cur usage: " << totalUsage
+                                                 << " , total cpu diff: " << mDiffCpu;
                         }
 
-                        procdata data;
+                        ProcData data;
                         data.pid = pid;
                         data.name = name;
-                        data.usage_ratio = usage_ratio;
-                        data.user = diffuser;
-                        data.system = diffsystem;
-                        proclist.push(data);
+                        data.usageRatio = usageRatio;
+                        data.user = diffUser;
+                        data.system = diffSystem;
+                        procList.push(data);
                     }
                 }
             }
         }
-        mPrevProcdata = std::move(proc_usage);
-        uint32_t count = 0;
+        mPrevProcdata = std::move(procUsage);
         out->append(TOP_HEADER);
-        while (!proclist.empty() && count++ < mTopcount) {
-            procdata data = proclist.top();
-            out->append(android::base::StringPrintf(FMT_TOP_PROFILE, data.usage_ratio, data.pid,
+        for (uint32_t count = 0; !procList.empty() && count < mTopcount; count++) {
+            ProcData data = procList.top();
+            out->append(android::base::StringPrintf(FMT_TOP_PROFILE, data.usageRatio, data.pid,
                                                     data.name.c_str(), data.user, data.system));
-            proclist.pop();
+            procList.pop();
         }
         closedir(dir);
     } else {
@@ -152,25 +151,20 @@ void cpu_usage::profileProcess(uint64_t diffcpu, std::string *out) {
     }
 }
 
-void cpu_usage::refresh(void) {
-    if (mDisabled)
-        return;
-
-    std::string out, proc_stat;
-    uint64_t diffcpu;
-    float totalRatio = 0.0f;
-    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+void CpuUsage::getOverallUsage(std::chrono::system_clock::time_point &now, std::string *out) {
+    mDiffCpu = 0;
+    mTotalRatio = 0.0f;
+    std::string procStat;
 
     // Get overall cpu usage
-    if (android::base::ReadFileToString("/proc/stat", &proc_stat)) {
-        std::istringstream stream(proc_stat);
+    if (android::base::ReadFileToString("/proc/stat", &procStat)) {
+        std::istringstream stream(procStat);
         std::string line;
         while (getline(stream, line)) {
             std::vector<std::string> fields = android::base::Split(line, " ");
             if (fields[0].find("cpu") != std::string::npos) {
-                std::string cpu_str = fields[0];
-                std::string core =
-                    cpu_str.length() > 3 ? cpu_str.substr(3, cpu_str.length() - 3) : "";
+                std::string cpuStr = fields[0];
+                std::string core = cpuStr.length() > 3 ? cpuStr.substr(3, cpuStr.length() - 3) : "";
                 uint64_t user = 0;
                 uint64_t nice = 0;
                 uint64_t system = 0;
@@ -196,39 +190,39 @@ void cpu_usage::refresh(void) {
                     continue;
                 }
 
-                uint64_t cputime = user + nice + system + idle + iowait + irq + softirq + steal;
-                uint64_t cpuusage = cputime - idle - iowait;
-                uint64_t userusage = user + nice;
+                uint64_t cpuTime = user + nice + system + idle + iowait + irq + softirq + steal;
+                uint64_t cpuUsage = cpuTime - idle - iowait;
+                uint64_t userUsage = user + nice;
 
                 if (!core.compare("")) {
-                    uint64_t diffusage = cpuusage - mPrevUsage.cpuusage;
-                    diffcpu = cputime - mPrevUsage.cputime;
-                    uint64_t diffuser = userusage - mPrevUsage.userusage;
-                    uint64_t diffsys = system - mPrevUsage.sysusage;
-                    uint64_t diffio = iowait - mPrevUsage.iousage;
+                    uint64_t diffUsage = cpuUsage - mPrevUsage.cpuUsage;
+                    mDiffCpu = cpuTime - mPrevUsage.cpuTime;
+                    uint64_t diffUser = userUsage - mPrevUsage.userUsage;
+                    uint64_t diffSys = system - mPrevUsage.sysUsage;
+                    uint64_t diffIo = iowait - mPrevUsage.ioUsage;
 
-                    totalRatio = (float)(diffusage * 100.0 / diffcpu);
-                    float userRatio = (float)(diffuser * 100.0 / diffcpu);
-                    float sysRatio = (float)(diffsys * 100.0 / diffcpu);
-                    float ioRatio = (float)(diffio * 100.0 / diffcpu);
+                    mTotalRatio = (float)(diffUsage * 100.0 / mDiffCpu);
+                    float userRatio = (float)(diffUser * 100.0 / mDiffCpu);
+                    float sysRatio = (float)(diffSys * 100.0 / mDiffCpu);
+                    float ioRatio = (float)(diffIo * 100.0 / mDiffCpu);
 
                     if (cDebug) {
                         LOG_TO(SYSTEM, INFO)
-                            << "prev total: " << mPrevUsage.cpuusage
-                            << " , cur total: " << cpuusage << " , diffusage: " << diffusage
-                            << " , diffcpu: " << diffcpu << " , ratio: " << totalRatio;
+                            << "prev total: " << mPrevUsage.cpuUsage
+                            << " , cur total: " << cpuUsage << " , diffusage: " << diffUsage
+                            << " , diffcpu: " << mDiffCpu << " , ratio: " << mTotalRatio;
                     }
 
-                    mPrevUsage.cpuusage = cpuusage;
-                    mPrevUsage.cputime = cputime;
-                    mPrevUsage.userusage = userusage;
-                    mPrevUsage.sysusage = system;
-                    mPrevUsage.iousage = iowait;
+                    mPrevUsage.cpuUsage = cpuUsage;
+                    mPrevUsage.cpuTime = cpuTime;
+                    mPrevUsage.userUsage = userUsage;
+                    mPrevUsage.sysUsage = system;
+                    mPrevUsage.ioUsage = iowait;
 
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - mLast);
-                    out.append(android::base::StringPrintf(FMT_CPU_TOTAL, ms.count() / 1000,
-                                                           ms.count() % 1000, totalRatio,
-                                                           userRatio, sysRatio, ioRatio));
+                    out->append(android::base::StringPrintf(FMT_CPU_TOTAL, ms.count() / 1000,
+                                                            ms.count() % 1000, mTotalRatio,
+                                                            userRatio, sysRatio, ioRatio));
                 } else {
                     // calculate total cpu usage of each core
                     uint32_t c = 0;
@@ -236,35 +230,45 @@ void cpu_usage::refresh(void) {
                         LOG_TO(SYSTEM, ERROR) << "Invalid core: " << core;
                         continue;
                     }
-                    uint64_t diffusage = cpuusage - mPrevCoresUsage[c].cpuusage;
-                    float coreTotalRatio = (float)(diffusage * 100.0 / diffcpu);
+                    uint64_t diffUsage = cpuUsage - mPrevCoresUsage[c].cpuUsage;
+                    float coreTotalRatio = (float)(diffUsage * 100.0 / mDiffCpu);
                     if (cDebug) {
                         LOG_TO(SYSTEM, INFO)
-                            << "core " << c << " , prev cpu usage: " << mPrevCoresUsage[c].cpuusage
-                            << " , cur cpu usage: " << cpuusage << " , diffusage: " << diffusage
-                            << " , difftotalcpu: " << diffcpu << " , ratio: " << coreTotalRatio;
+                            << "core " << c << " , prev cpu usage: " << mPrevCoresUsage[c].cpuUsage
+                            << " , cur cpu usage: " << cpuUsage << " , diffusage: " << diffUsage
+                            << " , difftotalcpu: " << mDiffCpu << " , ratio: " << coreTotalRatio;
                     }
-                    mPrevCoresUsage[c].cpuusage = cpuusage;
+                    mPrevCoresUsage[c].cpuUsage = cpuUsage;
 
                     char buf[64];
                     sprintf(buf, "%.2f%%]", coreTotalRatio);
-                    out.append("[" + core + ":" + std::string(buf));
+                    out->append("[" + core + ":" + std::string(buf));
                 }
             }
         }
-        out.append("\n");
+        out->append("\n");
     } else {
         LOG_TO(SYSTEM, ERROR) << "Fail to read /proc/stat";
     }
+}
 
-    if (totalRatio >= mProfileThreshold) {
+void CpuUsage::refresh(void) {
+    if (mDisabled)
+        return;
+
+    std::string out;
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+
+    getOverallUsage(now, &out);
+
+    if (mTotalRatio >= mProfileThreshold) {
         if (cDebug)
             LOG_TO(SYSTEM, INFO) << "Total CPU usage over " << mProfileThreshold << "%";
-        std::string profile_result;
-        profileProcess(diffcpu, &profile_result);
+        std::string profileResult;
+        profileProcess(&profileResult);
         if (mProfileProcess) {
             // Dump top processes once met threshold continuously at least twice.
-            out.append(profile_result);
+            out.append(profileResult);
         } else
             mProfileProcess = true;
     } else

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef _CPU_USAGE_H_
 #define _CPU_USAGE_H_
 
@@ -31,26 +32,26 @@ namespace android {
 namespace pixel {
 namespace perfstatsd {
 
-struct cpudata {
-    uint64_t cpuusage;
-    uint64_t cputime;
-    uint64_t userusage;
-    uint64_t sysusage;
-    uint64_t iousage;
+struct CpuData {
+    uint64_t cpuUsage;
+    uint64_t cpuTime;
+    uint64_t userUsage;
+    uint64_t sysUsage;
+    uint64_t ioUsage;
 };
 
-struct procdata {
+struct ProcData {
     uint32_t pid;
     std::string name;
-    float usage_ratio;
+    float usageRatio;
     uint64_t usage;
     uint64_t user;
     uint64_t system;
 };
 
-class cpu_usage : public statstype {
+class CpuUsage : public StatsType {
   public:
-    cpu_usage(void);
+    CpuUsage(void);
     void refresh(void);
     void setOptions(const std::string &key, const std::string &value);
 
@@ -61,16 +62,19 @@ class cpu_usage : public statstype {
     uint32_t mTopcount;
     bool mDisabled;
     bool mProfileProcess;
-    cpudata mPrevUsage;                                    // cpu usage of last record
-    std::vector<cpudata> mPrevCoresUsage;                  // cpu usage per core of last record
-    std::unordered_map<uint32_t, procdata> mPrevProcdata;  // <pid, last_usage>
-    void profileProcess(uint64_t, std::string *);
+    CpuData mPrevUsage;                                    // cpu usage of last record
+    std::vector<CpuData> mPrevCoresUsage;                  // cpu usage per core of last record
+    std::unordered_map<uint32_t, ProcData> mPrevProcdata;  // <pid, last_usage>
+    uint64_t mDiffCpu;
+    float mTotalRatio;
+    void getOverallUsage(std::chrono::system_clock::time_point &, std::string *);
+    void profileProcess(std::string *);
 };
 
 struct ProcdataCompare {
     // sort process by usage percentage in descending order
-    bool operator()(const procdata &a, const procdata &b) const {
-        return a.usage_ratio < b.usage_ratio;
+    bool operator()(const ProcData &a, const ProcData &b) const {
+        return a.usageRatio < b.usageRatio;
     }
 };
 

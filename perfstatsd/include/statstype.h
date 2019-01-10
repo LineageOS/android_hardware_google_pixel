@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@ namespace android {
 namespace pixel {
 namespace perfstatsd {
 
-class statstype : public RefBase {
+class StatsType : public RefBase {
   public:
     virtual void refresh() = 0;
     virtual void setOptions(const std::string &, const std::string &) = 0;
-    void dump(std::priority_queue<statsdata, std::vector<statsdata>, StatsdataCompare> *queue) {
+    void dump(std::priority_queue<StatsData, std::vector<StatsData>, StatsdataCompare> *queue) {
         std::unique_lock<std::mutex> mlock(mMutex);
-        std::queue<statsdata> buffer = mBuffer.dump();
+        std::queue<StatsData> buffer = mBuffer.dump();
         while (!buffer.empty()) {
             queue->push(buffer.front());
             buffer.pop();
@@ -40,12 +40,12 @@ class statstype : public RefBase {
     size_t bufferCount() { return mBuffer.count(); }
 
   protected:
-    void append(statsdata &&data) {
+    void append(StatsData &&data) {
         std::unique_lock<std::mutex> mlock(mMutex);
-        mBuffer.emplace(std::forward<statsdata>(data));
+        mBuffer.emplace(std::forward<StatsData>(data));
     }
     void append(std::chrono::system_clock::time_point &time, std::string &content) {
-        statsdata data;
+        StatsData data;
         data.setTime(time);
         data.setData(content);
         append(std::move(data));

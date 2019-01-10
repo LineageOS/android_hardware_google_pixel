@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,16 @@
 
 using namespace android::pixel::perfstatsd;
 
-void PerfstatsBuffer::emplace(statsdata &&data) {
+void PerfstatsBuffer::emplace(StatsData &&data) {
     while (mStorage.size() + 1 > mBufferSize) {
         if (mStorage.empty()) {
             break;
         }
         mStorage.pop();
     }
-    mStorage.emplace(std::forward<statsdata>(data));
+    mStorage.emplace(std::forward<StatsData>(data));
 }
 
-const std::queue<statsdata> &PerfstatsBuffer::dump(void) {
+const std::queue<StatsData> &PerfstatsBuffer::dump(void) {
     return mStorage;
 }

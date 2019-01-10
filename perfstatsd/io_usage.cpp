@@ -20,8 +20,8 @@
 #include <android-base/parseint.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
+#include <cutils/android_filesystem_config.h>
 #include <inttypes.h>
-#include <private/android_filesystem_config.h>
 #include <pwd.h>
 
 using namespace android::pixel::perfstatsd;
