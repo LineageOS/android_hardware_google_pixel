@@ -140,29 +140,53 @@ void UeventListener::ReportUsbAudioUevents(const char *driver, const char *produ
     }
 }
 
+void UeventListener::ReportMicBroken(const int mic) {
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (stats_client) {
+        HardwareFailed failure = {.hardwareType = HardwareFailed::HardwareType::MICROPHONE,
+                                  .hardwareLocation = mic,
+                                  .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
+        Return<void> ret = stats_client->reportHardwareFailed(failure);
+        if (!ret.isOk())
+            ALOGE("Unable to report physical drop to Stats service");
+    } else
+        ALOGE("Unable to connect to Stats service");
+
+    sp<IPixelStats> client = IPixelStats::tryGetService();
+    if (!client) {
+        ALOGE("Couldn't connect to PixelStats service for mic break");
+        return;
+    }
+    client->reportHardwareFailed(IPixelStats::HardwareType::MICROPHONE, mic,
+                                 IPixelStats::HardwareErrorCode::COMPLETE);
+}
+
 void UeventListener::ReportMicBroken(const char *devpath, const char *mic_break_status) {
     if (!devpath || !mic_break_status)
         return;
-    if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str()) &&
-        !strcmp(mic_break_status, "MIC_BREAK_STATUS=true")) {
-        sp<IStats> stats_client = IStats::tryGetService();
-        if (stats_client) {
-            HardwareFailed failure = {.hardwareType = HardwareFailed::HardwareType::MICROPHONE,
-                                      .hardwareLocation = 0,
-                                      .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
-            Return<void> ret = stats_client->reportHardwareFailed(failure);
-            if (!ret.isOk())
-                ALOGE("Unable to report physical drop to Stats service");
-        } else
-            ALOGE("Unable to connect to Stats service");
+    if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str())) {
+        std::vector<std::string> value = android::base::Split(mic_break_status, "=");
 
-        sp<IPixelStats> client = IPixelStats::tryGetService();
-        if (!client) {
-            ALOGE("Couldn't connect to PixelStats service for mic break");
-            return;
+        if (value.size() == 2 && !value[0].compare("MIC_BREAK_STATUS")) {
+            if (!value[1].compare("true"))
+                ReportMicBroken(0);
+            else {
+                int mic_status = atoi(value[1].c_str());
+
+                if (mic_status > 0 && mic_status <= 7) {
+                    for (int mic_bit = 0; mic_bit < 3; mic_bit++)
+                        if (mic_status & (0x1 << mic_bit))
+                            ReportMicBroken(mic_bit);
+                } else if (mic_status == 0) {
+                    // mic is ok
+                    return;
+                } else {
+                    // should not enter here
+                    ALOGE("invalid mic status");
+                    return;
+                }
+            }
         }
-        client->reportHardwareFailed(IPixelStats::HardwareType::MICROPHONE, 0,
-                                     IPixelStats::HardwareErrorCode::COMPLETE);
     }
 }
 
