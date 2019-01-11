@@ -42,6 +42,7 @@ using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::SlowIo;
 using android::frameworks::stats::V1_0::SpeakerImpedance;
+using android::frameworks::stats::V1_0::SpeechDspStat;
 using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
@@ -52,7 +53,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kCycleCountBinsPath(sysfs_paths.CycleCountBinsPath),
       kImpedancePath(sysfs_paths.ImpedancePath),
       kCodecPath(sysfs_paths.CodecPath),
-      kCodec1Path(sysfs_paths.Codec1Path) {}
+      kCodec1Path(sysfs_paths.Codec1Path),
+      kSpeechDspPath(sysfs_paths.SpeechDspPath) {}
 
 /**
  * Read the contents of kCycleCountBinsPath and report them via IPixelStats HAL.
@@ -201,6 +203,37 @@ void SysfsCollector::logSpeakerImpedance() {
     pixelstats_->reportSpeakerImpedance(1, right * 1000);
 }
 
+/**
+ * Report the Speech DSP state.
+ */
+void SysfsCollector::logSpeechDspStat() {
+    std::string file_contents;
+    if (kSpeechDspPath == nullptr || strlen(kSpeechDspPath) == 0) {
+        ALOGV("Speech DSP path not specified");
+        return;
+    }
+    if (!ReadFileToString(kSpeechDspPath, &file_contents)) {
+        ALOGE("Unable to read speech dsp path %s", kSpeechDspPath);
+        return;
+    }
+
+    int32_t uptime = 0, downtime = 0, crashcount = 0, recovercount = 0;
+    if (sscanf(file_contents.c_str(), "%d,%d,%d,%d", &uptime, &downtime, &crashcount,
+               &recovercount) != 4) {
+        ALOGE("Unable to parse speech dsp stat %s", file_contents.c_str());
+        return;
+    }
+
+    ALOGD("SpeechDSP uptime %d downtime %d crashcount %d recovercount %d", uptime, downtime,
+          crashcount, recovercount);
+    SpeechDspStat dspstat = {.totalUptimeMillis = uptime,
+                             .totalDowntimeMillis = downtime,
+                             .totalCrashCount = crashcount,
+                             .totalRecoverCount = recovercount};
+
+    stats_->reportSpeechDspStat(dspstat);
+}
+
 void SysfsCollector::logAll() {
     stats_ = IStats::tryGetService();
     if (!stats_) {
@@ -218,6 +251,7 @@ void SysfsCollector::logAll() {
     logCodec1Failed();
     logSlowIO();
     logSpeakerImpedance();
+    logSpeechDspStat();
 
     pixelstats_.clear();
 }
