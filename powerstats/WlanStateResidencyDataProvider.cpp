@@ -35,7 +35,7 @@ WlanStateResidencyDataProvider::WlanStateResidencyDataProvider(uint32_t id, std:
     : mPath(std::move(path)), mPowerEntityId(id) {}
 
 bool WlanStateResidencyDataProvider::getResults(
-    std::map<uint32_t, PowerEntityStateResidencyResult> &results) {
+    std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) {
     // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
     std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
     if (!fp) {
