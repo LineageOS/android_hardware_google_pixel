@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #define _IO_USAGE_H_
 
 #include <statstype.h>
+#include <chrono>
 #include <sstream>
 #include <string>
 
@@ -36,105 +37,113 @@ class ProcPidIoStats {
     std::vector<uint32_t> mCurrPids;
     std::unordered_map<uint32_t, std::string> mUidNameMapping;
     // functions
-    std::vector<uint32_t> getNewPids() {
-        std::vector<uint32_t> newpids;
-        // Not exists in Previous
-        for (int i = 0, len = mCurrPids.size(); i < len; i++) {
-            if (std::find(mPrevPids.begin(), mPrevPids.end(), mCurrPids[i]) == mPrevPids.end()) {
-                newpids.push_back(mCurrPids[i]);
-            }
-        }
-        return newpids;
-    }
+    std::vector<uint32_t> getNewPids();
 
   public:
     void update(bool forceAll);
     bool getNameForUid(uint32_t uid, std::string *name);
 };
 
-struct user_io {
+struct UserIo {
     uint32_t uid;
-    uint64_t fg_read;
-    uint64_t bg_read;
-    uint64_t fg_write;
-    uint64_t bg_write;
-    uint64_t fg_fsync;
-    uint64_t bg_fsync;
+    uint64_t fgRead;
+    uint64_t bgRead;
+    uint64_t fgWrite;
+    uint64_t bgWrite;
+    uint64_t fgFsync;
+    uint64_t bgFsync;
 
-    user_io &operator=(const user_io &other) {
+    UserIo &operator=(const UserIo &other) {
         uid = other.uid;
-        fg_read = other.fg_read;
-        bg_read = other.bg_read;
-        fg_write = other.fg_write;
-        bg_write = other.bg_write;
-        fg_fsync = other.fg_fsync;
-        bg_fsync = other.bg_fsync;
+        fgRead = other.fgRead;
+        bgRead = other.bgRead;
+        fgWrite = other.fgWrite;
+        bgWrite = other.bgWrite;
+        fgFsync = other.fgFsync;
+        bgFsync = other.bgFsync;
         return *this;
     }
-    user_io operator-(const user_io &other) const {
-        user_io r;
+
+    UserIo operator-(const UserIo &other) const {
+        UserIo r;
         r.uid = uid;
-        r.fg_read = fg_read - other.fg_read;
-        r.bg_read = bg_read - other.bg_read;
-        r.fg_write = fg_write - other.fg_write;
-        r.bg_write = bg_write - other.bg_write;
-        r.fg_fsync = fg_fsync - other.fg_fsync;
-        r.bg_fsync = bg_fsync - other.bg_fsync;
+        r.fgRead = fgRead - other.fgRead;
+        r.bgRead = bgRead - other.bgRead;
+        r.fgWrite = fgWrite - other.fgWrite;
+        r.bgWrite = bgWrite - other.bgWrite;
+        r.fgFsync = fgFsync - other.fgFsync;
+        r.bgFsync = bgFsync - other.bgFsync;
         return r;
     }
-    user_io operator+(const user_io &other) const {
-        user_io r;
+
+    UserIo operator+(const UserIo &other) const {
+        UserIo r;
         r.uid = uid;
-        r.fg_read = fg_read + other.fg_read;
-        r.bg_read = bg_read + other.bg_read;
-        r.fg_write = fg_write + other.fg_write;
-        r.bg_write = bg_write + other.bg_write;
-        r.fg_fsync = fg_fsync + other.fg_fsync;
-        r.bg_fsync = bg_fsync + other.bg_fsync;
+        r.fgRead = fgRead + other.fgRead;
+        r.bgRead = bgRead + other.bgRead;
+        r.fgWrite = fgWrite + other.fgWrite;
+        r.bgWrite = bgWrite + other.bgWrite;
+        r.fgFsync = fgFsync + other.fgFsync;
+        r.bgFsync = bgFsync + other.bgFsync;
         return r;
     }
+
+    uint64_t sumWrite() { return fgWrite + bgWrite; }
+
+    uint64_t sumRead() { return fgRead + bgRead; }
 
     void reset() {
         uid = 0;
-        fg_read = 0;
-        bg_read = 0;
-        fg_write = 0;
-        bg_write = 0;
-        fg_fsync = 0;
-        bg_fsync = 0;
+        fgRead = 0;
+        bgRead = 0;
+        fgWrite = 0;
+        bgWrite = 0;
+        fgFsync = 0;
+        bgFsync = 0;
     }
 };
 
 class ScopeTimer {
   private:
+    bool mDisabled;
     std::string mName;
     std::chrono::system_clock::time_point mStart;
 
   public:
-    ScopeTimer();
-    ScopeTimer(std::string name);
-    ~ScopeTimer();
+    ScopeTimer() : ScopeTimer("") {}
+    ScopeTimer(std::string name) : mDisabled(false), mName(name) {
+        mStart = std::chrono::system_clock::now();
+    }
+    ~ScopeTimer() {
+        if (!mDisabled) {
+            std::string msg;
+            dump(&msg);
+            LOG_TO(SYSTEM, INFO) << msg;
+        }
+    }
+    void setEnabled(bool enabled) { mDisabled = !enabled; }
+    void dump(std::string *outAppend);
 };
 
-const uint64_t IO_USAGE_DUMP_THRESHOLD = 50L * 1000L * 1000L;  // 50MB
+constexpr uint64_t IO_USAGE_DUMP_THRESHOLD = 50L * 1000L * 1000L;  // 50MB
 class IoStats {
   private:
     uint64_t mMinSizeOfTotalRead = IO_USAGE_DUMP_THRESHOLD;
     uint64_t mMinSizeOfTotalWrite = IO_USAGE_DUMP_THRESHOLD;
     std::chrono::system_clock::time_point mLast;
     std::chrono::system_clock::time_point mNow;
-    std::unordered_map<uint32_t, user_io> mPrevious;
-    user_io mTotal;
-    user_io mWriteTop[IO_TOP_MAX];
-    user_io mReadTop[IO_TOP_MAX];
+    std::unordered_map<uint32_t, UserIo> mPrevious;
+    UserIo mTotal;
+    UserIo mWriteTop[IO_TOP_MAX];
+    UserIo mReadTop[IO_TOP_MAX];
     std::vector<uint32_t> mUnknownUidList;
     std::unordered_map<uint32_t, std::string> mUidNameMap;
     ProcPidIoStats mProcIoStats;
     // Functions
-    std::unordered_map<uint32_t, user_io> calcIncrement(
-        const std::unordered_map<uint32_t, user_io> &data);
-    void updateTopWrite(user_io usage);
-    void updateTopRead(user_io usage);
+    std::unordered_map<uint32_t, UserIo> calcIncrement(
+        const std::unordered_map<uint32_t, UserIo> &data);
+    void updateTopWrite(UserIo usage);
+    void updateTopRead(UserIo usage);
     void updateUnknownUidList();
 
   public:
@@ -142,17 +151,19 @@ class IoStats {
         mNow = std::chrono::system_clock::now();
         mLast = mNow;
     }
-    void calcAll(std::unordered_map<uint32_t, user_io> &&data);
+    void calcAll(std::unordered_map<uint32_t, UserIo> &&data);
     void setDumpThresholdSizeForRead(uint64_t size) { mMinSizeOfTotalRead = size; }
     void setDumpThresholdSizeForWrite(uint64_t size) { mMinSizeOfTotalWrite = size; }
     bool dump(std::stringstream *output);
 };
 
-class io_usage : public StatsType {
+class IoUsage : public StatsType {
   private:
+    bool mDisabled;
     IoStats mStats;
 
   public:
+    IoUsage() : mDisabled(false) {}
     void refresh(void);
     void setOptions(const std::string &key, const std::string &value);
 };
