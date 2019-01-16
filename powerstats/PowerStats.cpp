@@ -22,7 +22,6 @@
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 
-#include <pixelpowerstats/Debugging.h>
 #include <pixelpowerstats/PowerStats.h>
 
 namespace android {
@@ -143,7 +142,7 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
         return getPowerEntityStateResidencyData(ids, _hidl_cb);
     }
 
-    std::map<uint32_t, PowerEntityStateResidencyResult> stateResidencies;
+    std::unordered_map<uint32_t, PowerEntityStateResidencyResult> stateResidencies;
     std::vector<PowerEntityStateResidencyResult> results;
     results.reserve(powerEntityIds.size());
 
@@ -183,9 +182,10 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
     return Void();
 }
 
-bool DumpResidencyDataToFd(const hidl_vec<PowerEntityInfo> &infos,
-                           const hidl_vec<PowerEntityStateSpace> &stateSpaces,
-                           const hidl_vec<PowerEntityStateResidencyResult> &results, int fd) {
+static bool DumpResidencyDataToFd(const hidl_vec<PowerEntityInfo> &infos,
+                                  const hidl_vec<PowerEntityStateSpace> &stateSpaces,
+                                  const hidl_vec<PowerEntityStateResidencyResult> &results,
+                                  int fd) {
     // construct lookup table of powerEntityId to name
     std::unordered_map<uint32_t, std::string> entityNames;
     for (auto info : infos) {
@@ -208,7 +208,7 @@ bool DumpResidencyDataToFd(const hidl_vec<PowerEntityInfo> &infos,
     const char *headerFormat = "  %14s   %14s   %16s   %15s   %16s\n";
     const char *dataFormat =
         "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %13" PRIu64 " ms\n";
-    dumpStats << android::base::StringPrintf(headerFormat, "Subsystem", "State", "Total time",
+    dumpStats << android::base::StringPrintf(headerFormat, "Entity", "State", "Total time",
                                              "Total entries", "Last entry timestamp");
 
     for (auto result : results) {

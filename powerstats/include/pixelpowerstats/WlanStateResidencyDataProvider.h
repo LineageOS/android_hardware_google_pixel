@@ -2,6 +2,7 @@
 #define HARDWARE_GOOGLE_PIXEL_POWERSTATS_WLANSTATERESIDENCYDATAPROVIDER_H
 
 #include <pixelpowerstats/PowerStats.h>
+#include <unordered_map>
 
 namespace android {
 namespace hardware {
@@ -13,7 +14,8 @@ class WlanStateResidencyDataProvider : public IStateResidencyDataProvider {
   public:
     WlanStateResidencyDataProvider(uint32_t id, std::string path);
     ~WlanStateResidencyDataProvider() = default;
-    bool getResults(std::map<uint32_t, PowerEntityStateResidencyResult> &results) override;
+    bool getResults(std::unordered_map<uint32_t, PowerEntityStateResidencyResult>
+            &results) override;
     std::vector<PowerEntityStateSpace> getStateSpaces() override;
 
   private:

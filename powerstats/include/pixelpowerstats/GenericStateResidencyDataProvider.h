@@ -41,7 +41,8 @@ class GenericStateResidencyDataProvider : public IStateResidencyDataProvider {
     GenericStateResidencyDataProvider(std::string path) : mPath(std::move(path)){};
     ~GenericStateResidencyDataProvider() = default;
     void addEntity(uint32_t id, const PowerEntityConfig &config);
-    bool getResults(std::map<uint32_t, PowerEntityStateResidencyResult> &results) override;
+    bool getResults(std::unordered_map<uint32_t, PowerEntityStateResidencyResult>
+            &results) override;
     std::vector<PowerEntityStateSpace> getStateSpaces() override;
 
   private:
