@@ -27,7 +27,7 @@ Perfstatsd::Perfstatsd(void) {
     cpuUsage->setBufferSize(CPU_USAGE_BUFFER_SIZE);
     mStats.emplace_back(std::move(cpuUsage));
 
-    std::unique_ptr<StatsType> ioUsage(new io_usage);
+    std::unique_ptr<StatsType> ioUsage(new IoUsage);
     ioUsage->setBufferSize(IO_USAGE_BUFFER_SIZE);
     mStats.emplace_back(std::move(ioUsage));
 }
