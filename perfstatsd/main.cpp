@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,28 +19,23 @@
 #include <perfstatsd.h>
 #include <perfstatsd_service.h>
 
-using namespace android;
-using namespace android::base;
-using namespace std;
-using namespace std::this_thread;
-
 enum MODE { DUMP_HISTORY, SET_OPTION };
 
-sp<perfstatsd_t> perfstatsd_sp;
+android::sp<Perfstatsd> perfstatsdSp;
 
-void *perfstatsd_main(void *) {
+void *perfstatsdMain(void *) {
     LOG_TO(SYSTEM, INFO) << "main thread started";
-    perfstatsd_sp = new perfstatsd_t();
+    perfstatsdSp = new Perfstatsd();
 
     while (true) {
-        perfstatsd_sp->refresh();
-        perfstatsd_sp->pause();
+        perfstatsdSp->refresh();
+        perfstatsdSp->pause();
     }
     return NULL;
 }
 
 void help(char **argv) {
-    string usage = argv[0];
+    std::string usage = argv[0];
     usage = "Usage: " + usage + " [-s][-d][-o]\n" +
             "Options:\n"
             "    -s, start as service\n"
@@ -51,13 +46,13 @@ void help(char **argv) {
 }
 
 int startService(void) {
-    pthread_t perfstatsd_main_thread;
-    errno = pthread_create(&perfstatsd_main_thread, NULL, perfstatsd_main, NULL);
+    pthread_t perfstatsdMainThread;
+    errno = pthread_create(&perfstatsdMainThread, NULL, perfstatsdMain, NULL);
     if (errno != 0) {
         PLOG_TO(SYSTEM, ERROR) << "Failed to create main thread";
         return -1;
     } else {
-        pthread_setname_np(perfstatsd_main_thread, "perfstatsd_main");
+        pthread_setname_np(perfstatsdMainThread, "perfstatsd_main");
     }
 
     android::ProcessState::initWithDriver("/dev/vndbinder");
@@ -69,16 +64,16 @@ int startService(void) {
         LOG_TO(SYSTEM, INFO) << "perfstatsd_pri_service started";
 
     android::ProcessState::self()->startThreadPool();
-    IPCThreadState::self()->joinThreadPool();
-    pthread_join(perfstatsd_main_thread, NULL);
+    android::IPCThreadState::self()->joinThreadPool();
+    pthread_join(perfstatsdMainThread, NULL);
     return 0;
 }
 
-int serviceCall(int mode, const string &key, const string &value) {
+int serviceCall(int mode, const std::string &key, const std::string &value) {
     android::ProcessState::initWithDriver("/dev/vndbinder");
 
-    sp<IPerfstatsdPrivate> perfstatsd_pri_service = get_perfstatsd_pri_service();
-    if (perfstatsd_pri_service == NULL) {
+    android::sp<IPerfstatsdPrivate> perfstatsdPrivateService = getPerfstatsdPrivateService();
+    if (perfstatsdPrivateService == NULL) {
         PLOG_TO(SYSTEM, ERROR) << "Cannot find perfstatsd service.";
         fprintf(stdout, "Cannot find perfstatsd service.\n");
         return -1;
@@ -86,9 +81,9 @@ int serviceCall(int mode, const string &key, const string &value) {
 
     switch (mode) {
         case DUMP_HISTORY: {
-            string history;
+            std::string history;
             LOG_TO(SYSTEM, INFO) << "dump perfstats history.";
-            if (!perfstatsd_pri_service->dumpHistory(&history).isOk() || history.empty()) {
+            if (!perfstatsdPrivateService->dumpHistory(&history).isOk() || history.empty()) {
                 PLOG_TO(SYSTEM, ERROR) << "perf stats history is not available";
                 fprintf(stdout, "perf stats history is not available\n");
                 return -1;
@@ -98,9 +93,9 @@ int serviceCall(int mode, const string &key, const string &value) {
         }
         case SET_OPTION:
             LOG_TO(SYSTEM, INFO) << "set option: " << key << " , " << value;
-            if (!perfstatsd_pri_service
-                     ->setOptions(std::forward<const string>(key),
-                                  std::forward<const string>(value))
+            if (!perfstatsdPrivateService
+                     ->setOptions(std::forward<const std::string>(key),
+                                  std::forward<const std::string>(value))
                      .isOk()) {
                 PLOG_TO(SYSTEM, ERROR) << "fail to set options";
                 fprintf(stdout, "fail to set options\n");
@@ -112,7 +107,7 @@ int serviceCall(int mode, const string &key, const string &value) {
 }
 
 int serviceCall(int mode) {
-    string empty("");
+    std::string empty("");
     return serviceCall(mode, empty, empty);
 }
 
@@ -127,8 +122,8 @@ int main(int argc, char **argv) {
             case 'o':
                 // set options
                 if (argc == 4) {
-                    string key(argv[2]);
-                    string value(argv[3]);
+                    std::string key(argv[2]);
+                    std::string value(argv[3]);
                     return serviceCall(SET_OPTION, std::move(key), std::move(value));
                 }
                 FALLTHROUGH_INTENDED;

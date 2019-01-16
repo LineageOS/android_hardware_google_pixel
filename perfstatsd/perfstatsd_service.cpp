@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,18 +24,18 @@ android::status_t PerfstatsdPrivateService::start() {
 }
 
 android::binder::Status PerfstatsdPrivateService::dumpHistory(std::string *_aidl_return) {
-    perfstatsd_sp->get_history(_aidl_return);
+    perfstatsdSp->getHistory(_aidl_return);
     return android::binder::Status::ok();
 }
 
 android::binder::Status PerfstatsdPrivateService::setOptions(const std::string &key,
                                                              const std::string &value) {
-    perfstatsd_sp->setOptions(std::forward<const std::string>(key),
-                              std::forward<const std::string>(value));
+    perfstatsdSp->setOptions(std::forward<const std::string>(key),
+                             std::forward<const std::string>(value));
     return android::binder::Status::ok();
 }
 
-android::sp<IPerfstatsdPrivate> get_perfstatsd_pri_service() {
+android::sp<IPerfstatsdPrivate> getPerfstatsdPrivateService() {
     android::sp<android::IServiceManager> sm = android::defaultServiceManager();
     if (sm == NULL)
         return NULL;

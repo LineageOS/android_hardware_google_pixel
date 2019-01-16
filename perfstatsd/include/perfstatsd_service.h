@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 
 using namespace android::pixel::perfstatsd;
 
-extern android::sp<perfstatsd_t> perfstatsd_sp;
+extern android::sp<Perfstatsd> perfstatsdSp;
 
 class PerfstatsdPrivateService : public android::BinderService<PerfstatsdPrivateService>,
                                  public BnPerfstatsdPrivate {
@@ -36,6 +36,6 @@ class PerfstatsdPrivateService : public android::BinderService<PerfstatsdPrivate
     android::binder::Status setOptions(const std::string &key, const std::string &value);
 };
 
-android::sp<IPerfstatsdPrivate> get_perfstatsd_pri_service();
+android::sp<IPerfstatsdPrivate> getPerfstatsdPrivateService();
 
 #endif /* _PERFSTATSD_SERVICE_H_ */

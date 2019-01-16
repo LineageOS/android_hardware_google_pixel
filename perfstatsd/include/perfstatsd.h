@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,16 +28,16 @@ namespace android {
 namespace pixel {
 namespace perfstatsd {
 
-class perfstatsd_t : public RefBase {
+class Perfstatsd : public RefBase {
   private:
-    std::list<std::unique_ptr<statstype>> mStats;
+    std::list<std::unique_ptr<StatsType>> mStats;
     uint32_t mRefreshPeriod;
 
   public:
-    perfstatsd_t(void);
+    Perfstatsd(void);
     void refresh(void);
     void pause(void) { sleep(mRefreshPeriod); }
-    void get_history(std::string *ret);
+    void getHistory(std::string *ret);
     void setOptions(const std::string &key, const std::string &value);
 };
 
