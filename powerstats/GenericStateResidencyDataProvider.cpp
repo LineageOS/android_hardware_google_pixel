@@ -148,7 +148,7 @@ static bool getStateData(
 }
 
 bool GenericStateResidencyDataProvider::getResults(
-    std::map<uint32_t, PowerEntityStateResidencyResult> &results) {
+    std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) {
     // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
     std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
     if (!fp) {
