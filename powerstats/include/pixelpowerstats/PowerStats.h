@@ -43,8 +43,7 @@ class IRailDataProvider {
 class IStateResidencyDataProvider {
   public:
     virtual ~IStateResidencyDataProvider() = default;
-    virtual bool getResults(
-        std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) = 0;
+    virtual bool getResults(std::map<uint32_t, PowerEntityStateResidencyResult> &results) = 0;
     virtual std::vector<PowerEntityStateSpace> getStateSpaces() = 0;
 };
 
