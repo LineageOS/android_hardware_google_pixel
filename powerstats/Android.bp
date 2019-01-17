@@ -4,6 +4,7 @@ cc_library_static {
     export_include_dirs: ["include"],
 
     srcs: [
+        "Debugging.cpp",
         "PowerStats.cpp",
         "PowerStatsUtils.cpp",
         "GenericStateResidencyDataProvider.cpp",
