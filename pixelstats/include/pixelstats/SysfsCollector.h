@@ -42,6 +42,7 @@ class SysfsCollector {
         const char *const ImpedancePath;
         const char *const CodecPath;
         const char *const Codec1Path;
+        const char *const SpeechDspPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -55,6 +56,7 @@ class SysfsCollector {
     void logCodec1Failed();
     void logSlowIO();
     void logSpeakerImpedance();
+    void logSpeechDspStat();
 
     void reportSlowIoFromFile(const char *path, const IPixelStats::IoOperation &operation,
                               const SlowIo::IoOperation &operation_s);
@@ -67,6 +69,7 @@ class SysfsCollector {
     const char *const kImpedancePath;
     const char *const kCodecPath;
     const char *const kCodec1Path;
+    const char *const kSpeechDspPath;
     sp<IPixelStats> pixelstats_;
     sp<IStats> stats_;
 };
