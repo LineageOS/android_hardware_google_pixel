@@ -41,6 +41,7 @@ class UeventListener {
     void ReportUsbConnectorUevents(const char *power_supply_typec_mode);
     void ReportUsbAudioUevents(const char *driver, const char *product, const char *action);
     void ReportMicBroken(const char *devpath, const char *mic_break_status);
+    void ReportMicBroken(const int mic);
 
     const std::string kAudioUevent;
 
