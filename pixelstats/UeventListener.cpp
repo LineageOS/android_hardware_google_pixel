@@ -140,17 +140,24 @@ void UeventListener::ReportUsbAudioUevents(const char *driver, const char *produ
     }
 }
 
-void UeventListener::ReportMicBroken(const int mic) {
+void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroken) {
     sp<IStats> stats_client = IStats::tryGetService();
+
     if (stats_client) {
         HardwareFailed failure = {.hardwareType = HardwareFailed::HardwareType::MICROPHONE,
                                   .hardwareLocation = mic,
-                                  .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
+                                  .errorCode = isbroken
+                                                   ? HardwareFailed::HardwareErrorCode::COMPLETE
+                                                   : HardwareFailed::HardwareErrorCode::DEGRADE};
         Return<void> ret = stats_client->reportHardwareFailed(failure);
         if (!ret.isOk())
             ALOGE("Unable to report physical drop to Stats service");
     } else
         ALOGE("Unable to connect to Stats service");
+
+    /* TODO: IPixelStats will be deprecated soon */
+    if (!isbroken)
+        return;
 
     sp<IPixelStats> client = IPixelStats::tryGetService();
     if (!client) {
@@ -161,22 +168,30 @@ void UeventListener::ReportMicBroken(const int mic) {
                                  IPixelStats::HardwareErrorCode::COMPLETE);
 }
 
-void UeventListener::ReportMicBroken(const char *devpath, const char *mic_break_status) {
-    if (!devpath || !mic_break_status)
+void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic_status) {
+    if (!devpath || !mic_status)
         return;
     if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str())) {
-        std::vector<std::string> value = android::base::Split(mic_break_status, "=");
+        std::vector<std::string> value = android::base::Split(mic_status, "=");
+        bool isbroken;
 
-        if (value.size() == 2 && !value[0].compare("MIC_BREAK_STATUS")) {
+        if (value.size() == 2) {
+            if (!value[0].compare("MIC_BREAK_STATUS"))
+                isbroken = true;
+            else if (!value[0].compare("MIC_DEGRADE_STATUS"))
+                isbroken = false;
+            else
+                return;
+
             if (!value[1].compare("true"))
-                ReportMicBroken(0);
+                ReportMicBrokenOrDegraded(0, isbroken);
             else {
                 int mic_status = atoi(value[1].c_str());
 
                 if (mic_status > 0 && mic_status <= 7) {
                     for (int mic_bit = 0; mic_bit < 3; mic_bit++)
                         if (mic_status & (0x1 << mic_bit))
-                            ReportMicBroken(mic_bit);
+                            ReportMicBrokenOrDegraded(mic_bit, isbroken);
                 } else if (mic_status == 0) {
                     // mic is ok
                     return;
@@ -194,7 +209,7 @@ bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
     const char *action, *power_supply_typec_mode, *driver, *product;
-    const char *mic_break_status;
+    const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
     int n;
 
@@ -215,7 +230,7 @@ bool UeventListener::ProcessUevent() {
     msg[n + 1] = '\0';
 
     action = power_supply_typec_mode = driver = product = NULL;
-    mic_break_status = devpath = NULL;
+    mic_break_status = mic_degrade_status = devpath = NULL;
 
     /**
      * msg is a sequence of null-terminated strings.
@@ -234,6 +249,8 @@ bool UeventListener::ProcessUevent() {
             product = cp;
         } else if (!strncmp(cp, "MIC_BREAK_STATUS=", strlen("MIC_BREAK_STATUS="))) {
             mic_break_status = cp;
+        } else if (!strncmp(cp, "MIC_DEGRADE_STATUS=", strlen("MIC_DEGRADE_STATUS="))) {
+            mic_degrade_status = cp;
         } else if (!strncmp(cp, "DEVPATH=", strlen("DEVPATH="))) {
             devpath = cp;
         }
@@ -246,7 +263,8 @@ bool UeventListener::ProcessUevent() {
     /* Process the strings recorded. */
     ReportUsbConnectorUevents(power_supply_typec_mode);
     ReportUsbAudioUevents(driver, product, action);
-    ReportMicBroken(devpath, mic_break_status);
+    ReportMicStatusUevents(devpath, mic_break_status);
+    ReportMicStatusUevents(devpath, mic_degrade_status);
 
     return true;
 }
