@@ -39,17 +39,26 @@ constexpr char kCpuOnlineRoot[] = "/sys/devices/system/cpu";
 constexpr char kCpuUsageFile[] = "/proc/stat";
 constexpr char kCpuOnlineFileSuffix[] = "online";
 constexpr char kCpuPresentFile[] = "/sys/devices/system/cpu/present";
+constexpr char kSensorPrefix[] = "thermal_zone";
+constexpr char kCoolingDevicePrefix[] = "cooling_device";
+constexpr char kThermalNameFile[] = "type";
+constexpr char kSensorTempSuffix[] = "temp";
+constexpr char kCoolingDeviceCurStateSuffix[] = "cur_state";
+constexpr char kConfigProperty[] = "vendor.thermal.config";
+constexpr char kConfigDefaultFileName[] = "thermal_info_config.json";
 
 namespace {
 using android::base::StringPrintf;
 
-// Pixel don't offline CPU, see std::thread::hardware_concurrency(); should work.
-// However /sys/devices/system/cpu/present is preferred.
-// The file is expected to contain single text line with two numbers %d-%d,
-// which is a range of available cpu numbers, e.g. 0-7 would mean there
-// are 8 cores number from 0 to 7.
-// For Android systems this approach is safer than using cpufeatures, see bug
-// b/36941727.
+/*
+ * Pixel don't offline CPU, so std::thread::hardware_concurrency(); should work.
+ * However /sys/devices/system/cpu/present is preferred.
+ * The file is expected to contain single text line with two numbers %d-%d,
+ * which is a range of available cpu numbers, e.g. 0-7 would mean there
+ * are 8 cores number from 0 to 7.
+ * For Android systems this approach is safer than using cpufeatures, see bug
+ * b/36941727.
+ */
 std::size_t getNumberOfCores() {
     std::string file;
     if (!android::base::ReadFileToString(kCpuPresentFile, &file)) {
@@ -117,6 +126,39 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
     }
 }
 
+std::map<std::string, std::string> parseThermalPathMap(const std::string &prefix) {
+    std::map<std::string, std::string> path_map;
+    std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(kThermalSensorsRoot), closedir);
+    if (!dir) {
+        return path_map;
+    }
+
+    // std::filesystem is not available for vendor yet
+    // see discussion: aosp/894015
+    while (struct dirent *dp = readdir(dir.get())) {
+        if (dp->d_type != DT_DIR) {
+            continue;
+        }
+
+        if (!android::base::StartsWith(dp->d_name, prefix)) {
+            continue;
+        }
+
+        std::string path = android::base::StringPrintf("%s/%s/%s", kThermalSensorsRoot, dp->d_name,
+                                                       kThermalNameFile);
+        std::string name;
+        if (!android::base::ReadFileToString(path, &name)) {
+            PLOG(ERROR) << "Failed to read from " << path;
+            continue;
+        }
+
+        path_map.emplace(android::base::Trim(name),
+                         android::base::StringPrintf("%s/%s", kThermalSensorsRoot, dp->d_name));
+    }
+
+    return path_map;
+}
+
 }  // namespace
 
 /*
@@ -130,11 +172,9 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                                        std::placeholders::_1, std::placeholders::_2))),
       cb_(cb),
       cooling_device_info_map_(ParseCoolingDevice(
-          "/vendor/etc/" +
-          android::base::GetProperty("vendor.thermal.config", "thermal_info_config.json"))),
+          "/vendor/etc/" + android::base::GetProperty(kConfigProperty, kConfigDefaultFileName))),
       sensor_info_map_(ParseSensorInfo(
-          "/vendor/etc/" +
-          android::base::GetProperty("vendor.thermal.config", "thermal_info_config.json"))) {
+          "/vendor/etc/" + android::base::GetProperty(kConfigProperty, kConfigDefaultFileName))) {
     for (auto const &name_status_pair : sensor_info_map_) {
         sensor_status_map_[name_status_pair.first] = {
             .severity = ThrottlingSeverity::NONE,
@@ -143,15 +183,18 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         };
     }
 
-    is_initialized_ = initializeSensorMap() && initializeCoolingDevices();
+    auto tz_map = parseThermalPathMap(kSensorPrefix);
+    auto cdev_map = parseThermalPathMap(kCoolingDevicePrefix);
+
+    is_initialized_ = initializeSensorMap(tz_map) && initializeCoolingDevices(cdev_map);
     if (!is_initialized_) {
         LOG(FATAL) << "ThermalHAL could not be initialized properly.";
     }
     std::vector<std::string> paths;
     for (const auto &entry : cooling_device_info_map_) {
-        std::string path = cooling_devices_.getCoolingDevicePath(entry.first);
+        std::string path = cooling_devices_.getThermalFilePath(entry.first);
         if (!path.empty()) {
-            paths.push_back(path + "/cur_state");
+            paths.push_back(path);
         }
     }
     thermal_watcher_->registerFilesToWatch(paths);
@@ -162,24 +205,12 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
     }
 }
 
-std::vector<std::string> ThermalHelper::getCoolingDevicePaths() const {
-    std::vector<std::string> paths;
-    for (const auto &entry : cooling_device_info_map_) {
-        std::string path = cooling_devices_.getCoolingDevicePath(entry.first);
-        if (!path.empty()) {
-            paths.push_back(path + "/cur_state");
-        }
-    }
-    return paths;
-}
-
 bool ThermalHelper::readCoolingDevice(const std::string &cooling_device,
                                       CoolingDevice_2_0 *out) const {
     // Read the file.  If the file can't be read temp will be empty string.
-    int data;
-    std::string path;
+    std::string data;
 
-    if (!cooling_devices_.getCoolingDeviceState(cooling_device, &data)) {
+    if (!cooling_devices_.readThermalFile(cooling_device, &data)) {
         LOG(ERROR) << "readCoolingDevice: failed to read cooling_device: " << cooling_device;
         return false;
     }
@@ -188,7 +219,7 @@ bool ThermalHelper::readCoolingDevice(const std::string &cooling_device,
 
     out->type = type;
     out->name = cooling_device;
-    out->value = data;
+    out->value = std::stoi(data);
 
     return true;
 }
@@ -196,15 +227,14 @@ bool ThermalHelper::readCoolingDevice(const std::string &cooling_device,
 bool ThermalHelper::readTemperature(const std::string &sensor_name, Temperature_1_0 *out) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string temp;
-    std::string path;
 
-    if (!thermal_sensors_.readSensorFile(sensor_name, &temp, &path)) {
+    if (!thermal_sensors_.readThermalFile(sensor_name, &temp)) {
         LOG(ERROR) << "readTemperature: sensor not found: " << sensor_name;
         return false;
     }
 
-    if (temp.empty() && !path.empty()) {
-        LOG(ERROR) << "readTemperature: failed to open file: " << path;
+    if (temp.empty()) {
+        LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
         return false;
     }
 
@@ -230,15 +260,14 @@ bool ThermalHelper::readTemperature(
     std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string temp;
-    std::string path;
 
-    if (!thermal_sensors_.readSensorFile(sensor_name, &temp, &path)) {
+    if (!thermal_sensors_.readThermalFile(sensor_name, &temp)) {
         LOG(ERROR) << "readTemperature: sensor not found: " << sensor_name;
         return false;
     }
 
-    if (temp.empty() && !path.empty()) {
-        LOG(ERROR) << "readTemperature: failed to open file: " << path;
+    if (temp.empty()) {
+        LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
         return false;
     }
 
@@ -330,34 +359,41 @@ std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFrom
     return std::make_pair(ret_hot, ret_cold);
 }
 
-bool ThermalHelper::initializeSensorMap() {
-    for (const auto &e : sensor_info_map_) {
-        std::string sensor_name = e.first;
-        std::string sensor_temp_path =
-            StringPrintf("%s/tz-by-name/%s/temp", kThermalSensorsRoot, sensor_name.c_str());
-        if (!thermal_sensors_.addSensor(sensor_name, sensor_temp_path)) {
+bool ThermalHelper::initializeSensorMap(const std::map<std::string, std::string> &path_map) {
+    for (const auto &sensor_info_pair : sensor_info_map_) {
+        const std::string &sensor_name = sensor_info_pair.first;
+        if (!path_map.count(sensor_name)) {
+            LOG(ERROR) << "Could not find " << sensor_name << " in sysfs";
+            continue;
+        }
+        std::string path = android::base::StringPrintf("%s/%s", path_map.at(sensor_name).c_str(),
+                                                       kSensorTempSuffix);
+        if (!thermal_sensors_.addThermalFile(sensor_name, path)) {
             LOG(ERROR) << "Could not add " << sensor_name << "to sensors map";
         }
     }
-    if (sensor_info_map_.size() == thermal_sensors_.getNumSensors()) {
+    if (sensor_info_map_.size() == thermal_sensors_.getNumThermalFiles()) {
         return true;
     }
     return false;
 }
 
-bool ThermalHelper::initializeCoolingDevices() {
-    for (const auto &cooling_device_info : cooling_device_info_map_) {
-        std::string cooling_device_name = cooling_device_info.first;
-        std::string cooling_device_path =
-            StringPrintf("%s/cdev-by-name/%s", kThermalSensorsRoot, cooling_device_name.c_str());
-
-        if (!cooling_devices_.addCoolingDevice(cooling_device_name, cooling_device_path)) {
+bool ThermalHelper::initializeCoolingDevices(const std::map<std::string, std::string> &path_map) {
+    for (const auto &cooling_device_info_pair : cooling_device_info_map_) {
+        const std::string &cooling_device_name = cooling_device_info_pair.first;
+        if (!path_map.count(cooling_device_name)) {
+            LOG(ERROR) << "Could not find " << cooling_device_name << " in sysfs";
+            continue;
+        }
+        std::string path = android::base::StringPrintf(
+            "%s/%s", path_map.at(cooling_device_name).c_str(), kCoolingDeviceCurStateSuffix);
+        if (!cooling_devices_.addThermalFile(cooling_device_name, path)) {
             LOG(ERROR) << "Could not add " << cooling_device_name << "to cooling device map";
             continue;
         }
     }
 
-    if (cooling_device_info_map_.size() == cooling_devices_.getNumCoolingDevices()) {
+    if (cooling_device_info_map_.size() == cooling_devices_.getNumThermalFiles()) {
         return true;
     }
     return false;

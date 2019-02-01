@@ -42,8 +42,7 @@
 #include <android/hardware/thermal/2.0/IThermal.h>
 
 #include "utils/config_parser.h"
-#include "utils/cooling_devices.h"
-#include "utils/sensors.h"
+#include "utils/thermal_files.h"
 #include "utils/thermal_watcher.h"
 
 namespace android {
@@ -94,10 +93,6 @@ class ThermalHelper {
 
     bool isInitializedOk() const { return is_initialized_; }
 
-    // Returns a vector of all cooling devices that has been found on the
-    // device.
-    std::vector<std::string> getCoolingDevicePaths() const;
-
     // Read the temperature of a single sensor.
     bool readTemperature(const std::string &sensor_name, Temperature_1_0 *out) const;
     bool readTemperature(
@@ -110,8 +105,8 @@ class ThermalHelper {
     const std::map<std::string, SensorInfo> &GetSensorInfoMap() const { return sensor_info_map_; }
 
   private:
-    bool initializeSensorMap();
-    bool initializeCoolingDevices();
+    bool initializeSensorMap(const std::map<std::string, std::string> &path_map);
+    bool initializeCoolingDevices(const std::map<std::string, std::string> &path_map);
     // For thermal_watcher_'s polling thread
     void thermalWatcherCallbackFunc(const std::string &, const int);
     // Return hot and cold severity status as std::pair
@@ -122,8 +117,8 @@ class ThermalHelper {
         float value) const;
 
     sp<ThermalWatcher> thermal_watcher_;
-    Sensors thermal_sensors_;
-    CoolingDevices cooling_devices_;
+    ThermalFiles thermal_sensors_;
+    ThermalFiles cooling_devices_;
     bool is_initialized_;
     const NotificationCallback cb_;
     const std::map<std::string, CoolingType> cooling_device_info_map_;

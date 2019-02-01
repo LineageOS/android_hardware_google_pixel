@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __SENSORS_H__
-#define __SENSORS_H__
+#ifndef __THERMAL_FILES_H__
+#define __THERMAL_FILES_H__
 
 #include <string>
 #include <unordered_map>
@@ -26,26 +26,24 @@ namespace thermal {
 namespace V2_0 {
 namespace implementation {
 
-class Sensors {
+class ThermalFiles {
   public:
-    Sensors() = default;
-    ~Sensors() = default;
-    Sensors(const Sensors &) = delete;
-    void operator=(const Sensors &) = delete;
+    ThermalFiles() = default;
+    ~ThermalFiles() = default;
+    ThermalFiles(const ThermalFiles &) = delete;
+    void operator=(const ThermalFiles &) = delete;
 
-    std::string getSensorPath(const std::string &sensor_name);
+    std::string getThermalFilePath(const std::string &thermal_name) const;
     // Returns true if add was successful, false otherwise.
-    bool addSensor(const std::string &sensor_name, const std::string &path);
-    // If sensor is not found in the sensor names to path map, this will set
-    // data and file path to empty and return false.  If the sensor is found,
-    // this function will fill in data and file_path accordingly then return
-    // true.
-    bool readSensorFile(const std::string &sensor_name, std::string *data,
-                        std::string *file_path) const;
-    size_t getNumSensors() const { return sensor_names_to_path_map_.size(); }
+    bool addThermalFile(const std::string &thermal_name, const std::string &path);
+    // If thermal_name is not found in the thermal names to path map, this will set
+    // data to empty and return false. If the thermal_name is found and its content
+    // is read, this function will fill in data accordingly then return true.
+    bool readThermalFile(const std::string &thermal_name, std::string *data) const;
+    size_t getNumThermalFiles() const { return thermal_name_to_path_map_.size(); }
 
   private:
-    std::unordered_map<std::string, std::string> sensor_names_to_path_map_;
+    std::unordered_map<std::string, std::string> thermal_name_to_path_map_;
 };
 
 }  // namespace implementation
@@ -54,4 +52,4 @@ class Sensors {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // __SENSORS_H__
+#endif  // __THERMAL_FILES_H__
