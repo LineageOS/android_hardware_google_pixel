@@ -1,13 +1,29 @@
+/*
+ * Copyright (C) 2019 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
 #define HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
 
+#include <android/hardware/power/stats/1.0/IPowerStats.h>
+#include <utils/RefBase.h>
 #include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <android/hardware/power/stats/1.0/IPowerStats.h>
 
 namespace android {
 namespace hardware {
@@ -40,7 +56,7 @@ class IRailDataProvider {
                                           IPowerStats::streamEnergyData_cb _hidl_cb) = 0;
 };
 
-class IStateResidencyDataProvider {
+class IStateResidencyDataProvider : public virtual RefBase {
   public:
     virtual ~IStateResidencyDataProvider() = default;
     virtual bool getResults(
@@ -67,7 +83,7 @@ class PowerStats : public IPowerStats {
     uint32_t addPowerEntity(const std::string &name, PowerEntityType type);
     // Using shared_ptr here because multiple power entities could depend on the
     // same IStateResidencyDataProvider.
-    void addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p);
+    void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
 
     // Methods from ::android::hardware::power::stats::V1_0::IPowerStats follow.
     Return<void> getRailInfo(getRailInfo_cb _hidl_cb) override;
@@ -89,8 +105,7 @@ class PowerStats : public IPowerStats {
     std::unique_ptr<IRailDataProvider> mRailDataProvider;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
     std::unordered_map<uint32_t, PowerEntityStateSpace> mPowerEntityStateSpaces;
-    std::unordered_map<uint32_t, std::shared_ptr<IStateResidencyDataProvider>>
-        mStateResidencyDataProviders;
+    std::unordered_map<uint32_t, sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
 
     void debugStateResidency(const std::unordered_map<uint32_t, std::string> &entityNames, int fd,
                              bool delta);

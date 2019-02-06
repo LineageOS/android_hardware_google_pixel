@@ -8,6 +8,7 @@ cc_library_static {
         "PowerStatsUtils.cpp",
         "GenericStateResidencyDataProvider.cpp",
         "WlanStateResidencyDataProvider.cpp",
+        "AidlStateResidencyDataProvider.cpp",
     ],
 
     cflags: [
@@ -18,6 +19,8 @@ cc_library_static {
     shared_libs: [
         "android.hardware.power@1.1",
         "android.hardware.power.stats@1.0",
+        "pixelpowerstats_provider_aidl_interface-cpp",
         "liblog",
+        "libbinder",
     ],
 }

@@ -71,7 +71,7 @@ uint32_t PowerStats::addPowerEntity(const std::string &name, PowerEntityType typ
     return id;
 }
 
-void PowerStats::addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p) {
+void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p) {
     std::vector<PowerEntityStateSpace> stateSpaces = p->getStateSpaces();
     for (auto stateSpace : stateSpaces) {
         mPowerEntityStateSpaces.emplace(stateSpace.powerEntityId, stateSpace);
