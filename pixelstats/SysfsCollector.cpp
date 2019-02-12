@@ -195,7 +195,7 @@ void SysfsCollector::logSpeakerImpedance() {
     }
     SpeakerImpedance left_obj = {.speakerLocation = 0,
                                  .milliOhms = static_cast<int32_t>(left * 1000)};
-    SpeakerImpedance right_obj = {.speakerLocation = 0,
+    SpeakerImpedance right_obj = {.speakerLocation = 1,
                                   .milliOhms = static_cast<int32_t>(right * 1000)};
     stats_->reportSpeakerImpedance(left_obj);
     stats_->reportSpeakerImpedance(right_obj);
