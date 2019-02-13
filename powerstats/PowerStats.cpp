@@ -16,13 +16,14 @@
 
 #define LOG_TAG "libpixelpowerstats"
 
-#include <inttypes.h>
+#include <pixelpowerstats/PowerStats.h>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 
-#include <pixelpowerstats/PowerStats.h>
+#include <inttypes.h>
+#include <time.h>
 
 namespace android {
 namespace hardware {
@@ -182,60 +183,215 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
     return Void();
 }
 
-static bool DumpResidencyDataToFd(const hidl_vec<PowerEntityInfo> &infos,
-                                  const hidl_vec<PowerEntityStateSpace> &stateSpaces,
-                                  const hidl_vec<PowerEntityStateResidencyResult> &results,
-                                  int fd) {
-    // construct lookup table of powerEntityId to name
-    std::unordered_map<uint32_t, std::string> entityNames;
-    for (auto info : infos) {
-        entityNames.emplace(info.powerEntityId, info.powerEntityName);
-    }
+//
+// Debugging utilities to support printing data via debug()
+//
 
-    // construct lookup table of powerEntityId, powerEntityStateId to state name
-    std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames;
-    for (auto stateSpace : stateSpaces) {
-        stateNames.emplace(stateSpace.powerEntityId, std::unordered_map<uint32_t, std::string>());
-        for (auto state : stateSpace.states) {
-            stateNames.at(stateSpace.powerEntityId)
-                .emplace(state.powerEntityStateId, state.powerEntityStateName);
-        }
-    }
+const static std::string RESIDENCY_HEADER =
+        "\n============= PowerStats HAL 1.0 state residencies ==============\n";
+const static std::string RESIDENCY_FOOTER =
+        "========== End of PowerStats HAL 1.0 state residencies ==========\n";
 
+static bool DumpResidencyDataToFd(
+        const std::unordered_map<uint32_t, std::string> &entityNames,
+        const std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames,
+        const hidl_vec<PowerEntityStateResidencyResult> &results, int fd) {
     std::ostringstream dumpStats;
-    dumpStats << "\n========== PowerStats HAL 1.0 state residencies ==========\n";
-
     const char *headerFormat = "  %14s   %14s   %16s   %15s   %16s\n";
     const char *dataFormat =
-        "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %13" PRIu64 " ms\n";
+            "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %13" PRIu64 " ms\n";
+
+    dumpStats << RESIDENCY_HEADER;
     dumpStats << android::base::StringPrintf(headerFormat, "Entity", "State", "Total time",
                                              "Total entries", "Last entry timestamp");
 
     for (auto result : results) {
         for (auto stateResidency : result.stateResidencyData) {
             dumpStats << android::base::StringPrintf(
-                dataFormat, entityNames.at(result.powerEntityId).c_str(),
-                stateNames.at(result.powerEntityId).at(stateResidency.powerEntityStateId).c_str(),
-                stateResidency.totalTimeInStateMs, stateResidency.totalStateEntryCount,
-                stateResidency.lastEntryTimestampMs);
+                    dataFormat, entityNames.at(result.powerEntityId).c_str(),
+                    stateNames.at(result.powerEntityId)
+                              .at(stateResidency.powerEntityStateId).c_str(),
+                    stateResidency.totalTimeInStateMs, stateResidency.totalStateEntryCount,
+                    stateResidency.lastEntryTimestampMs);
         }
     }
 
-    dumpStats << "========== End of PowerStats HAL 1.0 state residencies ==========\n";
+    dumpStats << RESIDENCY_FOOTER;
 
     return android::base::WriteStringToFd(dumpStats.str(), fd);
 }
 
-Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_string> &) {
+static bool DumpResidencyDataDiffToFd(
+        const std::unordered_map<uint32_t, std::string> &entityNames,
+        const std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames,
+        uint64_t elapsedTimeMs, const hidl_vec<PowerEntityStateResidencyResult> &prevResults,
+        const hidl_vec<PowerEntityStateResidencyResult> &results, int fd) {
+    std::ostringstream dumpStats;
+    const char *headerFormat = "  %14s   %14s   %16s (%14s)   %15s (%16s)   %16s (%10s)\n";
+    const char *dataFormatWithDelta =
+            "  %14s   %14s   %13" PRIu64 " ms (%14" PRId64 ")   %15" PRIu64 " (%16" PRId64 ")"
+            "   %13" PRIu64 " ms (%14" PRId64 ")\n";
+    const char *dataFormatWithoutDelta =
+            "  %14s   %14s   %13" PRIu64 " ms (          none)   %15" PRIu64 " (            none)"
+            "   %13" PRIu64 " ms (          none)\n";
+
+    dumpStats << RESIDENCY_HEADER;
+    dumpStats << "Elapsed time: "
+              << (elapsedTimeMs == 0 ? "unknown" : std::to_string(elapsedTimeMs)) << " ms\n";
+
+    dumpStats << android::base::StringPrintf(headerFormat, "Entity", "State", "Total time",
+                                             "Delta   ", "Total entries", "Delta   ",
+                                             "Last entry timestamp", "Delta ");
+
+    // Process prevResults into a 2-tier lookup table for easy reference
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, PowerEntityStateResidencyData>>
+            prevResultsMap;
+    for (auto prevResult : prevResults) {
+        prevResultsMap.emplace(prevResult.powerEntityId,
+                               std::unordered_map<uint32_t, PowerEntityStateResidencyData>());
+        for (auto stateResidency : prevResult.stateResidencyData) {
+            prevResultsMap.at(prevResult.powerEntityId)
+                    .emplace(stateResidency.powerEntityStateId, stateResidency);
+        }
+    }
+
+    // Iterate over the new result data (one "result" per entity)
+    for (auto result : results) {
+        uint32_t entityId = result.powerEntityId;
+        const char *entityName = entityNames.at(entityId).c_str();
+
+        // Look up previous result data for the same entity
+        auto prevEntityResultIt = prevResultsMap.find(entityId);
+
+        // Iterate over individual states within the current entity's new result
+        for (auto stateResidency : result.stateResidencyData) {
+            uint32_t stateId = stateResidency.powerEntityStateId;
+            const char *stateName = stateNames.at(entityId).at(stateId).c_str();
+
+            // If a previous result was found for the same entity, see if that
+            // result also contains data for the current state
+            bool prevValueFound = false;
+            if (prevEntityResultIt != prevResultsMap.end()) {
+                auto prevStateResidencyIt = prevEntityResultIt->second.find(stateId);
+                // If a previous result was found for the current entity and state, calculate the
+                // deltas and display them along with new result
+                if (prevStateResidencyIt != prevEntityResultIt->second.end()) {
+                    int64_t deltaTotalTime = stateResidency.totalTimeInStateMs -
+                                             prevStateResidencyIt->second.totalTimeInStateMs;
+                    int64_t deltaTotalCount = stateResidency.totalStateEntryCount -
+                                              prevStateResidencyIt->second.totalStateEntryCount;
+                    int64_t deltaTimestamp = stateResidency.lastEntryTimestampMs -
+                                             prevStateResidencyIt->second.lastEntryTimestampMs;
+
+                    dumpStats << android::base::StringPrintf(
+                            dataFormatWithDelta, entityName, stateName,
+                            stateResidency.totalTimeInStateMs, deltaTotalTime,
+                            stateResidency.totalStateEntryCount, deltaTotalCount,
+                            stateResidency.lastEntryTimestampMs, deltaTimestamp);
+                    prevValueFound = true;
+                }
+            }
+
+            // If no previous result was found for the current entity and state, display the new
+            // result without deltas
+            if (!prevValueFound) {
+                dumpStats << android::base::StringPrintf(
+                        dataFormatWithoutDelta, entityName, stateName,
+                        stateResidency.totalTimeInStateMs, stateResidency.totalStateEntryCount,
+                        stateResidency.lastEntryTimestampMs);
+            }
+        }
+    }
+
+    dumpStats << RESIDENCY_FOOTER;
+
+    return android::base::WriteStringToFd(dumpStats.str(), fd);
+}
+
+void PowerStats::debugStateResidency(const std::unordered_map<uint32_t, std::string> &entityNames,
+                                     int fd, bool delta) {
+    static struct timespec prevDataTime;
+    static bool prevDataTimeValid = false;
+    struct timespec dataTime;
+    bool dataTimeValid;
+
+    // Get power entity state space information
+    Status status;
+    hidl_vec<PowerEntityStateSpace> stateSpaces;
+    getPowerEntityStateInfo({}, [&status, &stateSpaces](auto rStateSpaces, auto rStatus) {
+        status = rStatus;
+        stateSpaces = rStateSpaces;
+    });
+    if (status != Status::SUCCESS) {
+        LOG(ERROR) << "Error getting state info";
+        return;
+    }
+
+    // Construct lookup table of powerEntityId, powerEntityStateId to state name
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames;
+    for (auto stateSpace : stateSpaces) {
+        stateNames.emplace(stateSpace.powerEntityId, std::unordered_map<uint32_t, std::string>());
+        auto &entityStateNames = stateNames.at(stateSpace.powerEntityId);
+        for (auto state : stateSpace.states) {
+            entityStateNames.emplace(state.powerEntityStateId, state.powerEntityStateName);
+        }
+    }
+
+    // Get power entity state residency data
+    hidl_vec<PowerEntityStateResidencyResult> results;
+    getPowerEntityStateResidencyData(
+            {}, [&status, &results, &dataTime, &dataTimeValid](auto rResults, auto rStatus) {
+                status = rStatus;
+                results = rResults;
+                dataTimeValid = (clock_gettime(CLOCK_BOOTTIME, &dataTime) == 0);
+            });
+
+    // This implementation of getPowerEntityStateResidencyData supports the
+    // return of partial results if status == FILESYSTEM_ERROR.
+    if (status != Status::SUCCESS) {
+        LOG(ERROR) << "Error getting residency data -- Some results missing";
+    }
+
+    if (!delta) {
+        // If no delta argument was supplied, just dump the latest data
+        if (!DumpResidencyDataToFd(entityNames, stateNames, results, fd)) {
+            PLOG(ERROR) << "Failed to dump residency data to fd";
+        }
+    } else {
+        // If the delta argument was supplied, calculate the elapsed time since the previous
+        // result and then dump the latest data along with elapsed time and deltas
+        static hidl_vec<PowerEntityStateResidencyResult> prevResults;
+        uint64_t elapsedTimeMs = 0;
+        if (dataTimeValid && prevDataTimeValid) {
+            uint64_t prevDataTimeMs = prevDataTime.tv_sec * 1000 + (prevDataTime.tv_nsec / 1000000);
+            uint64_t dataTimeMs = dataTime.tv_sec * 1000 + (dataTime.tv_nsec / 1000000);
+            elapsedTimeMs = dataTimeMs - prevDataTimeMs;
+        }
+
+        if (!DumpResidencyDataDiffToFd(entityNames, stateNames, elapsedTimeMs, prevResults,
+                                       results, fd)) {
+            PLOG(ERROR) << "Failed to dump residency data delta to fd";
+        }
+
+        prevResults = results;
+        prevDataTime = dataTime;
+        prevDataTimeValid = dataTimeValid;
+    }
+
+    fsync(fd);
+}
+
+Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_string> &args) {
     if (handle == nullptr || handle->numFds < 1) {
         return Void();
     }
 
     int fd = handle->data[0];
+    bool delta = (args.size() == 1) && (args[0] == "delta");
+
+    // Get power entity information, which is common across all supported data categories
     Status status;
     hidl_vec<PowerEntityInfo> infos;
-
-    // Get power entity information
     getPowerEntityInfo([&status, &infos](auto rInfos, auto rStatus) {
         status = rStatus;
         infos = rInfos;
@@ -245,35 +401,14 @@ Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_st
         return Void();
     }
 
-    // Get power entity state information
-    hidl_vec<PowerEntityStateSpace> stateSpaces;
-    getPowerEntityStateInfo({}, [&status, &stateSpaces](auto rStateSpaces, auto rStatus) {
-        status = rStatus;
-        stateSpaces = rStateSpaces;
-    });
-    if (status != Status::SUCCESS) {
-        LOG(ERROR) << "Error getting state info";
-        return Void();
+    // Construct lookup table of powerEntityId to name
+    std::unordered_map<uint32_t, std::string> entityNames;
+    for (auto info : infos) {
+        entityNames.emplace(info.powerEntityId, info.powerEntityName);
     }
 
-    // Get power entity state residency data
-    hidl_vec<PowerEntityStateResidencyResult> results;
-    getPowerEntityStateResidencyData({}, [&status, &results](auto rResults, auto rStatus) {
-        status = rStatus;
-        results = rResults;
-    });
-
-    // This implementation of getPowerEntityStateResidencyData supports the
-    // return of partial results if status == FILESYSTEM_ERROR.
-    if (status != Status::SUCCESS) {
-        LOG(ERROR) << "Error getting residency data -- Some results missing";
-    }
-
-    if (!DumpResidencyDataToFd(infos, stateSpaces, results, fd)) {
-        PLOG(ERROR) << "Failed to dump residency data to fd";
-    }
-
-    fsync(fd);
+    // Generate debug output for supported data categories
+    debugStateResidency(entityNames, fd, delta);
 
     return Void();
 }
