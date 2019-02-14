@@ -91,6 +91,9 @@ class PowerStats : public IPowerStats {
     std::unordered_map<uint32_t, PowerEntityStateSpace> mPowerEntityStateSpaces;
     std::unordered_map<uint32_t, std::shared_ptr<IStateResidencyDataProvider>>
         mStateResidencyDataProviders;
+
+    void debugStateResidency(const std::unordered_map<uint32_t, std::string> &entityNames, int fd,
+                             bool delta);
 };
 
 }  // namespace implementation
