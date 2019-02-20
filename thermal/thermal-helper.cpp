@@ -276,24 +276,29 @@ bool ThermalHelper::readTemperature(
     out->name = sensor_name;
     out->value = std::stof(temp) * sensor_info.multiplier;
 
-    ThrottlingSeverity prev_hot_severity, prev_cold_severity;
-    {
-        // reader lock, readTemperature will be called in Binder call and the watcher thread.
-        std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
-        prev_hot_severity = sensor_status_map_.at(sensor_name).prev_hot_severity;
-        prev_cold_severity = sensor_status_map_.at(sensor_name).prev_cold_severity;
+    std::pair<ThrottlingSeverity, ThrottlingSeverity> status =
+        std::make_pair(ThrottlingSeverity::NONE, ThrottlingSeverity::NONE);
+    // Only update status if the thermal sensor is being monitored
+    if (sensor_info.is_monitor) {
+        ThrottlingSeverity prev_hot_severity, prev_cold_severity;
+        {
+            // reader lock, readTemperature will be called in Binder call and the watcher thread.
+            std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
+            prev_hot_severity = sensor_status_map_.at(sensor_name).prev_hot_severity;
+            prev_cold_severity = sensor_status_map_.at(sensor_name).prev_cold_severity;
+        }
+        status = getSeverityFromThresholds(sensor_info.hot_thresholds, sensor_info.cold_thresholds,
+                                           sensor_info.hot_hysteresis, sensor_info.cold_hysteresis,
+                                           prev_hot_severity, prev_cold_severity, out->value);
     }
-
-    std::pair<ThrottlingSeverity, ThrottlingSeverity> status = getSeverityFromThresholds(
-        sensor_info.hot_thresholds, sensor_info.cold_thresholds, sensor_info.hot_hysteresis,
-        sensor_info.cold_hysteresis, prev_hot_severity, prev_cold_severity, out->value);
+    if (throtting_status) {
+        *throtting_status = status;
+    }
 
     out->throttlingStatus = static_cast<size_t>(status.first) > static_cast<size_t>(status.second)
                                 ? status.first
                                 : status.second;
-    if (throtting_status) {
-        *throtting_status = status;
-    }
+
     return true;
 }
 
