@@ -26,6 +26,7 @@
 #include <cutils/uevent.h>
 #include <log/log.h>
 #include <utils/StrongPointer.h>
+#include <vendor/google/libraries/pixelatoms/pixelatoms.pb.h>
 
 #include <unistd.h>
 #include <thread>
@@ -35,6 +36,9 @@ using android::base::ReadFileToString;
 using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
+using android::frameworks::stats::V1_0::VendorAtom;
+using android::hardware::google::pixel::PixelAtoms::ChargeStats;
+using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
 namespace android {
 namespace hardware {
@@ -64,11 +68,11 @@ void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroke
     sp<IStats> stats_client = IStats::tryGetService();
 
     if (stats_client) {
-        HardwareFailed failure = {.hardwareType = HardwareFailed::HardwareType::MICROPHONE,
-                                  .hardwareLocation = mic,
-                                  .errorCode = isbroken
-                                                   ? HardwareFailed::HardwareErrorCode::COMPLETE
-                                                   : HardwareFailed::HardwareErrorCode::DEGRADE};
+        HardwareFailed failure = {
+                .hardwareType = HardwareFailed::HardwareType::MICROPHONE,
+                .hardwareLocation = mic,
+                .errorCode = isbroken ? HardwareFailed::HardwareErrorCode::COMPLETE
+                                      : HardwareFailed::HardwareErrorCode::DEGRADE};
         Return<void> ret = stats_client->reportHardwareFailed(failure);
         if (!ret.isOk())
             ALOGE("Unable to report physical drop to Stats service");
@@ -131,6 +135,100 @@ void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
 
     if (stats_client) {
         stats_client->reportUsbPortOverheatEvent(event);
+    }
+}
+
+void UeventListener::ReportChargeMetricsEvent(const char *driver) {
+    ChargeStats m;
+    std::vector<int> charge_stats_fields = {
+            ChargeStats::kAdapterTypeFieldNumber,     ChargeStats::kAdapterVoltageFieldNumber,
+            ChargeStats::kAdapterAmperageFieldNumber, ChargeStats::kVoltageInFieldNumber,
+            ChargeStats::kSsocInFieldNumber,          ChargeStats::kVoltageOutFieldNumber,
+            ChargeStats::kSsocOutFieldNumber};
+    std::vector<int> voltage_tier_stats_fields = {VoltageTierStats::kVoltageTierFieldNumber,
+                                                  VoltageTierStats::kSocInFieldNumber,
+                                                  VoltageTierStats::kCcInFieldNumber,
+                                                  VoltageTierStats::kTempInFieldNumber,
+                                                  VoltageTierStats::kTimeFastSecsFieldNumber,
+                                                  VoltageTierStats::kTimeTaperSecsFieldNumber,
+                                                  VoltageTierStats::kTimeOtherSecsFieldNumber,
+                                                  VoltageTierStats::kTempMinFieldNumber,
+                                                  VoltageTierStats::kTempAvgFieldNumber,
+                                                  VoltageTierStats::kTempMaxFieldNumber,
+                                                  VoltageTierStats::kIbattMinFieldNumber,
+                                                  VoltageTierStats::kIbattAvgFieldNumber,
+                                                  VoltageTierStats::kIbattMaxFieldNumber,
+                                                  VoltageTierStats::kIclMinFieldNumber,
+                                                  VoltageTierStats::kIclAvgFieldNumber,
+                                                  VoltageTierStats::kIclMaxFieldNumber};
+    std::vector<VendorAtom::Value> values(charge_stats_fields.size());
+    VendorAtom::Value val;
+    std::string file_contents, line;
+    std::istringstream ss;
+    int32_t i = 0, tmp[15] = {0};
+    float ssoc_tmp;
+
+    if (!driver || strcmp(driver, "DRIVER=google,battery")) {
+        return;
+    }
+
+    if (!ReadFileToString(kChargeMetricsPath.c_str(), &file_contents)) {
+        ALOGE("Unable to read %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
+        return;
+    }
+    ss.str(file_contents);
+
+    if (!std::getline(ss, line)) {
+        ALOGE("Unable to read first line");
+        return;
+    }
+    ALOGI("ChargeMetrics: processing %s", line.c_str());
+    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
+               &tmp[5], &tmp[6]) != 7) {
+        ALOGE("Couldn't process %s", line.c_str());
+    }
+    for (i = 0; i < charge_stats_fields.size(); i++) {
+        val.intValue(tmp[i]);
+        values[charge_stats_fields[i] - 2] = val;
+    }
+
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (!stats_client) {
+        ALOGE("Couldn't connect to IStats service");
+        return;
+    }
+
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::CHARGE_STATS,
+                        .values = values};
+    Return<void> ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report ChargeStats to Stats service");
+
+    while (std::getline(ss, line)) {
+        ALOGI("ChargeMetrics: processing %s", line.c_str());
+        if (sscanf(line.c_str(), "%d, %f,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d", &tmp[0],
+                   &ssoc_tmp, &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5], &tmp[6], &tmp[7],
+                   &tmp[8], &tmp[9], &tmp[10], &tmp[11], &tmp[12], &tmp[13], &tmp[14]) != 16) {
+            ALOGE("Couldn't process %s", line.c_str());
+            continue;
+        }
+        values.clear();
+        values.resize(voltage_tier_stats_fields.size());
+        val.intValue(tmp[0]);
+        values[voltage_tier_stats_fields[0] - 2] = val;
+        val.floatValue(ssoc_tmp);
+        values[voltage_tier_stats_fields[1] - 2] = val;
+        for (i = 2; i < voltage_tier_stats_fields.size(); i++) {
+            val.intValue(tmp[i - 1]);
+            values[voltage_tier_stats_fields[i] - 2] = val;
+        }
+        VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                            .atomId = PixelAtoms::Ids::VOLTAGE_TIER_STATS,
+                            .values = values};
+        Return<void> ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VoltageTierStats to Stats service");
     }
 }
 
@@ -197,9 +295,11 @@ bool UeventListener::ProcessUevent() {
     return true;
 }
 
-UeventListener::UeventListener(const std::string audio_uevent, const std::string overheat_path)
+UeventListener::UeventListener(const std::string audio_uevent, const std::string overheat_path,
+                               const std::string charge_metrics_path)
     : kAudioUevent(audio_uevent),
       kUsbPortOverheatPath(overheat_path),
+      kChargeMetricsPath(charge_metrics_path),
       uevent_fd_(-1) {}
 
 /* Thread function to continuously monitor uevents.
