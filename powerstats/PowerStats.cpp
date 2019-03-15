@@ -16,6 +16,12 @@
 
 #define LOG_TAG "libpixelpowerstats"
 
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include <pixelpowerstats/PowerStats.h>
 
 #include <android-base/file.h>
@@ -187,9 +193,15 @@ Return<void> PowerStats::getPowerEntityStateResidencyData(
 // Debugging utilities to support printing data via debug()
 //
 
-const static std::string RESIDENCY_HEADER =
+static uint64_t getTimeElapsedMs(const struct timespec &now, const struct timespec &then) {
+    uint64_t thenMs = then.tv_sec * 1000 + (then.tv_nsec / 1000000);
+    uint64_t nowMs = now.tv_sec * 1000 + (now.tv_nsec / 1000000);
+    return (nowMs - thenMs);
+}
+
+static const char RESIDENCY_HEADER[] =
         "\n============= PowerStats HAL 1.0 state residencies ==============\n";
-const static std::string RESIDENCY_FOOTER =
+static const char RESIDENCY_FOOTER[] =
         "========== End of PowerStats HAL 1.0 state residencies ==========\n";
 
 static bool DumpResidencyDataToFd(
@@ -197,13 +209,13 @@ static bool DumpResidencyDataToFd(
         const std::unordered_map<uint32_t, std::unordered_map<uint32_t, std::string>> stateNames,
         const hidl_vec<PowerEntityStateResidencyResult> &results, int fd) {
     std::ostringstream dumpStats;
-    const char *headerFormat = "  %14s   %14s   %16s   %15s   %16s\n";
+    const char *headerFormat = "  %14s   %14s   %16s   %15s   %17s\n";
     const char *dataFormat =
-            "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %13" PRIu64 " ms\n";
+            "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %14" PRIu64 " ms\n";
 
     dumpStats << RESIDENCY_HEADER;
     dumpStats << android::base::StringPrintf(headerFormat, "Entity", "State", "Total time",
-                                             "Total entries", "Last entry timestamp");
+                                             "Total entries", "Last entry tstamp");
 
     for (auto result : results) {
         for (auto stateResidency : result.stateResidencyData) {
@@ -227,13 +239,13 @@ static bool DumpResidencyDataDiffToFd(
         uint64_t elapsedTimeMs, const hidl_vec<PowerEntityStateResidencyResult> &prevResults,
         const hidl_vec<PowerEntityStateResidencyResult> &results, int fd) {
     std::ostringstream dumpStats;
-    const char *headerFormat = "  %14s   %14s   %16s (%14s)   %15s (%16s)   %16s (%10s)\n";
+    const char *headerFormat = "  %14s   %14s   %16s (%14s)   %15s (%16s)   %17s (%14s)\n";
     const char *dataFormatWithDelta =
             "  %14s   %14s   %13" PRIu64 " ms (%14" PRId64 ")   %15" PRIu64 " (%16" PRId64 ")"
-            "   %13" PRIu64 " ms (%14" PRId64 ")\n";
+            "   %14" PRIu64 " ms (%14" PRId64 ")\n";
     const char *dataFormatWithoutDelta =
             "  %14s   %14s   %13" PRIu64 " ms (          none)   %15" PRIu64 " (            none)"
-            "   %13" PRIu64 " ms (          none)\n";
+            "   %14" PRIu64 " ms (          none)\n";
 
     dumpStats << RESIDENCY_HEADER;
     dumpStats << "Elapsed time: "
@@ -241,7 +253,7 @@ static bool DumpResidencyDataDiffToFd(
 
     dumpStats << android::base::StringPrintf(headerFormat, "Entity", "State", "Total time",
                                              "Delta   ", "Total entries", "Delta   ",
-                                             "Last entry timestamp", "Delta ");
+                                             "Last entry tstamp", "Delta ");
 
     // Process prevResults into a 2-tier lookup table for easy reference
     std::unordered_map<uint32_t, std::unordered_map<uint32_t, PowerEntityStateResidencyData>>
@@ -363,9 +375,7 @@ void PowerStats::debugStateResidency(const std::unordered_map<uint32_t, std::str
         static hidl_vec<PowerEntityStateResidencyResult> prevResults;
         uint64_t elapsedTimeMs = 0;
         if (dataTimeValid && prevDataTimeValid) {
-            uint64_t prevDataTimeMs = prevDataTime.tv_sec * 1000 + (prevDataTime.tv_nsec / 1000000);
-            uint64_t dataTimeMs = dataTime.tv_sec * 1000 + (dataTime.tv_nsec / 1000000);
-            elapsedTimeMs = dataTimeMs - prevDataTimeMs;
+            elapsedTimeMs = getTimeElapsedMs(dataTime, prevDataTime);
         }
 
         if (!DumpResidencyDataDiffToFd(entityNames, stateNames, elapsedTimeMs, prevResults,
@@ -377,8 +387,130 @@ void PowerStats::debugStateResidency(const std::unordered_map<uint32_t, std::str
         prevDataTime = dataTime;
         prevDataTimeValid = dataTimeValid;
     }
+}
 
-    fsync(fd);
+static const char ENERGYDATA_HEADER[] =
+        "\n============= PowerStats HAL 1.0 rail energy data ==============\n";
+static const char ENERGYDATA_FOOTER[] =
+        "========== End of PowerStats HAL 1.0 rail energy data ==========\n";
+
+static bool DumpEnergyDataToFd(
+        const std::unordered_map<uint32_t, std::pair<std::string, std::string>> &railNames,
+        const hidl_vec<EnergyData> &energyData, int fd) {
+    std::ostringstream dumpStats;
+    const char *headerFormat = "  %14s   %18s   %18s\n";
+    const char *dataFormat = "  %14s   %18s   %14.2f mWs\n";
+
+    dumpStats << ENERGYDATA_HEADER;
+    dumpStats << android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Energy");
+
+    for (auto data : energyData) {
+        dumpStats << android::base::StringPrintf(dataFormat, railNames.at(data.index).first.c_str(),
+                                                 railNames.at(data.index).second.c_str(),
+                                                 static_cast<float>(data.energy) / 1000.0);
+    }
+
+    dumpStats << ENERGYDATA_FOOTER;
+
+    return android::base::WriteStringToFd(dumpStats.str(), fd);
+}
+
+static bool DumpEnergyDataDiffToFd(
+        const std::unordered_map<uint32_t, std::pair<std::string, std::string>> &railNames,
+        uint64_t elapsedTimeMs, const hidl_vec<EnergyData> &prevEnergyData,
+        const hidl_vec<EnergyData> &energyData, int fd) {
+    std::ostringstream dumpStats;
+    const char *headerFormat = "  %14s   %18s   %18s (%14s)\n";
+    const char *dataFormatWithDelta = "  %14s   %18s   %14.2f mWs (%14.2f)\n";
+    const char *dataFormatWithoutDelta = "  %14s   %18s   %14.2f mWs (          none)\n";
+
+    dumpStats << ENERGYDATA_HEADER;
+    dumpStats << "Elapsed time: "
+              << (elapsedTimeMs == 0 ? "unknown" : std::to_string(elapsedTimeMs)) << " ms\n";
+
+    dumpStats << android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Energy", "Delta   ");
+
+    std::unordered_map<uint32_t, uint64_t> prevEnergyDataMap;
+    for (auto data : prevEnergyData) {
+        prevEnergyDataMap.emplace(data.index, data.energy);
+    }
+
+    for (auto data : energyData) {
+        const char *subsysName = railNames.at(data.index).first.c_str();
+        const char *railName = railNames.at(data.index).second.c_str();
+
+        auto prevEnergyDataIt = prevEnergyDataMap.find(data.index);
+
+        if (prevEnergyDataIt != prevEnergyDataMap.end()) {
+            int64_t deltaEnergy = data.energy - prevEnergyDataIt->second;
+
+            dumpStats << android::base::StringPrintf(dataFormatWithDelta, subsysName, railName,
+                                                     static_cast<float>(data.energy) / 1000.0,
+                                                     static_cast<float>(deltaEnergy) / 1000.0);
+        } else {
+            dumpStats << android::base::StringPrintf(dataFormatWithoutDelta, subsysName, railName,
+                                                     static_cast<float>(data.energy) / 1000.0);
+        }
+    }
+
+    dumpStats << ENERGYDATA_FOOTER;
+
+    return android::base::WriteStringToFd(dumpStats.str(), fd);
+}
+
+void PowerStats::debugEnergyData(int fd, bool delta) {
+    static struct timespec prevDataTime;
+    static bool prevDataTimeValid = false;
+    struct timespec dataTime;
+    bool dataTimeValid = false;
+
+    std::unordered_map<uint32_t, std::pair<std::string, std::string>> railNames;
+    getRailInfo([&railNames](auto infos, auto /* status */) {
+        // Don't care about the status. infos will be nonempty if rail energy is supported.
+        for (auto info : infos) {
+            railNames.emplace(info.index, std::make_pair(info.subsysName, info.railName));
+        }
+    });
+    if (railNames.empty()) {
+        return;
+    }
+
+    Status status;
+    hidl_vec<EnergyData> energyData;
+    getEnergyData(
+            {}, [&status, &energyData, &dataTime, &dataTimeValid](auto rEnergyData, auto rStatus) {
+                status = rStatus;
+                energyData = rEnergyData;
+                dataTimeValid = (clock_gettime(CLOCK_BOOTTIME, &dataTime) == 0);
+            });
+
+    // getEnergyData returns no results if status != SUCCESS.
+    if (status != Status::SUCCESS) {
+        LOG(ERROR) << "Error getting rail data";
+        return;
+    }
+
+    if (!delta) {
+        if (!DumpEnergyDataToFd(railNames, energyData, fd)) {
+            PLOG(ERROR) << "Failed to dump energy data to fd";
+        }
+    } else {
+        // If the delta argument was supplied, calculate the elapsed time since the previous
+        // result and then dump the latest data along with elapsed time and deltas
+        static hidl_vec<EnergyData> prevEnergyData;
+        uint64_t elapsedTimeMs = 0;
+        if (dataTimeValid && prevDataTimeValid) {
+            elapsedTimeMs = getTimeElapsedMs(dataTime, prevDataTime);
+        }
+
+        if (!DumpEnergyDataDiffToFd(railNames, elapsedTimeMs, prevEnergyData, energyData, fd)) {
+            PLOG(ERROR) << "Failed to dump energy data delta to fd";
+        }
+
+        prevEnergyData = energyData;
+        prevDataTime = dataTime;
+        prevDataTimeValid = dataTimeValid;
+    }
 }
 
 Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_string> &args) {
@@ -391,10 +523,10 @@ Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_st
 
     // Get power entity information, which is common across all supported data categories
     Status status;
-    hidl_vec<PowerEntityInfo> infos;
-    getPowerEntityInfo([&status, &infos](auto rInfos, auto rStatus) {
+    hidl_vec<PowerEntityInfo> stateInfos;
+    getPowerEntityInfo([&status, &stateInfos](auto rInfos, auto rStatus) {
         status = rStatus;
-        infos = rInfos;
+        stateInfos = rInfos;
     });
     if (status != Status::SUCCESS) {
         LOG(ERROR) << "Error getting power entity info";
@@ -403,13 +535,17 @@ Return<void> PowerStats::debug(const hidl_handle &handle, const hidl_vec<hidl_st
 
     // Construct lookup table of powerEntityId to name
     std::unordered_map<uint32_t, std::string> entityNames;
-    for (auto info : infos) {
+    for (auto info : stateInfos) {
         entityNames.emplace(info.powerEntityId, info.powerEntityName);
     }
 
     // Generate debug output for supported data categories
     debugStateResidency(entityNames, fd, delta);
 
+    // Generate debug output for energy data
+    debugEnergyData(fd, delta);
+
+    fsync(fd);
     return Void();
 }
 

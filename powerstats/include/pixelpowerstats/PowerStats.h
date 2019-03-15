@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
-#define HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
+#ifndef POWERSTATS_INCLUDE_PIXELPOWERSTATS_POWERSTATS_H_
+#define POWERSTATS_INCLUDE_PIXELPOWERSTATS_POWERSTATS_H_
 
 #include <android/hardware/power/stats/1.0/IPowerStats.h>
 #include <utils/RefBase.h>
@@ -47,7 +47,7 @@ using android::hardware::power::stats::V1_0::RailInfo;
 using android::hardware::power::stats::V1_0::Status;
 
 class IRailDataProvider {
-  public:
+public:
     virtual ~IRailDataProvider() = default;
     virtual Return<void> getRailInfo(IPowerStats::getRailInfo_cb _hidl_cb) = 0;
     virtual Return<void> getEnergyData(const hidl_vec<uint32_t> &railIndices,
@@ -57,7 +57,7 @@ class IRailDataProvider {
 };
 
 class IStateResidencyDataProvider : public virtual RefBase {
-  public:
+public:
     virtual ~IStateResidencyDataProvider() = default;
     virtual bool getResults(
         std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) = 0;
@@ -77,7 +77,7 @@ using android::hardware::google::pixel::powerstats::IRailDataProvider;
 using android::hardware::google::pixel::powerstats::IStateResidencyDataProvider;
 
 class PowerStats : public IPowerStats {
-  public:
+public:
     PowerStats() = default;
     void setRailDataProvider(std::unique_ptr<IRailDataProvider> dataProvider);
     uint32_t addPowerEntity(const std::string &name, PowerEntityType type);
@@ -101,7 +101,7 @@ class PowerStats : public IPowerStats {
     // Methods from ::android::hidl::base::V1_0::IBase follow.
     Return<void> debug(const hidl_handle &fd, const hidl_vec<hidl_string> &args) override;
 
-  private:
+private:
     std::unique_ptr<IRailDataProvider> mRailDataProvider;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
     std::unordered_map<uint32_t, PowerEntityStateSpace> mPowerEntityStateSpaces;
@@ -109,6 +109,7 @@ class PowerStats : public IPowerStats {
 
     void debugStateResidency(const std::unordered_map<uint32_t, std::string> &entityNames, int fd,
                              bool delta);
+    void debugEnergyData(int fd, bool delta);
 };
 
 }  // namespace implementation
@@ -118,4 +119,4 @@ class PowerStats : public IPowerStats {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_PIXEL_POWERSTATS_POWERSTATS_H
+#endif  // POWERSTATS_INCLUDE_PIXELPOWERSTATS_POWERSTATS_H_
