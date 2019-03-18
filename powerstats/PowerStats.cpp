@@ -402,7 +402,7 @@ static bool DumpEnergyDataToFd(
     const char *dataFormat = "  %14s   %18s   %14.2f mWs\n";
 
     dumpStats << ENERGYDATA_HEADER;
-    dumpStats << android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Energy");
+    dumpStats << android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Cumulative Energy");
 
     for (auto data : energyData) {
         dumpStats << android::base::StringPrintf(dataFormat, railNames.at(data.index).first.c_str(),
@@ -428,7 +428,8 @@ static bool DumpEnergyDataDiffToFd(
     dumpStats << "Elapsed time: "
               << (elapsedTimeMs == 0 ? "unknown" : std::to_string(elapsedTimeMs)) << " ms\n";
 
-    dumpStats << android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Energy", "Delta   ");
+    dumpStats << android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Cumulative Energy",
+                                             "Delta   ");
 
     std::unordered_map<uint32_t, uint64_t> prevEnergyDataMap;
     for (auto data : prevEnergyData) {
