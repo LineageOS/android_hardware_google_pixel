@@ -24,7 +24,6 @@
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #include <log/log.h>
 #include <utils/StrongPointer.h>
 
@@ -36,7 +35,6 @@ using android::base::ReadFileToString;
 using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 namespace android {
 namespace hardware {
@@ -62,104 +60,6 @@ bool UeventListener::ReadFileToInt(const char *const path, int *val) {
     return true;
 }
 
-// Report connection & disconnection of devices into the USB-C connector.
-void UeventListener::ReportUsbConnectorUevents(const char *power_supply_typec_mode) {
-    if (!power_supply_typec_mode) {
-        // No mode reported -> No reporting.
-        return;
-    }
-
-    // It's attached if the string *doesn't* match.
-    int attached = !!strcmp(power_supply_typec_mode, "POWER_SUPPLY_TYPEC_MODE=Nothing attached");
-    if (attached == is_usb_attached_) {
-        return;
-    }
-    is_usb_attached_ = attached;
-
-    sp<IPixelStats> client = IPixelStats::tryGetService();
-    if (!client) {
-        ALOGE("Unable to connect to PixelStats service");
-        return;
-    }
-
-    if (attached) {
-        client->reportUsbConnectorConnected();
-        usb_connect_time_ = android::base::Timer();
-    } else {
-        client->reportUsbConnectorDisconnected(usb_connect_time_.duration().count());
-    }
-}
-
-// Report connection & disconnection of USB audio devices.
-void UeventListener::ReportUsbAudioUevents(const char *driver, const char *product,
-                                           const char *action) {
-    // driver is not provided on remove, so it can be NULL.  Check in remove branch.
-    if (!product || !action) {
-        return;
-    }
-
-    // The PRODUCT of a USB audio device is PRODUCT=VID/PID/VERSION
-    std::vector<std::string> halves = android::base::Split(product, "=");
-    if (halves.size() != 2) {
-        return;
-    }
-    std::vector<std::string> vidPidVer = android::base::Split(halves[1], "/");
-    if (vidPidVer.size() != 3) {
-        return;
-    }
-
-    // Parse the VID/PID as hex values.
-    const int kBaseHex = 16;
-    int32_t vid, pid;
-    char *vidEnd = NULL, *pidEnd = NULL;
-
-    const char *vidC = vidPidVer[0].c_str();
-    vid = strtol(vidC, &vidEnd, kBaseHex);
-    if ((vidC == vidEnd) || !vidEnd || (*vidEnd != '\0')) {
-        return;
-    }
-
-    const char *pidC = vidPidVer[1].c_str();
-    pid = strtol(pidC, &pidEnd, kBaseHex);
-    if ((pidC == pidEnd) || !pidEnd || (*pidEnd != '\0')) {
-        return;
-    }
-
-    /* A uevent is generated for each audio interface - only report the first connected one
-     * for each device by storing its PRODUCT= string in attached_product_, and clearing
-     * it on disconnect.  This also means we will only report the first USB audio device attached
-     * to the system. Only attempt to connect to the HAL when reporting an event.
-     */
-    if (!attached_product_ && !strcmp(action, "ACTION=add")) {
-        if (!driver || strcmp(driver, "DRIVER=snd-usb-audio")) {
-            return;
-        }
-        usb_audio_connect_time_ = android::base::Timer();
-        attached_product_ = strdup(product);
-
-        sp<IPixelStats> client = IPixelStats::tryGetService();
-        if (!client) {
-            ALOGE("Couldn't connect to PixelStats service for audio connect");
-            return;
-        }
-        client->reportUsbAudioConnected(vid, pid);
-    } else if (attached_product_ && !strcmp(action, "ACTION=remove")) {
-        if (strcmp(attached_product_, product)) {
-            // Not the expected product detaching.
-            return;
-        }
-        free(attached_product_);
-        attached_product_ = NULL;
-
-        sp<IPixelStats> client = IPixelStats::tryGetService();
-        if (!client) {
-            ALOGE("Couldn't connect to PixelStats service for audio disconnect");
-            return;
-        }
-        client->reportUsbAudioDisconnected(vid, pid, usb_audio_connect_time_.duration().count());
-    }
-}
-
 void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroken) {
     sp<IStats> stats_client = IStats::tryGetService();
 
@@ -174,18 +74,6 @@ void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroke
             ALOGE("Unable to report physical drop to Stats service");
     } else
         ALOGE("Unable to connect to Stats service");
-
-    /* TODO: IPixelStats will be deprecated soon */
-    if (!isbroken)
-        return;
-
-    sp<IPixelStats> client = IPixelStats::tryGetService();
-    if (!client) {
-        ALOGE("Couldn't connect to PixelStats service for mic break");
-        return;
-    }
-    client->reportHardwareFailed(IPixelStats::HardwareType::MICROPHONE, mic,
-                                 IPixelStats::HardwareErrorCode::COMPLETE);
 }
 
 void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic_status) {
@@ -302,8 +190,6 @@ bool UeventListener::ProcessUevent() {
     }
 
     /* Process the strings recorded. */
-    ReportUsbConnectorUevents(power_supply_typec_mode);
-    ReportUsbAudioUevents(driver, product, action);
     ReportMicStatusUevents(devpath, mic_break_status);
     ReportMicStatusUevents(devpath, mic_degrade_status);
     ReportUsbPortOverheatEvent(driver);
@@ -314,9 +200,7 @@ bool UeventListener::ProcessUevent() {
 UeventListener::UeventListener(const std::string audio_uevent, const std::string overheat_path)
     : kAudioUevent(audio_uevent),
       kUsbPortOverheatPath(overheat_path),
-      uevent_fd_(-1),
-      is_usb_attached_(false),
-      attached_product_(nullptr) {}
+      uevent_fd_(-1) {}
 
 /* Thread function to continuously monitor uevents.
  * Exit after kMaxConsecutiveErrors to prevent spinning. */

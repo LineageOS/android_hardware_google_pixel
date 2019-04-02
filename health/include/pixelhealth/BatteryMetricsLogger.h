@@ -27,7 +27,6 @@
 #include <string>
 
 #include <android/frameworks/stats/1.0/IStats.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
 
 namespace hardware {
 namespace google {
@@ -37,7 +36,6 @@ namespace health {
 using android::sp;
 using android::frameworks::stats::V1_0::BatteryHealthSnapshotArgs;
 using android::frameworks::stats::V1_0::IStats;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 class BatteryMetricsLogger {
   public:
@@ -57,24 +55,14 @@ class BatteryMetricsLogger {
         NUM_FIELDS,  // do not reference
     };
 
-    const int kSnapshotType[NUM_FIELDS] = {
-        -1,
-        (int)IPixelStats::BatterySnapshotType::MIN_CURRENT,
-        (int)IPixelStats::BatterySnapshotType::MIN_VOLTAGE,
-        (int)IPixelStats::BatterySnapshotType::MIN_TEMP,
-        (int)IPixelStats::BatterySnapshotType::MIN_BATT_LEVEL,
-        (int)IPixelStats::BatterySnapshotType::MIN_RESISTANCE,
-        -1,
-    };
-
     const int kStatsSnapshotType[NUM_FIELDS] = {
-        -1,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_CURRENT,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_VOLTAGE,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_TEMP,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_BATT_LEVEL,
-        (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_RESISTANCE,
-        -1,
+            -1,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_CURRENT,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_VOLTAGE,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_TEMP,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_BATT_LEVEL,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_RESISTANCE,
+            -1,
     };
 
     const char *const kBatteryResistance;
@@ -99,7 +87,7 @@ class BatteryMetricsLogger {
     int64_t getTime();
     bool recordSample(struct android::BatteryProperties *props);
     bool uploadMetrics();
-    bool uploadOutlierMetric(sp<IPixelStats> client, sp<IStats> stats_client, sampleType type);
+    bool uploadOutlierMetric(sp<IStats> stats_client, sampleType type);
 };
 
 }  // namespace health
