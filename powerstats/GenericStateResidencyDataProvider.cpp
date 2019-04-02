@@ -17,10 +17,16 @@
 #define LOG_TAG "libpixelpowerstats"
 
 #include <android-base/logging.h>
+#include <android-base/strings.h>
 #include <pixelpowerstats/GenericStateResidencyDataProvider.h>
 #include <pixelpowerstats/PowerStatsUtils.h>
 #include <cstdio>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace android {
 namespace hardware {
@@ -119,8 +125,7 @@ static bool getStateData(
     auto endState = stateResidencyConfigs.cend();
     auto pred = [](auto a, char const *b) {
         // return true if b matches the header contained in a, ignoring whitespace
-        size_t begin = strspn(b, " \t");
-        return (!strncmp(b + begin, a.second.header.c_str(), a.second.header.length()));
+        return (a.second.header == android::base::Trim(std::string(b)));
     };
 
     result.stateResidencyData.resize(numStates);
@@ -165,8 +170,7 @@ bool GenericStateResidencyDataProvider::getResults(
     auto endConfig = mPowerEntityConfigs.cend();
     auto pred = [](auto a, char const *b) {
         // return true if b matches the header contained in a, ignoring whitespace
-        size_t begin = strspn(b, " \t");
-        return (!strncmp(b + begin, a.second.mHeader.c_str(), a.second.mHeader.length()));
+        return (a.second.mHeader == android::base::Trim(std::string(b)));
     };
 
     // Search for entity headers until we have found them all or can't find anymore
