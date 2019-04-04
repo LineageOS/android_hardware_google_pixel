@@ -13,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __DEVICE_FILE_WATCHER_H__
-#define __DEVICE_FILE_WATCHER_H__
+#ifndef THERMAL_UTILS_THERMAL_WATCHER_H_
+#define THERMAL_UTILS_THERMAL_WATCHER_H_
 
 #include <chrono>
 #include <condition_variable>
 #include <future>
 #include <list>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -37,10 +38,9 @@ namespace V2_0 {
 namespace implementation {
 
 using android::base::unique_fd;
-using WatcherCallback = std::function<void(const std::string &path, const int fd)>;
+using WatcherCallback = std::function<bool(const std::set<std::string> &name)>;
 
-// A helper class for polling thermal files for changes.
-// TODO: change to use uevent (b/119189816)
+// A helper class for monitoring thermal files changes.
 class ThermalWatcher : public ::android::Thread {
   public:
     ThermalWatcher(const WatcherCallback &cb)
@@ -56,7 +56,8 @@ class ThermalWatcher : public ::android::Thread {
     // Give the file watcher a list of files to start watching. This helper
     // class will by default wait for modifications to the file with a looper.
     // This should be called before starting watcher thread.
-    void registerFilesToWatch(const std::vector<std::string> &files_to_watch);
+    void registerFilesToWatch(const std::set<std::string> &sensors_to_watch,
+                              const std::set<std::string> &cdev_to_watch, bool uevent_monitor);
     // Wake up the looper thus the worker thread, immediately. This can be called
     // in any thread.
     void wake();
@@ -68,17 +69,29 @@ class ThermalWatcher : public ::android::Thread {
     // modified file.
     bool threadLoop() override;
 
+    // Parse uevent message
+    void parseUevent(std::set<std::string> *sensor_name);
+
     // Maps watcher filer descriptor to watched file path.
     std::unordered_map<int, std::string> watch_to_file_path_map_;
     std::vector<android::base::unique_fd> fds_;
 
-    // The callback function. Called whenever a modification is seen.  The
-    // function passed in should expect a pair of strings in the form
-    // (path, data). Where path is the path of the file that saw a modification
-    // and data was the modification. Callback will return a time for next polling.
+    // The callback function. Called whenever thermal uevent is seen.
+    // The function passed in should expect a string in the form (type).
+    // Where type is the name of the thermal zone that trigger a uevent notification.
+    // Callback will return thermal trigger status for next polling decision.
     const WatcherCallback cb_;
 
     sp<Looper> looper_;
+
+    // For uevent socket registration.
+    android::base::unique_fd uevent_fd_;
+    // Sensor list which monitor flag is enabled.
+    std::set<std::string> monitored_sensors_;
+    // Flag to point out if any sensor across the first threshold.
+    bool thermal_triggered_;
+    // Flag to point out if device can support uevent notify.
+    bool is_polling_;
 };
 
 }  // namespace implementation
@@ -87,4 +100,4 @@ class ThermalWatcher : public ::android::Thread {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // __DEVICE_FILE_WATCHER_H__
+#endif  // THERMAL_UTILS_THERMAL_WATCHER_H_

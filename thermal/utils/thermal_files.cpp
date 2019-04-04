@@ -15,6 +15,7 @@
  */
 
 #include <algorithm>
+#include <string_view>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
@@ -27,21 +28,21 @@ namespace thermal {
 namespace V2_0 {
 namespace implementation {
 
-std::string ThermalFiles::getThermalFilePath(const std::string &thermal_name) const {
-    auto sensor_itr = thermal_name_to_path_map_.find(thermal_name);
+std::string ThermalFiles::getThermalFilePath(std::string_view thermal_name) const {
+    auto sensor_itr = thermal_name_to_path_map_.find(thermal_name.data());
     if (sensor_itr == thermal_name_to_path_map_.end()) {
         return "";
     }
     return sensor_itr->second;
 }
 
-bool ThermalFiles::addThermalFile(const std::string &thermal_name, const std::string &path) {
+bool ThermalFiles::addThermalFile(std::string_view thermal_name, std::string_view path) {
     return thermal_name_to_path_map_.emplace(thermal_name, path).second;
 }
 
-bool ThermalFiles::readThermalFile(const std::string &thermal_name, std::string *data) const {
+bool ThermalFiles::readThermalFile(std::string_view thermal_name, std::string *data) const {
     std::string sensor_reading;
-    std::string file_path = getThermalFilePath(thermal_name);
+    std::string file_path = getThermalFilePath(std::string_view(thermal_name));
     *data = "";
     if (file_path.empty()) {
         return false;

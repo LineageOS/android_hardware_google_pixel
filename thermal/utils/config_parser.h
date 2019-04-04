@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __CONFIG_PARSER_H__
-#define __CONFIG_PARSER_H__
+#ifndef THERMAL_UTILS_CONFIG_PARSER_H__
+#define THERMAL_UTILS_CONFIG_PARSER_H__
 
 #include <map>
 #include <string>
@@ -47,8 +47,8 @@ struct SensorInfo {
     bool is_monitor;
 };
 
-std::map<std::string, SensorInfo> ParseSensorInfo(const std::string &config_path);
-std::map<std::string, CoolingType> ParseCoolingDevice(const std::string &config_path);
+std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
+std::map<std::string, CoolingType> ParseCoolingDevice(std::string_view config_path);
 
 }  // namespace implementation
 }  // namespace V2_0
@@ -56,4 +56,4 @@ std::map<std::string, CoolingType> ParseCoolingDevice(const std::string &config_
 }  // namespace hardware
 }  // namespace android
 
-#endif  // __CONFIG_PARSER_H__
+#endif  // THERMAL_UTILS_CONFIG_PARSER_H__
