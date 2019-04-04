@@ -20,7 +20,6 @@
 #include <chre_host/socket_client.h>
 
 #include <android/frameworks/stats/1.0/IStats.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #define LOG_TAG "pixelstats-vendor"
 #include <log/log.h>
 
@@ -32,7 +31,6 @@ using android::chre::IChreMessageHandlers;
 using android::chre::SocketClient;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::PhysicalDropDetected;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 // following convention of CHRE code.
 namespace fbs = ::chre::fbs;
@@ -145,14 +143,6 @@ void DropDetect::handleNanoappMessage(const fbs::NanoappMessageT &message) {
             ALOGE("Unable to report physical drop to Stats service");
     } else
         ALOGE("Unable to connect to Stats service");
-
-    sp<IPixelStats> client = IPixelStats::tryGetService();
-    if (!client) {
-        ALOGE("Unable to connect to PixelStats service");
-        return;
-    }
-    client->reportPhysicalDropDetected(confidence, accel_magnitude_peak_1000ths_g,
-                                       free_fall_duration_ms);
 }
 
 }  // namespace pixel

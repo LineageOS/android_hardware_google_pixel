@@ -22,7 +22,6 @@
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
 #include <utils/Log.h>
 #include <utils/StrongPointer.h>
 #include <utils/Timers.h>
@@ -43,7 +42,6 @@ using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::SlowIo;
 using android::frameworks::stats::V1_0::SpeakerImpedance;
 using android::frameworks::stats::V1_0::SpeechDspStat;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -57,7 +55,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSpeechDspPath(sysfs_paths.SpeechDspPath) {}
 
 /**
- * Read the contents of kCycleCountBinsPath and report them via IPixelStats HAL.
+ * Read the contents of kCycleCountBinsPath and report them via IStats HAL.
  * The contents are expected to be N buckets total, the nth of which indicates the
  * number of times battery %-full has been increased with the n/N% full bucket.
  */
@@ -82,7 +80,6 @@ void SysfsCollector::logBatteryChargeCycles() {
     cycles.cycleBucket = charge_cycles;
 
     std::replace(file_contents.begin(), file_contents.end(), ' ', ',');
-    pixelstats_->reportChargeCycles(android::base::Trim(file_contents));
     stats_->reportChargeCycles(cycles);
 }
 
@@ -106,8 +103,6 @@ void SysfsCollector::logCodecFailed() {
                                  .hardwareLocation = 0,
                                  .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
         stats_->reportHardwareFailed(failed);
-        pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 0,
-                                          IPixelStats::HardwareErrorCode::COMPLETE);
     }
 }
 
@@ -128,13 +123,14 @@ void SysfsCollector::logCodec1Failed() {
         return;
     } else {
         ALOGE("%s report hardware fail", kCodec1Path);
-        pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 1,
-                                          IPixelStats::HardwareErrorCode::COMPLETE);
+        HardwareFailed failed = {.hardwareType = HardwareFailed::HardwareType::CODEC,
+                                 .hardwareLocation = 1,
+                                 .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
+        stats_->reportHardwareFailed(failed);
     }
 }
 
 void SysfsCollector::reportSlowIoFromFile(const char *path,
-                                          const IPixelStats::IoOperation &operation,
                                           const SlowIo::IoOperation &operation_s) {
     std::string file_contents;
     if (path == nullptr || strlen(path) == 0) {
@@ -151,7 +147,6 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
         } else if (slow_io_count > 0) {
             SlowIo slowio = {.operation = operation_s, .count = slow_io_count};
             stats_->reportSlowIo(slowio);
-            pixelstats_->reportSlowIo(operation, slow_io_count);
         }
         // Clear the stats
         if (!android::base::WriteStringToFile("0", path, true)) {
@@ -164,14 +159,10 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
  * Check for slow IO operations.
  */
 void SysfsCollector::logSlowIO() {
-    reportSlowIoFromFile(kSlowioReadCntPath, IPixelStats::IoOperation::READ,
-                         SlowIo::IoOperation::READ);
-    reportSlowIoFromFile(kSlowioWriteCntPath, IPixelStats::IoOperation::WRITE,
-                         SlowIo::IoOperation::WRITE);
-    reportSlowIoFromFile(kSlowioUnmapCntPath, IPixelStats::IoOperation::UNMAP,
-                         SlowIo::IoOperation::UNMAP);
-    reportSlowIoFromFile(kSlowioSyncCntPath, IPixelStats::IoOperation::SYNC,
-                         SlowIo::IoOperation::SYNC);
+    reportSlowIoFromFile(kSlowioReadCntPath, SlowIo::IoOperation::READ);
+    reportSlowIoFromFile(kSlowioWriteCntPath, SlowIo::IoOperation::WRITE);
+    reportSlowIoFromFile(kSlowioUnmapCntPath, SlowIo::IoOperation::UNMAP);
+    reportSlowIoFromFile(kSlowioSyncCntPath, SlowIo::IoOperation::SYNC);
 }
 
 /**
@@ -199,8 +190,6 @@ void SysfsCollector::logSpeakerImpedance() {
                                   .milliOhms = static_cast<int32_t>(right * 1000)};
     stats_->reportSpeakerImpedance(left_obj);
     stats_->reportSpeakerImpedance(right_obj);
-    pixelstats_->reportSpeakerImpedance(0, left * 1000);
-    pixelstats_->reportSpeakerImpedance(1, right * 1000);
 }
 
 /**
@@ -240,11 +229,6 @@ void SysfsCollector::logAll() {
         ALOGE("Unable to connect to Stats service");
         return;
     }
-    pixelstats_ = IPixelStats::tryGetService();
-    if (!pixelstats_) {
-        ALOGE("Unable to connect to PixelStats service");
-        return;
-    }
 
     logBatteryChargeCycles();
     logCodecFailed();
@@ -253,12 +237,12 @@ void SysfsCollector::logAll() {
     logSpeakerImpedance();
     logSpeechDspStat();
 
-    pixelstats_.clear();
+    stats_.clear();
 }
 
 /**
  * Loop forever collecting stats from sysfs nodes and reporting them via
- * IPixelStats.
+ * IStats.
  */
 void SysfsCollector::collect(void) {
     int timerfd = timerfd_create(CLOCK_BOOTTIME, 0);
