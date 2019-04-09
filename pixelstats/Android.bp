@@ -36,15 +36,11 @@ cc_library {
     "libhidltransport",
     "liblog",
     "libutils",
-    "libprotobuf-cpp-lite",
   ],
   export_shared_lib_headers: [
     "android.frameworks.stats@1.0",
   ],
-  static_libs: [
-    "chre_client",
-    "pixel-atoms-cpp",
-  ],
+  static_libs: ["chre_client"],
   header_libs: ["chre_api"],
 }
 

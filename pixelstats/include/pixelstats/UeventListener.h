@@ -35,11 +35,9 @@ namespace pixel {
  */
 class UeventListener {
   public:
-    UeventListener(
-            const std::string audio_uevent,
-            const std::string overheat_path =
-                    "/sys/devices/platform/soc/soc:google,overheat_mitigation",
-            const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats");
+    UeventListener(const std::string audio_uevent,
+                   const std::string overheat_path =
+                       "/sys/devices/platform/soc/soc:google,overheat_mitigation");
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
@@ -49,11 +47,9 @@ class UeventListener {
     void ReportMicStatusUevents(const char *devpath, const char *mic_status);
     void ReportMicBrokenOrDegraded(const int mic, const bool isBroken);
     void ReportUsbPortOverheatEvent(const char *driver);
-    void ReportChargeMetricsEvent(const char *driver);
 
     const std::string kAudioUevent;
     const std::string kUsbPortOverheatPath;
-    const std::string kChargeMetricsPath;
 
     int uevent_fd_;
 };
