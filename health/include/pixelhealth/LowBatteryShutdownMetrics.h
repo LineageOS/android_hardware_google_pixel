@@ -35,8 +35,8 @@ namespace health {
 class LowBatteryShutdownMetrics {
   public:
     LowBatteryShutdownMetrics(
-        const char *const voltage_avg,
-        const char *const persist_prop = "persist.vendor.shutdown.voltage_avg");
+            const char *const voltage_avg,
+            const char *const persist_prop = "persist.vendor.shutdown.voltage_avg");
     void logShutdownVoltage(struct android::BatteryProperties *props);
 
   private:
