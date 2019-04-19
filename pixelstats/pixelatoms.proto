@@ -36,6 +36,7 @@ enum Ids {
     // AOSP atom ID range starts at 105000
     CHARGE_STATS = 105000;
     VOLTAGE_TIER_STATS = 105001;
+    BATTERY_CAPACITY = 105002;
     // AOSP atom ID range ends at 109999
 }
 
@@ -118,4 +119,12 @@ message VoltageTierStats {
     optional int32 icl_min = 15;
     optional int32 icl_avg = 16;
     optional int32 icl_max = 17;
+}
+
+/* A message containing an alternate proprietary full battery capacity estimate. */
+message BatteryCapacity {
+    /* Sum of the change in coulomb count. */
+    optional int32 delta_cc_sum = 2;
+    /* Sum of the change in state of charge (battery level). */
+    optional int32 delta_vfsoc_sum = 3;
 }
