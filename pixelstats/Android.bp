@@ -14,6 +14,29 @@
 // limitations under the License.
 
 cc_library {
+    name: "pixelatoms-cpp",
+    vendor: true,
+    proto: {
+        type: "lite",
+        export_proto_headers: true,
+    },
+    srcs: [
+        "pixelatoms.proto",
+    ],
+}
+
+java_library {
+    name: "pixelatoms-java",
+    vendor: true,
+    proto: {
+        type: "lite",
+    },
+    srcs: [
+        "pixelatoms.proto",
+    ],
+}
+
+cc_library {
   name: "libpixelstats",
   vendor: true,
   export_include_dirs: ["include"],
@@ -40,7 +63,9 @@ cc_library {
   export_shared_lib_headers: [
     "android.frameworks.stats@1.0",
   ],
-  static_libs: ["chre_client"],
+  static_libs: [
+    "chre_client",
+  ],
   header_libs: ["chre_api"],
 }
 
