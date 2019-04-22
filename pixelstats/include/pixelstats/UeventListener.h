@@ -20,6 +20,7 @@
 #include <android-base/chrono_utils.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 
+using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
 
 namespace android {
@@ -35,9 +36,11 @@ namespace pixel {
  */
 class UeventListener {
   public:
-    UeventListener(const std::string audio_uevent,
-                   const std::string overheat_path =
-                       "/sys/devices/platform/soc/soc:google,overheat_mitigation");
+    UeventListener(
+            const std::string audio_uevent,
+            const std::string overheat_path =
+                    "/sys/devices/platform/soc/soc:google,overheat_mitigation",
+            const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats");
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
@@ -47,9 +50,17 @@ class UeventListener {
     void ReportMicStatusUevents(const char *devpath, const char *mic_status);
     void ReportMicBrokenOrDegraded(const int mic, const bool isBroken);
     void ReportUsbPortOverheatEvent(const char *driver);
+    void ReportChargeStats(sp<IStats> &stats_client, const char *line);
+    void ReportVoltageTierStats(sp<IStats> &stats_client, const char *line);
+    void ReportChargeMetricsEvent(const char *driver);
 
     const std::string kAudioUevent;
     const std::string kUsbPortOverheatPath;
+    const std::string kChargeMetricsPath;
+    // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
+    // store everything in the values array at the index of the field number
+    // -2.
+    const int kVendorAtomOffset = 2;
 
     int uevent_fd_;
 };
