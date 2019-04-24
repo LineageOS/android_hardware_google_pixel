@@ -41,12 +41,16 @@ class SysfsCollector {
         const char *const CodecPath;
         const char *const Codec1Path;
         const char *const SpeechDspPath;
+        const char *const BatteryCapacityCC;
+        const char *const BatteryCapacityVFSOC;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
     void collect();
 
   private:
+    bool ReadFileToInt(const std::string &path, int *val);
+    bool ReadFileToInt(const char *path, int *val);
     void logAll();
 
     void logBatteryChargeCycles();
@@ -55,6 +59,7 @@ class SysfsCollector {
     void logSlowIO();
     void logSpeakerImpedance();
     void logSpeechDspStat();
+    void logBatteryCapacity();
 
     void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
 
@@ -67,7 +72,14 @@ class SysfsCollector {
     const char *const kCodecPath;
     const char *const kCodec1Path;
     const char *const kSpeechDspPath;
+    const char *const kBatteryCapacityCC;
+    const char *const kBatteryCapacityVFSOC;
     sp<IStats> stats_;
+
+    // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
+    // store everything in the values array at the index of the field number
+    // -2.
+    const int kVendorAtomOffset = 2;
 };
 
 }  // namespace pixel
