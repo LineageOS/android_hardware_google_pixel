@@ -22,6 +22,7 @@
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <utils/Log.h>
 #include <utils/StrongPointer.h>
 #include <utils/Timers.h>
@@ -42,6 +43,8 @@ using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::SlowIo;
 using android::frameworks::stats::V1_0::SpeakerImpedance;
 using android::frameworks::stats::V1_0::SpeechDspStat;
+using android::frameworks::stats::V1_0::VendorAtom;
+using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -52,7 +55,26 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kImpedancePath(sysfs_paths.ImpedancePath),
       kCodecPath(sysfs_paths.CodecPath),
       kCodec1Path(sysfs_paths.Codec1Path),
-      kSpeechDspPath(sysfs_paths.SpeechDspPath) {}
+      kSpeechDspPath(sysfs_paths.SpeechDspPath),
+      kBatteryCapacityCC(sysfs_paths.BatteryCapacityCC),
+      kBatteryCapacityVFSOC(sysfs_paths.BatteryCapacityVFSOC) {}
+
+bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
+    return ReadFileToInt(path.c_str(), val);
+}
+
+bool SysfsCollector::ReadFileToInt(const char *const path, int *val) {
+    std::string file_contents;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read %s - %s", path, strerror(errno));
+        return false;
+    } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
+        ALOGE("Unable to convert %s to int - %s", path, strerror(errno));
+        return false;
+    }
+    return true;
+}
 
 /**
  * Read the contents of kCycleCountBinsPath and report them via IStats HAL.
@@ -223,6 +245,38 @@ void SysfsCollector::logSpeechDspStat() {
     stats_->reportSpeechDspStat(dspstat);
 }
 
+void SysfsCollector::logBatteryCapacity() {
+    std::string file_contents;
+    if (kBatteryCapacityCC == nullptr || strlen(kBatteryCapacityCC) == 0) {
+        ALOGV("Battery Capacity CC path not specified");
+        return;
+    }
+    if (kBatteryCapacityVFSOC == nullptr || strlen(kBatteryCapacityVFSOC) == 0) {
+        ALOGV("Battery Capacity VFSOC path not specified");
+        return;
+    }
+    int delta_cc_sum, delta_vfsoc_sum;
+    if (!ReadFileToInt(kBatteryCapacityCC, &delta_cc_sum) ||
+	!ReadFileToInt(kBatteryCapacityVFSOC, &delta_vfsoc_sum))
+	return;
+
+    // Load values array
+    std::vector<VendorAtom::Value> values(2);
+    VendorAtom::Value tmp;
+    tmp.intValue(delta_cc_sum);
+    values[BatteryCapacity::kDeltaCcSumFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(delta_vfsoc_sum);
+    values[BatteryCapacity::kDeltaVfsocSumFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::BATTERY_CAPACITY,
+                        .values = values};
+    Return<void> ret = stats_->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report ChargeStats to Stats service");
+}
+
 void SysfsCollector::logAll() {
     stats_ = IStats::tryGetService();
     if (!stats_) {
@@ -236,6 +290,7 @@ void SysfsCollector::logAll() {
     logSlowIO();
     logSpeakerImpedance();
     logSpeechDspStat();
+    logBatteryCapacity();
 
     stats_.clear();
 }
