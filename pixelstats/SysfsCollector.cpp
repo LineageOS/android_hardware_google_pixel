@@ -45,7 +45,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSlowioSyncCntPath(sysfs_paths.SlowioSyncCntPath),
       kCycleCountBinsPath(sysfs_paths.CycleCountBinsPath),
       kImpedancePath(sysfs_paths.ImpedancePath),
-      kCodecPath(sysfs_paths.CodecPath) {}
+      kCodecPath(sysfs_paths.CodecPath),
+      kCodec1Path(sysfs_paths.Codec1Path) {}
 
 /**
  * Read the contents of kCycleCountBinsPath and report them via IPixelStats HAL.
@@ -54,7 +55,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
  */
 void SysfsCollector::logBatteryChargeCycles() {
     std::string file_contents;
-    if (strlen(kCycleCountBinsPath) == 0) {
+    if (kCycleCountBinsPath == nullptr || strlen(kCycleCountBinsPath) == 0) {
         ALOGV("Battery charge cycle path not specified");
         return;
     }
@@ -72,7 +73,7 @@ void SysfsCollector::logBatteryChargeCycles() {
  */
 void SysfsCollector::logCodecFailed() {
     std::string file_contents;
-    if (strlen(kCodecPath) == 0) {
+    if (kCodecPath == nullptr || strlen(kCodecPath) == 0) {
         ALOGV("Audio codec path not specified");
         return;
     }
@@ -88,10 +89,32 @@ void SysfsCollector::logCodecFailed() {
     }
 }
 
+/**
+ * Check the codec1 for failures over the past 24hr.
+ */
+void SysfsCollector::logCodec1Failed() {
+    std::string file_contents;
+    if (kCodec1Path == nullptr || strlen(kCodec1Path) == 0) {
+        ALOGV("Audio codec1 path not specified");
+        return;
+    }
+    if (!ReadFileToString(kCodec1Path, &file_contents)) {
+        ALOGE("Unable to read codec1 state %s - %s", kCodec1Path, strerror(errno));
+        return;
+    }
+    if (file_contents == "0") {
+        return;
+    } else {
+        ALOGE("%s report hardware fail", kCodec1Path);
+        pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 1,
+                                          IPixelStats::HardwareErrorCode::COMPLETE);
+    }
+}
+
 void SysfsCollector::reportSlowIoFromFile(const char *path,
                                           const IPixelStats::IoOperation &operation) {
     std::string file_contents;
-    if (strlen(path) == 0) {
+    if (path == nullptr || strlen(path) == 0) {
         ALOGV("slow_io path not specified");
         return;
     }
@@ -127,7 +150,7 @@ void SysfsCollector::logSlowIO() {
  */
 void SysfsCollector::logSpeakerImpedance() {
     std::string file_contents;
-    if (strlen(kImpedancePath) == 0) {
+    if (kImpedancePath == nullptr || strlen(kImpedancePath) == 0) {
         ALOGV("Audio impedance path not specified");
         return;
     }
@@ -154,6 +177,7 @@ void SysfsCollector::logAll() {
 
     logBatteryChargeCycles();
     logCodecFailed();
+    logCodec1Failed();
     logSlowIO();
     logSpeakerImpedance();
 
