@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include <pwd.h>
 
 using namespace android::pixel::perfstatsd;
-static const char *UID_IO_STATS_PATH = "/proc/uid_io/stats";
+static constexpr const char *UID_IO_STATS_PATH = "/proc/uid_io/stats";
 static constexpr char FMT_STR_TOTAL_USAGE[] =
     "[IO_TOTAL: %lld.%03llds] RD:%s WR:%s fsync:%" PRIu64 "\n";
 static constexpr char STR_TOP_HEADER[] =
@@ -34,24 +34,15 @@ static constexpr char FMT_STR_TOP_WRITE_USAGE[] =
     "[W%d:%6.2f%%]%12" PRIu64 ",%12" PRIu64 ",%5" PRIu64 ",%5" PRIu64 " :%6u %s\n";
 static constexpr char FMT_STR_TOP_READ_USAGE[] =
     "[R%d:%6.2f%%]%12" PRIu64 ",%12" PRIu64 ",%5" PRIu64 ",%5" PRIu64 " :%6u %s\n";
-static constexpr char FMT_STR_SKIP_TOP_READ[] = "(%" PRIu64 "<%" PRIu64 "MB)skip RD";
-static constexpr char FMT_STR_SKIP_TOP_WRITE[] = "(%" PRIu64 "<%" PRIu64 "MB)skip WR";
+static constexpr char FMT_STR_SKIP_TOP_READ[] = "(< %" PRIu64 "MB)skip RD";
+static constexpr char FMT_STR_SKIP_TOP_WRITE[] = "(< %" PRIu64 "MB)skip WR";
 
-static bool sDisabled = false;
 static bool sOptDebug = false;
-
-static uint64_t io_sum_read(user_io &d) {
-    return d.fg_read + d.bg_read;
-}
-
-static uint64_t io_sum_write(user_io &d) {
-    return d.fg_write + d.bg_write;
-}
 
 /* format number with comma
  * Ex: 10000 => 10,000
  */
-static bool print_num(uint64_t x, char *str, int size) {
+static bool formatNum(uint64_t x, char *str, int size) {
     int len = snprintf(str, size, "%" PRIu64, x);
     if (len + 1 > size) {
         return false;
@@ -82,8 +73,20 @@ static bool isAppUid(uint32_t uid) {
     return false;
 }
 
+std::vector<uint32_t> ProcPidIoStats::getNewPids() {
+    std::vector<uint32_t> newpids;
+    // Not exists in Previous
+    for (int i = 0, len = mCurrPids.size(); i < len; i++) {
+        if (std::find(mPrevPids.begin(), mPrevPids.end(), mCurrPids[i]) == mPrevPids.end()) {
+            newpids.push_back(mCurrPids[i]);
+        }
+    }
+    return newpids;
+}
+
 void ProcPidIoStats::update(bool forceAll) {
-    ScopeTimer _timer("ProcPidIoStats::update");
+    ScopeTimer _debugTimer("update: /proc/pid/status for UID/Name mapping");
+    _debugTimer.setEnabled(sOptDebug);
     if (forceAll) {
         mPrevPids.clear();
     } else {
@@ -166,10 +169,10 @@ bool ProcPidIoStats::getNameForUid(uint32_t uid, std::string *name) {
     return false;
 }
 
-void IoStats::updateTopRead(user_io usage) {
-    user_io tmp;
+void IoStats::updateTopRead(UserIo usage) {
+    UserIo tmp;
     for (int i = 0, len = IO_TOP_MAX; i < len; i++) {
-        if (io_sum_read(usage) > io_sum_read(mReadTop[i])) {
+        if (usage.sumRead() > mReadTop[i].sumRead()) {
             // if new read > old read, then swap values
             tmp = mReadTop[i];
             mReadTop[i] = usage;
@@ -178,10 +181,10 @@ void IoStats::updateTopRead(user_io usage) {
     }
 }
 
-void IoStats::updateTopWrite(user_io usage) {
-    user_io tmp;
+void IoStats::updateTopWrite(UserIo usage) {
+    UserIo tmp;
     for (int i = 0, len = IO_TOP_MAX; i < len; i++) {
-        if (io_sum_write(usage) > io_sum_write(mWriteTop[i])) {
+        if (usage.sumWrite() > mWriteTop[i].sumWrite()) {
             // if new write > old write, then swap values
             tmp = mWriteTop[i];
             mWriteTop[i] = usage;
@@ -194,7 +197,8 @@ void IoStats::updateUnknownUidList() {
     if (!mUnknownUidList.size()) {
         return;
     }
-    ScopeTimer _DEBUG_TIME_COUNTER("update uid/name");
+    ScopeTimer _debugTimer("update overall UID/Name");
+    _debugTimer.setEnabled(sOptDebug);
     mProcIoStats.update(false);
     for (uint32_t i = 0, len = mUnknownUidList.size(); i < len; i++) {
         uint32_t uid = mUnknownUidList[i];
@@ -235,11 +239,11 @@ void IoStats::updateUnknownUidList() {
     mUnknownUidList.clear();
 }
 
-std::unordered_map<uint32_t, user_io> IoStats::calcIncrement(
-    const std::unordered_map<uint32_t, user_io> &data) {
-    std::unordered_map<uint32_t, user_io> diffs;
+std::unordered_map<uint32_t, UserIo> IoStats::calcIncrement(
+    const std::unordered_map<uint32_t, UserIo> &data) {
+    std::unordered_map<uint32_t, UserIo> diffs;
     for (const auto &it : data) {
-        const user_io &d = it.second;
+        const UserIo &d = it.second;
         // If data not existed, copy one, else calculate the increment.
         if (mPrevious.find(d.uid) == mPrevious.end()) {
             diffs[d.uid] = d;
@@ -247,7 +251,7 @@ std::unordered_map<uint32_t, user_io> IoStats::calcIncrement(
             diffs[d.uid] = d - mPrevious[d.uid];
         }
         // If uid not existed in UidNameMap, then add into unknown list
-        if ((io_sum_read(diffs[d.uid]) || io_sum_write(diffs[d.uid])) &&
+        if ((diffs[d.uid].sumRead() || diffs[d.uid].sumWrite()) &&
             mUidNameMap.find(d.uid) == mUidNameMap.end()) {
             mUnknownUidList.push_back(d.uid);
         }
@@ -257,7 +261,7 @@ std::unordered_map<uint32_t, user_io> IoStats::calcIncrement(
     return diffs;
 }
 
-void IoStats::calcAll(std::unordered_map<uint32_t, user_io> &&data) {
+void IoStats::calcAll(std::unordered_map<uint32_t, UserIo> &&data) {
     // if mList == mNow, it's in init state.
     if (mLast == mNow) {
         mPrevious = std::move(data);
@@ -274,7 +278,7 @@ void IoStats::calcAll(std::unordered_map<uint32_t, user_io> &&data) {
     mNow = std::chrono::system_clock::now();
 
     // calculate incremental IO throughput
-    std::unordered_map<uint32_t, user_io> amounts = calcIncrement(data);
+    std::unordered_map<uint32_t, UserIo> amounts = calcIncrement(data);
     // assign current data to Previous for next calculating
     mPrevious = std::move(data);
     // Reset Total and Tops
@@ -284,7 +288,7 @@ void IoStats::calcAll(std::unordered_map<uint32_t, user_io> &&data) {
         mWriteTop[i].reset();
     }
     for (const auto &it : amounts) {
-        const user_io &d = it.second;
+        const UserIo &d = it.second;
         // Add into total
         mTotal = mTotal + d;
         // Check if it's top
@@ -313,120 +317,98 @@ bool IoStats::dump(std::stringstream *output) {
     std::stringstream &out = (*output);
 
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(mNow - mLast);
-    char r_total[32];
-    char w_total[32];
-    if (!print_num(io_sum_read(mTotal), r_total, 32)) {
-        LOG_TO(SYSTEM, ERROR) << "print_num buffer size is too small for read: "
-                              << io_sum_read(mTotal);
+    char readTotal[32];
+    char writeTotal[32];
+    if (!formatNum(mTotal.sumRead(), readTotal, 32)) {
+        LOG_TO(SYSTEM, ERROR) << "formatNum buffer size is too small for read: "
+                              << mTotal.sumRead();
     }
-    if (!print_num(io_sum_write(mTotal), w_total, 32)) {
-        LOG_TO(SYSTEM, ERROR) << "print_num buffer size is too small for write: "
-                              << io_sum_write(mTotal);
+    if (!formatNum(mTotal.sumWrite(), writeTotal, 32)) {
+        LOG_TO(SYSTEM, ERROR) << "formatNum buffer size is too small for write: "
+                              << mTotal.sumWrite();
     }
 
     out << android::base::StringPrintf(FMT_STR_TOTAL_USAGE, ms.count() / 1000, ms.count() % 1000,
-                                       r_total, w_total, mTotal.fg_fsync + mTotal.bg_fsync);
+                                       readTotal, writeTotal, mTotal.fgFsync + mTotal.bgFsync);
 
-    if (io_sum_read(mTotal) >= mMinSizeOfTotalRead ||
-        io_sum_write(mTotal) >= mMinSizeOfTotalWrite) {
+    if (mTotal.sumRead() >= mMinSizeOfTotalRead || mTotal.sumWrite() >= mMinSizeOfTotalWrite) {
         out << STR_TOP_HEADER;
     }
     // Dump READ TOP
-    user_io total = {};
-    if (io_sum_read(mTotal) < mMinSizeOfTotalRead) {
-        out << android::base::StringPrintf(FMT_STR_SKIP_TOP_READ, io_sum_read(mTotal),
-                                           mMinSizeOfTotalRead / 1000000)
+    if (mTotal.sumRead() < mMinSizeOfTotalRead) {
+        out << android::base::StringPrintf(FMT_STR_SKIP_TOP_READ, mMinSizeOfTotalRead / 1000000)
             << std::endl;
     } else {
         for (int i = 0, len = IO_TOP_MAX; i < len; i++) {
-            total = total + mReadTop[i];
-        }
-
-        for (int i = 0, len = IO_TOP_MAX; i < len; i++) {
-            user_io &target = mReadTop[i];
-            if (io_sum_read(total) == 0) {
+            UserIo &target = mReadTop[i];
+            if (target.sumRead() == 0) {
                 break;
             }
-            if (io_sum_read(target) == 0) {
-                break;
-            }
-            float percent = 100.0f * io_sum_read(target) / io_sum_read(total);
+            float percent = 100.0f * target.sumRead() / mTotal.sumRead();
             const char *package = mUidNameMap.find(target.uid) == mUidNameMap.end()
                                       ? "-"
                                       : mUidNameMap[target.uid].c_str();
             out << android::base::StringPrintf(FMT_STR_TOP_READ_USAGE, i + 1, percent,
-                                               target.fg_read, target.bg_read, target.fg_fsync,
-                                               target.bg_fsync, target.uid, package);
+                                               target.fgRead, target.bgRead, target.fgFsync,
+                                               target.bgFsync, target.uid, package);
         }
     }
 
     // Dump WRITE TOP
-    total = {};
-    if (io_sum_write(mTotal) < mMinSizeOfTotalWrite) {
-        out << android::base::StringPrintf(FMT_STR_SKIP_TOP_WRITE, io_sum_write(mTotal),
-                                           mMinSizeOfTotalWrite / 1000000)
+    if (mTotal.sumWrite() < mMinSizeOfTotalWrite) {
+        out << android::base::StringPrintf(FMT_STR_SKIP_TOP_WRITE, mMinSizeOfTotalWrite / 1000000)
             << std::endl;
     } else {
         for (int i = 0, len = IO_TOP_MAX; i < len; i++) {
-            total = total + mWriteTop[i];
-        }
-
-        for (int i = 0, len = IO_TOP_MAX; i < len; i++) {
-            user_io &target = mWriteTop[i];
-            if (io_sum_write(total) == 0) {
+            UserIo &target = mWriteTop[i];
+            if (target.sumWrite() == 0) {
                 break;
             }
-            if (io_sum_write(target) == 0) {
-                break;
-            }
-            float percent = 100.0f * io_sum_write(target) / io_sum_write(total);
+            float percent = 100.0f * target.sumWrite() / mTotal.sumWrite();
             const char *package = mUidNameMap.find(target.uid) == mUidNameMap.end()
                                       ? "-"
                                       : mUidNameMap[target.uid].c_str();
             out << android::base::StringPrintf(FMT_STR_TOP_WRITE_USAGE, i + 1, percent,
-                                               target.fg_write, target.bg_write, target.fg_fsync,
-                                               target.bg_fsync, target.uid, package);
+                                               target.fgWrite, target.bgWrite, target.fgFsync,
+                                               target.bgFsync, target.uid, package);
         }
     }
     return true;
 }
 
-static bool read_line_to_data(std::string &&line, user_io &data) {
+static bool loadDataFromLine(std::string &&line, UserIo &data) {
     std::vector<std::string> fields = android::base::Split(line, " ");
     if (fields.size() < 11 || !android::base::ParseUint(fields[0], &data.uid) ||
-        !android::base::ParseUint(fields[3], &data.fg_read) ||
-        !android::base::ParseUint(fields[4], &data.fg_write) ||
-        !android::base::ParseUint(fields[7], &data.bg_read) ||
-        !android::base::ParseUint(fields[8], &data.bg_write) ||
-        !android::base::ParseUint(fields[9], &data.fg_fsync) ||
-        !android::base::ParseUint(fields[10], &data.bg_fsync)) {
+        !android::base::ParseUint(fields[3], &data.fgRead) ||
+        !android::base::ParseUint(fields[4], &data.fgWrite) ||
+        !android::base::ParseUint(fields[7], &data.bgRead) ||
+        !android::base::ParseUint(fields[8], &data.bgWrite) ||
+        !android::base::ParseUint(fields[9], &data.fgFsync) ||
+        !android::base::ParseUint(fields[10], &data.bgFsync)) {
         LOG_TO(SYSTEM, WARNING) << "Invalid uid I/O stats: \"" << line << "\"";
         return false;
     }
     return true;
 }
 
-ScopeTimer::ScopeTimer() : ScopeTimer("") {}
-ScopeTimer::ScopeTimer(std::string name) {
-    mStart = std::chrono::system_clock::now();
-    mName = name;
-}
-ScopeTimer::~ScopeTimer() {
-    if (sOptDebug) {
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now() - mStart);
-        LOG_TO(SYSTEM, INFO) << "duration (" << mName << "): " << ms.count() << "ms";
-    }
+void ScopeTimer::dump(std::string *outAppend) {
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now() - mStart);
+    outAppend->append("duration (");
+    outAppend->append(mName);
+    outAppend->append("): ");
+    outAppend->append(std::to_string(ms.count()));
+    outAppend->append("ms");
 }
 
 /*
- * setOptions - io_usage supports following options
+ * setOptions - IoUsage supports following options
  *     iostats.min : skip dump when R/W amount is lower than the value
  *     iostats.read.min : skip dump when READ amount is lower than the value
  *     iostats.write.min : skip dump when WRITE amount is lower than the value
  *     iostats.debug : 1 - to enable debug log; 0 - disabled
  */
-void io_usage::setOptions(const std::string &key, const std::string &value) {
+void IoUsage::setOptions(const std::string &key, const std::string &value) {
     std::stringstream out;
     out << "set IO options: " << key << " , " << value;
     if (key == "iostats.min" || key == "iostats.read.min" || key == "iostats.write.min" ||
@@ -441,7 +423,7 @@ void io_usage::setOptions(const std::string &key, const std::string &value) {
             mStats.setDumpThresholdSizeForRead(val);
             mStats.setDumpThresholdSizeForWrite(val);
         } else if (key == "iostats.disabled") {
-            sDisabled = (val != 0);
+            mDisabled = (val != 0);
         } else if (key == "iostats.read.min") {
             mStats.setDumpThresholdSizeForRead(val);
         } else if (key == "iostats.write.min") {
@@ -453,10 +435,11 @@ void io_usage::setOptions(const std::string &key, const std::string &value) {
     }
 }
 
-void io_usage::refresh(void) {
-    if (sDisabled)
+void IoUsage::refresh(void) {
+    if (mDisabled)
         return;
-    ScopeTimer _DEBUG_TIME_COUNTER("refresh");
+    ScopeTimer _debugTimer("refresh");
+    _debugTimer.setEnabled(sOptDebug);
     std::string buffer;
     if (!android::base::ReadFileToString(UID_IO_STATS_PATH, &buffer)) {
         LOG_TO(SYSTEM, ERROR) << UID_IO_STATS_PATH << ": ReadFileToString failed";
@@ -464,13 +447,13 @@ void io_usage::refresh(void) {
     if (sOptDebug)
         LOG_TO(SYSTEM, INFO) << "read " << UID_IO_STATS_PATH << " OK.";
     std::vector<std::string> lines = android::base::Split(std::move(buffer), "\n");
-    std::unordered_map<uint32_t, user_io> datas;
+    std::unordered_map<uint32_t, UserIo> datas;
     for (uint32_t i = 0; i < lines.size(); i++) {
         if (lines[i].empty()) {
             continue;
         }
-        user_io data;
-        if (!read_line_to_data(std::move(lines[i]), data))
+        UserIo data;
+        if (!loadDataFromLine(std::move(lines[i]), data))
             continue;
         datas[data.uid] = data;
     }
