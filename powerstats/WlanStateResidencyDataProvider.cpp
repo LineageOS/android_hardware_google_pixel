@@ -17,6 +17,8 @@
 #define LOG_TAG "libpixelpowerstats"
 
 #include <android-base/logging.h>
+#include <android-base/properties.h>
+
 #include <pixelpowerstats/PowerStatsUtils.h>
 #include <pixelpowerstats/WlanStateResidencyDataProvider.h>
 #include <cstdio>
@@ -35,20 +37,26 @@ WlanStateResidencyDataProvider::WlanStateResidencyDataProvider(uint32_t id, std:
     : mPath(std::move(path)), mPowerEntityId(id) {}
 
 bool WlanStateResidencyDataProvider::getResults(
-    std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) {
-    // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
-    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
-    if (!fp) {
-        PLOG(ERROR) << __func__ << ":Failed to open file " << mPath
-                    << " Error = " << strerror(errno);
-        return false;
-    }
-
+        std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) {
     PowerEntityStateResidencyResult result = {
         .powerEntityId = mPowerEntityId,
         .stateResidencyData = {{.powerEntityStateId = ACTIVE_ID},
                                {.powerEntityStateId = DEEPSLEEP_ID}}};
 
+    std::string wlanDriverStatus = android::base::GetProperty("wlan.driver.status", "unloaded");
+    if (wlanDriverStatus != "ok") {
+        LOG(ERROR) << __func__ << ": wlan is " << wlanDriverStatus;
+        // Return 0s for Wlan stats, because the driver is unloaded
+        results.insert(std::make_pair(mPowerEntityId, result));
+        return true;
+    }
+
+    // Using FILE* instead of std::ifstream for performance reasons (b/122253123)
+    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
+    if (!fp) {
+        PLOG(ERROR) << __func__ << ":Failed to open file " << mPath;
+        return false;
+    }
     size_t numFieldsRead = 0;
     const size_t numFields = 4;
     size_t len = 0;
