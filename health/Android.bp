@@ -4,10 +4,11 @@ cc_library {
     export_include_dirs: ["include"],
 
     srcs: [
-        "LowBatteryShutdownMetrics.cpp",
+        "BatteryMetricsLogger.cpp",
+        "BatteryThermalControl.cpp",
         "CycleCountBackupRestore.cpp",
         "DeviceHealth.cpp",
-        "BatteryMetricsLogger.cpp",
+        "LowBatteryShutdownMetrics.cpp",
     ],
 
     cflags: [
