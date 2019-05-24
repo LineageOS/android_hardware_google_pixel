@@ -45,18 +45,19 @@ const std::map<std::string, TracingConfig> kTracingMap = {
         },
         {
                 "ion",
-                {"ION allocation",
+                {"ION Allocation",
                  {{"/sys/kernel/debug/tracing/events/kmem/ion_alloc_buffer_start/enable", false}}},
         },
         {
-                "tz",
-                {"Trust zone",
+                "sched",
+                {"CPU Scheduling and Trustzone",
                  {{"/sys/kernel/debug/tracing/events/scm/enable", false},
                   {"/sys/kernel/debug/tracing/events/systrace/enable", false}}},
         },
         {
                 "freq",
-                {"Clocks", {{"/sys/kernel/debug/tracing/events/msm_bus/enable", false}}},
+                {"CPU Frequency and System Clock",
+                 {{"/sys/kernel/debug/tracing/events/msm_bus/enable", false}}},
         },
 };
 
