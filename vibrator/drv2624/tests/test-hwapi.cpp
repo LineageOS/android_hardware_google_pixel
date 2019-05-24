@@ -51,8 +51,8 @@ class HwApiTest : public Test {
   public:
     void SetUp() override {
         for (auto n : FILE_NAMES) {
-            auto name = std::string(n);
-            auto path = std::string(mFilesDir.path) + "/" + name;
+            auto name = std::filesystem::path(n);
+            auto path = std::filesystem::path(mFilesDir.path) / name;
             std::ofstream touch{path};
             setenv(name.c_str(), path.c_str(), true);
             mFileMap[name] = path;
@@ -60,8 +60,8 @@ class HwApiTest : public Test {
         mHwApi = HwApi::Create();
 
         for (auto n : REQUIRED) {
-            auto name = std::string(n);
-            auto path = std::string(mEmptyDir.path) + "/" + name;
+            auto name = std::filesystem::path(n);
+            auto path = std::filesystem::path(mEmptyDir.path) / name;
             std::ofstream touch{path};
         }
         for (auto n : FILE_NAMES) {

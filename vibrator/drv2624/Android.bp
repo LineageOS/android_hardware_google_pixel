@@ -29,7 +29,6 @@ cc_defaults {
         "android.hardware.vibrator@1.1",
         "android.hardware.vibrator@1.2",
     ],
-    proprietary: true,
 }
 
 cc_defaults {
@@ -58,6 +57,8 @@ cc_library {
         "Vibrator.cpp",
     ],
     export_include_dirs: ["."],
+    vendor_available: true,
+    visibility: [":__subpackages__"],
 }
 
 cc_binary {
@@ -67,4 +68,5 @@ cc_binary {
     vintf_fragments: ["android.hardware.vibrator@1.2-service.drv2624.xml"],
     srcs: ["service.cpp"],
     static_libs: ["android.hardware.vibrator@1.2-impl.drv2624"],
+    proprietary: true,
 }
