@@ -32,39 +32,10 @@ cc_defaults {
     proprietary: true,
 }
 
-cc_library {
-    name: "android.hardware.vibrator@1.2-impl.drv2624",
+cc_defaults {
+    name: "PtsVibratorHalDrv2624Defaults",
     defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
-    srcs: [
-        "Hardware.cpp",
-        "Vibrator.cpp",
-    ],
-}
-
-cc_binary {
-    name: "android.hardware.vibrator@1.2-service.drv2624",
-    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
-    init_rc: ["android.hardware.vibrator@1.2-service.drv2624.rc"],
-    vintf_fragments: ["android.hardware.vibrator@1.2-service.drv2624.xml"],
-    srcs: ["service.cpp"],
     static_libs: ["android.hardware.vibrator@1.2-impl.drv2624"],
-}
-
-cc_test {
-    name: "PtsVibratorHalDrv2624TestSuite",
-    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
-    srcs: [
-        "tests/test-hwapi.cpp",
-        "tests/test-hwcal.cpp",
-        "tests/test-vibrator.cpp",
-    ],
-    static_libs: [
-        "android.hardware.vibrator@1.2-impl.drv2624",
-        "libgmock",
-    ],
-    shared_libs: [
-        "libbase",
-    ],
     test_suites: [
         "general-tests",
         "pts",
@@ -77,4 +48,23 @@ cc_test {
             suffix: "64",
         },
     },
+}
+
+cc_library {
+    name: "android.hardware.vibrator@1.2-impl.drv2624",
+    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
+    srcs: [
+        "Hardware.cpp",
+        "Vibrator.cpp",
+    ],
+    export_include_dirs: ["."],
+}
+
+cc_binary {
+    name: "android.hardware.vibrator@1.2-service.drv2624",
+    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
+    init_rc: ["android.hardware.vibrator@1.2-service.drv2624.rc"],
+    vintf_fragments: ["android.hardware.vibrator@1.2-service.drv2624.xml"],
+    srcs: ["service.cpp"],
+    static_libs: ["android.hardware.vibrator@1.2-impl.drv2624"],
 }
