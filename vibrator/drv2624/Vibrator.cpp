@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "VibratorService"
+#define ATRACE_TAG (ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)
+#define LOG_TAG "android.hardware.vibrator@1.2-service.drv2624"
 
 #include "Vibrator.h"
 
@@ -22,6 +23,7 @@
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
 #include <log/log.h>
+#include <utils/Trace.h>
 
 #include <cinttypes>
 #include <cmath>
@@ -117,10 +119,12 @@ Return<Status> Vibrator::on(uint32_t timeoutMs, bool forceOpenLoop, bool isWavef
 
 // Methods from ::android::hardware::vibrator::V1_2::IVibrator follow.
 Return<Status> Vibrator::on(uint32_t timeoutMs) {
+    ATRACE_NAME("Vibrator::on");
     return on(timeoutMs, false /* forceOpenLoop */, false /* isWaveform */);
 }
 
 Return<Status> Vibrator::off() {
+    ATRACE_NAME("Vibrator::off");
     if (!mHwApi->setActivate(0)) {
         ALOGE("Failed to turn vibrator off (%d): %s", errno, strerror(errno));
         return Status::UNKNOWN_ERROR;
@@ -129,10 +133,12 @@ Return<Status> Vibrator::off() {
 }
 
 Return<bool> Vibrator::supportsAmplitudeControl() {
+    ATRACE_NAME("Vibrator::supportsAmplitudeControl");
     return (mHwApi->hasRtpInput() ? true : false);
 }
 
 Return<Status> Vibrator::setAmplitude(uint8_t amplitude) {
+    ATRACE_NAME("Vibrator::setAmplitude");
     if (amplitude == 0) {
         return Status::BAD_VALUE;
     }
@@ -209,6 +215,7 @@ Return<void> Vibrator::perform_1_2(Effect effect, EffectStrength strength, perfo
 
 template <typename T>
 Return<void> Vibrator::performWrapper(T effect, EffectStrength strength, perform_cb _hidl_cb) {
+    ATRACE_NAME("Vibrator::performWrapper");
     auto validEffectRange = hidl_enum_range<T>();
     if (effect < *validEffectRange.begin() || effect > *std::prev(validEffectRange.end())) {
         _hidl_cb(Status::UNSUPPORTED_OPERATION, 0);

@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+#define ATRACE_TAG (ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)
 #define LOG_TAG "android.hardware.vibrator@1.2-service.drv2624"
 
 #include "Hardware.h"
 
 #include <log/log.h>
+#include <utils/Trace.h>
 
 #include <iostream>
 
@@ -122,6 +124,7 @@ bool HwApi::has(const T &stream) {
 
 template <typename T, typename U>
 bool HwApi::get(T *value, U *stream) {
+    ATRACE_NAME("HwApi::get");
     bool ret;
     stream->seekg(0);
     *stream >> *value;
@@ -134,6 +137,7 @@ bool HwApi::get(T *value, U *stream) {
 
 template <typename T, typename U>
 bool HwApi::set(const T &value, U *stream) {
+    ATRACE_NAME("HwApi::set");
     using utils::operator<<;
     bool ret;
     *stream << value << std::endl;
@@ -185,6 +189,7 @@ HwCal::HwCal() {
 
 template <typename T>
 bool HwCal::get(const char *key, T *value) {
+    ATRACE_NAME("HwCal::get");
     auto it = mCalData.find(key);
     if (it == mCalData.end()) {
         ALOGE("Missing %s config!", key);
