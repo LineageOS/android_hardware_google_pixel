@@ -32,6 +32,7 @@
 
 using android::sp;
 using android::base::ReadFileToString;
+using android::base::WriteStringToFile;
 using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
@@ -229,6 +230,10 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
     if (!std::getline(ss, line)) {
         ALOGE("Unable to read first line");
         return;
+    }
+
+    if (!WriteStringToFile(kChargeMetricsPath.c_str(), std::to_string(0))) {
+	ALOGE("Couldn't clear %s", kChargeMetricsPath.c_str());
     }
 
     sp<IStats> stats_client = IStats::tryGetService();
