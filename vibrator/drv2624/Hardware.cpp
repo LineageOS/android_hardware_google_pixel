@@ -92,6 +92,8 @@ static void unpack(std::istream &stream, std::string *value) {
     stream.setstate(std::istream::eofbit);
 }
 
+#define RECORD(args...) record(__FUNCTION__, ##args)
+
 HwApi::HwApi() {
     fileFromEnv("AUTOCAL_FILEPATH", &mAutocal, &mNames[&mAutocal]);
     fileFromEnv("OL_LRA_PERIOD_FILEPATH", &mOlLraPeriod, &mNames[&mOlLraPeriod]);
@@ -132,6 +134,7 @@ bool HwApi::get(T *value, U *stream) {
         ALOGE("Failed to read %s (%d): %s", mNames[stream].c_str(), errno, strerror(errno));
     }
     stream->clear();
+    RECORD(*value, stream);
     return ret;
 }
 
@@ -145,7 +148,14 @@ bool HwApi::set(const T &value, U *stream) {
         ALOGE("Failed to write %s (%d): %s", mNames[stream].c_str(), errno, strerror(errno));
         stream->clear();
     }
+    RECORD(value, stream);
     return ret;
+}
+
+template <typename T>
+void HwApi::record(const char *func, const T &value, void *stream) {
+    mRecords.emplace_back(std::make_unique<Record<T>>(func, value, stream));
+    mRecords.erase(mRecords.begin());
 }
 
 void HwApi::debug(int fd) {
@@ -161,6 +171,24 @@ void HwApi::debug(int fd) {
             dprintf(fd, "    %s\n", line.c_str());
         }
     }
+
+    dprintf(fd, "  Records:\n");
+    for (auto &r : mRecords) {
+        if (r == nullptr) {
+            continue;
+        }
+        dprintf(fd, "    %s\n", r->toString(mNames).c_str());
+    }
+}
+
+template <typename T>
+std::string HwApi::Record<T>::toString(const NamesMap &names) {
+    using utils::operator<<;
+    std::stringstream ret;
+
+    ret << mFunc << " '" << names.at(mStream) << "' = '" << mValue << "'";
+
+    return ret.str();
 }
 
 HwCal::HwCal() {

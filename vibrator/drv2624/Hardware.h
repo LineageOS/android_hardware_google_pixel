@@ -27,6 +27,29 @@ namespace V1_2 {
 namespace implementation {
 
 class HwApi : public Vibrator::HwApi {
+  private:
+    using NamesMap = std::map<const void *, std::string>;
+
+    class RecordInterface {
+      public:
+        virtual std::string toString(const NamesMap &names) = 0;
+        virtual ~RecordInterface() {}
+    };
+    template <typename T>
+    class Record : public RecordInterface {
+      public:
+        Record(const char *func, const T &value, const void *stream)
+            : mFunc(func), mValue(value), mStream(stream) {}
+        std::string toString(const NamesMap &names) override;
+
+      private:
+        const char *mFunc;
+        const T mValue;
+        const void *mStream;
+    };
+
+    static constexpr uint32_t RECORDS_SIZE = 32;
+
   public:
     static std::unique_ptr<HwApi> Create();
     bool setAutocal(std::string value) override { return set(value, &mAutocal); }
@@ -51,9 +74,12 @@ class HwApi : public Vibrator::HwApi {
     bool get(T *value, U *stream);
     template <typename T, typename U>
     bool set(const T &value, U *stream);
+    template <typename T>
+    void record(const char *func, const T &value, void *stream);
 
   private:
-    std::map<void *, std::string> mNames;
+    NamesMap mNames;
+    std::vector<std::unique_ptr<RecordInterface>> mRecords{RECORDS_SIZE};
     std::ofstream mAutocal;
     std::ofstream mOlLraPeriod;
     std::ofstream mActivate;
