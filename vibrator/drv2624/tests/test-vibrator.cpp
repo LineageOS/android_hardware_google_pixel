@@ -41,6 +41,7 @@ using ::testing::Combine;
 using ::testing::DoAll;
 using ::testing::DoDefault;
 using ::testing::Exactly;
+using ::testing::ExpectationSet;
 using ::testing::Mock;
 using ::testing::Return;
 using ::testing::Sequence;
@@ -68,11 +69,48 @@ static const std::map<EffectTuple, EffectSequence> EFFECT_SEQUENCES{
         {{Effect::HEAVY_CLICK, EffectStrength::STRONG}, {"4 0", 0}},
 };
 
-class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
+static uint32_t freqPeriodFormula(uint32_t in) {
+    return 1000000000 / (24615 * in);
+}
+
+template <typename... T>
+class VibratorTestTemplate : public Test, public WithParamInterface<std::tuple<bool, T...>> {
   public:
+    static auto GetDynamicConfig(typename VibratorTestTemplate::ParamType param) {
+        return std::get<0>(param);
+    }
+    template <std::size_t I>
+    static auto GetOtherParam(typename VibratorTestTemplate::ParamType param) {
+        return std::get<I + 1>(param);
+    }
+
+    static auto PrintParam(const TestParamInfo<typename VibratorTestTemplate::ParamType> &info) {
+        auto dynamic = GetDynamicConfig(info.param);
+        return std::string() + (dynamic ? "Dynamic" : "Static") + "Config";
+    }
+
+    static auto MakeParam(bool dynamicConfig, T... others) {
+        return std::make_tuple(dynamicConfig, others...);
+    }
+
     void SetUp() override {
         std::unique_ptr<MockApi> mockapi;
         std::unique_ptr<MockCal> mockcal;
+
+        mCloseLoopThreshold = std::rand();
+        // ensure close-loop test is possible
+        if (mCloseLoopThreshold == UINT32_MAX) {
+            mCloseLoopThreshold--;
+        }
+
+        mShortLraPeriod = std::rand();
+        if (getDynamicConfig()) {
+            mLongFrequencyShift = std::rand();
+            mLongLraPeriod =
+                    freqPeriodFormula(freqPeriodFormula(mShortLraPeriod) - mLongFrequencyShift);
+            mShortVoltageMax = std::rand();
+            mLongVoltageMax = std::rand();
+        }
 
         mEffectDurations[Effect::CLICK] = std::rand();
         mEffectDurations[Effect::TICK] = std::rand();
@@ -86,6 +124,8 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
     void TearDown() override { deleteVibrator(); }
 
   protected:
+    auto getDynamicConfig() const { return GetDynamicConfig(VibratorTestTemplate::GetParam()); }
+
     void createMock(std::unique_ptr<MockApi> *mockapi, std::unique_ptr<MockCal> *mockcal) {
         *mockapi = std::make_unique<MockApi>();
         *mockcal = std::make_unique<MockCal>();
@@ -94,8 +134,31 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
         mMockCal = mockcal->get();
 
         ON_CALL(*mMockApi, destructor()).WillByDefault(Assign(&mMockApi, nullptr));
+        ON_CALL(*mMockApi, setOlLraPeriod(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setActivate(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setDuration(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setMode(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setCtrlLoop(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setLraWaveShape(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setOdClamp(_)).WillByDefault(Return(true));
 
         ON_CALL(*mMockCal, destructor()).WillByDefault(Assign(&mMockCal, nullptr));
+        ON_CALL(*mMockCal, getLraPeriod(_))
+                .WillByDefault(DoAll(SetArgPointee<0>(mShortLraPeriod), Return(true)));
+        ON_CALL(*mMockCal, getCloseLoopThreshold(_))
+                .WillByDefault(DoAll(SetArgPointee<0>(mCloseLoopThreshold), Return(true)));
+        ON_CALL(*mMockCal, getDynamicConfig(_))
+                .WillByDefault(DoAll(SetArgPointee<0>(getDynamicConfig()), Return(true)));
+
+        if (getDynamicConfig()) {
+            ON_CALL(*mMockCal, getLongFrequencyShift(_))
+                    .WillByDefault(DoAll(SetArgPointee<0>(mLongFrequencyShift), Return(true)));
+            ON_CALL(*mMockCal, getShortVoltageMax(_))
+                    .WillByDefault(DoAll(SetArgPointee<0>(mShortVoltageMax), Return(true)));
+            ON_CALL(*mMockCal, getLongVoltageMax(_))
+                    .WillByDefault(DoAll(SetArgPointee<0>(mLongVoltageMax), Return(true)));
+        }
+
         ON_CALL(*mMockCal, getClickDuration(_))
                 .WillByDefault(
                         DoAll(SetArgPointee<0>(mEffectDurations[Effect::CLICK]), Return(true)));
@@ -130,7 +193,6 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
         mVibrator.clear();
     }
 
-  private:
     void relaxMock(bool relax) {
         auto times = relax ? AnyNumber() : Exactly(0);
 
@@ -150,11 +212,18 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
         EXPECT_CALL(*mMockApi, setScale(_)).Times(times);
         EXPECT_CALL(*mMockApi, setCtrlLoop(_)).Times(times);
         EXPECT_CALL(*mMockApi, setLpTriggerEffect(_)).Times(times);
+        EXPECT_CALL(*mMockApi, setLraWaveShape(_)).Times(times);
+        EXPECT_CALL(*mMockApi, setOdClamp(_)).Times(times);
         EXPECT_CALL(*mMockApi, debug(_)).Times(times);
 
         EXPECT_CALL(*mMockCal, destructor()).Times(times);
         EXPECT_CALL(*mMockCal, getAutocal(_)).Times(times);
         EXPECT_CALL(*mMockCal, getLraPeriod(_)).Times(times);
+        EXPECT_CALL(*mMockCal, getCloseLoopThreshold(_)).Times(times);
+        EXPECT_CALL(*mMockCal, getDynamicConfig(_)).Times(times);
+        EXPECT_CALL(*mMockCal, getLongFrequencyShift(_)).Times(times);
+        EXPECT_CALL(*mMockCal, getShortVoltageMax(_)).Times(times);
+        EXPECT_CALL(*mMockCal, getLongVoltageMax(_)).Times(times);
         EXPECT_CALL(*mMockCal, getClickDuration(_)).Times(times);
         EXPECT_CALL(*mMockCal, getTickDuration(_)).Times(times);
         EXPECT_CALL(*mMockCal, getDoubleClickDuration(_)).Times(times);
@@ -167,15 +236,22 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
     MockCal *mMockCal;
     sp<IVibrator> mVibrator;
 
+    EffectDuration mCloseLoopThreshold;
+    uint32_t mLongFrequencyShift;
+    uint32_t mShortLraPeriod;
+    uint32_t mLongLraPeriod;
+    uint32_t mShortVoltageMax;
+    uint32_t mLongVoltageMax;
     std::map<Effect, EffectDuration> mEffectDurations;
 };
 
-TEST_F(VibratorTest, Constructor) {
+using BasicTest = VibratorTestTemplate<>;
+
+TEST_P(BasicTest, Constructor) {
     std::unique_ptr<MockApi> mockapi;
     std::unique_ptr<MockCal> mockcal;
     std::string autocalVal = std::to_string(std::rand()) + " " + std::to_string(std::rand()) + " " +
                              std::to_string(std::rand());
-    uint32_t lraPeriodVal = std::rand();
     Sequence autocalSeq, lraPeriodSeq;
 
     EXPECT_CALL(*mMockApi, destructor()).WillOnce(DoDefault());
@@ -190,14 +266,22 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockCal, getAutocal(_))
             .InSequence(autocalSeq)
             .WillOnce(DoAll(SetArgReferee<0>(autocalVal), Return(true)));
-    EXPECT_CALL(*mMockApi, setAutocal(autocalVal)).InSequence(autocalSeq).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, setAutocal(autocalVal)).InSequence(autocalSeq).WillOnce(DoDefault());
 
-    EXPECT_CALL(*mMockCal, getLraPeriod(_))
-            .InSequence(lraPeriodSeq)
-            .WillOnce(DoAll(SetArgPointee<0>(lraPeriodVal), Return(true)));
-    EXPECT_CALL(*mMockApi, setOlLraPeriod(lraPeriodVal))
-            .InSequence(lraPeriodSeq)
-            .WillOnce(Return(true));
+    EXPECT_CALL(*mMockCal, getLraPeriod(_)).InSequence(lraPeriodSeq).WillOnce(DoDefault());
+
+    EXPECT_CALL(*mMockCal, getCloseLoopThreshold(_)).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockCal, getDynamicConfig(_)).WillOnce(DoDefault());
+
+    if (getDynamicConfig()) {
+        EXPECT_CALL(*mMockCal, getLongFrequencyShift(_)).WillOnce(DoDefault());
+        EXPECT_CALL(*mMockCal, getShortVoltageMax(_)).WillOnce(DoDefault());
+        EXPECT_CALL(*mMockCal, getLongVoltageMax(_)).WillOnce(DoDefault());
+    } else {
+        EXPECT_CALL(*mMockApi, setOlLraPeriod(mShortLraPeriod))
+                .InSequence(lraPeriodSeq)
+                .WillOnce(DoDefault());
+    }
 
     EXPECT_CALL(*mMockCal, getClickDuration(_)).WillOnce(DoDefault());
     EXPECT_CALL(*mMockCal, getTickDuration(_)).WillOnce(DoDefault());
@@ -209,37 +293,64 @@ TEST_F(VibratorTest, Constructor) {
     createVibrator(std::move(mockapi), std::move(mockcal), false);
 }
 
-TEST_F(VibratorTest, on) {
+TEST_P(BasicTest, on) {
     EffectDuration duration = std::rand();
-    Sequence s1, s2, s3;
+    ExpectationSet e;
 
-    EXPECT_CALL(*mMockApi, setCtrlLoop(AnyOf(0, 1))).InSequence(s1).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setMode("rtp")).InSequence(s2).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setDuration(duration)).InSequence(s3).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setActivate(true)).InSequence(s1, s2, s3).WillOnce(Return(true));
+    e += EXPECT_CALL(*mMockApi, setCtrlLoop(_)).WillOnce(DoDefault());
+    e += EXPECT_CALL(*mMockApi, setMode("rtp")).WillOnce(DoDefault());
+    e += EXPECT_CALL(*mMockApi, setDuration(duration)).WillOnce(DoDefault());
+
+    if (getDynamicConfig()) {
+        e += EXPECT_CALL(*mMockApi, setLraWaveShape(0)).WillOnce(DoDefault());
+        e += EXPECT_CALL(*mMockApi, setOdClamp(mLongVoltageMax)).WillOnce(DoDefault());
+        e += EXPECT_CALL(*mMockApi, setOlLraPeriod(mLongLraPeriod)).WillOnce(DoDefault());
+    }
+
+    EXPECT_CALL(*mMockApi, setActivate(true)).After(e).WillOnce(DoDefault());
 
     EXPECT_EQ(Status::OK, mVibrator->on(duration));
 }
 
-TEST_F(VibratorTest, off) {
-    EXPECT_CALL(*mMockApi, setActivate(false)).WillOnce(Return(true));
+TEST_P(BasicTest, on_openLoop) {
+    EffectDuration duration = mCloseLoopThreshold;
+
+    relaxMock(true);
+
+    EXPECT_CALL(*mMockApi, setCtrlLoop(true)).WillOnce(DoDefault());
+
+    EXPECT_EQ(Status::OK, mVibrator->on(duration));
+}
+
+TEST_P(BasicTest, on_closeLoop) {
+    EffectDuration duration = mCloseLoopThreshold + 1;
+
+    relaxMock(true);
+
+    EXPECT_CALL(*mMockApi, setCtrlLoop(false)).WillOnce(DoDefault());
+
+    EXPECT_EQ(Status::OK, mVibrator->on(duration));
+}
+
+TEST_P(BasicTest, off) {
+    EXPECT_CALL(*mMockApi, setActivate(false)).WillOnce(DoDefault());
 
     EXPECT_EQ(Status::OK, mVibrator->off());
 }
 
-TEST_F(VibratorTest, supportsAmplitudeControl_supported) {
+TEST_P(BasicTest, supportsAmplitudeControl_supported) {
     EXPECT_CALL(*mMockApi, hasRtpInput()).WillOnce(Return(true));
 
     EXPECT_EQ(true, mVibrator->supportsAmplitudeControl());
 }
 
-TEST_F(VibratorTest, supportsAmplitudeControl_unsupported) {
+TEST_P(BasicTest, supportsAmplitudeControl_unsupported) {
     EXPECT_CALL(*mMockApi, hasRtpInput()).WillOnce(Return(false));
 
     EXPECT_EQ(false, mVibrator->supportsAmplitudeControl());
 }
 
-TEST_F(VibratorTest, setAmplitude) {
+TEST_P(BasicTest, setAmplitude) {
     EffectAmplitude amplitude = std::rand();
 
     EXPECT_CALL(*mMockApi, setRtpInput(amplitudeToRtpInput(amplitude))).WillOnce(Return(true));
@@ -247,30 +358,54 @@ TEST_F(VibratorTest, setAmplitude) {
     EXPECT_EQ(Status::OK, mVibrator->setAmplitude(amplitude));
 }
 
-TEST_P(VibratorTest, perform) {
-    auto param = GetParam();
-    auto effect = std::get<0>(param);
-    auto strength = std::get<1>(param);
-    auto seqIter = EFFECT_SEQUENCES.find(param);
+INSTANTIATE_TEST_CASE_P(VibratorTests, BasicTest,
+                        ValuesIn({BasicTest::MakeParam(false), BasicTest::MakeParam(true)}),
+                        BasicTest::PrintParam);
+
+class EffectsTest : public VibratorTestTemplate<EffectTuple> {
+  public:
+    static auto GetEffectTuple(ParamType param) { return GetOtherParam<0>(param); }
+
+    static auto PrintParam(const TestParamInfo<ParamType> &info) {
+        auto prefix = VibratorTestTemplate::PrintParam(info);
+        auto tuple = GetEffectTuple(info.param);
+        auto effect = std::get<0>(tuple);
+        auto strength = std::get<1>(tuple);
+        return prefix + "_" + toString(effect) + "_" + toString(strength);
+    }
+
+  protected:
+    auto getEffectTuple() const { return GetEffectTuple(GetParam()); }
+};
+
+TEST_P(EffectsTest, perform) {
+    auto tuple = getEffectTuple();
+    auto effect = std::get<0>(tuple);
+    auto strength = std::get<1>(tuple);
+    auto seqIter = EFFECT_SEQUENCES.find(tuple);
     auto durIter = mEffectDurations.find(effect);
     EffectDuration duration;
 
     if (seqIter != EFFECT_SEQUENCES.end() && durIter != mEffectDurations.end()) {
         auto sequence = std::get<0>(seqIter->second);
         auto scale = std::get<1>(seqIter->second);
-        Sequence s1, s2, s3, s4, s5;
+        ExpectationSet e;
 
         duration = durIter->second;
 
-        EXPECT_CALL(*mMockApi, setSequencer(sequence)).InSequence(s1).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setScale(scale)).InSequence(s2).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setCtrlLoop(1)).InSequence(s3).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setMode("waveform")).InSequence(s4).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setDuration(duration)).InSequence(s5).WillOnce(Return(true));
+        e += EXPECT_CALL(*mMockApi, setSequencer(sequence)).WillOnce(Return(true));
+        e += EXPECT_CALL(*mMockApi, setScale(scale)).WillOnce(Return(true));
+        e += EXPECT_CALL(*mMockApi, setCtrlLoop(1)).WillOnce(DoDefault());
+        e += EXPECT_CALL(*mMockApi, setMode("waveform")).WillOnce(DoDefault());
+        e += EXPECT_CALL(*mMockApi, setDuration(duration)).WillOnce(DoDefault());
 
-        EXPECT_CALL(*mMockApi, setActivate(true))
-                .InSequence(s1, s2, s3, s4, s5)
-                .WillOnce(Return(true));
+        if (getDynamicConfig()) {
+            e += EXPECT_CALL(*mMockApi, setLraWaveShape(1)).WillOnce(DoDefault());
+            e += EXPECT_CALL(*mMockApi, setOdClamp(mShortVoltageMax)).WillOnce(DoDefault());
+            e += EXPECT_CALL(*mMockApi, setOlLraPeriod(mShortLraPeriod)).WillOnce(DoDefault());
+        }
+
+        EXPECT_CALL(*mMockApi, setActivate(true)).After(e).WillOnce(DoDefault());
     } else {
         duration = 0;
     }
@@ -286,16 +421,13 @@ TEST_P(VibratorTest, perform) {
     });
 }
 
-INSTANTIATE_TEST_CASE_P(VibratorEffects, VibratorTest,
-                        Combine(ValuesIn(hidl_enum_range<Effect>().begin(),
-                                         hidl_enum_range<Effect>().end()),
-                                ValuesIn(hidl_enum_range<EffectStrength>().begin(),
-                                         hidl_enum_range<EffectStrength>().end())),
-                        [](const TestParamInfo<VibratorTest::ParamType> &info) {
-                            auto effect = std::get<0>(info.param);
-                            auto strength = std::get<1>(info.param);
-                            return toString(effect) + "_" + toString(strength);
-                        });
+INSTANTIATE_TEST_CASE_P(VibratorTests, EffectsTest,
+                        Combine(ValuesIn({false, true}),
+                                Combine(ValuesIn(hidl_enum_range<Effect>().begin(),
+                                                 hidl_enum_range<Effect>().end()),
+                                        ValuesIn(hidl_enum_range<EffectStrength>().begin(),
+                                                 hidl_enum_range<EffectStrength>().end()))),
+                        EffectsTest::PrintParam);
 
 }  // namespace implementation
 }  // namespace V1_2

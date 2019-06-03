@@ -64,6 +64,8 @@ class HwApi : public Vibrator::HwApi {
     bool setScale(uint8_t value) override { return set(value, &mScale); }
     bool setCtrlLoop(bool value) override { return set(value, &mCtrlLoop); }
     bool setLpTriggerEffect(uint32_t value) override { return set(value, &mLpTrigger); }
+    bool setLraWaveShape(uint32_t value) override { return set(value, &mLraWaveShape); }
+    bool setOdClamp(uint32_t value) override { return set(value, &mOdClamp); }
     void debug(int fd) override;
 
   private:
@@ -91,6 +93,8 @@ class HwApi : public Vibrator::HwApi {
     std::ofstream mScale;
     std::ofstream mCtrlLoop;
     std::ofstream mLpTrigger;
+    std::ofstream mLraWaveShape;
+    std::ofstream mOdClamp;
 };
 
 class HwCal : public Vibrator::HwCal {
@@ -103,10 +107,43 @@ class HwCal : public Vibrator::HwCal {
     static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_EFFECT_MS = 135;
     static constexpr uint32_t WAVEFORM_HEAVY_CLICK_EFFECT_MS = 8;
 
+    static constexpr uint32_t DEFAULT_LRA_PERIOD = 262;
+    static constexpr uint32_t DEFAULT_FREQUENCY_SHIFT = 10;
+    static constexpr uint32_t DEFAULT_VOLTAGE_MAX = 107;  // 2.15V;
+
   public:
     HwCal();
     bool getAutocal(std::string *value) override { return get(AUTOCAL_CONFIG, value); }
-    bool getLraPeriod(uint32_t *value) override { return get(LRA_PERIOD_CONFIG, value); }
+    bool getLraPeriod(uint32_t *value) override {
+        if (get(LRA_PERIOD_CONFIG, value)) {
+            return true;
+        }
+        *value = DEFAULT_LRA_PERIOD;
+        return true;
+    }
+    bool getCloseLoopThreshold(uint32_t *value) override {
+        *value = property_get_int32((mPropertyPrefix + "closeloop.threshold").c_str(), UINT32_MAX);
+        return true;
+    }
+    bool getDynamicConfig(bool *value) override {
+        *value = property_get_bool((mPropertyPrefix + "config.dynamic").c_str(), false);
+        return true;
+    }
+    bool getLongFrequencyShift(uint32_t *value) override {
+        *value = property_get_int32((mPropertyPrefix + "long.frequency.shift").c_str(),
+                                    DEFAULT_FREQUENCY_SHIFT);
+        return true;
+    }
+    bool getShortVoltageMax(uint32_t *value) override {
+        *value = property_get_int32((mPropertyPrefix + "short.voltage").c_str(),
+                                    DEFAULT_VOLTAGE_MAX);
+        return true;
+    }
+    bool getLongVoltageMax(uint32_t *value) override {
+        *value =
+                property_get_int32((mPropertyPrefix + "long.voltage").c_str(), DEFAULT_VOLTAGE_MAX);
+        return true;
+    }
     bool getClickDuration(uint32_t *value) override {
         *value = property_get_int32((mPropertyPrefix + "click.duration").c_str(),
                                     WAVEFORM_CLICK_EFFECT_MS);

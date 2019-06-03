@@ -30,6 +30,11 @@ inline std::ostream &operator<<(std::ostream &stream, const uint8_t value) {
     return stream << +value;
 }
 
+template <typename T>
+static inline auto toUnderlying(const T value) {
+    return static_cast<std::underlying_type_t<T>>(value);
+}
+
 }  // namespace utils
 }  // namespace vibrator
 }  // namespace hardware

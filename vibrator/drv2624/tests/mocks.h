@@ -33,6 +33,8 @@ class MockApi : public ::android::hardware::vibrator::V1_2::implementation::Vibr
     MOCK_METHOD1(setScale, bool(uint8_t value));
     MOCK_METHOD1(setCtrlLoop, bool(bool value));
     MOCK_METHOD1(setLpTriggerEffect, bool(uint32_t value));
+    MOCK_METHOD1(setLraWaveShape, bool(uint32_t value));
+    MOCK_METHOD1(setOdClamp, bool(uint32_t value));
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockApi() override { destructor(); };
@@ -43,6 +45,11 @@ class MockCal : public ::android::hardware::vibrator::V1_2::implementation::Vibr
     MOCK_METHOD0(destructor, void());
     MOCK_METHOD1(getAutocal, bool(std::string &value));  // NOLINT
     MOCK_METHOD1(getLraPeriod, bool(uint32_t *value));
+    MOCK_METHOD1(getCloseLoopThreshold, bool(uint32_t *value));
+    MOCK_METHOD1(getDynamicConfig, bool(bool *value));
+    MOCK_METHOD1(getLongFrequencyShift, bool(uint32_t *value));
+    MOCK_METHOD1(getShortVoltageMax, bool(uint32_t *value));
+    MOCK_METHOD1(getLongVoltageMax, bool(uint32_t *value));
     MOCK_METHOD1(getClickDuration, bool(uint32_t *value));
     MOCK_METHOD1(getTickDuration, bool(uint32_t *value));
     MOCK_METHOD1(getDoubleClickDuration, bool(uint32_t *value));
