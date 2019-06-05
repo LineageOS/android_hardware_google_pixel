@@ -123,14 +123,12 @@ class HwApiTest : public Test {
     std::map<std::string, std::stringstream> mExpectedContent;
 };
 
-class CreateTest : public HwApiTest, public testing::WithParamInterface<const char *> {
+class CreateTest : public HwApiTest, public WithParamInterface<const char *> {
   public:
     void SetUp() override{};
     void TearDown() override{};
 
-    static auto PrintParam(const testing::TestParamInfo<CreateTest::ParamType> &info) {
-        return info.param;
-    }
+    static auto PrintParam(const TestParamInfo<CreateTest::ParamType> &info) { return info.param; }
     static auto &AllParams() { return FILE_NAMES; }
 };
 
@@ -185,11 +183,10 @@ INSTANTIATE_TEST_CASE_P(HwApiTests, CreateTest, ValuesIn(CreateTest::AllParams()
                         CreateTest::PrintParam);
 
 template <typename T>
-class HwApiTypedTest
-    : public HwApiTest,
-      public testing::WithParamInterface<std::tuple<std::string, std::function<T>>> {
+class HwApiTypedTest : public HwApiTest,
+                       public WithParamInterface<std::tuple<std::string, std::function<T>>> {
   public:
-    static auto PrintParam(const testing::TestParamInfo<typename HwApiTypedTest::ParamType> &info) {
+    static auto PrintParam(const TestParamInfo<typename HwApiTypedTest::ParamType> &info) {
         return std::get<0>(info.param);
     }
     static auto MakeParam(std::string name, std::function<T> func) {
