@@ -17,12 +17,11 @@
 <configuration description="Config for PTS Vibrator HAL Benchmark">
     <option name="test-suite-tag" value="pts" />
     <target_preparer class="com.android.compatibility.common.tradefed.targetprep.FilePusher">
-      <option name="append-bitness" value="true" />
       <option name="cleanup" value="true" />
-      <option name="push" value="PtsVibratorHalDrv2624Benchmark->/data/local/tmp/PtsVibratorHalDrv2624Benchmark" />
+      <option name="push" value="VibratorHalDrv2624Benchmark->/data/local/tmp/VibratorHalDrv2624Benchmark" />
     </target_preparer>
     <test class="com.android.tradefed.testtype.GoogleBenchmarkTest" >
-        <option name="benchmark-module-name" value="PtsVibratorHalDrv2624Benchmark" />
+        <option name="benchmark-module-name" value="VibratorHalDrv2624Benchmark" />
         <option name="native-benchmark-device-path" value="/data/local/tmp" />
     </test>
 </configuration>
