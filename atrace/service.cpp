@@ -16,6 +16,7 @@
 
 #define LOG_TAG "android.hardware.atrace@1.0-service.pixel"
 
+#include <hidl/HidlLazyUtils.h>
 #include <hidl/HidlSupport.h>
 #include <hidl/HidlTransportSupport.h>
 
@@ -25,13 +26,15 @@ using ::android::OK;
 using ::android::sp;
 using ::android::hardware::configureRpcThreadpool;
 using ::android::hardware::joinRpcThreadpool;
+using ::android::hardware::LazyServiceRegistrar;
 using ::android::hardware::atrace::V1_0::IAtraceDevice;
 using ::android::hardware::atrace::V1_0::implementation::AtraceDevice;
 
 int main(int /* argc */, char * /* argv */ []) {
     sp<IAtraceDevice> atrace = new AtraceDevice;
     configureRpcThreadpool(1, true /* will join */);
-    if (atrace->registerAsService() != OK) {
+    auto serviceRegistrar = std::make_shared<LazyServiceRegistrar>();
+    if (serviceRegistrar->registerService(atrace) != OK) {
         ALOGE("Could not register service.");
         return 1;
     }
