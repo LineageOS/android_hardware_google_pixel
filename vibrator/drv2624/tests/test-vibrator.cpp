@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#define LOG_TAG "VibratorHalDrv2624TestSuite"
 
 #include <android-base/logging.h>
 #include <gmock/gmock.h>

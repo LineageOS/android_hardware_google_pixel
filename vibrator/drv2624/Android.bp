@@ -15,19 +15,15 @@
 
 cc_defaults {
     name: "android.hardware.vibrator@1.2-defaults.drv2624",
-    defaults: ["hidl_defaults"],
-    relative_install_path: "hw",
+    defaults: ["PixelVibratorDefaults"],
     shared_libs: [
-        "libhidlbase",
-        "libcutils",
-        "libhidltransport",
-        "liblog",
-        "libhwbinder",
-        "libutils",
-        "libhardware",
         "android.hardware.vibrator@1.0",
         "android.hardware.vibrator@1.1",
         "android.hardware.vibrator@1.2",
+    ],
+    cflags: [
+        "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
+        "-DLOG_TAG=\"android.hardware.vibrator@1.2-drv2624\"",
     ],
 }
 
@@ -41,10 +37,7 @@ cc_defaults {
 cc_library {
     name: "android.hardware.vibrator@1.2-impl.drv2624",
     defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
-    srcs: [
-        "Hardware.cpp",
-        "Vibrator.cpp",
-    ],
+    srcs: ["Vibrator.cpp"],
     export_include_dirs: ["."],
     vendor_available: true,
     visibility: [":__subpackages__"],
