@@ -39,7 +39,8 @@ class HwApiTest : public Test {
     static constexpr const char *FILE_NAMES[]{
             "AUTOCAL_FILEPATH", "OL_LRA_PERIOD_FILEPATH", "ACTIVATE_PATH",   "DURATION_PATH",
             "STATE_PATH",       "RTP_INPUT_PATH",         "MODE_PATH",       "SEQUENCER_PATH",
-            "SCALE_PATH",       "CTRL_LOOP_PATH",         "LP_TRIGGER_PATH",
+            "SCALE_PATH",       "CTRL_LOOP_PATH",         "LP_TRIGGER_PATH", "LRA_WAVE_SHAPE_PATH",
+            "OD_CLAMP_PATH",
     };
 
     static constexpr const char *REQUIRED[]{
@@ -358,6 +359,8 @@ INSTANTIATE_TEST_CASE_P(
                                          &Vibrator::HwApi::setOlLraPeriod),
                 SetUint32Test::MakeParam("DURATION_PATH", &Vibrator::HwApi::setDuration),
                 SetUint32Test::MakeParam("LP_TRIGGER_PATH", &Vibrator::HwApi::setLpTriggerEffect),
+                SetUint32Test::MakeParam("LRA_WAVE_SHAPE_PATH", &Vibrator::HwApi::setLraWaveShape),
+                SetUint32Test::MakeParam("OD_CLAMP_PATH", &Vibrator::HwApi::setOdClamp),
         }),
         SetUint32Test::PrintParam);
 

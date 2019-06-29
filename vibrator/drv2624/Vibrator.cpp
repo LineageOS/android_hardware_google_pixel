@@ -18,6 +18,7 @@
 #define LOG_TAG "android.hardware.vibrator@1.2-service.drv2624"
 
 #include "Vibrator.h"
+#include "utils.h"
 
 #include <cutils/properties.h>
 #include <hardware/hardware.h>
@@ -54,8 +55,11 @@ static constexpr char WAVEFORM_DOUBLE_CLICK_EFFECT_SEQ[] = "3 0";
 // Use effect #4 in the waveform library for HEAVY_CLICK effect
 static constexpr char WAVEFORM_HEAVY_CLICK_EFFECT_SEQ[] = "4 0";
 
-// Timeout threshold for selecting open or closed loop mode
-static constexpr int8_t LOOP_MODE_THRESHOLD_MS = 20;
+static std::uint32_t freqPeriodFormula(std::uint32_t in) {
+    return 1000000000 / (24615 * in);
+}
+
+using utils::toUnderlying;
 
 using Status = ::android::hardware::vibrator::V1_0::Status;
 using EffectStrength = ::android::hardware::vibrator::V1_0::EffectStrength;
@@ -64,6 +68,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)) {
     std::string autocal;
     uint32_t lraPeriod;
+    bool dynamicConfig;
 
     if (!mHwApi->setState(true)) {
         ALOGE("Failed to set state (%d): %s", errno, strerror(errno));
@@ -72,7 +77,33 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     if (mHwCal->getAutocal(&autocal)) {
         mHwApi->setAutocal(autocal);
     }
-    if (mHwCal->getLraPeriod(&lraPeriod)) {
+    mHwCal->getLraPeriod(&lraPeriod);
+
+    mHwCal->getCloseLoopThreshold(&mCloseLoopThreshold);
+    mHwCal->getDynamicConfig(&dynamicConfig);
+
+    if (dynamicConfig) {
+        uint32_t longFreqencyShift;
+        uint32_t shortVoltageMax, longVoltageMax;
+
+        mHwCal->getLongFrequencyShift(&longFreqencyShift);
+        mHwCal->getShortVoltageMax(&shortVoltageMax);
+        mHwCal->getLongVoltageMax(&longVoltageMax);
+
+        mEffectConfig.reset(new VibrationConfig({
+                .shape = WaveShape::SINE,
+                .odClamp = shortVoltageMax,
+                .olLraPeriod = lraPeriod,
+        }));
+        mSteadyConfig.reset(new VibrationConfig({
+                .shape = WaveShape::SQUARE,
+                .odClamp = longVoltageMax,
+                // 1. Change long lra period to frequency
+                // 2. Get frequency': subtract the frequency shift from the frequency
+                // 3. Get final long lra period after put the frequency' to formula
+                .olLraPeriod = freqPeriodFormula(freqPeriodFormula(lraPeriod) - longFreqencyShift),
+        }));
+    } else {
         mHwApi->setOlLraPeriod(lraPeriod);
     }
 
@@ -88,25 +119,27 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 }
 
-Return<Status> Vibrator::on(uint32_t timeoutMs, bool forceOpenLoop, bool isWaveform) {
-    uint32_t loopMode = 1;
+Return<Status> Vibrator::on(uint32_t timeoutMs, const char mode[],
+                            const std::unique_ptr<VibrationConfig> &config) {
+    LoopControl loopMode = LoopControl::OPEN;
 
     // Open-loop mode is used for short click for over-drive
     // Close-loop mode is used for long notification for stability
-    if (!forceOpenLoop && timeoutMs > LOOP_MODE_THRESHOLD_MS) {
-        loopMode = 0;
+    if (mode == RTP_MODE && timeoutMs > mCloseLoopThreshold) {
+        loopMode = LoopControl::CLOSE;
     }
 
-    mHwApi->setCtrlLoop(loopMode);
+    mHwApi->setCtrlLoop(toUnderlying(loopMode));
     if (!mHwApi->setDuration(timeoutMs)) {
         ALOGE("Failed to set duration (%d): %s", errno, strerror(errno));
         return Status::UNKNOWN_ERROR;
     }
 
-    if (isWaveform) {
-        mHwApi->setMode(WAVEFORM_MODE);
-    } else {
-        mHwApi->setMode(RTP_MODE);
+    mHwApi->setMode(mode);
+    if (config != nullptr) {
+        mHwApi->setLraWaveShape(toUnderlying(config->shape));
+        mHwApi->setOdClamp(config->odClamp);
+        mHwApi->setOlLraPeriod(config->olLraPeriod);
     }
 
     if (!mHwApi->setActivate(1)) {
@@ -120,7 +153,7 @@ Return<Status> Vibrator::on(uint32_t timeoutMs, bool forceOpenLoop, bool isWavef
 // Methods from ::android::hardware::vibrator::V1_2::IVibrator follow.
 Return<Status> Vibrator::on(uint32_t timeoutMs) {
     ATRACE_NAME("Vibrator::on");
-    return on(timeoutMs, false /* forceOpenLoop */, false /* isWaveform */);
+    return on(timeoutMs, RTP_MODE, mSteadyConfig);
 }
 
 Return<Status> Vibrator::off() {
@@ -167,6 +200,17 @@ Return<void> Vibrator::debug(const hidl_handle &handle,
 
     dprintf(fd, "HIDL:\n");
 
+    dprintf(fd, "  Close Loop Thresh: %" PRIu32 "\n", mCloseLoopThreshold);
+    if (mSteadyConfig) {
+        dprintf(fd, "  Steady Shape: %" PRIu32 "\n", mSteadyConfig->shape);
+        dprintf(fd, "  Steady OD Clamp: %" PRIu32 "\n", mSteadyConfig->odClamp);
+        dprintf(fd, "  Steady OL LRA Period: %" PRIu32 "\n", mSteadyConfig->olLraPeriod);
+    }
+    if (mEffectConfig) {
+        dprintf(fd, "  Effect Shape: %" PRIu32 "\n", mEffectConfig->shape);
+        dprintf(fd, "  Effect OD Clamp: %" PRIu32 "\n", mEffectConfig->odClamp);
+        dprintf(fd, "  Effect OL LRA Period: %" PRIu32 "\n", mEffectConfig->olLraPeriod);
+    }
     dprintf(fd, "  Click Duration: %" PRIu32 "\n", mClickDuration);
     dprintf(fd, "  Tick Duration: %" PRIu32 "\n", mTickDuration);
     dprintf(fd, "  Double Click Duration: %" PRIu32 "\n", mDoubleClickDuration);
@@ -255,7 +299,7 @@ Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength, per
             return Void();
     }
     mHwApi->setScale(convertEffectStrength(strength));
-    on(timeMS, true /* forceOpenLoop */, true /* isWaveform */);
+    on(timeMS, WAVEFORM_MODE, mEffectConfig);
     _hidl_cb(status, timeMS);
     return Void();
 }

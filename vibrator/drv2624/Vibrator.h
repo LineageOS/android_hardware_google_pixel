@@ -70,9 +70,17 @@ class Vibrator : public IVibrator {
         // (true = open, false = closed).
         virtual bool setCtrlLoop(bool value) = 0;
         // Specifies waveform index to be played in low-power trigger mode.
-        // 0    - Disabled
-        // 1+   - Waveform Index
+        //   0  - Disabled
+        //   1+ - Waveform Index
         virtual bool setLpTriggerEffect(uint32_t value) = 0;
+        // Specifies which shape to use for driving the LRA when in open loop
+        // mode.
+        //   0 - Square Wave
+        //   1 - Sine Wave
+        virtual bool setLraWaveShape(uint32_t value) = 0;
+        // Specifies the maximum voltage for automatic overdrive and automatic
+        // braking periods.
+        virtual bool setOdClamp(uint32_t value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -85,6 +93,16 @@ class Vibrator : public IVibrator {
         virtual bool getAutocal(std::string *value) = 0;
         // Obtains the open-loop LRA frequency to be used.
         virtual bool getLraPeriod(uint32_t *value) = 0;
+        // Obtains threshold in ms, above which close-loop should be used.
+        virtual bool getCloseLoopThreshold(uint32_t *value) = 0;
+        // Obtains dynamic/static configuration choice.
+        virtual bool getDynamicConfig(bool *value) = 0;
+        // Obtains LRA frequency shift for long (steady) vibrations.
+        virtual bool getLongFrequencyShift(uint32_t *value) = 0;
+        // Obtains maximum voltage for short (effect) vibrations
+        virtual bool getShortVoltageMax(uint32_t *value) = 0;
+        // Obtains maximum voltage for long (steady) vibrations
+        virtual bool getLongVoltageMax(uint32_t *value) = 0;
         // Obtains the duration for the click effect
         virtual bool getClickDuration(uint32_t *value) = 0;
         // Obtains the duration for the tick effect
@@ -95,6 +113,23 @@ class Vibrator : public IVibrator {
         virtual bool getHeavyClickDuration(uint32_t *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
+    };
+
+  private:
+    enum class LoopControl : bool {
+        CLOSE = false,
+        OPEN = true,
+    };
+
+    enum class WaveShape : uint32_t {
+        SQUARE = 0,
+        SINE = 1,
+    };
+
+    struct VibrationConfig {
+        WaveShape shape;
+        uint32_t odClamp;
+        uint32_t olLraPeriod;
     };
 
   public:
@@ -118,17 +153,22 @@ class Vibrator : public IVibrator {
     Return<void> debug(const hidl_handle &handle, const hidl_vec<hidl_string> &options) override;
 
   private:
-    Return<Status> on(uint32_t timeoutMs, bool forceOpenLoop, bool isWaveform);
+    Return<Status> on(uint32_t timeoutMs, const char mode[],
+                      const std::unique_ptr<VibrationConfig> &config);
     template <typename T>
     Return<void> performWrapper(T effect, EffectStrength strength, perform_cb _hidl_cb);
     Return<void> performEffect(Effect effect, EffectStrength strength, perform_cb _hidl_cb);
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
+    uint32_t mCloseLoopThreshold;
+    std::unique_ptr<VibrationConfig> mSteadyConfig;
+    std::unique_ptr<VibrationConfig> mEffectConfig;
     uint32_t mClickDuration;
     uint32_t mTickDuration;
     uint32_t mDoubleClickDuration;
     uint32_t mHeavyClickDuration;
 };
+
 }  // namespace implementation
 }  // namespace V1_2
 }  // namespace vibrator

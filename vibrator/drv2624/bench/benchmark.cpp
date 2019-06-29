@@ -15,6 +15,7 @@
 #include "benchmark/benchmark.h"
 
 #include <android-base/file.h>
+#include <android-base/properties.h>
 
 #include "Hardware.h"
 #include "Vibrator.h"
@@ -28,12 +29,16 @@ namespace vibrator {
 namespace V1_2 {
 namespace implementation {
 
+using ::android::base::SetProperty;
 using ::android::hardware::vibrator::V1_0::EffectStrength;
 using ::android::hardware::vibrator::V1_0::Status;
 
 class VibratorBench : public benchmark::Fixture {
+  private:
+    static constexpr char PROPERTY_PREFIX[] = "test.vibrator.hal.";
+
   public:
-    void SetUp(::benchmark::State & /*state*/) override {
+    void SetUp(::benchmark::State &state) override {
         setenv("AUTOCAL_FILEPATH", "/dev/null", true);
         setenv("OL_LRA_PERIOD_FILEPATH", "/dev/null", true);
         setenv("ACTIVATE_PATH", "/dev/null", true);
@@ -45,28 +50,45 @@ class VibratorBench : public benchmark::Fixture {
         setenv("SCALE_PATH", "/dev/null", true);
         setenv("CTRL_LOOP_PATH", "/dev/null", true);
         setenv("LP_TRIGGER_PATH", "/dev/null", true);
+        setenv("LRA_WAVE_SHAPE_PATH", "/dev/null", true);
+        setenv("OD_CLAMP_PATH", "/dev/null", true);
+
+        setenv("PROPERTY_PREFIX", PROPERTY_PREFIX, true);
+
+        SetProperty(std::string() + PROPERTY_PREFIX + "config.dynamic", getDynamicConfig(state));
 
         mVibrator = new Vibrator(HwApi::Create(), std::make_unique<HwCal>());
     }
 
-    static void DefaultArgs(benchmark::internal::Benchmark *b) { b->Unit(benchmark::kMicrosecond); }
+    static void DefaultConfig(benchmark::internal::Benchmark *b) {
+        b->Unit(benchmark::kMicrosecond);
+    }
 
-    static void SupportedEffectArgs(benchmark::internal::Benchmark *b) {
-        for (const auto &effect : hidl_enum_range<Effect>()) {
-            for (const auto &strength : hidl_enum_range<EffectStrength>()) {
-                b->Args({static_cast<long>(effect), static_cast<long>(strength)});
-            }
-        }
+    static void DefaultArgs(benchmark::internal::Benchmark *b) {
+        b->ArgNames({"DynamicConfig"});
+        b->Args({false});
+        b->Args({true});
+    }
+
+  protected:
+    std::string getDynamicConfig(const ::benchmark::State &state) const {
+        return std::to_string(state.range(0));
+    }
+
+    auto getOtherArg(const ::benchmark::State &state, std::size_t index) const {
+        return state.range(index + 1);
     }
 
   protected:
     sp<IVibrator> mVibrator;
 };
 
-#define BENCHMARK_WRAPPER(fixt, test, code) \
-    BENCHMARK_DEFINE_F(fixt, test)          \
-    /* NOLINTNEXTLINE */                    \
-    (benchmark::State & state){code} BENCHMARK_REGISTER_F(fixt, test)->Apply(fixt::DefaultArgs)
+#define BENCHMARK_WRAPPER(fixt, test, code)                           \
+    BENCHMARK_DEFINE_F(fixt, test)                                    \
+    /* NOLINTNEXTLINE */                                              \
+    (benchmark::State & state){code} BENCHMARK_REGISTER_F(fixt, test) \
+            ->Apply(fixt::DefaultConfig)                              \
+            ->Apply(fixt::DefaultArgs)
 
 BENCHMARK_WRAPPER(VibratorBench, on, {
     uint32_t duration = std::rand() ?: 1;
@@ -96,10 +118,33 @@ BENCHMARK_WRAPPER(VibratorBench, setAmplitude, {
     }
 });
 
-BENCHMARK_WRAPPER(VibratorBench, perform_1_2,
+class VibratorEffectsBench : public VibratorBench {
+  public:
+    static void DefaultArgs(benchmark::internal::Benchmark *b) {
+        b->ArgNames({"DynamicConfig", "Effect", "Strength"});
+        for (const auto &dynamic : {false, true}) {
+            for (const auto &effect : hidl_enum_range<Effect>()) {
+                for (const auto &strength : hidl_enum_range<EffectStrength>()) {
+                    b->Args({dynamic, static_cast<long>(effect), static_cast<long>(strength)});
+                }
+            }
+        }
+    }
+
+  protected:
+    auto getEffect(const ::benchmark::State &state) const {
+        return static_cast<Effect>(getOtherArg(state, 0));
+    }
+
+    auto getStrength(const ::benchmark::State &state) const {
+        return static_cast<EffectStrength>(getOtherArg(state, 1));
+    }
+};
+
+BENCHMARK_WRAPPER(VibratorEffectsBench, perform_1_2,
                   {
-                      Effect effect = Effect(state.range(0));
-                      EffectStrength strength = EffectStrength(state.range(1));
+                      Effect effect = getEffect(state);
+                      EffectStrength strength = getStrength(state);
                       bool supported = true;
 
                       mVibrator->perform_1_2(effect, strength,
@@ -117,8 +162,7 @@ BENCHMARK_WRAPPER(VibratorBench, perform_1_2,
                           mVibrator->perform_1_2(effect, strength,
                                                  [](Status /*status*/, uint32_t /*lengthMs*/) {});
                       }
-                  })
-        ->Apply(VibratorBench::SupportedEffectArgs);
+                  });
 
 }  // namespace implementation
 }  // namespace V1_2

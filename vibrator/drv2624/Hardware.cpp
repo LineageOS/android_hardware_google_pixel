@@ -106,6 +106,8 @@ HwApi::HwApi() {
     fileFromEnv("SCALE_PATH", &mScale, &mNames[&mScale]);
     fileFromEnv("CTRL_LOOP_PATH", &mCtrlLoop, &mNames[&mCtrlLoop]);
     fileFromEnv("LP_TRIGGER_PATH", &mLpTrigger, &mNames[&mLpTrigger]);
+    fileFromEnv("LRA_WAVE_SHAPE_PATH", &mLraWaveShape, &mNames[&mLraWaveShape]);
+    fileFromEnv("OD_CLAMP_PATH", &mOdClamp, &mNames[&mOdClamp]);
 }
 
 std::unique_ptr<HwApi> HwApi::Create() {

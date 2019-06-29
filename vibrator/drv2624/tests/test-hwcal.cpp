@@ -38,6 +38,11 @@ class HwCalTest : public Test {
   protected:
     static constexpr char PROPERTY_PREFIX[] = "test.vibrator.hal.";
 
+    static constexpr uint32_t DEFAULT_LRA_PERIOD = 262;
+
+    static constexpr uint32_t DEFAULT_FREQUENCY_SHIFT = 10;
+    static constexpr uint32_t DEFAULT_VOLTAGE_MAX = 107;
+
     static constexpr uint32_t DEFAULT_CLICK_DURATION_MS = 6;
     static constexpr uint32_t DEFAULT_TICK_DURATION_MS = 2;
     static constexpr uint32_t DEFAULT_DOUBLE_CLICK_DURATION_MS = 135;
@@ -73,6 +78,149 @@ class HwCalTest : public Test {
     std::unique_ptr<Vibrator::HwCal> mHwCal;
     TemporaryFile mCalFile;
 };
+
+TEST_F(HwCalTest, closeloop_present) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = std::rand();
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "closeloop.threshold", std::to_string(expect)));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getCloseLoopThreshold(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, closeloop_missing) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = UINT32_MAX;
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "closeloop.threshold", std::string()));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getCloseLoopThreshold(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, dynamicconfig_presentFalse) {
+    std::string prefix{PROPERTY_PREFIX};
+    bool expect = false;
+    bool actual = !expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "config.dynamic", "0"));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getDynamicConfig(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, dynamicconfig_presentTrue) {
+    std::string prefix{PROPERTY_PREFIX};
+    bool expect = true;
+    bool actual = !expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "config.dynamic", "1"));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getDynamicConfig(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, dynamicconfig_missing) {
+    std::string prefix{PROPERTY_PREFIX};
+    bool expect = false;
+    bool actual = !expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "config.dynamic", std::string()));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getDynamicConfig(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, freqshift_present) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = std::rand();
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "long.frequency.shift", std::to_string(expect)));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getLongFrequencyShift(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, freqshift_missing) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = DEFAULT_FREQUENCY_SHIFT;
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "long.frequency.shift", std::string()));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getLongFrequencyShift(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, shortvolt_present) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = std::rand();
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "short.voltage", std::to_string(expect)));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getShortVoltageMax(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, shortvolt_missing) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = DEFAULT_VOLTAGE_MAX;
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "short.voltage", std::string()));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getShortVoltageMax(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, longvolt_present) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = std::rand();
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "long.voltage", std::to_string(expect)));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getLongVoltageMax(&actual));
+    EXPECT_EQ(expect, actual);
+}
+
+TEST_F(HwCalTest, longvolt_missing) {
+    std::string prefix{PROPERTY_PREFIX};
+    uint32_t expect = DEFAULT_VOLTAGE_MAX;
+    uint32_t actual = ~expect;
+
+    EXPECT_TRUE(SetProperty(prefix + "long.voltage", std::string()));
+
+    createHwCal();
+
+    EXPECT_TRUE(mHwCal->getLongVoltageMax(&actual));
+    EXPECT_EQ(expect, actual);
+}
 
 TEST_F(HwCalTest, click_present) {
     std::string prefix{PROPERTY_PREFIX};
@@ -197,11 +345,13 @@ TEST_F(HwCalTest, lra_period_present) {
 }
 
 TEST_F(HwCalTest, lra_period_missing) {
-    uint32_t actual;
+    uint32_t expect = DEFAULT_LRA_PERIOD;
+    uint32_t actual = ~expect;
 
     createHwCal();
 
-    EXPECT_FALSE(mHwCal->getLraPeriod(&actual));
+    EXPECT_TRUE(mHwCal->getLraPeriod(&actual));
+    EXPECT_EQ(expect, actual);
 }
 
 TEST_F(HwCalTest, multiple) {
