@@ -26,14 +26,16 @@
 #include <utils/Timers.h>
 #include <string>
 
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
+#include <android/frameworks/stats/1.0/IStats.h>
 
 namespace hardware {
 namespace google {
 namespace pixel {
 namespace health {
 
-using BatterySnapshotType = ::hardware::google::pixelstats::V1_0::IPixelStats::BatterySnapshotType;
+using android::sp;
+using android::frameworks::stats::V1_0::BatteryHealthSnapshotArgs;
+using android::frameworks::stats::V1_0::IStats;
 
 class BatteryMetricsLogger {
   public:
@@ -53,14 +55,14 @@ class BatteryMetricsLogger {
         NUM_FIELDS,  // do not reference
     };
 
-    const int kSnapshotType[NUM_FIELDS] = {
-        -1,
-        (int)BatterySnapshotType::MIN_CURRENT,
-        (int)BatterySnapshotType::MIN_VOLTAGE,
-        (int)BatterySnapshotType::MIN_TEMP,
-        (int)BatterySnapshotType::MIN_BATT_LEVEL,
-        (int)BatterySnapshotType::MIN_RESISTANCE,
-        -1,
+    const int kStatsSnapshotType[NUM_FIELDS] = {
+            -1,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_CURRENT,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_VOLTAGE,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_TEMP,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_BATT_LEVEL,
+            (int)BatteryHealthSnapshotArgs::BatterySnapshotType::MIN_RESISTANCE,
+            -1,
     };
 
     const char *const kBatteryResistance;
@@ -85,8 +87,7 @@ class BatteryMetricsLogger {
     int64_t getTime();
     bool recordSample(struct android::BatteryProperties *props);
     bool uploadMetrics();
-    bool uploadOutlierMetric(android::sp<::hardware::google::pixelstats::V1_0::IPixelStats> client,
-                             sampleType type);
+    bool uploadOutlierMetric(sp<IStats> stats_client, sampleType type);
 };
 
 }  // namespace health

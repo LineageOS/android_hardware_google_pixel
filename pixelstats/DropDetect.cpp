@@ -19,7 +19,7 @@
 #include <chre_host/host_protocol_host.h>
 #include <chre_host/socket_client.h>
 
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
+#include <android/frameworks/stats/1.0/IStats.h>
 #define LOG_TAG "pixelstats-vendor"
 #include <log/log.h>
 
@@ -29,6 +29,8 @@ using android::sp;
 using android::chre::HostProtocolHost;
 using android::chre::IChreMessageHandlers;
 using android::chre::SocketClient;
+using android::frameworks::stats::V1_0::IStats;
+using android::frameworks::stats::V1_0::PhysicalDropDetected;
 
 // following convention of CHRE code.
 namespace fbs = ::chre::fbs;
@@ -122,26 +124,25 @@ void DropDetect::handleNanoappMessage(const fbs::NanoappMessageT &message) {
         message.message.size() < sizeof(struct DropEventPayload))
         return;
     message_struct = (struct DropEventPayload *)&message.message[0];
-    /*
-     * ALOGI("Received drop detect message! Confidence %f Peak %f Duration %g",
-     *     message_struct->confidence, message_struct->accel_magnitude_peak,
-     *     message_struct->free_fall_duration_ns / 1e9);
-     */
-    int32_t confidence = message_struct->confidence * 100;
-    confidence = std::min(confidence, 100);
-    confidence = std::max(0, confidence);
+    ALOGI("Received drop detect message! Confidence %f Peak %f Duration %g",
+          message_struct->confidence, message_struct->accel_magnitude_peak,
+          message_struct->free_fall_duration_ns / 1e9);
+    uint8_t confidence = message_struct->confidence * 100;
+    confidence = std::min<int>(confidence, 100);
+    confidence = std::max<int>(0, confidence);
 
     int32_t accel_magnitude_peak_1000ths_g = message_struct->accel_magnitude_peak * 1000.0;
     int32_t free_fall_duration_ms = message_struct->free_fall_duration_ns / 1000000;
 
-    using ::hardware::google::pixelstats::V1_0::IPixelStats;
-    sp<IPixelStats> client = IPixelStats::tryGetService();
-    if (!client) {
-        ALOGE("Unable to connect to PixelStats service");
-        return;
-    }
-    client->reportPhysicalDropDetected(confidence, accel_magnitude_peak_1000ths_g,
-                                       free_fall_duration_ms);
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (stats_client) {
+        PhysicalDropDetected drop = {confidence, accel_magnitude_peak_1000ths_g,
+                                     free_fall_duration_ms};
+        Return<void> ret = stats_client->reportPhysicalDropDetected(drop);
+        if (!ret.isOk())
+            ALOGE("Unable to report physical drop to Stats service");
+    } else
+        ALOGE("Unable to connect to Stats service");
 }
 
 }  // namespace pixel

@@ -14,41 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef __THERMAL_STRUCTS_PARSER_H__
-#define __THERMAL_STRUCTS_PARSER_H__
-
-#include <android/hardware/thermal/1.0/IThermal.h>
-
-#include <cmath>
+#include <pixelpowerstats/PowerStatsUtils.h>
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
-namespace thermal {
+namespace powerstats {
+namespace utils {
 
-using ::android::hardware::thermal::V1_0::TemperatureType;
+bool extractStat(const char *line, const std::string &prefix, uint64_t &stat) {
+    char const *prefixStart = strstr(line, prefix.c_str());
+    if (prefixStart == nullptr) {
+        // Did not find the given prefix
+        return false;
+    }
 
-struct SensorInfo {
-    TemperatureType type;
-    bool is_override;
-    float throttling;
-    float shutdown;
-    float multiplier;
-};
+    stat = strtoull(prefixStart + prefix.length(), nullptr, 0);
+    return true;
+}
 
-struct ThrottlingThresholds {
-    ThrottlingThresholds() : cpu(NAN), gpu(NAN), ss(NAN), battery(NAN) {}
-    float cpu;
-    float gpu;
-    float ss;
-    float battery;
-};
-
-}  // namespace thermal
+}  // namespace utils
+}  // namespace powerstats
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware
 }  // namespace android
-
-#endif
