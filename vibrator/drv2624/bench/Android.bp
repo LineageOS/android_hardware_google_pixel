@@ -14,12 +14,14 @@
 // limitations under the License.
 
 cc_benchmark {
-    name: "PtsVibratorHalDrv2624Benchmark",
-    defaults: ["PtsVibratorHalDrv2624Defaults"],
+    name: "VibratorHalDrv2624Benchmark",
+    defaults: ["VibratorHalDrv2624TestDefaults"],
     srcs: [
         "benchmark.cpp",
     ],
     shared_libs: [
         "libbase",
     ],
+    // TODO(b/135767253): Remove when fixed.
+    test_suites: ["device-tests"],
 }
