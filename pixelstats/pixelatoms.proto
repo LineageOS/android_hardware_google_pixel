@@ -62,10 +62,10 @@ message ChargeStats {
         ADAPTER_TYPE_USB_PD_BRICKID = 10;
         ADAPTER_TYPE_HVDCP = 11;
         ADAPTER_TYPE_HVDCP3 = 12;
-        ADAPTER_TYPE_WLC  = 13;
-        ADAPTER_TYPE_WLC_EPP = 14;
-        ADAPTER_TYPE_WLC_SPP = 15;
-        ADAPTER_TYPE_FLOAT = 16;
+        ADAPTER_TYPE_FLOAT = 13;
+        ADAPTER_TYPE_WLC  = 14;
+        ADAPTER_TYPE_WLC_EPP = 15;
+        ADAPTER_TYPE_WLC_SPP = 16;
     }
     /* Type of charge adapter, enumerated above. */
     optional AdapterType adapter_type = 2;
