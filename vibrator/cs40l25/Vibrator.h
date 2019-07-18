@@ -20,6 +20,7 @@
 #include <hidl/Status.h>
 
 #include <fstream>
+#include <future>
 
 namespace android {
 namespace hardware {
@@ -85,6 +86,9 @@ class Vibrator : public IVibrator {
         // Indicates the number of 0.125-dB steps of attenuation to apply to
         // waveforms triggered in response to a GPIO1 rising edge.
         virtual bool setGpioRiseScale(uint32_t value) = 0;
+        // Blocks until vibrator reaches desired state
+        // (true = enabled, false = disabled).
+        virtual bool pollVibeState(bool value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -144,9 +148,12 @@ class Vibrator : public IVibrator {
     Return<void> debug(const hidl_handle &handle, const hidl_vec<hidl_string> &options) override;
 
   private:
-    Return<Status> on(uint32_t timeoutMs, uint32_t effectIndex);
+    Return<Status> on(uint32_t timeoutMs, uint32_t effectIndex,
+                      const sp<IVibratorCallback> &callback);
+    Return<Status> onWrapper(uint32_t timeoutMs, const sp<IVibratorCallback> &callback);
     template <typename T>
-    Return<void> performWrapper(T effect, EffectStrength strength, perform_cb _hidl_cb);
+    Return<void> performWrapper(T effect, EffectStrength strength,
+                                const sp<IVibratorCallback> &callback, perform_cb _hidl_cb);
     // set 'amplitude' based on an arbitrary scale determined by 'maximum'
     Return<Status> setEffectAmplitude(uint8_t amplitude, uint8_t maximum);
     Return<Status> setGlobalAmplitude(bool set);
@@ -157,12 +164,16 @@ class Vibrator : public IVibrator {
     Return<Status> getCompoundDetails(Effect effect, EffectStrength strength, uint32_t *outTimeMs,
                                       uint32_t *outVolLevel, std::string *outEffectQueue);
     Return<Status> setEffectQueue(const std::string &effectQueue);
-    Return<void> performEffect(Effect effect, EffectStrength strength, perform_cb _hidl_cb);
+    Return<void> performEffect(Effect effect, EffectStrength strength,
+                               const sp<IVibratorCallback> &callback, perform_cb _hidl_cb);
     bool isUnderExternalControl();
+    void waitForComplete(sp<IVibratorCallback> &&callback);
+
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
     std::array<uint32_t, 6> mVolLevels;
     uint32_t mSimpleEffectDuration;
+    std::future<void> mAsyncHandle;
 };
 
 }  // namespace implementation

@@ -65,9 +65,12 @@ static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
 static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
 static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;  // ALERT Irq Handling
+static constexpr uint32_t MAX_TIME_MS = UINT32_MAX;
 
 static constexpr float AMP_ATTENUATE_STEP_SIZE = 0.125f;
 static constexpr float EFFECT_FREQUENCY_KHZ = 48.0f;
+
+static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
 
 static uint8_t amplitudeToScale(uint8_t amplitude, uint8_t maximum) {
     return std::round((-20 * std::log10(amplitude / static_cast<float>(maximum))) /
@@ -75,7 +78,7 @@ static uint8_t amplitudeToScale(uint8_t amplitude, uint8_t maximum) {
 }
 
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
-    : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)) {
+    : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
     uint32_t caldata;
     uint32_t effectDuration;
 
@@ -110,16 +113,23 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     mHwApi->setGpioRiseScale(scaleRise);
 }
 
-Return<Status> Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex) {
+Return<Status> Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
+                            const sp<IVibratorCallback> &callback) {
+    if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
+        ALOGE("Previous vibration pending.");
+        return Status::UNKNOWN_ERROR;
+    }
+
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);
     mHwApi->setActivate(1);
 
+    mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
+
     return Status::OK;
 }
 
-// Methods from ::android::hardware::vibrator::V1_1::IVibrator follow.
-Return<Status> Vibrator::on(uint32_t timeoutMs) {
+Return<Status> Vibrator::onWrapper(uint32_t timeoutMs, const sp<IVibratorCallback> &callback) {
     ATRACE_NAME("Vibrator::on");
     const uint32_t index = timeoutMs < WAVEFORM_LONG_VIBRATION_THRESHOLD_MS
                                    ? WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX
@@ -128,7 +138,11 @@ Return<Status> Vibrator::on(uint32_t timeoutMs) {
         timeoutMs += MAX_COLD_START_LATENCY_MS;
     }
     setGlobalAmplitude(true);
-    return on(timeoutMs, index);
+    return on(timeoutMs, index, callback);
+}
+
+Return<Status> Vibrator::on(uint32_t timeoutMs) {
+    return onWrapper(timeoutMs, nullptr);
 }
 
 Return<Status> Vibrator::off() {
@@ -209,12 +223,11 @@ bool Vibrator::isUnderExternalControl() {
 // Methods from ::android::hardware::vibrator::V1_4::IVibrator follow.
 
 Return<hidl_bitfield<Capabilities>> Vibrator::getCapabilities() {
-    return 0;
+    return Capabilities::ON_COMPLETION_CALLBACK | Capabilities::PERFORM_COMPLETION_CALLBACK;
 }
 
-Return<Status> Vibrator::on_1_4(uint32_t /*timeoutMs*/,
-                                const sp<IVibratorCallback> & /*callback*/) {
-    return Status::UNSUPPORTED_OPERATION;
+Return<Status> Vibrator::on_1_4(uint32_t timeoutMs, const sp<IVibratorCallback> &callback) {
+    return onWrapper(timeoutMs, callback);
 }
 
 // Methods from ::android.hidl.base::V1_0::IBase follow.
@@ -251,38 +264,39 @@ Return<void> Vibrator::debug(const hidl_handle &handle,
 }
 
 template <typename T>
-Return<void> Vibrator::performWrapper(T effect, EffectStrength strength, perform_cb _hidl_cb) {
+Return<void> Vibrator::performWrapper(T effect, EffectStrength strength,
+                                      const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) {
     ATRACE_NAME("Vibrator::performWrapper");
     auto validRange = hidl_enum_range<T>();
     if (effect < *validRange.begin() || effect > *std::prev(validRange.end())) {
         _hidl_cb(Status::UNSUPPORTED_OPERATION, 0);
         return Void();
     }
-    return performEffect(static_cast<Effect>(effect), strength, _hidl_cb);
+    return performEffect(static_cast<Effect>(effect), strength, callback, _hidl_cb);
 }
 
 Return<void> Vibrator::perform(V1_0::Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, _hidl_cb);
+    return performWrapper(effect, strength, nullptr, _hidl_cb);
 }
 
 Return<void> Vibrator::perform_1_1(V1_1::Effect_1_1 effect, EffectStrength strength,
                                    perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, _hidl_cb);
+    return performWrapper(effect, strength, nullptr, _hidl_cb);
 }
 
 Return<void> Vibrator::perform_1_2(V1_2::Effect effect, EffectStrength strength,
                                    perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, _hidl_cb);
+    return performWrapper(effect, strength, nullptr, _hidl_cb);
 }
 
-Return<void> Vibrator::perform_1_3(Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, _hidl_cb);
+Return<void> Vibrator::perform_1_3(V1_3::Effect effect, EffectStrength strength,
+                                   perform_cb _hidl_cb) {
+    return performWrapper(effect, strength, nullptr, _hidl_cb);
 }
 
 Return<void> Vibrator::perform_1_4(Effect effect, EffectStrength strength,
-                                   const sp<IVibratorCallback> & /*callback*/,
-                                   perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, _hidl_cb);
+                                   const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) {
+    return performWrapper(effect, strength, callback, _hidl_cb);
 }
 
 Return<Status> Vibrator::getSimpleDetails(Effect effect, EffectStrength strength,
@@ -389,7 +403,8 @@ Return<Status> Vibrator::setEffectQueue(const std::string &effectQueue) {
     return Status::OK;
 }
 
-Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
+Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength,
+                                     const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) {
     Status status = Status::OK;
     uint32_t timeMs = 0;
     uint32_t effectIndex;
@@ -429,13 +444,25 @@ Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength, per
         effectIndex = WAVEFORM_SIMPLE_EFFECT_INDEX;
     }
 
-    on(timeMs, effectIndex);
+    on(MAX_TIME_MS, effectIndex, callback);
 
 exit:
 
     _hidl_cb(status, timeMs);
 
     return Void();
+}
+
+void Vibrator::waitForComplete(sp<IVibratorCallback> &&callback) {
+    mHwApi->pollVibeState(false);
+    mHwApi->setActivate(false);
+
+    if (callback) {
+        auto ret = callback->onComplete();
+        if (!ret.isOk()) {
+            ALOGE("Failed completion callback: %s", ret.description().c_str());
+        }
+    }
 }
 
 }  // namespace implementation

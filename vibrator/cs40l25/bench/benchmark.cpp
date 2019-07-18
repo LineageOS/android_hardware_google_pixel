@@ -31,6 +31,7 @@ namespace implementation {
 
 using ::android::hardware::vibrator::V1_0::EffectStrength;
 using ::android::hardware::vibrator::V1_0::Status;
+using ::android::hardware::vibrator::V1_3::Effect;
 
 class VibratorBench : public benchmark::Fixture {
   private:
