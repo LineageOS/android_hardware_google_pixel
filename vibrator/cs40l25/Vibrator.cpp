@@ -34,7 +34,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
 using Status = ::android::hardware::vibrator::V1_0::Status;
@@ -206,6 +206,17 @@ bool Vibrator::isUnderExternalControl() {
     return isAspEnabled;
 }
 
+// Methods from ::android::hardware::vibrator::V1_4::IVibrator follow.
+
+Return<hidl_bitfield<Capabilities>> Vibrator::getCapabilities() {
+    return 0;
+}
+
+Return<Status> Vibrator::on_1_4(uint32_t /*timeoutMs*/,
+                                const sp<IVibratorCallback> & /*callback*/) {
+    return Status::UNSUPPORTED_OPERATION;
+}
+
 // Methods from ::android.hidl.base::V1_0::IBase follow.
 
 Return<void> Vibrator::debug(const hidl_handle &handle,
@@ -265,6 +276,12 @@ Return<void> Vibrator::perform_1_2(V1_2::Effect effect, EffectStrength strength,
 }
 
 Return<void> Vibrator::perform_1_3(Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
+    return performWrapper(effect, strength, _hidl_cb);
+}
+
+Return<void> Vibrator::perform_1_4(Effect effect, EffectStrength strength,
+                                   const sp<IVibratorCallback> & /*callback*/,
+                                   perform_cb _hidl_cb) {
     return performWrapper(effect, strength, _hidl_cb);
 }
 
@@ -422,7 +439,7 @@ exit:
 }
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

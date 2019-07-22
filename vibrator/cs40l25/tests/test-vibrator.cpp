@@ -26,7 +26,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
 using ::android::hardware::vibrator::V1_0::EffectStrength;
@@ -445,7 +445,7 @@ INSTANTIATE_TEST_CASE_P(VibratorEffects, VibratorTest,
                         });
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

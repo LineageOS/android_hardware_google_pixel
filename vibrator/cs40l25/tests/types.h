@@ -16,7 +16,7 @@
 #ifndef ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
 #define ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
 
-#include <android/hardware/vibrator/1.3/IVibrator.h>
+#include <android/hardware/vibrator/1.4/IVibrator.h>
 
 using EffectIndex = uint16_t;
 using EffectLevel = uint32_t;

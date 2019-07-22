@@ -18,7 +18,7 @@
 
 #include "Vibrator.h"
 
-class MockApi : public ::android::hardware::vibrator::V1_3::implementation::Vibrator::HwApi {
+class MockApi : public ::android::hardware::vibrator::V1_4::implementation::Vibrator::HwApi {
   public:
     MOCK_METHOD0(destructor, void());
     MOCK_METHOD1(setF0, bool(uint32_t value));
@@ -45,7 +45,7 @@ class MockApi : public ::android::hardware::vibrator::V1_3::implementation::Vibr
     ~MockApi() override { destructor(); };
 };
 
-class MockCal : public ::android::hardware::vibrator::V1_3::implementation::Vibrator::HwCal {
+class MockCal : public ::android::hardware::vibrator::V1_4::implementation::Vibrator::HwCal {
   public:
     MOCK_METHOD0(destructor, void());
     MOCK_METHOD1(getF0, bool(uint32_t *value));

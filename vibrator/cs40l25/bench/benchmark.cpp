@@ -26,7 +26,7 @@ using ::android::hardware::hidl_enum_range;
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
 using ::android::hardware::vibrator::V1_0::EffectStrength;
@@ -174,7 +174,7 @@ BENCHMARK_WRAPPER(VibratorBench, perform_1_3, {
 })->Apply(VibratorBench::SupportedEffectArgs);
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

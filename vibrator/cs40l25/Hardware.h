@@ -22,7 +22,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
 using common::implementation::HwApiBase;
@@ -132,7 +132,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
 };
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
