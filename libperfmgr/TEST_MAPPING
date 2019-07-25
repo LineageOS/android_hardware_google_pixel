@@ -1,7 +1,0 @@
-{
-  "presubmit": [
-    {
-      "name": "libperfmgr_test"
-    }
-  ]
-}
