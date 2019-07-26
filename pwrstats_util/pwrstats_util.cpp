@@ -27,7 +27,7 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "PowerStatsUtil.h"
+#include "PowerStatsAggregator.h"
 
 namespace {
 volatile std::sig_atomic_t gSignalStatus;
@@ -72,10 +72,9 @@ static Options parseArgs(int argc, char** argv) {
     return opt;
 }
 
-static void snapshot(void) {
+static void snapshot(const PowerStatsAggregator& agg) {
     std::unordered_map<std::string, uint64_t> data;
-    PowerStatsUtil util;
-    int ret = util.getData(data);
+    int ret = agg.getData(&data);
     if (ret) {
         exit(EXIT_FAILURE);
     }
@@ -87,7 +86,7 @@ static void snapshot(void) {
     exit(EXIT_SUCCESS);
 }
 
-static void daemon(const std::string& filePath) {
+static void daemon(const std::string& filePath, const PowerStatsAggregator& agg) {
     // Following a subset of steps outlined in http://man7.org/linux/man-pages/man7/daemon.7.html
 
     // Call fork to create child process
@@ -145,9 +144,8 @@ static void daemon(const std::string& filePath) {
     // get the start_data
     auto start_time = std::chrono::system_clock::now();
 
-    PowerStatsUtil util;
     std::unordered_map<std::string, uint64_t> start_data;
-    int ret = util.getData(start_data);
+    int ret = agg.getData(&start_data);
     if (ret) {
         LOG(ERROR) << "failed to get start data";
         exit(EXIT_FAILURE);
@@ -160,7 +158,7 @@ static void daemon(const std::string& filePath) {
 
     // get the end data
     std::unordered_map<std::string, uint64_t> end_data;
-    ret = util.getData(end_data);
+    ret = agg.getData(&end_data);
     if (ret) {
         LOG(ERROR) << "failed to get end data";
         exit(EXIT_FAILURE);
@@ -185,18 +183,18 @@ static void daemon(const std::string& filePath) {
     exit(EXIT_SUCCESS);
 }
 
-void run(const Options& opt) {
+static void runWithOptions(const Options& opt, const PowerStatsAggregator& agg) {
     if (opt.daemonMode) {
-        daemon(opt.filePath);
+        daemon(opt.filePath, agg);
     } else {
-        snapshot();
+        snapshot(agg);
     }
 }
 
-int main(int argc, char** argv) {
+int run(int argc, char** argv, const PowerStatsAggregator& agg) {
     Options opt = parseArgs(argc, argv);
 
-    run(opt);
+    runWithOptions(opt, agg);
 
     return 0;
 }
