@@ -20,6 +20,7 @@ cc_library_static {
         "pwrstats_util.cpp",
         "PowerStatsAggregator.cpp",
         "dataproviders/PowerEntityResidencyDataProvider.cpp",
+        "dataproviders/RailEnergyDataProvider.cpp",
     ],
     shared_libs: [
         "libhidlbase",
