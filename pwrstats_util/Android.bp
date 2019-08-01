@@ -12,14 +12,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-cc_binary {
-    name: "pwrstats_util",
+cc_library_static {
+    name: "libpowerstatsutil",
+    defaults: ["pwrstatsutil_defaults"],
+    export_include_dirs: ["."],
     srcs: [
-        "main.cpp",
-        "PowerStatsUtil.cpp",
+        "pwrstats_util.cpp",
+        "PowerStatsAggregator.cpp",
+        "dataproviders/PowerEntityResidencyDataProvider.cpp",
     ],
+    shared_libs: [
+        "libhidlbase",
+        "android.hardware.power.stats@1.0",
+    ],
+}
+
+// Useful defaults for pwrstats_util
+cc_defaults {
+    name: "pwrstatsutil_defaults",
+    vendor: true,
     cflags: [
         "-Wall",
+
+        // Try to catch typical 32-bit assumptions that break with 64-bit pointers.
+        "-Werror=pointer-to-int-cast",
+        "-Werror=int-to-pointer-cast",
+        "-Werror=type-limits",
         "-Werror",
     ],
     tidy: true,
@@ -44,8 +62,5 @@ cc_binary {
         "libbase",
         "libutils",
         "liblog",
-        "libhidlbase",
-        "android.hardware.power.stats@1.0",
     ],
-    vendor: true,
 }

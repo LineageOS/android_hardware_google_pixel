@@ -13,11 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef POWERSTATSUTIL_H
-#define POWERSTATSUTIL_H
+#ifndef POWERSTATSAGGREGATOR_H
+#define POWERSTATSAGGREGATOR_H
 
 #include <memory>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -25,23 +24,26 @@
  * Classes that implement this interface can be used to provide stats in the form of key/value
  * pairs to PwrStatsUtil.
  **/
-class IPwrStatsUtilDataProvider {
+class IPowerStatsDataProvider {
   public:
-    virtual ~IPwrStatsUtilDataProvider() = default;
-    virtual int get(std::unordered_map<std::string, uint64_t>& data) = 0;
+    virtual ~IPowerStatsDataProvider() = default;
+    virtual int get(std::unordered_map<std::string, uint64_t>* data) = 0;
 };
 
 /**
  * This class is used to return stats in the form of key/value pairs for all registered classes
  * that implement IPwrStatsUtilDataProvider.
  **/
-class PowerStatsUtil {
+class PowerStatsAggregator {
   public:
-    PowerStatsUtil();
-    int getData(std::unordered_map<std::string, uint64_t>& data);
+    PowerStatsAggregator() = default;
+    int getData(std::unordered_map<std::string, uint64_t>* data) const;
+    void addDataProvider(std::unique_ptr<IPowerStatsDataProvider> dataProvider);
 
   private:
-    std::vector<std::unique_ptr<IPwrStatsUtilDataProvider>> mDataProviders;
+    std::vector<std::unique_ptr<IPowerStatsDataProvider>> mDataProviders;
 };
 
-#endif  // POWERSTATSUTIL_H
+int run(int argc, char** argv, const PowerStatsAggregator& agg);
+
+#endif  // POWERSTATSAGGREGATOR_H
