@@ -11,5 +11,10 @@
     {
       "name": "VibratorHalCs40l25Benchmark"
     }
+  ],
+  "pts-experimental": [
+    {
+      "name": "VibratorHalCs40l25TestSuite"
+    }
   ]
 }
