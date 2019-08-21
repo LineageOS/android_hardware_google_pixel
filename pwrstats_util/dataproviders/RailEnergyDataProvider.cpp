@@ -24,12 +24,11 @@ using android::hardware::Return;
 using android::hardware::power::stats::V1_0::IPowerStats;
 using android::hardware::power::stats::V1_0::Status;
 
-int RailEnergyDataProvider::get(std::unordered_map<std::string, uint64_t>* data) {
-    // example using the power stats HAL
-    sp<IPowerStats> powerStatsService =
+int RailEnergyDataProvider::getImpl(PowerStatistic* stat) const {
+    sp<android::hardware::power::stats::V1_0::IPowerStats> powerStatsService =
             android::hardware::power::stats::V1_0::IPowerStats::getService();
     if (powerStatsService == nullptr) {
-        LOG(ERROR) << "Unable to get power.stats HAL service.";
+        LOG(ERROR) << "unable to get power.stats HAL service";
         return 1;
     }
 
@@ -44,41 +43,81 @@ int RailEnergyDataProvider::get(std::unordered_map<std::string, uint64_t>* data)
         }
 
         for (auto const& info : railInfos) {
-            railNames.emplace(info.index,
-                              std::string(info.subsysName) + "__" + std::string(info.railName));
+            railNames.emplace(info.index, info.railName);
         }
     });
     if (retStatus == Status::NOT_SUPPORTED) {
-        LOG(WARNING) << "rail energy stats not supported";
+        LOG(WARNING) << __func__ << ": rail energy stats not supported";
         return 0;
     }
     if (!ret.isOk() || retStatus != Status::SUCCESS) {
-        LOG(ERROR) << "no rail information available";
+        LOG(ERROR) << __func__ << ": no rail information available";
         return 1;
     }
 
+    auto railEntries = stat->mutable_rail_energy();
     bool resultSuccess = true;
     ret = powerStatsService->getEnergyData(
-            {}, [&data, &railNames, &resultSuccess](auto energyData, auto status) {
+            {}, [&railEntries, &railNames, &resultSuccess](auto energyData, auto status) {
                 if (status != Status::SUCCESS) {
-                    LOG(ERROR) << "Error getting rail energy";
+                    LOG(ERROR) << __func__ << ": unable to get rail energy";
                     resultSuccess = false;
                     return;
                 }
+
                 for (auto const& energyDatum : energyData) {
-                    auto railName = railNames.find(energyDatum.index);
-                    if (railName == railNames.end()) {
-                        LOG(ERROR) << "Missing one or more rail names";
-                        resultSuccess = false;
-                        return;
-                    }
-                    data->emplace(railName->second, energyDatum.energy);
+                    auto entry = railEntries->add_entry();
+                    entry->set_rail_name(railNames.at(energyDatum.index));
+                    entry->set_energy_uws(energyDatum.energy);
                 }
             });
     if (!ret.isOk() || !resultSuccess) {
-        LOG(ERROR) << "Failed to get rail energy stats";
+        stat->clear_rail_energy();
+        LOG(ERROR) << __func__ << ": failed to get rail energy stats";
         return 1;
     }
 
+    // Sort entries by name. Sorting is needed to make interval processing efficient.
+    std::sort(railEntries->mutable_entry()->begin(), railEntries->mutable_entry()->end(),
+              [](const auto& a, const auto& b) { return a.rail_name() < b.rail_name(); });
+
     return 0;
+}
+
+int RailEnergyDataProvider::getImpl(const PowerStatistic& start, PowerStatistic* interval) const {
+    auto startEnergy = start.rail_energy().entry();
+    auto intervalEnergy = interval->mutable_rail_energy()->mutable_entry();
+
+    // If start and interval are not the same size then they cannot have matching data
+    if (startEnergy.size() != intervalEnergy->size()) {
+        LOG(ERROR) << __func__ << ": mismatched data";
+        interval->clear_rail_energy();
+        return 1;
+    }
+
+    for (int i = 0; i < startEnergy.size(); ++i) {
+        // Check and make sure each entry matches. Data are in sorted order so if there is a
+        // mismatch then we will bail.
+        if (startEnergy.Get(i).rail_name() != intervalEnergy->Get(i).rail_name()) {
+            LOG(ERROR) << __func__ << ": mismatched data";
+            interval->clear_rail_energy();
+            return 1;
+        }
+
+        auto delta = intervalEnergy->Get(i).energy_uws() - startEnergy.Get(i).energy_uws();
+        intervalEnergy->Mutable(i)->set_energy_uws(delta);
+    }
+    return 0;
+}
+
+void RailEnergyDataProvider::dumpImpl(const PowerStatistic& stat, std::ostream* output) const {
+    *output << "Rail Energy:" << std::endl;
+    for (auto const& rail : stat.rail_energy().entry()) {
+        *output << rail.rail_name() << "=" << rail.energy_uws() << std::endl;
+    }
+    *output << std::endl;
+}
+
+PowerStatCase RailEnergyDataProvider::typeOf() const {
+    return PowerStatCase::kRailEnergy;
 }
