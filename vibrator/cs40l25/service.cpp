@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#define LOG_TAG "android.hardware.vibrator@1.3-service.cs40l25"
 
 #include <hidl/HidlSupport.h>
 #include <hidl/HidlTransportSupport.h>

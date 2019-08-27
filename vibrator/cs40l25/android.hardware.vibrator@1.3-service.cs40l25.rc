@@ -3,6 +3,7 @@ service vendor.vibrator-1-3 /vendor/bin/hw/android.hardware.vibrator@1.3-service
     user system
     group system
 
+    setenv PROPERTY_PREFIX ro.vibrator.hal.
     setenv CALIBRATION_FILEPATH /mnt/vendor/persist/haptics/cs40l25a.cal
 
     setenv F0_FILEPATH /sys/class/leds/vibrator/device/f0_stored

@@ -16,8 +16,8 @@
 #ifndef ANDROID_HARDWARE_VIBRATOR_HARDWARE_H
 #define ANDROID_HARDWARE_VIBRATOR_HARDWARE_H
 
+#include "HardwareBase.h"
 #include "Vibrator.h"
-#include "utils.h"
 
 namespace android {
 namespace hardware {
@@ -25,32 +25,30 @@ namespace vibrator {
 namespace V1_3 {
 namespace implementation {
 
-class HwApi : public Vibrator::HwApi {
-  private:
-    using NamesMap = std::map<const void *, std::string>;
+using common::implementation::HwApiBase;
+using common::implementation::HwCalBase;
 
-    class RecordInterface {
-      public:
-        virtual std::string toString(const NamesMap &names) = 0;
-        virtual ~RecordInterface() {}
-    };
-    template <typename T>
-    class Record : public RecordInterface {
-      public:
-        Record(const char *func, const T &value, const void *stream)
-            : mFunc(func), mValue(value), mStream(stream) {}
-        std::string toString(const NamesMap &names) override;
-
-      private:
-        const char *mFunc;
-        const T mValue;
-        const void *mStream;
-    };
-
-    static constexpr uint32_t RECORDS_SIZE = 32;
-
+class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
-    HwApi();
+    HwApi() {
+        open("F0_FILEPATH", &mF0);
+        open("REDC_FILEPATH", &mRedc);
+        open("Q_FILEPATH", &mQ);
+        open("ACTIVATE_PATH", &mActivate);
+        open("DURATION_PATH", &mDuration);
+        open("STATE_PATH", &mState);
+        open("EFFECT_DURATION_PATH", &mEffectDuration);
+        open("EFFECT_INDEX_PATH", &mEffectIndex);
+        open("EFFECT_QUEUE_PATH", &mEffectQueue);
+        open("EFFECT_SCALE_PATH", &mEffectScale);
+        open("GLOBAL_SCALE_PATH", &mGlobalScale);
+        open("ASP_ENABLE_PATH", &mAspEnable);
+        open("GPIO_FALL_INDEX", &mGpioFallIndex);
+        open("GPIO_FALL_SCALE", &mGpioFallScale);
+        open("GPIO_RISE_INDEX", &mGpioRiseIndex);
+        open("GPIO_RISE_SCALE", &mGpioRiseScale);
+    }
+
     bool setF0(uint32_t value) override { return set(value, &mF0); }
     bool setRedc(uint32_t value) override { return set(value, &mRedc); }
     bool setQ(uint32_t value) override { return set(value, &mQ); }
@@ -70,21 +68,9 @@ class HwApi : public Vibrator::HwApi {
     bool setGpioFallScale(uint32_t value) override { return set(value, &mGpioFallScale); }
     bool setGpioRiseIndex(uint32_t value) override { return set(value, &mGpioRiseIndex); }
     bool setGpioRiseScale(uint32_t value) override { return set(value, &mGpioRiseScale); }
-    void debug(int fd) override;
+    void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
-    template <typename T>
-    bool has(const T &stream);
-    template <typename T, typename U>
-    bool get(T *value, U *stream);
-    template <typename T, typename U>
-    bool set(const T &value, U *stream);
-    template <typename T>
-    void record(const char *func, const T &value, void *stream);
-
-  private:
-    NamesMap mNames;
-    std::vector<std::unique_ptr<RecordInterface>> mRecords{RECORDS_SIZE};
     std::ofstream mF0;
     std::ofstream mRedc;
     std::ofstream mQ;
@@ -103,7 +89,7 @@ class HwApi : public Vibrator::HwApi {
     std::ofstream mGpioRiseScale;
 };
 
-class HwCal : public Vibrator::HwCal {
+class HwCal : public Vibrator::HwCal, private HwCalBase {
   private:
     static constexpr char F0_CONFIG[] = "f0_measured";
     static constexpr char REDC_CONFIG[] = "redc_measured";
@@ -120,14 +106,15 @@ class HwCal : public Vibrator::HwCal {
     static constexpr std::array<uint32_t, 6> V_LEVELS_DEFAULT = {60, 70, 80, 90, 100, 76};
 
   public:
-    HwCal();
-    bool getF0(uint32_t *value) override { return get(F0_CONFIG, value); }
-    bool getRedc(uint32_t *value) override { return get(REDC_CONFIG, value); }
+    HwCal() {}
+
+    bool getF0(uint32_t *value) override { return getPersist(F0_CONFIG, value); }
+    bool getRedc(uint32_t *value) override { return getPersist(REDC_CONFIG, value); }
     bool getQ(uint32_t *value) override {
-        if (get(Q_CONFIG, value)) {
+        if (getPersist(Q_CONFIG, value)) {
             return true;
         }
-        if (get(Q_INDEX, value)) {
+        if (getPersist(Q_INDEX, value)) {
             *value = *value * Q_INDEX_TO_FIXED + Q_INDEX_OFFSET;
             return true;
         }
@@ -135,20 +122,13 @@ class HwCal : public Vibrator::HwCal {
         return true;
     }
     bool getVolLevels(std::array<uint32_t, 6> *value) override {
-        if (get(VOLTAGES_CONFIG, value)) {
+        if (getPersist(VOLTAGES_CONFIG, value)) {
             return true;
         }
         *value = V_LEVELS_DEFAULT;
         return true;
     }
-    void debug(int fd) override;
-
-  private:
-    template <typename T>
-    bool get(const char *key, T *value);
-
-  private:
-    std::map<std::string, std::string> mCalData;
+    void debug(int fd) override { HwCalBase::debug(fd); }
 };
 
 }  // namespace implementation

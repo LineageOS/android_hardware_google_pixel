@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define ATRACE_TAG (ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)
-#define LOG_TAG "android.hardware.vibrator@1.3-service.cs40l25"
 
 #include "Vibrator.h"
 

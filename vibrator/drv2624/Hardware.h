@@ -16,8 +16,7 @@
 #ifndef ANDROID_HARDWARE_VIBRATOR_HARDWARE_H
 #define ANDROID_HARDWARE_VIBRATOR_HARDWARE_H
 
-#include <cutils/properties.h>
-
+#include "HardwareBase.h"
 #include "Vibrator.h"
 
 namespace android {
@@ -26,32 +25,21 @@ namespace vibrator {
 namespace V1_2 {
 namespace implementation {
 
-class HwApi : public Vibrator::HwApi {
-  private:
-    using NamesMap = std::map<const void *, std::string>;
+using common::implementation::HwApiBase;
+using common::implementation::HwCalBase;
 
-    class RecordInterface {
-      public:
-        virtual std::string toString(const NamesMap &names) = 0;
-        virtual ~RecordInterface() {}
-    };
-    template <typename T>
-    class Record : public RecordInterface {
-      public:
-        Record(const char *func, const T &value, const void *stream)
-            : mFunc(func), mValue(value), mStream(stream) {}
-        std::string toString(const NamesMap &names) override;
-
-      private:
-        const char *mFunc;
-        const T mValue;
-        const void *mStream;
-    };
-
-    static constexpr uint32_t RECORDS_SIZE = 32;
-
+class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
-    static std::unique_ptr<HwApi> Create();
+    static std::unique_ptr<HwApi> Create() {
+        auto hwapi = std::unique_ptr<HwApi>(new HwApi());
+        // the following streams are required
+        if (!hwapi->mActivate.is_open() || !hwapi->mDuration.is_open() ||
+            !hwapi->mState.is_open()) {
+            return nullptr;
+        }
+        return hwapi;
+    }
+
     bool setAutocal(std::string value) override { return set(value, &mAutocal); }
     bool setOlLraPeriod(uint32_t value) override { return set(value, &mOlLraPeriod); }
     bool setActivate(bool value) override { return set(value, &mActivate); }
@@ -66,22 +54,26 @@ class HwApi : public Vibrator::HwApi {
     bool setLpTriggerEffect(uint32_t value) override { return set(value, &mLpTrigger); }
     bool setLraWaveShape(uint32_t value) override { return set(value, &mLraWaveShape); }
     bool setOdClamp(uint32_t value) override { return set(value, &mOdClamp); }
-    void debug(int fd) override;
+    void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
-    HwApi();
-    template <typename T>
-    bool has(const T &stream);
-    template <typename T, typename U>
-    bool get(T *value, U *stream);
-    template <typename T, typename U>
-    bool set(const T &value, U *stream);
-    template <typename T>
-    void record(const char *func, const T &value, void *stream);
+    HwApi() {
+        open("AUTOCAL_FILEPATH", &mAutocal);
+        open("OL_LRA_PERIOD_FILEPATH", &mOlLraPeriod);
+        open("ACTIVATE_PATH", &mActivate);
+        open("DURATION_PATH", &mDuration);
+        open("STATE_PATH", &mState);
+        open("RTP_INPUT_PATH", &mRtpInput);
+        open("MODE_PATH", &mMode);
+        open("SEQUENCER_PATH", &mSequencer);
+        open("SCALE_PATH", &mScale);
+        open("CTRL_LOOP_PATH", &mCtrlLoop);
+        open("LP_TRIGGER_PATH", &mLpTrigger);
+        open("LRA_WAVE_SHAPE_PATH", &mLraWaveShape);
+        open("OD_CLAMP_PATH", &mOdClamp);
+    }
 
   private:
-    NamesMap mNames;
-    std::vector<std::unique_ptr<RecordInterface>> mRecords{RECORDS_SIZE};
     std::ofstream mAutocal;
     std::ofstream mOlLraPeriod;
     std::ofstream mActivate;
@@ -97,7 +89,7 @@ class HwApi : public Vibrator::HwApi {
     std::ofstream mOdClamp;
 };
 
-class HwCal : public Vibrator::HwCal {
+class HwCal : public Vibrator::HwCal, private HwCalBase {
   private:
     static constexpr char AUTOCAL_CONFIG[] = "autocal";
     static constexpr char LRA_PERIOD_CONFIG[] = "lra_period";
@@ -112,66 +104,46 @@ class HwCal : public Vibrator::HwCal {
     static constexpr uint32_t DEFAULT_VOLTAGE_MAX = 107;  // 2.15V;
 
   public:
-    HwCal();
-    bool getAutocal(std::string *value) override { return get(AUTOCAL_CONFIG, value); }
+    HwCal() {}
+
+    bool getAutocal(std::string *value) override { return getPersist(AUTOCAL_CONFIG, value); }
     bool getLraPeriod(uint32_t *value) override {
-        if (get(LRA_PERIOD_CONFIG, value)) {
+        if (getPersist(LRA_PERIOD_CONFIG, value)) {
             return true;
         }
         *value = DEFAULT_LRA_PERIOD;
         return true;
     }
     bool getCloseLoopThreshold(uint32_t *value) override {
-        *value = property_get_int32((mPropertyPrefix + "closeloop.threshold").c_str(), UINT32_MAX);
+        return getProperty("closeloop.threshold", value, UINT32_MAX);
         return true;
     }
     bool getDynamicConfig(bool *value) override {
-        *value = property_get_bool((mPropertyPrefix + "config.dynamic").c_str(), false);
-        return true;
+        return getProperty("config.dynamic", value, false);
     }
     bool getLongFrequencyShift(uint32_t *value) override {
-        *value = property_get_int32((mPropertyPrefix + "long.frequency.shift").c_str(),
-                                    DEFAULT_FREQUENCY_SHIFT);
-        return true;
+        return getProperty("long.frequency.shift", value, DEFAULT_FREQUENCY_SHIFT);
     }
     bool getShortVoltageMax(uint32_t *value) override {
-        *value = property_get_int32((mPropertyPrefix + "short.voltage").c_str(),
-                                    DEFAULT_VOLTAGE_MAX);
-        return true;
+        return getProperty("short.voltage", value, DEFAULT_VOLTAGE_MAX);
     }
     bool getLongVoltageMax(uint32_t *value) override {
-        *value =
-                property_get_int32((mPropertyPrefix + "long.voltage").c_str(), DEFAULT_VOLTAGE_MAX);
-        return true;
+        return getProperty("long.voltage", value, DEFAULT_VOLTAGE_MAX);
     }
     bool getClickDuration(uint32_t *value) override {
-        *value = property_get_int32((mPropertyPrefix + "click.duration").c_str(),
-                                    WAVEFORM_CLICK_EFFECT_MS);
-        return true;
+        return getProperty("click.duration", value, WAVEFORM_CLICK_EFFECT_MS);
     }
     bool getTickDuration(uint32_t *value) override {
-        *value = property_get_int32((mPropertyPrefix + "tick.duration").c_str(),
-                                    WAVEFORM_TICK_EFFECT_MS);
-        return true;
+        return getProperty("tick.duration", value, WAVEFORM_TICK_EFFECT_MS);
     }
     bool getDoubleClickDuration(uint32_t *value) override {
         *value = WAVEFORM_DOUBLE_CLICK_EFFECT_MS;
         return true;
     }
     bool getHeavyClickDuration(uint32_t *value) override {
-        *value = property_get_int32((mPropertyPrefix + "heavyclick.duration").c_str(),
-                                    WAVEFORM_HEAVY_CLICK_EFFECT_MS);
-        return true;
+        return getProperty("heavyclick.duration", value, WAVEFORM_HEAVY_CLICK_EFFECT_MS);
     }
-    void debug(int fd) override;
-
-  private:
-    template <typename T>
-    bool get(const char *key, T *value);
-
-  private:
-    std::string mPropertyPrefix;
-    std::map<std::string, std::string> mCalData;
+    void debug(int fd) override { HwCalBase::debug(fd); }
 };
 
 }  // namespace implementation
