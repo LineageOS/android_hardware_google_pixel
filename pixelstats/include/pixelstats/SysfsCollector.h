@@ -17,8 +17,12 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
+#include <android/frameworks/stats/1.0/IStats.h>
 #include <utils/StrongPointer.h>
+
+using android::sp;
+using android::frameworks::stats::V1_0::IStats;
+using android::frameworks::stats::V1_0::SlowIo;
 
 namespace android {
 namespace hardware {
@@ -36,12 +40,17 @@ class SysfsCollector {
         const char *const ImpedancePath;
         const char *const CodecPath;
         const char *const Codec1Path;
+        const char *const SpeechDspPath;
+        const char *const BatteryCapacityCC;
+        const char *const BatteryCapacityVFSOC;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
     void collect();
 
   private:
+    bool ReadFileToInt(const std::string &path, int *val);
+    bool ReadFileToInt(const char *path, int *val);
     void logAll();
 
     void logBatteryChargeCycles();
@@ -49,10 +58,10 @@ class SysfsCollector {
     void logCodec1Failed();
     void logSlowIO();
     void logSpeakerImpedance();
+    void logSpeechDspStat();
+    void logBatteryCapacity();
 
-    void reportSlowIoFromFile(
-        const char *path,
-        const ::hardware::google::pixelstats::V1_0::IPixelStats::IoOperation &operation);
+    void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -62,7 +71,15 @@ class SysfsCollector {
     const char *const kImpedancePath;
     const char *const kCodecPath;
     const char *const kCodec1Path;
-    android::sp<::hardware::google::pixelstats::V1_0::IPixelStats> pixelstats_;
+    const char *const kSpeechDspPath;
+    const char *const kBatteryCapacityCC;
+    const char *const kBatteryCapacityVFSOC;
+    sp<IStats> stats_;
+
+    // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
+    // store everything in the values array at the index of the field number
+    // -2.
+    const int kVendorAtomOffset = 2;
 };
 
 }  // namespace pixel

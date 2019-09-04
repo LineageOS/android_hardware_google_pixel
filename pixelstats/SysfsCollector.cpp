@@ -21,7 +21,8 @@
 #include <android-base/file.h>
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
+#include <android/frameworks/stats/1.0/IStats.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <utils/Log.h>
 #include <utils/StrongPointer.h>
 #include <utils/Timers.h>
@@ -36,7 +37,14 @@ namespace pixel {
 
 using android::sp;
 using android::base::ReadFileToString;
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
+using android::frameworks::stats::V1_0::ChargeCycles;
+using android::frameworks::stats::V1_0::HardwareFailed;
+using android::frameworks::stats::V1_0::IStats;
+using android::frameworks::stats::V1_0::SlowIo;
+using android::frameworks::stats::V1_0::SpeakerImpedance;
+using android::frameworks::stats::V1_0::SpeechDspStat;
+using android::frameworks::stats::V1_0::VendorAtom;
+using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -46,15 +54,37 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kCycleCountBinsPath(sysfs_paths.CycleCountBinsPath),
       kImpedancePath(sysfs_paths.ImpedancePath),
       kCodecPath(sysfs_paths.CodecPath),
-      kCodec1Path(sysfs_paths.Codec1Path) {}
+      kCodec1Path(sysfs_paths.Codec1Path),
+      kSpeechDspPath(sysfs_paths.SpeechDspPath),
+      kBatteryCapacityCC(sysfs_paths.BatteryCapacityCC),
+      kBatteryCapacityVFSOC(sysfs_paths.BatteryCapacityVFSOC) {}
+
+bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
+    return ReadFileToInt(path.c_str(), val);
+}
+
+bool SysfsCollector::ReadFileToInt(const char *const path, int *val) {
+    std::string file_contents;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read %s - %s", path, strerror(errno));
+        return false;
+    } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
+        ALOGE("Unable to convert %s to int - %s", path, strerror(errno));
+        return false;
+    }
+    return true;
+}
 
 /**
- * Read the contents of kCycleCountBinsPath and report them via IPixelStats HAL.
+ * Read the contents of kCycleCountBinsPath and report them via IStats HAL.
  * The contents are expected to be N buckets total, the nth of which indicates the
  * number of times battery %-full has been increased with the n/N% full bucket.
  */
 void SysfsCollector::logBatteryChargeCycles() {
     std::string file_contents;
+    int val;
+    std::vector<int> charge_cycles;
     if (kCycleCountBinsPath == nullptr || strlen(kCycleCountBinsPath) == 0) {
         ALOGV("Battery charge cycle path not specified");
         return;
@@ -64,8 +94,15 @@ void SysfsCollector::logBatteryChargeCycles() {
         return;
     }
 
+    std::stringstream stream(file_contents);
+    while (stream >> val) {
+        charge_cycles.push_back(val);
+    }
+    ChargeCycles cycles;
+    cycles.cycleBucket = charge_cycles;
+
     std::replace(file_contents.begin(), file_contents.end(), ' ', ',');
-    pixelstats_->reportChargeCycles(android::base::Trim(file_contents));
+    stats_->reportChargeCycles(cycles);
 }
 
 /**
@@ -84,8 +121,10 @@ void SysfsCollector::logCodecFailed() {
     if (file_contents == "0") {
         return;
     } else {
-        pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 0,
-                                          IPixelStats::HardwareErrorCode::COMPLETE);
+        HardwareFailed failed = {.hardwareType = HardwareFailed::HardwareType::CODEC,
+                                 .hardwareLocation = 0,
+                                 .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
+        stats_->reportHardwareFailed(failed);
     }
 }
 
@@ -106,13 +145,15 @@ void SysfsCollector::logCodec1Failed() {
         return;
     } else {
         ALOGE("%s report hardware fail", kCodec1Path);
-        pixelstats_->reportHardwareFailed(IPixelStats::HardwareType::CODEC, 1,
-                                          IPixelStats::HardwareErrorCode::COMPLETE);
+        HardwareFailed failed = {.hardwareType = HardwareFailed::HardwareType::CODEC,
+                                 .hardwareLocation = 1,
+                                 .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
+        stats_->reportHardwareFailed(failed);
     }
 }
 
 void SysfsCollector::reportSlowIoFromFile(const char *path,
-                                          const IPixelStats::IoOperation &operation) {
+                                          const SlowIo::IoOperation &operation_s) {
     std::string file_contents;
     if (path == nullptr || strlen(path) == 0) {
         ALOGV("slow_io path not specified");
@@ -126,7 +167,8 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
         if (sscanf(file_contents.c_str(), "%d", &slow_io_count) != 1) {
             ALOGE("Unable to parse %s from file %s to int.", file_contents.c_str(), path);
         } else if (slow_io_count > 0) {
-            pixelstats_->reportSlowIo(operation, slow_io_count);
+            SlowIo slowio = {.operation = operation_s, .count = slow_io_count};
+            stats_->reportSlowIo(slowio);
         }
         // Clear the stats
         if (!android::base::WriteStringToFile("0", path, true)) {
@@ -139,10 +181,10 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
  * Check for slow IO operations.
  */
 void SysfsCollector::logSlowIO() {
-    reportSlowIoFromFile(kSlowioReadCntPath, IPixelStats::IoOperation::READ);
-    reportSlowIoFromFile(kSlowioWriteCntPath, IPixelStats::IoOperation::WRITE);
-    reportSlowIoFromFile(kSlowioUnmapCntPath, IPixelStats::IoOperation::UNMAP);
-    reportSlowIoFromFile(kSlowioSyncCntPath, IPixelStats::IoOperation::SYNC);
+    reportSlowIoFromFile(kSlowioReadCntPath, SlowIo::IoOperation::READ);
+    reportSlowIoFromFile(kSlowioWriteCntPath, SlowIo::IoOperation::WRITE);
+    reportSlowIoFromFile(kSlowioUnmapCntPath, SlowIo::IoOperation::UNMAP);
+    reportSlowIoFromFile(kSlowioSyncCntPath, SlowIo::IoOperation::SYNC);
 }
 
 /**
@@ -164,14 +206,81 @@ void SysfsCollector::logSpeakerImpedance() {
         ALOGE("Unable to parse speaker impedance %s", file_contents.c_str());
         return;
     }
-    pixelstats_->reportSpeakerImpedance(0, left * 1000);
-    pixelstats_->reportSpeakerImpedance(1, right * 1000);
+    SpeakerImpedance left_obj = {.speakerLocation = 0,
+                                 .milliOhms = static_cast<int32_t>(left * 1000)};
+    SpeakerImpedance right_obj = {.speakerLocation = 1,
+                                  .milliOhms = static_cast<int32_t>(right * 1000)};
+    stats_->reportSpeakerImpedance(left_obj);
+    stats_->reportSpeakerImpedance(right_obj);
+}
+
+/**
+ * Report the Speech DSP state.
+ */
+void SysfsCollector::logSpeechDspStat() {
+    std::string file_contents;
+    if (kSpeechDspPath == nullptr || strlen(kSpeechDspPath) == 0) {
+        ALOGV("Speech DSP path not specified");
+        return;
+    }
+    if (!ReadFileToString(kSpeechDspPath, &file_contents)) {
+        ALOGE("Unable to read speech dsp path %s", kSpeechDspPath);
+        return;
+    }
+
+    int32_t uptime = 0, downtime = 0, crashcount = 0, recovercount = 0;
+    if (sscanf(file_contents.c_str(), "%d,%d,%d,%d", &uptime, &downtime, &crashcount,
+               &recovercount) != 4) {
+        ALOGE("Unable to parse speech dsp stat %s", file_contents.c_str());
+        return;
+    }
+
+    ALOGD("SpeechDSP uptime %d downtime %d crashcount %d recovercount %d", uptime, downtime,
+          crashcount, recovercount);
+    SpeechDspStat dspstat = {.totalUptimeMillis = uptime,
+                             .totalDowntimeMillis = downtime,
+                             .totalCrashCount = crashcount,
+                             .totalRecoverCount = recovercount};
+
+    stats_->reportSpeechDspStat(dspstat);
+}
+
+void SysfsCollector::logBatteryCapacity() {
+    std::string file_contents;
+    if (kBatteryCapacityCC == nullptr || strlen(kBatteryCapacityCC) == 0) {
+        ALOGV("Battery Capacity CC path not specified");
+        return;
+    }
+    if (kBatteryCapacityVFSOC == nullptr || strlen(kBatteryCapacityVFSOC) == 0) {
+        ALOGV("Battery Capacity VFSOC path not specified");
+        return;
+    }
+    int delta_cc_sum, delta_vfsoc_sum;
+    if (!ReadFileToInt(kBatteryCapacityCC, &delta_cc_sum) ||
+	!ReadFileToInt(kBatteryCapacityVFSOC, &delta_vfsoc_sum))
+	return;
+
+    // Load values array
+    std::vector<VendorAtom::Value> values(2);
+    VendorAtom::Value tmp;
+    tmp.intValue(delta_cc_sum);
+    values[BatteryCapacity::kDeltaCcSumFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(delta_vfsoc_sum);
+    values[BatteryCapacity::kDeltaVfsocSumFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::BATTERY_CAPACITY,
+                        .values = values};
+    Return<void> ret = stats_->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report ChargeStats to Stats service");
 }
 
 void SysfsCollector::logAll() {
-    pixelstats_ = IPixelStats::tryGetService();
-    if (!pixelstats_) {
-        ALOGE("Unable to connect to PixelStats service");
+    stats_ = IStats::tryGetService();
+    if (!stats_) {
+        ALOGE("Unable to connect to Stats service");
         return;
     }
 
@@ -180,13 +289,15 @@ void SysfsCollector::logAll() {
     logCodec1Failed();
     logSlowIO();
     logSpeakerImpedance();
+    logSpeechDspStat();
+    logBatteryCapacity();
 
-    pixelstats_.clear();
+    stats_.clear();
 }
 
 /**
  * Loop forever collecting stats from sysfs nodes and reporting them via
- * IPixelStats.
+ * IStats.
  */
 void SysfsCollector::collect(void) {
     int timerfd = timerfd_create(CLOCK_BOOTTIME, 0);

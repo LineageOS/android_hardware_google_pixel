@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <android/frameworks/stats/1.0/IStats.h>
 #include <pixelhealth/BatteryMetricsLogger.h>
 
 namespace hardware {
@@ -22,10 +23,9 @@ namespace google {
 namespace pixel {
 namespace health {
 
-using ::hardware::google::pixelstats::V1_0::IPixelStats;
-using BatteryHealthSnapshotArgs =
-    ::hardware::google::pixelstats::V1_0::IPixelStats::BatteryHealthSnapshotArgs;
 using android::sp;
+using android::frameworks::stats::V1_0::BatteryHealthSnapshotArgs;
+using android::frameworks::stats::V1_0::IStats;
 
 BatteryMetricsLogger::BatteryMetricsLogger(const char *const batt_res, const char *const batt_ocv,
                                            int sample_period, int upload_period)
@@ -47,30 +47,33 @@ int64_t BatteryMetricsLogger::getTime(void) {
     return nanoseconds_to_seconds(systemTime(SYSTEM_TIME_BOOTTIME));
 }
 
-bool BatteryMetricsLogger::uploadOutlierMetric(sp<IPixelStats> client, sampleType type) {
-    BatteryHealthSnapshotArgs min_ss = {static_cast<BatterySnapshotType>(0),
-                                        min_[type][TEMP],
-                                        min_[type][VOLT],
-                                        min_[type][CURR],
-                                        min_[type][OCV],
-                                        min_[type][RES],
-                                        min_[type][SOC]};
-    BatteryHealthSnapshotArgs max_ss = {static_cast<BatterySnapshotType>(0),
-                                        max_[type][TEMP],
-                                        max_[type][VOLT],
-                                        max_[type][CURR],
-                                        max_[type][OCV],
-                                        max_[type][RES],
-                                        max_[type][SOC]};
-
-    if (kSnapshotType[type] < 0)
+bool BatteryMetricsLogger::uploadOutlierMetric(sp<IStats> stats_client, sampleType type) {
+    BatteryHealthSnapshotArgs min_stats_ss = {
+            .type = static_cast<BatteryHealthSnapshotArgs::BatterySnapshotType>(0),
+            .temperatureDeciC = min_[type][TEMP],
+            .voltageMicroV = min_[type][VOLT],
+            .currentMicroA = min_[type][CURR],
+            .openCircuitVoltageMicroV = min_[type][OCV],
+            .resistanceMicroOhm = min_[type][RES],
+            .levelPercent = min_[type][SOC]};
+    BatteryHealthSnapshotArgs max_stats_ss = {
+            .type = static_cast<BatteryHealthSnapshotArgs::BatterySnapshotType>(0),
+            .temperatureDeciC = max_[type][TEMP],
+            .voltageMicroV = max_[type][VOLT],
+            .currentMicroA = max_[type][CURR],
+            .openCircuitVoltageMicroV = max_[type][OCV],
+            .resistanceMicroOhm = max_[type][RES],
+            .levelPercent = max_[type][SOC]};
+    if (kStatsSnapshotType[type] < 0)
         return false;
 
-    min_ss.type = (BatterySnapshotType)kSnapshotType[type];
-    max_ss.type = (BatterySnapshotType)(kSnapshotType[type] + 1);
+    min_stats_ss.type = (BatteryHealthSnapshotArgs::BatterySnapshotType)kStatsSnapshotType[type];
+    max_stats_ss.type =
+            (BatteryHealthSnapshotArgs::BatterySnapshotType)(kStatsSnapshotType[type] + 1);
 
-    client->reportBatteryHealthSnapshot(min_ss);
-    client->reportBatteryHealthSnapshot(max_ss);
+    stats_client->reportBatteryHealthSnapshot(min_stats_ss);
+    stats_client->reportBatteryHealthSnapshot(max_stats_ss);
+
     return true;
 }
 
@@ -87,17 +90,17 @@ bool BatteryMetricsLogger::uploadMetrics(void) {
     if (num_res_samples_)
         avg_resistance = accum_resistance_ / num_res_samples_;
 
-    LOG(INFO) << "Logging metrics to tron";
+    LOG(INFO) << "Logging metrics";
 
-    sp<IPixelStats> client = IPixelStats::tryGetService();
-    if (!client) {
-        LOG(ERROR) << "Unable to connect to PixelStats service";
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (!stats_client) {
+        LOG(ERROR) << "Unable to connect to Stats service";
         return false;
     }
 
     // Only log and upload the min and max for metric types we want to upload
     for (int metric = 0; metric < NUM_FIELDS; metric++) {
-        if ((metric == RES && num_res_samples_ == 0) || kSnapshotType[metric] < 0)
+        if ((metric == RES && num_res_samples_ == 0) || kStatsSnapshotType[metric] < 0)
             continue;
         std::string log_min = "min-" + std::to_string(metric) + " ";
         std::string log_max = "max-" + std::to_string(metric) + " ";
@@ -108,14 +111,21 @@ bool BatteryMetricsLogger::uploadMetrics(void) {
         LOG(INFO) << log_min;
         LOG(INFO) << log_max;
         // Upload min/max metrics
-        uploadOutlierMetric(client, static_cast<sampleType>(metric));
+        uploadOutlierMetric(stats_client, static_cast<sampleType>(metric));
     }
 
     // Upload average metric
-    BatteryHealthSnapshotArgs avg_res_ss = {
-        BatterySnapshotType::AVG_RESISTANCE, 0, 0, 0, 0, avg_resistance, 0};
-    if (num_res_samples_)
-        client->reportBatteryHealthSnapshot(avg_res_ss);
+    BatteryHealthSnapshotArgs avg_res_ss_stats = {
+            .type = BatteryHealthSnapshotArgs::BatterySnapshotType::AVG_RESISTANCE,
+            .temperatureDeciC = 0,
+            .voltageMicroV = 0,
+            .currentMicroA = 0,
+            .openCircuitVoltageMicroV = 0,
+            .resistanceMicroOhm = avg_resistance,
+            .levelPercent = 0};
+    if (num_res_samples_) {
+        stats_client->reportBatteryHealthSnapshot(avg_res_ss_stats);
+    }
 
     // Clear existing data
     memset(min_, 0, sizeof(min_));
@@ -165,7 +175,7 @@ bool BatteryMetricsLogger::recordSample(struct android::BatteryProperties *props
     for (int metric = 0; metric < NUM_FIELDS; metric++) {
         // Discard resistance min/max when charging
         if ((metric == RES && props->batteryStatus == android::BATTERY_STATUS_CHARGING) ||
-            kSnapshotType[metric] < 0)
+            kStatsSnapshotType[metric] < 0)
             continue;
         if (num_samples_ == 0 || (metric == RES && num_res_samples_ == 0) ||
             sample[metric] < min_[metric][metric]) {

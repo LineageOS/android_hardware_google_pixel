@@ -15,51 +15,51 @@
  */
 
 #include <algorithm>
+#include <string_view>
 
 #include <android-base/file.h>
+#include <android-base/logging.h>
 #include <android-base/strings.h>
-#include "include/pixelthermal/sensors.h"
+#include "thermal_files.h"
 
 namespace android {
 namespace hardware {
-namespace google {
-namespace pixel {
 namespace thermal {
+namespace V2_0 {
+namespace implementation {
 
-std::string Sensors::getSensorPath(const std::string& sensor_name) {
-    if (sensor_names_to_path_map_.find(sensor_name) !=
-            sensor_names_to_path_map_.end()) {
-        return sensor_names_to_path_map_.at(sensor_name);
+std::string ThermalFiles::getThermalFilePath(std::string_view thermal_name) const {
+    auto sensor_itr = thermal_name_to_path_map_.find(thermal_name.data());
+    if (sensor_itr == thermal_name_to_path_map_.end()) {
+        return "";
     }
-    return "";
+    return sensor_itr->second;
 }
 
-bool Sensors::addSensor(
-        const std::string& sensor_name, const std::string& path) {
-    return sensor_names_to_path_map_.emplace(sensor_name, path).second;
+bool ThermalFiles::addThermalFile(std::string_view thermal_name, std::string_view path) {
+    return thermal_name_to_path_map_.emplace(thermal_name, path).second;
 }
 
-bool Sensors::readSensorFile(
-        const std::string& sensor_name, std::string* data,
-        std::string* file_path) const {
+bool ThermalFiles::readThermalFile(std::string_view thermal_name, std::string *data) const {
     std::string sensor_reading;
-    if (sensor_names_to_path_map_.find(sensor_name) ==
-            sensor_names_to_path_map_.end()) {
-        *data = "";
-        *file_path = "";
+    std::string file_path = getThermalFilePath(std::string_view(thermal_name));
+    *data = "";
+    if (file_path.empty()) {
         return false;
     }
 
-    android::base::ReadFileToString(
-        sensor_names_to_path_map_.at(sensor_name), &sensor_reading);
+    if (!::android::base::ReadFileToString(file_path, &sensor_reading)) {
+        PLOG(WARNING) << "Failed to read sensor: " << thermal_name;
+        return false;
+    }
+
     // Strip the newline.
     *data = ::android::base::Trim(sensor_reading);
-    *file_path = sensor_names_to_path_map_.at(sensor_name);
     return true;
 }
 
+}  // namespace implementation
+}  // namespace V2_0
 }  // namespace thermal
-}  // namespace pixel
-}  // namespace google
 }  // namespace hardware
 }  // namespace android

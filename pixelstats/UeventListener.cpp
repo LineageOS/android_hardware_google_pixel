@@ -16,18 +16,28 @@
 
 #define LOG_TAG "pixelstats-uevent"
 
-#include <pixelstats/UeventListener.h>
-
+#include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
+#include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
-#include <hardware/google/pixelstats/1.0/IPixelStats.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
+#include <pixelstats/UeventListener.h>
+#include <unistd.h>
 #include <utils/StrongPointer.h>
 
-#include <unistd.h>
 #include <thread>
+
+using android::sp;
+using android::base::ReadFileToString;
+using android::frameworks::stats::V1_0::HardwareFailed;
+using android::frameworks::stats::V1_0::IStats;
+using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
+using android::frameworks::stats::V1_0::VendorAtom;
+using android::hardware::google::pixel::PixelAtoms::ChargeStats;
+using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
 namespace android {
 namespace hardware {
@@ -36,119 +46,201 @@ namespace pixel {
 
 constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
 
-// Report connection & disconnection of devices into the USB-C connector.
-void UeventListener::ReportUsbConnectorUevents(const char *power_supply_typec_mode) {
-    using ::hardware::google::pixelstats::V1_0::IPixelStats;
-    if (!power_supply_typec_mode) {
-        // No mode reported -> No reporting.
-        return;
-    }
+bool UeventListener::ReadFileToInt(const std::string &path, int *val) {
+    return ReadFileToInt(path.c_str(), val);
+}
 
-    // It's attached if the string *doesn't* match.
-    int attached = !!strcmp(power_supply_typec_mode, "POWER_SUPPLY_TYPEC_MODE=Nothing attached");
-    if (attached == is_usb_attached_) {
-        return;
-    }
-    is_usb_attached_ = attached;
+bool UeventListener::ReadFileToInt(const char *const path, int *val) {
+    std::string file_contents;
 
-    android::sp<IPixelStats> client = IPixelStats::tryGetService();
-    if (!client) {
-        ALOGE("Unable to connect to PixelStats service");
-        return;
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read %s - %s", path, strerror(errno));
+        return false;
+    } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
+        ALOGE("Unable to convert %s to int - %s", path, strerror(errno));
+        return false;
     }
+    return true;
+}
 
-    if (attached) {
-        client->reportUsbConnectorConnected();
-        usb_connect_time_ = android::base::Timer();
-    } else {
-        client->reportUsbConnectorDisconnected(usb_connect_time_.duration().count());
+void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroken) {
+    sp<IStats> stats_client = IStats::tryGetService();
+
+    if (stats_client) {
+        HardwareFailed failure = {
+                .hardwareType = HardwareFailed::HardwareType::MICROPHONE,
+                .hardwareLocation = mic,
+                .errorCode = isbroken ? HardwareFailed::HardwareErrorCode::COMPLETE
+                                      : HardwareFailed::HardwareErrorCode::DEGRADE};
+        Return<void> ret = stats_client->reportHardwareFailed(failure);
+        if (!ret.isOk())
+            ALOGE("Unable to report physical drop to Stats service");
+    } else
+        ALOGE("Unable to connect to Stats service");
+}
+
+void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic_status) {
+    if (!devpath || !mic_status)
+        return;
+    if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str())) {
+        std::vector<std::string> value = android::base::Split(mic_status, "=");
+        bool isbroken;
+
+        if (value.size() == 2) {
+            if (!value[0].compare("MIC_BREAK_STATUS"))
+                isbroken = true;
+            else if (!value[0].compare("MIC_DEGRADE_STATUS"))
+                isbroken = false;
+            else
+                return;
+
+            if (!value[1].compare("true"))
+                ReportMicBrokenOrDegraded(0, isbroken);
+            else {
+                int mic_status = atoi(value[1].c_str());
+
+                if (mic_status > 0 && mic_status <= 7) {
+                    for (int mic_bit = 0; mic_bit < 3; mic_bit++)
+                        if (mic_status & (0x1 << mic_bit))
+                            ReportMicBrokenOrDegraded(mic_bit, isbroken);
+                } else if (mic_status == 0) {
+                    // mic is ok
+                    return;
+                } else {
+                    // should not enter here
+                    ALOGE("invalid mic status");
+                    return;
+                }
+            }
+        }
     }
 }
 
-// Report connection & disconnection of USB audio devices.
-void UeventListener::ReportUsbAudioUevents(const char *driver, const char *product,
-                                           const char *action) {
-    // driver is not provided on remove, so it can be NULL.  Check in remove branch.
-    if (!product || !action) {
+void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
+    UsbPortOverheatEvent event = {};
+    std::string file_contents;
+
+    if (!driver || strcmp(driver, "DRIVER=google,overheat_mitigation")) {
         return;
     }
 
-    // The PRODUCT of a USB audio device is PRODUCT=VID/PID/VERSION
-    std::vector<std::string> halves = android::base::Split(product, "=");
-    if (halves.size() != 2) {
-        return;
-    }
-    std::vector<std::string> vidPidVer = android::base::Split(halves[1], "/");
-    if (vidPidVer.size() != 3) {
-        return;
-    }
+    ReadFileToInt((kUsbPortOverheatPath + "/plug_temp"), &event.plugTemperatureDeciC);
+    ReadFileToInt((kUsbPortOverheatPath + "/max_temp"), &event.maxTemperatureDeciC);
+    ReadFileToInt((kUsbPortOverheatPath + "/trip_time"), &event.timeToOverheat);
+    ReadFileToInt((kUsbPortOverheatPath + "/hysteresis_time"), &event.timeToHysteresis);
+    ReadFileToInt((kUsbPortOverheatPath + "/cleared_time"), &event.timeToInactive);
 
-    // Parse the VID/PID as hex values.
-    const int kBaseHex = 16;
-    int32_t vid, pid;
-    char *vidEnd = NULL, *pidEnd = NULL;
+    sp<IStats> stats_client = IStats::tryGetService();
 
-    const char *vidC = vidPidVer[0].c_str();
-    vid = strtol(vidC, &vidEnd, kBaseHex);
-    if ((vidC == vidEnd) || !vidEnd || (*vidEnd != '\0')) {
-        return;
-    }
-
-    const char *pidC = vidPidVer[1].c_str();
-    pid = strtol(pidC, &pidEnd, kBaseHex);
-    if ((pidC == pidEnd) || !pidEnd || (*pidEnd != '\0')) {
-        return;
-    }
-
-    /* A uevent is generated for each audio interface - only report the first connected one
-     * for each device by storing its PRODUCT= string in attached_product_, and clearing
-     * it on disconnect.  This also means we will only report the first USB audio device attached
-     * to the system. Only attempt to connect to the HAL when reporting an event.
-     */
-    using ::hardware::google::pixelstats::V1_0::IPixelStats;
-    if (!attached_product_ && !strcmp(action, "ACTION=add")) {
-        if (!driver || strcmp(driver, "DRIVER=snd-usb-audio")) {
-            return;
-        }
-        usb_audio_connect_time_ = android::base::Timer();
-        attached_product_ = strdup(product);
-
-        android::sp<IPixelStats> client = IPixelStats::tryGetService();
-        if (!client) {
-            ALOGE("Couldn't connect to PixelStats service for audio connect");
-            return;
-        }
-        client->reportUsbAudioConnected(vid, pid);
-    } else if (attached_product_ && !strcmp(action, "ACTION=remove")) {
-        if (strcmp(attached_product_, product)) {
-            // Not the expected product detaching.
-            return;
-        }
-        free(attached_product_);
-        attached_product_ = NULL;
-
-        android::sp<IPixelStats> client = IPixelStats::tryGetService();
-        if (!client) {
-            ALOGE("Couldn't connect to PixelStats service for audio disconnect");
-            return;
-        }
-        client->reportUsbAudioDisconnected(vid, pid, usb_audio_connect_time_.duration().count());
+    if (stats_client) {
+        stats_client->reportUsbPortOverheatEvent(event);
     }
 }
 
-void UeventListener::ReportMicBroken(const char *devpath, const char *mic_break_status) {
-    if (!devpath || !mic_break_status)
+void UeventListener::ReportChargeStats(sp<IStats> &stats_client, const char *line) {
+    std::vector<int> charge_stats_fields = {
+            ChargeStats::kAdapterTypeFieldNumber,     ChargeStats::kAdapterVoltageFieldNumber,
+            ChargeStats::kAdapterAmperageFieldNumber, ChargeStats::kSsocInFieldNumber,
+            ChargeStats::kVoltageInFieldNumber,       ChargeStats::kSsocOutFieldNumber,
+            ChargeStats::kVoltageOutFieldNumber};
+    std::vector<VendorAtom::Value> values(charge_stats_fields.size());
+    VendorAtom::Value val;
+    int32_t i = 0, tmp[7] = {0};
+
+    ALOGD("ChargeStats: processing %s", line);
+    if (sscanf(line, "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5],
+               &tmp[6]) != 7) {
+        ALOGE("Couldn't process %s", line);
         return;
-    if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str()) &&
-        !strcmp(mic_break_status, "MIC_BREAK_STATUS=true")) {
-        using ::hardware::google::pixelstats::V1_0::IPixelStats;
-        android::sp<IPixelStats> client = IPixelStats::tryGetService();
-        if (!client) {
-            ALOGE("Couldn't connect to PixelStats service for mic break");
-            return;
-        }
-        client->reportHardwareFailed(IPixelStats::HardwareType::MICROPHONE, 0,
-                                     IPixelStats::HardwareErrorCode::COMPLETE);
+    }
+    for (i = 0; i < charge_stats_fields.size(); i++) {
+        val.intValue(tmp[i]);
+        values[charge_stats_fields[i] - kVendorAtomOffset] = val;
+    }
+
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::CHARGE_STATS,
+                        .values = values};
+    Return<void> ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report ChargeStats to Stats service");
+}
+
+void UeventListener::ReportVoltageTierStats(sp<IStats> &stats_client, const char *line) {
+    std::vector<int> voltage_tier_stats_fields = {VoltageTierStats::kVoltageTierFieldNumber,
+                                                  VoltageTierStats::kSocInFieldNumber,
+                                                  VoltageTierStats::kCcInFieldNumber,
+                                                  VoltageTierStats::kTempInFieldNumber,
+                                                  VoltageTierStats::kTimeFastSecsFieldNumber,
+                                                  VoltageTierStats::kTimeTaperSecsFieldNumber,
+                                                  VoltageTierStats::kTimeOtherSecsFieldNumber,
+                                                  VoltageTierStats::kTempMinFieldNumber,
+                                                  VoltageTierStats::kTempAvgFieldNumber,
+                                                  VoltageTierStats::kTempMaxFieldNumber,
+                                                  VoltageTierStats::kIbattMinFieldNumber,
+                                                  VoltageTierStats::kIbattAvgFieldNumber,
+                                                  VoltageTierStats::kIbattMaxFieldNumber,
+                                                  VoltageTierStats::kIclMinFieldNumber,
+                                                  VoltageTierStats::kIclAvgFieldNumber,
+                                                  VoltageTierStats::kIclMaxFieldNumber};
+    std::vector<VendorAtom::Value> values(voltage_tier_stats_fields.size());
+    VendorAtom::Value val;
+    float ssoc_tmp;
+    int32_t i = 0, tmp[15] = {0};
+
+    ALOGD("VoltageTierStats: processing %s", line);
+    if (sscanf(line, "%d, %f,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d", &tmp[0], &ssoc_tmp,
+               &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5], &tmp[6], &tmp[7], &tmp[8], &tmp[9],
+               &tmp[10], &tmp[11], &tmp[12], &tmp[13], &tmp[14]) != 16) {
+        ALOGE("Couldn't process %s", line);
+        return;
+    }
+    val.intValue(tmp[0]);
+    values[voltage_tier_stats_fields[0] - kVendorAtomOffset] = val;
+    val.floatValue(ssoc_tmp);
+    values[voltage_tier_stats_fields[1] - kVendorAtomOffset] = val;
+    for (i = 2; i < voltage_tier_stats_fields.size(); i++) {
+        val.intValue(tmp[i - 1]);
+        values[voltage_tier_stats_fields[i] - kVendorAtomOffset] = val;
+    }
+
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::VOLTAGE_TIER_STATS,
+                        .values = values};
+    Return<void> ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VoltageTierStats to Stats service");
+}
+
+void UeventListener::ReportChargeMetricsEvent(const char *driver) {
+    if (!driver || strcmp(driver, "DRIVER=google,battery")) {
+        return;
+    }
+
+    std::string file_contents, line;
+    std::istringstream ss;
+
+    if (!ReadFileToString(kChargeMetricsPath.c_str(), &file_contents)) {
+        ALOGE("Unable to read %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
+        return;
+    }
+    ss.str(file_contents);
+
+    if (!std::getline(ss, line)) {
+        ALOGE("Unable to read first line");
+        return;
+    }
+
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (!stats_client) {
+        ALOGE("Couldn't connect to IStats service");
+        return;
+    }
+
+    ReportChargeStats(stats_client, line.c_str());
+
+    while (std::getline(ss, line)) {
+        ReportVoltageTierStats(stats_client, line.c_str());
     }
 }
 
@@ -156,7 +248,7 @@ bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
     const char *action, *power_supply_typec_mode, *driver, *product;
-    const char *mic_break_status;
+    const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
     int n;
 
@@ -177,7 +269,7 @@ bool UeventListener::ProcessUevent() {
     msg[n + 1] = '\0';
 
     action = power_supply_typec_mode = driver = product = NULL;
-    mic_break_status = devpath = NULL;
+    mic_break_status = mic_degrade_status = devpath = NULL;
 
     /**
      * msg is a sequence of null-terminated strings.
@@ -196,6 +288,8 @@ bool UeventListener::ProcessUevent() {
             product = cp;
         } else if (!strncmp(cp, "MIC_BREAK_STATUS=", strlen("MIC_BREAK_STATUS="))) {
             mic_break_status = cp;
+        } else if (!strncmp(cp, "MIC_DEGRADE_STATUS=", strlen("MIC_DEGRADE_STATUS="))) {
+            mic_degrade_status = cp;
         } else if (!strncmp(cp, "DEVPATH=", strlen("DEVPATH="))) {
             devpath = cp;
         }
@@ -206,18 +300,20 @@ bool UeventListener::ProcessUevent() {
     }
 
     /* Process the strings recorded. */
-    ReportUsbConnectorUevents(power_supply_typec_mode);
-    ReportUsbAudioUevents(driver, product, action);
-    ReportMicBroken(devpath, mic_break_status);
+    ReportMicStatusUevents(devpath, mic_break_status);
+    ReportMicStatusUevents(devpath, mic_degrade_status);
+    ReportUsbPortOverheatEvent(driver);
+    ReportChargeMetricsEvent(driver);
 
     return true;
 }
 
-UeventListener::UeventListener(const std::string audio_uevent)
+UeventListener::UeventListener(const std::string audio_uevent, const std::string overheat_path,
+                               const std::string charge_metrics_path)
     : kAudioUevent(audio_uevent),
-      uevent_fd_(-1),
-      is_usb_attached_(false),
-      attached_product_(nullptr) {}
+      kUsbPortOverheatPath(overheat_path),
+      kChargeMetricsPath(charge_metrics_path),
+      uevent_fd_(-1) {}
 
 /* Thread function to continuously monitor uevents.
  * Exit after kMaxConsecutiveErrors to prevent spinning. */
