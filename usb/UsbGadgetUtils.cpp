@@ -39,7 +39,7 @@ int unlinkFunctions(const char *path) {
         if ((strstr(function->d_name, FUNCTION_NAME) == NULL))
             continue;
         // build the path for each file in the folder.
-        sprintf(filepath, "%s/%s", path, function->d_name);
+        snprintf(filepath, kMaxFilePathLength, "%s/%s", path, function->d_name);
         ret = remove(filepath);
         if (ret) {
             ALOGE("Unable  remove file %s errno:%d", filepath, errno);
@@ -69,8 +69,8 @@ int linkFunction(const char *function, int index) {
     char functionPath[kMaxFilePathLength];
     char link[kMaxFilePathLength];
 
-    sprintf(functionPath, "%s%s", FUNCTIONS_PATH, function);
-    sprintf(link, "%s%d", FUNCTION_PATH, index);
+    snprintf(functionPath, kMaxFilePathLength, "%s%s", FUNCTIONS_PATH, function);
+    snprintf(link, kMaxFilePathLength, "%s%d", FUNCTION_PATH, index);
     if (symlink(functionPath, link)) {
         ALOGE("Cannot create symlink %s -> %s errno:%d", link, functionPath, errno);
         return -1;
