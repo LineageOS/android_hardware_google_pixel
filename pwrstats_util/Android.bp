@@ -18,10 +18,16 @@ cc_library_static {
     export_include_dirs: ["."],
     srcs: [
         "pwrstats_util.cpp",
-        "PowerStatsAggregator.cpp",
+        "PowerStatsCollector.cpp",
         "dataproviders/PowerEntityResidencyDataProvider.cpp",
         "dataproviders/RailEnergyDataProvider.cpp",
+        "dataproviders/DataProviderHelper.cpp",
+        "pwrstatsutil.proto",
     ],
+    proto: {
+        export_proto_headers: true,
+        type: "full",
+    },
     shared_libs: [
         "libhidlbase",
         "android.hardware.power.stats@1.0",
@@ -40,6 +46,7 @@ cc_defaults {
         "-Werror=int-to-pointer-cast",
         "-Werror=type-limits",
         "-Werror",
+        "-Wno-unused-parameter",
     ],
     tidy: true,
     tidy_checks: [
@@ -63,5 +70,6 @@ cc_defaults {
         "libbase",
         "libutils",
         "liblog",
+        "libprotobuf-cpp-full"
     ],
 }
