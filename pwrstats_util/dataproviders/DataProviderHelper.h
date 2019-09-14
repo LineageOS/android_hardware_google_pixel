@@ -13,20 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef POWERENTITYRESIDENCYDATAPROVIDER_H
-#define POWERENTITYRESIDENCYDATAPROVIDER_H
+#ifndef DATAPROVIDERHELPER_H
+#define DATAPROVIDERHELPER_H
 
-#include "PowerStatsCollector.h"
+#include <pwrstatsutil.pb.h>
 
-class PowerEntityResidencyDataProvider : public IPowerStatProvider {
-  public:
-    PowerEntityResidencyDataProvider() = default;
-    PowerStatCase typeOf() const override;
+using StateResidency_Residency = ::google::protobuf::RepeatedPtrField<
+        ::com::google::android::pwrstatsutil::StateResidency_Residency>;
+int StateResidencyInterval(const StateResidency_Residency& start,
+                           StateResidency_Residency* interval);
 
-  private:
-    int getImpl(PowerStatistic* stat) const override;
-    int getImpl(const PowerStatistic& start, PowerStatistic* interval) const override;
-    void dumpImpl(const PowerStatistic& stat, std::ostream* output) const override;
-};
+void StateResidencyDump(const StateResidency_Residency& stateResidency, std::ostream* output);
 
-#endif  // POWERENTITYRESIDENCYDATAPROVIDER_H
+#endif  // DATAPROVIDERHELPER_H

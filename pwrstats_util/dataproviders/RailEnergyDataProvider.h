@@ -16,18 +16,22 @@
 #ifndef RAILENERGYDATAPROVIDER_H
 #define RAILENERGYDATAPROVIDER_H
 
-#include "PowerStatsAggregator.h"
+#include "PowerStatsCollector.h"
 
 /**
  * Rail Energy data provider:
  * Provides data via Power Stats HAL 1.0
  * data is in units of microwatt-seconds (uWs)
  **/
-class RailEnergyDataProvider : public IPowerStatsDataProvider {
+class RailEnergyDataProvider : public IPowerStatProvider {
   public:
     RailEnergyDataProvider() = default;
+    PowerStatCase typeOf() const override;
 
-    int get(std::unordered_map<std::string, uint64_t>* data) override;
+  private:
+    int getImpl(PowerStatistic* stat) const override;
+    int getImpl(const PowerStatistic& start, PowerStatistic* interval) const override;
+    void dumpImpl(const PowerStatistic& stat, std::ostream* output) const override;
 };
 
 #endif  // RAILENERGYDATAPROVIDER_H
