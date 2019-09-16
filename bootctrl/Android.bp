@@ -1,0 +1,21 @@
+cc_library {
+    name: "android.hardware.boot@1.0-impl-pixel-legacy",
+    vendor: true,
+    recovery_available: true,
+    srcs: [
+        "LegacyBootControl.cpp",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    relative_install_path: "hw",
+    shared_libs: [
+        "libbase",
+        "liblog",
+        "libhardware",
+        "libhidlbase",
+        "libutils",
+        "android.hardware.boot@1.0",
+    ],
+}
