@@ -1,8 +1,10 @@
 cc_library {
-    name: "android.hardware.boot@1.0-impl-pixel-legacy",
+    name: "android.hardware.boot@1.1-impl-pixel-legacy",
+    stem: "android.hardware.boot@1.0-impl-1.1-pixel-legacy",
     vendor: true,
     recovery_available: true,
     srcs: [
+        "BootControlShared.cpp",
         "LegacyBootControl.cpp",
     ],
     cflags: [
@@ -17,5 +19,10 @@ cc_library {
         "libhidlbase",
         "libutils",
         "android.hardware.boot@1.0",
+        "android.hardware.boot@1.1",
+    ],
+    static_libs: [
+        "libbootloader_message_vendor",
+        "libfstab",
     ],
 }
