@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <android/hardware/vibrator/1.2/IVibrator.h>
+#include <android/hardware/vibrator/1.3/IVibrator.h>
 #include <hidl/HidlSupport.h>
 #include <hidl/HidlTransportSupport.h>
 #include <utils/Errors.h>
@@ -29,9 +29,9 @@ using android::status_t;
 using android::UNKNOWN_ERROR;
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
-using android::hardware::vibrator::V1_2::implementation::HwApi;
-using android::hardware::vibrator::V1_2::implementation::HwCal;
-using android::hardware::vibrator::V1_2::implementation::Vibrator;
+using android::hardware::vibrator::V1_3::implementation::HwApi;
+using android::hardware::vibrator::V1_3::implementation::HwCal;
+using android::hardware::vibrator::V1_3::implementation::Vibrator;
 
 status_t registerVibratorService() {
     auto hwapi = HwApi::Create();

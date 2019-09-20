@@ -14,29 +14,30 @@
 // limitations under the License.
 
 cc_defaults {
-    name: "android.hardware.vibrator@1.2-defaults.drv2624",
+    name: "android.hardware.vibrator@1.3-defaults.drv2624",
     defaults: ["PixelVibratorDefaults"],
     shared_libs: [
         "android.hardware.vibrator@1.0",
         "android.hardware.vibrator@1.1",
         "android.hardware.vibrator@1.2",
+        "android.hardware.vibrator@1.3",
     ],
     cflags: [
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
-        "-DLOG_TAG=\"android.hardware.vibrator@1.2-drv2624\"",
+        "-DLOG_TAG=\"android.hardware.vibrator@1.3-drv2624\"",
     ],
 }
 
 cc_defaults {
     name: "VibratorHalDrv2624TestDefaults",
-    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
-    static_libs: ["android.hardware.vibrator@1.2-impl.drv2624"],
+    defaults: ["android.hardware.vibrator@1.3-defaults.drv2624"],
+    static_libs: ["android.hardware.vibrator@1.3-impl.drv2624"],
     test_suites: ["device-tests"],
 }
 
 cc_library {
-    name: "android.hardware.vibrator@1.2-impl.drv2624",
-    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
+    name: "android.hardware.vibrator@1.3-impl.drv2624",
+    defaults: ["android.hardware.vibrator@1.3-defaults.drv2624"],
     srcs: ["Vibrator.cpp"],
     export_include_dirs: ["."],
     vendor_available: true,
@@ -44,11 +45,11 @@ cc_library {
 }
 
 cc_binary {
-    name: "android.hardware.vibrator@1.2-service.drv2624",
-    defaults: ["android.hardware.vibrator@1.2-defaults.drv2624"],
-    init_rc: ["android.hardware.vibrator@1.2-service.drv2624.rc"],
-    vintf_fragments: ["android.hardware.vibrator@1.2-service.drv2624.xml"],
+    name: "android.hardware.vibrator@1.3-service.drv2624",
+    defaults: ["android.hardware.vibrator@1.3-defaults.drv2624"],
+    init_rc: ["android.hardware.vibrator@1.3-service.drv2624.rc"],
+    vintf_fragments: ["android.hardware.vibrator@1.3-service.drv2624.xml"],
     srcs: ["service.cpp"],
-    static_libs: ["android.hardware.vibrator@1.2-impl.drv2624"],
+    static_libs: ["android.hardware.vibrator@1.3-impl.drv2624"],
     proprietary: true,
 }
