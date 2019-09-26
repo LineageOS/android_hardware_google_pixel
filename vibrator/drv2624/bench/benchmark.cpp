@@ -16,6 +16,7 @@
 
 #include <android-base/file.h>
 #include <android-base/properties.h>
+#include <cutils/fs.h>
 
 #include "Hardware.h"
 #include "Vibrator.h"
@@ -35,23 +36,36 @@ using ::android::hardware::vibrator::V1_0::Status;
 
 class VibratorBench : public benchmark::Fixture {
   private:
+    static constexpr const char *FILE_NAMES[]{
+            "device/autocal",
+            "device/ol_lra_period",
+            "activate",
+            "duration",
+            "state",
+            "device/rtp_input",
+            "device/mode",
+            "device/set_sequencer",
+            "device/scale",
+            "device/ctrl_loop",
+            "device/lp_trigger_effect",
+            "device/lra_wave_shape",
+            "device/od_clamp",
+    };
     static constexpr char PROPERTY_PREFIX[] = "test.vibrator.hal.";
 
   public:
     void SetUp(::benchmark::State &state) override {
-        setenv("AUTOCAL_FILEPATH", "/dev/null", true);
-        setenv("OL_LRA_PERIOD_FILEPATH", "/dev/null", true);
-        setenv("ACTIVATE_PATH", "/dev/null", true);
-        setenv("DURATION_PATH", "/dev/null", true);
-        setenv("STATE_PATH", "/dev/null", true);
-        setenv("RTP_INPUT_PATH", "/dev/null", true);
-        setenv("MODE_PATH", "/dev/null", true);
-        setenv("SEQUENCER_PATH", "/dev/null", true);
-        setenv("SCALE_PATH", "/dev/null", true);
-        setenv("CTRL_LOOP_PATH", "/dev/null", true);
-        setenv("LP_TRIGGER_PATH", "/dev/null", true);
-        setenv("LRA_WAVE_SHAPE_PATH", "/dev/null", true);
-        setenv("OD_CLAMP_PATH", "/dev/null", true);
+        auto prefix = std::filesystem::path(mFilesDir.path) / "";
+
+        setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
+
+        for (auto n : FILE_NAMES) {
+            const auto name = std::filesystem::path(n);
+            const auto path = std::filesystem::path(mFilesDir.path) / name;
+
+            fs_mkdirs(path.c_str(), S_IRWXU);
+            symlink("/dev/null", path.c_str());
+        }
 
         setenv("PROPERTY_PREFIX", PROPERTY_PREFIX, true);
 
@@ -80,6 +94,7 @@ class VibratorBench : public benchmark::Fixture {
     }
 
   protected:
+    TemporaryDir mFilesDir;
     sp<IVibrator> mVibrator;
 };
 

@@ -30,6 +30,13 @@ namespace vibrator {
 namespace common {
 namespace implementation {
 
+HwApiBase::HwApiBase() {
+    mPathPrefix = std::getenv("HWAPI_PATH_PREFIX") ?: "";
+    if (mPathPrefix.empty()) {
+        ALOGE("Failed get HWAPI path prefix!");
+    }
+}
+
 bool HwApiBase::has(const std::ios &stream) {
     return !!stream;
 }
@@ -37,7 +44,7 @@ bool HwApiBase::has(const std::ios &stream) {
 void HwApiBase::debug(int fd) {
     dprintf(fd, "Kernel:\n");
 
-    for (auto &entry : utils::pathsFromEnv("HWAPI_DEBUG_PATHS")) {
+    for (auto &entry : utils::pathsFromEnv("HWAPI_DEBUG_PATHS", mPathPrefix)) {
         auto &path = entry.first;
         auto &stream = entry.second;
         std::string line;

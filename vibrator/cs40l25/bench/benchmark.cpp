@@ -15,6 +15,7 @@
 #include "benchmark/benchmark.h"
 
 #include <android-base/file.h>
+#include <cutils/fs.h>
 
 #include "Hardware.h"
 #include "Vibrator.h"
@@ -32,34 +33,49 @@ using ::android::hardware::vibrator::V1_0::EffectStrength;
 using ::android::hardware::vibrator::V1_0::Status;
 
 class VibratorBench : public benchmark::Fixture {
+  private:
+    static constexpr const char *FILE_NAMES[]{
+            "device/f0_stored",
+            "device/redc_stored",
+            "device/q_stored",
+            "activate",
+            "duration",
+            "state",
+            "device/cp_trigger_duration",
+            "device/cp_trigger_index",
+            "device/cp_trigger_queue",
+            "device/cp_dig_scale",
+            "device/dig_scale",
+            "device/asp_enable",
+            "device/gpio1_fall_index",
+            "device/gpio1_fall_dig_scale",
+            "device/gpio1_rise_index",
+            "device/gpio1_rise_dig_scale",
+    };
+
   public:
     void SetUp(::benchmark::State & /*state*/) override {
-        mFileMap["EFFECT_DURATION_PATH"] =
-                std::filesystem::path(mFilesDir.path) / "EFFECT_DURATION_PATH";
-        std::ofstream{mFileMap["EFFECT_DURATION_PATH"]} << ((uint32_t)std::rand() ?: 1)
-                                                        << std::endl;
+        auto prefix = std::filesystem::path(mFilesDir.path) / "";
+        const std::map<const std::string, const std::string> content{
+                {"duration", std::to_string((uint32_t)std::rand() ?: 1)},
+                {"device/asp_enable", std::to_string(0)},
+        };
 
-        mFileMap["ASP_ENABLE_PATH"] = std::filesystem::path(mFilesDir.path) / "ASP_ENABLE_PATH";
-        std::ofstream{mFileMap["ASP_ENABLE_PATH"]} << 0 << std::endl;
+        setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
 
-        setenv("CALIBRATION_FILEPATH", "/dev/null", true);
-        setenv("F0_FILEPATH", "/dev/null", true);
-        setenv("REDC_FILEPATH", "/dev/null", true);
-        setenv("Q_FILEPATH", "/dev/null", true);
-        setenv("ACTIVATE_PATH", "/dev/null", true);
-        setenv("DURATION_PATH", "/dev/null", true);
-        setenv("STATE_PATH", "/dev/null", true);
-        setenv("EFFECT_INDEX_PATH", "/dev/null", true);
-        setenv("EFFECT_QUEUE_PATH", "/dev/null", true);
-        setenv("EFFECT_SCALE_PATH", "/dev/null", true);
-        setenv("GLOBAL_SCALE_PATH", "/dev/null", true);
-        setenv("GPIO_FALL_INDEX", "/dev/null", true);
-        setenv("GPIO_FALL_SCALE", "/dev/null", true);
-        setenv("GPIO_RISE_INDEX", "/dev/null", true);
-        setenv("GPIO_RISE_SCALE", "/dev/null", true);
+        for (auto n : FILE_NAMES) {
+            const auto it = content.find(n);
+            const auto name = std::filesystem::path(n);
+            const auto path = std::filesystem::path(mFilesDir.path) / name;
 
-        setenv("EFFECT_DURATION_PATH", mFileMap["EFFECT_DURATION_PATH"].c_str(), true);
-        setenv("ASP_ENABLE_PATH", mFileMap["ASP_ENABLE_PATH"].c_str(), true);
+            fs_mkdirs(path.c_str(), S_IRWXU);
+
+            if (it != content.end()) {
+                std::ofstream{path} << it->second << std::endl;
+            } else {
+                symlink("/dev/null", path.c_str());
+            }
+        }
 
         mVibrator = new Vibrator(std::make_unique<HwApi>(), std::make_unique<HwCal>());
     }
@@ -77,7 +93,6 @@ class VibratorBench : public benchmark::Fixture {
 
   protected:
     TemporaryDir mFilesDir;
-    std::map<std::string, std::string> mFileMap;
     sp<IVibrator> mVibrator;
 };
 

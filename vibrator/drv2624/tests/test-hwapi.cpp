@@ -15,6 +15,7 @@
  */
 
 #include <android-base/file.h>
+#include <cutils/fs.h>
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -36,39 +37,49 @@ using ::testing::WithParamInterface;
 class HwApiTest : public Test {
   protected:
     static constexpr const char *FILE_NAMES[]{
-            "AUTOCAL_FILEPATH", "OL_LRA_PERIOD_FILEPATH", "ACTIVATE_PATH",   "DURATION_PATH",
-            "STATE_PATH",       "RTP_INPUT_PATH",         "MODE_PATH",       "SEQUENCER_PATH",
-            "SCALE_PATH",       "CTRL_LOOP_PATH",         "LP_TRIGGER_PATH", "LRA_WAVE_SHAPE_PATH",
-            "OD_CLAMP_PATH",
+            "device/autocal",
+            "device/ol_lra_period",
+            "activate",
+            "duration",
+            "state",
+            "device/rtp_input",
+            "device/mode",
+            "device/set_sequencer",
+            "device/scale",
+            "device/ctrl_loop",
+            "device/lp_trigger_effect",
+            "device/lra_wave_shape",
+            "device/od_clamp",
     };
 
     static constexpr const char *REQUIRED[]{
-            "ACTIVATE_PATH",
-            "DURATION_PATH",
-            "STATE_PATH",
+            "activate",
+            "duration",
+            "state",
     };
 
   public:
     void SetUp() override {
+        std::string prefix;
         for (auto n : FILE_NAMES) {
             auto name = std::filesystem::path(n);
             auto path = std::filesystem::path(mFilesDir.path) / name;
+            fs_mkdirs(path.c_str(), S_IRWXU);
             std::ofstream touch{path};
-            setenv(name.c_str(), path.c_str(), true);
             mFileMap[name] = path;
         }
+        prefix = std::filesystem::path(mFilesDir.path) / "";
+        setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
         mHwApi = HwApi::Create();
 
         for (auto n : REQUIRED) {
             auto name = std::filesystem::path(n);
             auto path = std::filesystem::path(mEmptyDir.path) / name;
+            fs_mkdirs(path.c_str(), S_IRWXU);
             std::ofstream touch{path};
         }
-        for (auto n : FILE_NAMES) {
-            auto name = std::string(n);
-            auto path = std::string(mEmptyDir.path) + "/" + name;
-            setenv(name.c_str(), path.c_str(), true);
-        }
+        prefix = std::filesystem::path(mEmptyDir.path) / "";
+        setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
         mNoApi = HwApi::Create();
     }
 
@@ -114,6 +125,11 @@ class HwApiTest : public Test {
         return false;
     }
 
+    static auto ParamNameFixup(std::string str) {
+        std::replace(str.begin(), str.end(), '/', '_');
+        return str;
+    }
+
   protected:
     std::unique_ptr<Vibrator::HwApi> mHwApi;
     std::unique_ptr<Vibrator::HwApi> mNoApi;
@@ -128,49 +144,30 @@ class CreateTest : public HwApiTest, public WithParamInterface<const char *> {
     void SetUp() override{};
     void TearDown() override{};
 
-    static auto PrintParam(const TestParamInfo<CreateTest::ParamType> &info) { return info.param; }
+    static auto PrintParam(const TestParamInfo<CreateTest::ParamType> &info) {
+        return ParamNameFixup(info.param);
+    }
     static auto &AllParams() { return FILE_NAMES; }
 };
-
-TEST_P(CreateTest, env_missing) {
-    auto skip = std::string(GetParam());
-    TemporaryDir dir;
-    std::unique_ptr<HwApi> hwapi;
-
-    for (auto n : FILE_NAMES) {
-        auto name = std::string(n);
-        if (name == skip) {
-            unsetenv(name.c_str());
-            continue;
-        }
-        auto path = std::string(dir.path) + "/" + name;
-        std::ofstream touch{path};
-        setenv(name.c_str(), path.c_str(), true);
-    }
-
-    hwapi = HwApi::Create();
-    if (isRequired(skip)) {
-        EXPECT_EQ(nullptr, hwapi);
-    } else {
-        EXPECT_NE(nullptr, hwapi);
-    }
-}
 
 TEST_P(CreateTest, file_missing) {
     auto skip = std::string(GetParam());
     TemporaryDir dir;
     std::unique_ptr<HwApi> hwapi;
+    std::string prefix;
 
     for (auto n : FILE_NAMES) {
         auto name = std::string(n);
         auto path = std::string(dir.path) + "/" + name;
-        setenv(name.c_str(), path.c_str(), true);
         if (name == skip) {
             continue;
         }
+        fs_mkdirs(path.c_str(), S_IRWXU);
         std::ofstream touch{path};
     }
 
+    prefix = std::filesystem::path(dir.path) / "";
+    setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
     hwapi = HwApi::Create();
     if (isRequired(skip)) {
         EXPECT_EQ(nullptr, hwapi);
@@ -187,7 +184,7 @@ class HwApiTypedTest : public HwApiTest,
                        public WithParamInterface<std::tuple<std::string, std::function<T>>> {
   public:
     static auto PrintParam(const TestParamInfo<typename HwApiTypedTest::ParamType> &info) {
-        return std::get<0>(info.param);
+        return ParamNameFixup(std::get<0>(info.param));
     }
     static auto MakeParam(std::string name, std::function<T> func) {
         return std::make_tuple(name, func);
@@ -212,7 +209,8 @@ TEST_P(HasTest, success_returnsFalse) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, HasTest,
                         ValuesIn({
-                                HasTest::MakeParam("RTP_INPUT_PATH", &Vibrator::HwApi::hasRtpInput),
+                                HasTest::MakeParam("device/rtp_input",
+                                                   &Vibrator::HwApi::hasRtpInput),
                         }),
                         HasTest::PrintParam);
 
@@ -251,14 +249,14 @@ TEST_P(SetBoolTest, failure) {
     EXPECT_FALSE(func(*mNoApi, false));
 }
 
-INSTANTIATE_TEST_CASE_P(
-        HwApiTests, SetBoolTest,
-        ValuesIn({
-                SetBoolTest::MakeParam("ACTIVATE_PATH", &Vibrator::HwApi::setActivate),
-                SetBoolTest::MakeParam("STATE_PATH", &Vibrator::HwApi::setState),
-                SetBoolTest::MakeParam("CTRL_LOOP_PATH", &Vibrator::HwApi::setCtrlLoop),
-        }),
-        SetBoolTest::PrintParam);
+INSTANTIATE_TEST_CASE_P(HwApiTests, SetBoolTest,
+                        ValuesIn({
+                                SetBoolTest::MakeParam("activate", &Vibrator::HwApi::setActivate),
+                                SetBoolTest::MakeParam("state", &Vibrator::HwApi::setState),
+                                SetBoolTest::MakeParam("device/ctrl_loop",
+                                                       &Vibrator::HwApi::setCtrlLoop),
+                        }),
+                        SetBoolTest::PrintParam);
 
 using SetInt8Test = HwApiTypedTest<bool(Vibrator::HwApi &, int8_t)>;
 
@@ -288,7 +286,7 @@ TEST_P(SetInt8Test, failure) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, SetInt8Test,
                         ValuesIn({
-                                SetInt8Test::MakeParam("RTP_INPUT_PATH",
+                                SetInt8Test::MakeParam("device/rtp_input",
                                                        &Vibrator::HwApi::setRtpInput),
                         }),
                         SetInt8Test::PrintParam);
@@ -321,7 +319,7 @@ TEST_P(SetUint8Test, failure) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, SetUint8Test,
                         ValuesIn({
-                                SetUint8Test::MakeParam("SCALE_PATH", &Vibrator::HwApi::setScale),
+                                SetUint8Test::MakeParam("device/scale", &Vibrator::HwApi::setScale),
                         }),
                         SetUint8Test::PrintParam);
 
@@ -354,12 +352,13 @@ TEST_P(SetUint32Test, failure) {
 INSTANTIATE_TEST_CASE_P(
         HwApiTests, SetUint32Test,
         ValuesIn({
-                SetUint32Test::MakeParam("OL_LRA_PERIOD_FILEPATH",
-                                         &Vibrator::HwApi::setOlLraPeriod),
-                SetUint32Test::MakeParam("DURATION_PATH", &Vibrator::HwApi::setDuration),
-                SetUint32Test::MakeParam("LP_TRIGGER_PATH", &Vibrator::HwApi::setLpTriggerEffect),
-                SetUint32Test::MakeParam("LRA_WAVE_SHAPE_PATH", &Vibrator::HwApi::setLraWaveShape),
-                SetUint32Test::MakeParam("OD_CLAMP_PATH", &Vibrator::HwApi::setOdClamp),
+                SetUint32Test::MakeParam("device/ol_lra_period", &Vibrator::HwApi::setOlLraPeriod),
+                SetUint32Test::MakeParam("duration", &Vibrator::HwApi::setDuration),
+                SetUint32Test::MakeParam("device/lp_trigger_effect",
+                                         &Vibrator::HwApi::setLpTriggerEffect),
+                SetUint32Test::MakeParam("device/lra_wave_shape",
+                                         &Vibrator::HwApi::setLraWaveShape),
+                SetUint32Test::MakeParam("device/od_clamp", &Vibrator::HwApi::setOdClamp),
         }),
         SetUint32Test::PrintParam);
 
@@ -392,9 +391,9 @@ TEST_P(SetStringTest, failure) {
 INSTANTIATE_TEST_CASE_P(
         HwApiTests, SetStringTest,
         ValuesIn({
-                SetStringTest::MakeParam("AUTOCAL_FILEPATH", &Vibrator::HwApi::setAutocal),
-                SetStringTest::MakeParam("MODE_PATH", &Vibrator::HwApi::setMode),
-                SetStringTest::MakeParam("SEQUENCER_PATH", &Vibrator::HwApi::setSequencer),
+                SetStringTest::MakeParam("device/autocal", &Vibrator::HwApi::setAutocal),
+                SetStringTest::MakeParam("device/mode", &Vibrator::HwApi::setMode),
+                SetStringTest::MakeParam("device/set_sequencer", &Vibrator::HwApi::setSequencer),
         }),
         SetStringTest::PrintParam);
 

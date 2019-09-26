@@ -15,6 +15,7 @@
  */
 
 #include <android-base/file.h>
+#include <cutils/fs.h>
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -36,32 +37,53 @@ using ::testing::WithParamInterface;
 class HwApiTest : public Test {
   private:
     static constexpr const char *FILE_NAMES[]{
-            "F0_FILEPATH",       "REDC_FILEPATH",     "Q_FILEPATH",           "ACTIVATE_PATH",
-            "DURATION_PATH",     "STATE_PATH",        "EFFECT_DURATION_PATH", "EFFECT_INDEX_PATH",
-            "EFFECT_QUEUE_PATH", "EFFECT_SCALE_PATH", "GLOBAL_SCALE_PATH",    "ASP_ENABLE_PATH",
-            "GPIO_FALL_INDEX",   "GPIO_FALL_SCALE",   "GPIO_RISE_INDEX",      "GPIO_RISE_SCALE",
+            "device/f0_stored",
+            "device/redc_stored",
+            "device/q_stored",
+            "activate",
+            "duration",
+            "state",
+            "device/cp_trigger_duration",
+            "device/cp_trigger_index",
+            "device/cp_trigger_queue",
+            "device/cp_dig_scale",
+            "device/dig_scale",
+            "device/asp_enable",
+            "device/gpio1_fall_index",
+            "device/gpio1_fall_dig_scale",
+            "device/gpio1_rise_index",
+            "device/gpio1_rise_dig_scale",
     };
 
   public:
     void SetUp() override {
+        std::string prefix;
         for (auto n : FILE_NAMES) {
             auto name = std::filesystem::path(n);
             auto path = std::filesystem::path(mFilesDir.path) / name;
+            fs_mkdirs(path.c_str(), S_IRWXU);
             std::ofstream touch{path};
-            setenv(name.c_str(), path.c_str(), true);
             mFileMap[name] = path;
         }
+        prefix = std::filesystem::path(mFilesDir.path) / "";
+        setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
         mHwApi = std::make_unique<HwApi>();
 
         for (auto n : FILE_NAMES) {
             auto name = std::filesystem::path(n);
             auto path = std::filesystem::path(mEmptyDir.path) / name;
-            setenv(name.c_str(), path.c_str(), true);
         }
+        prefix = std::filesystem::path(mEmptyDir.path) / "";
+        setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
         mNoApi = std::make_unique<HwApi>();
     }
 
     void TearDown() override { verifyContents(); }
+
+    static auto ParamNameFixup(std::string str) {
+        std::replace(str.begin(), str.end(), '/', '_');
+        return str;
+    }
 
   protected:
     // Set expected file content for a test.
@@ -107,7 +129,7 @@ class HwApiTypedTest : public HwApiTest,
                        public WithParamInterface<std::tuple<std::string, std::function<T>>> {
   public:
     static auto PrintParam(const TestParamInfo<typename HwApiTypedTest::ParamType> &info) {
-        return std::get<0>(info.param);
+        return ParamNameFixup(std::get<0>(info.param));
     }
     static auto MakeParam(std::string name, std::function<T> func) {
         return std::make_tuple(name, func);
@@ -133,8 +155,8 @@ TEST_P(HasTest, success_returnsFalse) {
 INSTANTIATE_TEST_CASE_P(
         HwApiTests, HasTest,
         ValuesIn({
-                HasTest::MakeParam("EFFECT_SCALE_PATH", &Vibrator::HwApi::hasEffectScale),
-                HasTest::MakeParam("ASP_ENABLE_PATH", &Vibrator::HwApi::hasAspEnable),
+                HasTest::MakeParam("device/cp_dig_scale", &Vibrator::HwApi::hasEffectScale),
+                HasTest::MakeParam("device/asp_enable", &Vibrator::HwApi::hasAspEnable),
         }),
         HasTest::PrintParam);
 
@@ -176,7 +198,7 @@ TEST_P(GetBoolTest, failure) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, GetBoolTest,
                         ValuesIn({
-                                GetBoolTest::MakeParam("ASP_ENABLE_PATH",
+                                GetBoolTest::MakeParam("device/asp_enable",
                                                        &Vibrator::HwApi::getAspEnable),
                         }),
                         GetBoolTest::PrintParam);
@@ -206,7 +228,7 @@ TEST_P(GetUint32Test, failure) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, GetUint32Test,
                         ValuesIn({
-                                GetUint32Test::MakeParam("EFFECT_DURATION_PATH",
+                                GetUint32Test::MakeParam("device/cp_trigger_duration",
                                                          &Vibrator::HwApi::getEffectDuration),
                         }),
                         GetUint32Test::PrintParam);
@@ -241,14 +263,14 @@ TEST_P(SetBoolTest, failure) {
     EXPECT_FALSE(func(*mNoApi, false));
 }
 
-INSTANTIATE_TEST_CASE_P(
-        HwApiTests, SetBoolTest,
-        ValuesIn({
-                SetBoolTest::MakeParam("ACTIVATE_PATH", &Vibrator::HwApi::setActivate),
-                SetBoolTest::MakeParam("STATE_PATH", &Vibrator::HwApi::setState),
-                SetBoolTest::MakeParam("ASP_ENABLE_PATH", &Vibrator::HwApi::setAspEnable),
-        }),
-        SetBoolTest::PrintParam);
+INSTANTIATE_TEST_CASE_P(HwApiTests, SetBoolTest,
+                        ValuesIn({
+                                SetBoolTest::MakeParam("activate", &Vibrator::HwApi::setActivate),
+                                SetBoolTest::MakeParam("state", &Vibrator::HwApi::setState),
+                                SetBoolTest::MakeParam("device/asp_enable",
+                                                       &Vibrator::HwApi::setAspEnable),
+                        }),
+                        SetBoolTest::PrintParam);
 
 using SetUint32Test = HwApiTypedTest<bool(Vibrator::HwApi &, uint32_t)>;
 
@@ -274,17 +296,22 @@ TEST_P(SetUint32Test, failure) {
 INSTANTIATE_TEST_CASE_P(
         HwApiTests, SetUint32Test,
         ValuesIn({
-                SetUint32Test::MakeParam("F0_FILEPATH", &Vibrator::HwApi::setF0),
-                SetUint32Test::MakeParam("REDC_FILEPATH", &Vibrator::HwApi::setRedc),
-                SetUint32Test::MakeParam("Q_FILEPATH", &Vibrator::HwApi::setQ),
-                SetUint32Test::MakeParam("DURATION_PATH", &Vibrator::HwApi::setDuration),
-                SetUint32Test::MakeParam("EFFECT_INDEX_PATH", &Vibrator::HwApi::setEffectIndex),
-                SetUint32Test::MakeParam("EFFECT_SCALE_PATH", &Vibrator::HwApi::setEffectScale),
-                SetUint32Test::MakeParam("GLOBAL_SCALE_PATH", &Vibrator::HwApi::setGlobalScale),
-                SetUint32Test::MakeParam("GPIO_FALL_INDEX", &Vibrator::HwApi::setGpioFallIndex),
-                SetUint32Test::MakeParam("GPIO_FALL_SCALE", &Vibrator::HwApi::setGpioFallScale),
-                SetUint32Test::MakeParam("GPIO_RISE_INDEX", &Vibrator::HwApi::setGpioRiseIndex),
-                SetUint32Test::MakeParam("GPIO_RISE_SCALE", &Vibrator::HwApi::setGpioRiseScale),
+                SetUint32Test::MakeParam("device/f0_stored", &Vibrator::HwApi::setF0),
+                SetUint32Test::MakeParam("device/redc_stored", &Vibrator::HwApi::setRedc),
+                SetUint32Test::MakeParam("device/q_stored", &Vibrator::HwApi::setQ),
+                SetUint32Test::MakeParam("duration", &Vibrator::HwApi::setDuration),
+                SetUint32Test::MakeParam("device/cp_trigger_index",
+                                         &Vibrator::HwApi::setEffectIndex),
+                SetUint32Test::MakeParam("device/cp_dig_scale", &Vibrator::HwApi::setEffectScale),
+                SetUint32Test::MakeParam("device/dig_scale", &Vibrator::HwApi::setGlobalScale),
+                SetUint32Test::MakeParam("device/gpio1_fall_index",
+                                         &Vibrator::HwApi::setGpioFallIndex),
+                SetUint32Test::MakeParam("device/gpio1_fall_dig_scale",
+                                         &Vibrator::HwApi::setGpioFallScale),
+                SetUint32Test::MakeParam("device/gpio1_rise_index",
+                                         &Vibrator::HwApi::setGpioRiseIndex),
+                SetUint32Test::MakeParam("device/gpio1_rise_dig_scale",
+                                         &Vibrator::HwApi::setGpioRiseScale),
         }),
         SetUint32Test::PrintParam);
 
@@ -311,7 +338,7 @@ TEST_P(SetStringTest, failure) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, SetStringTest,
                         ValuesIn({
-                                SetStringTest::MakeParam("EFFECT_QUEUE_PATH",
+                                SetStringTest::MakeParam("device/cp_trigger_queue",
                                                          &Vibrator::HwApi::setEffectQueue),
                         }),
                         SetStringTest::PrintParam);
