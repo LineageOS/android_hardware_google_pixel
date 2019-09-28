@@ -58,19 +58,19 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
 
   private:
     HwApi() {
-        open("AUTOCAL_FILEPATH", &mAutocal);
-        open("OL_LRA_PERIOD_FILEPATH", &mOlLraPeriod);
-        open("ACTIVATE_PATH", &mActivate);
-        open("DURATION_PATH", &mDuration);
-        open("STATE_PATH", &mState);
-        open("RTP_INPUT_PATH", &mRtpInput);
-        open("MODE_PATH", &mMode);
-        open("SEQUENCER_PATH", &mSequencer);
-        open("SCALE_PATH", &mScale);
-        open("CTRL_LOOP_PATH", &mCtrlLoop);
-        open("LP_TRIGGER_PATH", &mLpTrigger);
-        open("LRA_WAVE_SHAPE_PATH", &mLraWaveShape);
-        open("OD_CLAMP_PATH", &mOdClamp);
+        open("device/autocal", &mAutocal);
+        open("device/ol_lra_period", &mOlLraPeriod);
+        open("activate", &mActivate);
+        open("duration", &mDuration);
+        open("state", &mState);
+        open("device/rtp_input", &mRtpInput);
+        open("device/mode", &mMode);
+        open("device/set_sequencer", &mSequencer);
+        open("device/scale", &mScale);
+        open("device/ctrl_loop", &mCtrlLoop);
+        open("device/lp_trigger_effect", &mLpTrigger);
+        open("device/lra_wave_shape", &mLraWaveShape);
+        open("device/od_clamp", &mOdClamp);
     }
 
   private:

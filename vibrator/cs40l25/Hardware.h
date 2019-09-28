@@ -31,22 +31,22 @@ using common::implementation::HwCalBase;
 class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
     HwApi() {
-        open("F0_FILEPATH", &mF0);
-        open("REDC_FILEPATH", &mRedc);
-        open("Q_FILEPATH", &mQ);
-        open("ACTIVATE_PATH", &mActivate);
-        open("DURATION_PATH", &mDuration);
-        open("STATE_PATH", &mState);
-        open("EFFECT_DURATION_PATH", &mEffectDuration);
-        open("EFFECT_INDEX_PATH", &mEffectIndex);
-        open("EFFECT_QUEUE_PATH", &mEffectQueue);
-        open("EFFECT_SCALE_PATH", &mEffectScale);
-        open("GLOBAL_SCALE_PATH", &mGlobalScale);
-        open("ASP_ENABLE_PATH", &mAspEnable);
-        open("GPIO_FALL_INDEX", &mGpioFallIndex);
-        open("GPIO_FALL_SCALE", &mGpioFallScale);
-        open("GPIO_RISE_INDEX", &mGpioRiseIndex);
-        open("GPIO_RISE_SCALE", &mGpioRiseScale);
+        open("device/f0_stored", &mF0);
+        open("device/redc_stored", &mRedc);
+        open("device/q_stored", &mQ);
+        open("activate", &mActivate);
+        open("duration", &mDuration);
+        open("state", &mState);
+        open("device/cp_trigger_duration", &mEffectDuration);
+        open("device/cp_trigger_index", &mEffectIndex);
+        open("device/cp_trigger_queue", &mEffectQueue);
+        open("device/cp_dig_scale", &mEffectScale);
+        open("device/dig_scale", &mGlobalScale);
+        open("device/asp_enable", &mAspEnable);
+        open("device/gpio1_fall_index", &mGpioFallIndex);
+        open("device/gpio1_fall_dig_scale", &mGpioFallScale);
+        open("device/gpio1_rise_index", &mGpioRiseIndex);
+        open("device/gpio1_rise_dig_scale", &mGpioRiseScale);
     }
 
     bool setF0(uint32_t value) override { return set(value, &mF0); }

@@ -57,6 +57,7 @@ class HwApiBase {
     static constexpr uint32_t RECORDS_SIZE = 32;
 
   public:
+    HwApiBase();
     void debug(int fd);
 
   protected:
@@ -71,6 +72,7 @@ class HwApiBase {
     void record(const char *func, const T &value, const std::ios *stream);
 
   private:
+    std::string mPathPrefix;
     NamesMap mNames;
     std::vector<std::unique_ptr<RecordInterface>> mRecords{RECORDS_SIZE};
 };
@@ -79,7 +81,8 @@ class HwApiBase {
 
 template <typename T>
 void HwApiBase::open(const std::string &name, T *stream) {
-    utils::fileFromEnv(name.c_str(), stream, &mNames[stream]);
+    mNames[stream] = name;
+    utils::openNoCreate(mPathPrefix + name, stream);
 }
 
 template <typename T>

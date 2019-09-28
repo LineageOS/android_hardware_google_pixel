@@ -97,9 +97,19 @@ inline bool getProperty<bool>(const std::string &key, const bool def) {
 }
 
 template <typename T>
+static void openNoCreate(const std::string &file, T *outStream) {
+    auto mode = std::is_base_of_v<std::ostream, T> ? std::ios_base::out : std::ios_base::in;
+
+    // Force 'in' mode to prevent file creation
+    outStream->open(file, mode | std::ios_base::in);
+    if (!*outStream) {
+        ALOGE("Failed to open %s (%d): %s", file.c_str(), errno, strerror(errno));
+    }
+}
+
+template <typename T>
 static void fileFromEnv(const char *env, T *outStream, std::string *outName = nullptr) {
     auto file = std::getenv(env);
-    auto mode = std::is_base_of_v<std::ostream, T> ? std::ios_base::out : std::ios_base::in;
 
     if (file == nullptr) {
         ALOGE("Failed get env %s", env);
@@ -110,14 +120,10 @@ static void fileFromEnv(const char *env, T *outStream, std::string *outName = nu
         *outName = std::string(file);
     }
 
-    // Force 'in' mode to prevent file creation
-    outStream->open(file, mode | std::ios_base::in);
-    if (!*outStream) {
-        ALOGE("Failed to open %s:%s (%d): %s", env, file, errno, strerror(errno));
-    }
+    openNoCreate(file, outStream);
 }
 
-static ATTRIBUTE_UNUSED auto pathsFromEnv(const char *env) {
+static ATTRIBUTE_UNUSED auto pathsFromEnv(const char *env, const std::string &prefix = "") {
     std::map<std::string, std::ifstream> ret;
     auto value = std::getenv(env);
 
@@ -129,7 +135,7 @@ static ATTRIBUTE_UNUSED auto pathsFromEnv(const char *env) {
     std::string path;
 
     while (paths >> path) {
-        ret[path].open(path);
+        ret[path].open(prefix + path);
     }
 
     return ret;
