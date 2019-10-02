@@ -56,7 +56,6 @@ cc_library {
     "libbinder",
     "libcutils",
     "libhidlbase",
-    "libhidltransport",
     "liblog",
     "libutils",
     "pixelatoms-cpp",

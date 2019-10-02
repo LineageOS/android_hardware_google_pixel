@@ -21,7 +21,6 @@ cc_binary {
     "libbase",
     "libcutils",
     "libhidlbase",
-    "libhidltransport",
     "libjsoncpp",
     "libutils",
     "android.hardware.thermal@1.0",
