@@ -26,7 +26,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_2 {
+namespace V1_3 {
 namespace implementation {
 
 using ::android::hardware::vibrator::V1_0::EffectStrength;
@@ -66,6 +66,9 @@ static const std::map<EffectTuple, EffectSequence> EFFECT_SEQUENCES{
         {{Effect::HEAVY_CLICK, EffectStrength::LIGHT}, {"4 0", 2}},
         {{Effect::HEAVY_CLICK, EffectStrength::MEDIUM}, {"4 0", 0}},
         {{Effect::HEAVY_CLICK, EffectStrength::STRONG}, {"4 0", 0}},
+        {{Effect::TEXTURE_TICK, EffectStrength::LIGHT}, {"2 0", 2}},
+        {{Effect::TEXTURE_TICK, EffectStrength::MEDIUM}, {"2 0", 0}},
+        {{Effect::TEXTURE_TICK, EffectStrength::STRONG}, {"2 0", 0}},
 };
 
 static uint32_t freqPeriodFormula(uint32_t in) {
@@ -115,6 +118,7 @@ class VibratorTestTemplate : public Test, public WithParamInterface<std::tuple<b
         mEffectDurations[Effect::TICK] = std::rand();
         mEffectDurations[Effect::DOUBLE_CLICK] = std::rand();
         mEffectDurations[Effect::HEAVY_CLICK] = std::rand();
+        mEffectDurations[Effect::TEXTURE_TICK] = mEffectDurations[Effect::TICK];
 
         createMock(&mockapi, &mockcal);
         createVibrator(std::move(mockapi), std::move(mockcal));
@@ -357,6 +361,18 @@ TEST_P(BasicTest, setAmplitude) {
     EXPECT_EQ(Status::OK, mVibrator->setAmplitude(amplitude));
 }
 
+TEST_P(BasicTest, supportsExternalControl_unsupported) {
+    EXPECT_EQ(false, mVibrator->supportsExternalControl());
+}
+
+TEST_P(BasicTest, setExternalControl_enable) {
+    EXPECT_EQ(Status::UNSUPPORTED_OPERATION, mVibrator->setExternalControl(true));
+}
+
+TEST_P(BasicTest, setExternalControl_disable) {
+    EXPECT_EQ(Status::UNSUPPORTED_OPERATION, mVibrator->setExternalControl(false));
+}
+
 INSTANTIATE_TEST_CASE_P(VibratorTests, BasicTest,
                         ValuesIn({BasicTest::MakeParam(false), BasicTest::MakeParam(true)}),
                         BasicTest::PrintParam);
@@ -409,10 +425,10 @@ TEST_P(EffectsTest, perform) {
         duration = 0;
     }
 
-    mVibrator->perform_1_2(effect, strength, [&](Status status, uint32_t lengthMs) {
+    mVibrator->perform_1_3(effect, strength, [&](Status status, uint32_t lengthMs) {
         if (duration) {
             EXPECT_EQ(Status::OK, status);
-            EXPECT_EQ(duration, lengthMs);
+            EXPECT_LE(duration, lengthMs);
         } else {
             EXPECT_EQ(Status::UNSUPPORTED_OPERATION, status);
             EXPECT_EQ(0, lengthMs);
@@ -429,7 +445,7 @@ INSTANTIATE_TEST_CASE_P(VibratorTests, EffectsTest,
                         EffectsTest::PrintParam);
 
 }  // namespace implementation
-}  // namespace V1_2
+}  // namespace V1_3
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

@@ -32,7 +32,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_2 {
+namespace V1_3 {
 namespace implementation {
 
 static constexpr int8_t MAX_RTP_INPUT = 127;
@@ -185,6 +185,19 @@ Return<Status> Vibrator::setAmplitude(uint8_t amplitude) {
     return Status::OK;
 }
 
+// Methods from ::android::hardware::vibrator::V1_3::IVibrator follow.
+
+Return<bool> Vibrator::supportsExternalControl() {
+    ATRACE_NAME("Vibrator::supportsExternalControl");
+    return false;
+}
+
+Return<Status> Vibrator::setExternalControl(bool enabled) {
+    ATRACE_NAME("Vibrator::setExternalControl");
+    ALOGE("Not support in DRV2624 solution, %d", enabled);
+    return Status::UNSUPPORTED_OPERATION;
+}
+
 // Methods from ::android.hidl.base::V1_0::IBase follow.
 
 Return<void> Vibrator::debug(const hidl_handle &handle,
@@ -251,7 +264,12 @@ Return<void> Vibrator::perform_1_1(V1_1::Effect_1_1 effect, EffectStrength stren
     return performWrapper(effect, strength, _hidl_cb);
 }
 
-Return<void> Vibrator::perform_1_2(Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
+Return<void> Vibrator::perform_1_2(V1_2::Effect effect, EffectStrength strength,
+                                   perform_cb _hidl_cb) {
+    return performWrapper(effect, strength, _hidl_cb);
+}
+
+Return<void> Vibrator::perform_1_3(Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
     return performWrapper(effect, strength, _hidl_cb);
 }
 
@@ -276,6 +294,10 @@ Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength, per
     uint32_t timeMS;
 
     switch (effect) {
+        case Effect::TEXTURE_TICK:
+            mHwApi->setSequencer(WAVEFORM_TICK_EFFECT_SEQ);
+            timeMS = mTickDuration;
+            break;
         case Effect::CLICK:
             mHwApi->setSequencer(WAVEFORM_CLICK_EFFECT_SEQ);
             timeMS = mClickDuration;
@@ -303,7 +325,7 @@ Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength, per
 }
 
 }  // namespace implementation
-}  // namespace V1_2
+}  // namespace V1_3
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

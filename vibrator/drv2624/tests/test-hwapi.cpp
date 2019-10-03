@@ -26,7 +26,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_2 {
+namespace V1_3 {
 namespace implementation {
 
 using ::testing::Test;
@@ -398,7 +398,7 @@ INSTANTIATE_TEST_CASE_P(
         SetStringTest::PrintParam);
 
 }  // namespace implementation
-}  // namespace V1_2
+}  // namespace V1_3
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

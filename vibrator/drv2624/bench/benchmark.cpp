@@ -27,7 +27,7 @@ using ::android::hardware::hidl_enum_range;
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_2 {
+namespace V1_3 {
 namespace implementation {
 
 using ::android::base::SetProperty;
@@ -133,6 +133,24 @@ BENCHMARK_WRAPPER(VibratorBench, setAmplitude, {
     }
 });
 
+BENCHMARK_WRAPPER(VibratorBench, supportsExternalControl, {
+    for (auto _ : state) {
+        mVibrator->supportsExternalControl();
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench, setExternalControl_enable, {
+    for (auto _ : state) {
+        mVibrator->setExternalControl(true);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench, setExternalControl_disable, {
+    for (auto _ : state) {
+        mVibrator->setExternalControl(false);
+    }
+});
+
 class VibratorEffectsBench : public VibratorBench {
   public:
     static void DefaultArgs(benchmark::internal::Benchmark *b) {
@@ -156,31 +174,28 @@ class VibratorEffectsBench : public VibratorBench {
     }
 };
 
-BENCHMARK_WRAPPER(VibratorEffectsBench, perform_1_2,
-                  {
-                      Effect effect = getEffect(state);
-                      EffectStrength strength = getStrength(state);
-                      bool supported = true;
+BENCHMARK_WRAPPER(VibratorEffectsBench, perform_1_3, {
+    Effect effect = getEffect(state);
+    EffectStrength strength = getStrength(state);
+    bool supported = true;
 
-                      mVibrator->perform_1_2(effect, strength,
-                                             [&](Status status, uint32_t /*lengthMs*/) {
-                                                 if (status == Status::UNSUPPORTED_OPERATION) {
-                                                     supported = false;
-                                                 }
-                                             });
+    mVibrator->perform_1_3(effect, strength, [&](Status status, uint32_t /*lengthMs*/) {
+        if (status == Status::UNSUPPORTED_OPERATION) {
+            supported = false;
+        }
+    });
 
-                      if (!supported) {
-                          return;
-                      }
+    if (!supported) {
+        return;
+    }
 
-                      for (auto _ : state) {
-                          mVibrator->perform_1_2(effect, strength,
-                                                 [](Status /*status*/, uint32_t /*lengthMs*/) {});
-                      }
-                  });
+    for (auto _ : state) {
+        mVibrator->perform_1_3(effect, strength, [](Status /*status*/, uint32_t /*lengthMs*/) {});
+    }
+});
 
 }  // namespace implementation
-}  // namespace V1_2
+}  // namespace V1_3
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
