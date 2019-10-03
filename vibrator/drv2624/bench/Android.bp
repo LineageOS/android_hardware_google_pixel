@@ -27,4 +27,6 @@ cc_benchmark {
     ],
     // TODO(b/135767253): Remove when fixed.
     test_suites: ["device-tests"],
+    // TODO(b/142024316): Remove when fixed.
+    require_root: true,
 }
