@@ -37,6 +37,7 @@ enum Ids {
     CHARGE_STATS = 105000;
     VOLTAGE_TIER_STATS = 105001;
     BATTERY_CAPACITY = 105002;
+    STORAGE_UFS_HEALTH = 105003;
     // AOSP atom ID range ends at 109999
 }
 
@@ -127,4 +128,14 @@ message BatteryCapacity {
     optional int32 delta_cc_sum = 2;
     /* Sum of the change in state of charge (battery level). */
     optional int32 delta_vfsoc_sum = 3;
+}
+
+/* A message containing health values of UFS */
+message StorageUfsHealth {
+    /* The value of lifetimeA for UFS health */
+    optional int32 lifetime_a = 2;
+    /* The value of lifetimeB for UFS health */
+    optional int32 lifetime_b = 3;
+    /* The value of lifetimeC for UFS health */
+    optional int32 lifetime_c = 4;
 }
