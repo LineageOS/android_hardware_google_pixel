@@ -29,8 +29,6 @@ cc_library {
         "libbase",
         "libcutils",
         "libhidlbase",
-        "libhidltransport",
-        "libhwbinder",
         "libutils",
     ],
 }
