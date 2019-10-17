@@ -22,7 +22,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
 using common::implementation::HwApiBase;
@@ -47,6 +47,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         open("device/gpio1_fall_dig_scale", &mGpioFallScale);
         open("device/gpio1_rise_index", &mGpioRiseIndex);
         open("device/gpio1_rise_dig_scale", &mGpioRiseScale);
+        open("device/vibe_state", &mVibeState);
     }
 
     bool setF0(uint32_t value) override { return set(value, &mF0); }
@@ -68,6 +69,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setGpioFallScale(uint32_t value) override { return set(value, &mGpioFallScale); }
     bool setGpioRiseIndex(uint32_t value) override { return set(value, &mGpioRiseIndex); }
     bool setGpioRiseScale(uint32_t value) override { return set(value, &mGpioRiseScale); }
+    bool pollVibeState(bool value) override { return poll(value, &mVibeState); }
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
@@ -87,6 +89,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mGpioFallScale;
     std::ofstream mGpioRiseIndex;
     std::ofstream mGpioRiseScale;
+    std::ifstream mVibeState;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
@@ -132,7 +135,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
 };
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

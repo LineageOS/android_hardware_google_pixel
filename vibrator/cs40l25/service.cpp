@@ -27,9 +27,9 @@ using android::sp;
 using android::status_t;
 using android::hardware::configureRpcThreadpool;
 using android::hardware::joinRpcThreadpool;
-using android::hardware::vibrator::V1_3::implementation::HwApi;
-using android::hardware::vibrator::V1_3::implementation::HwCal;
-using android::hardware::vibrator::V1_3::implementation::Vibrator;
+using android::hardware::vibrator::V1_4::implementation::HwApi;
+using android::hardware::vibrator::V1_4::implementation::HwCal;
+using android::hardware::vibrator::V1_4::implementation::Vibrator;
 
 status_t registerVibratorService() {
     sp<Vibrator> vibrator = new Vibrator(std::make_unique<HwApi>(), std::make_unique<HwCal>());

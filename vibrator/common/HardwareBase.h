@@ -16,12 +16,14 @@
 #ifndef ANDROID_HARDWARE_VIBRATOR_HARDWARE_BASE_H
 #define ANDROID_HARDWARE_VIBRATOR_HARDWARE_BASE_H
 
+#include <list>
 #include <map>
 #include <sstream>
 #include <string>
-#include <vector>
 
+#include <android-base/unique_fd.h>
 #include <log/log.h>
+#include <sys/epoll.h>
 #include <utils/Trace.h>
 
 #include "utils.h"
@@ -31,6 +33,8 @@ namespace hardware {
 namespace vibrator {
 namespace common {
 namespace implementation {
+
+using base::unique_fd;
 
 class HwApiBase {
   private:
@@ -53,6 +57,7 @@ class HwApiBase {
         const T mValue;
         const std::ios *mStream;
     };
+    using Records = std::list<std::unique_ptr<RecordInterface>>;
 
     static constexpr uint32_t RECORDS_SIZE = 32;
 
@@ -69,12 +74,14 @@ class HwApiBase {
     template <typename T>
     bool set(const T &value, std::ostream *stream);
     template <typename T>
+    bool poll(const T &value, std::istream *stream);
+    template <typename T>
     void record(const char *func, const T &value, const std::ios *stream);
 
   private:
     std::string mPathPrefix;
     NamesMap mNames;
-    std::vector<std::unique_ptr<RecordInterface>> mRecords{RECORDS_SIZE};
+    Records mRecords{RECORDS_SIZE};
 };
 
 #define HWAPI_RECORD(args...) HwApiBase::record(__FUNCTION__, ##args)
@@ -114,9 +121,34 @@ bool HwApiBase::set(const T &value, std::ostream *stream) {
 }
 
 template <typename T>
+bool HwApiBase::poll(const T &value, std::istream *stream) {
+    ATRACE_NAME("HwApi::poll");
+    auto path = mPathPrefix + mNames[stream];
+    unique_fd fileFd{::open(path.c_str(), O_RDONLY)};
+    unique_fd epollFd{epoll_create(1)};
+    epoll_event event = {
+            .events = EPOLLPRI | EPOLLET,
+    };
+    T actual;
+    bool ret;
+
+    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, fileFd, &event)) {
+        ALOGE("Failed to poll %s (%d): %s", mNames[stream].c_str(), errno, strerror(errno));
+        return false;
+    }
+
+    while ((ret = get(&actual, stream)) && (actual != value)) {
+        epoll_wait(epollFd, &event, 1, -1);
+    }
+
+    HWAPI_RECORD(value, stream);
+    return ret;
+}
+
+template <typename T>
 void HwApiBase::record(const char *func, const T &value, const std::ios *stream) {
     mRecords.emplace_back(std::make_unique<Record<T>>(func, value, stream));
-    mRecords.erase(mRecords.begin());
+    mRecords.pop_front();
 }
 
 template <typename T>

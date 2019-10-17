@@ -24,7 +24,7 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
 using ::testing::Test;
@@ -295,7 +295,7 @@ TEST_F(HwCalTest, trimming) {
 }
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
