@@ -18,6 +18,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <future>
+
 #include "Vibrator.h"
 #include "mocks.h"
 #include "types.h"
@@ -26,11 +28,13 @@
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_3 {
+namespace V1_4 {
 namespace implementation {
 
+using ::android::hardware::Void;
 using ::android::hardware::vibrator::V1_0::EffectStrength;
 using ::android::hardware::vibrator::V1_0::Status;
+using ::android::hardware::vibrator::V1_3::Effect;
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -42,6 +46,7 @@ using ::testing::DoAll;
 using ::testing::DoDefault;
 using ::testing::Exactly;
 using ::testing::Expectation;
+using ::testing::ExpectationSet;
 using ::testing::Ge;
 using ::testing::Mock;
 using ::testing::MockFunction;
@@ -126,6 +131,18 @@ EffectQueue Queue(const T &first, const U &second, Args... rest) {
     auto duration = std::get<1>(head) + std::get<1>(tail);
     return {string, duration};
 }
+
+class CompletionCallback : public IVibratorCallback {
+  public:
+    CompletionCallback(std::function<void()> callback) : mCallback(callback) {}
+    hardware::Return<void> onComplete() override {
+        mCallback();
+        return Void();
+    }
+
+  private:
+    std::function<void()> mCallback;
+};
 
 class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
   public:
@@ -394,35 +411,39 @@ TEST_P(VibratorTest, perform) {
     auto scale = EFFECT_SCALE.find(param);
     auto queue = EFFECT_QUEUE.find(param);
     EffectDuration duration;
+    std::promise<void> completionPromise;
+    std::future<void> completionFuture{completionPromise.get_future()};
+    sp<CompletionCallback> callback =
+            new CompletionCallback([&completionPromise] { completionPromise.set_value(); });
+    ExpectationSet eSetup;
+    Expectation eActivate, ePoll;
 
     if (scale != EFFECT_SCALE.end()) {
-        Sequence s1, s2, s3;
-
         duration = EFFECT_DURATION;
 
-        EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).InSequence(s1).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setEffectScale(scale->second)).InSequence(s2).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setDuration(Ge(duration))).InSequence(s3).WillOnce(Return(true));
-
-        EXPECT_CALL(*mMockApi, setActivate(true)).InSequence(s1, s2, s3).WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectScale(scale->second)).WillOnce(Return(true));
     } else if (queue != EFFECT_QUEUE.end()) {
-        Sequence s1, s2, s3, s4;
-
         duration = std::get<1>(queue->second);
 
-        EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).InSequence(s1).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setEffectQueue(std::get<0>(queue->second)))
-                .InSequence(s2)
-                .WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setDuration(Ge(duration))).InSequence(s3).WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setEffectScale(0)).InSequence(s4).WillOnce(Return(true));
-
-        EXPECT_CALL(*mMockApi, setActivate(true)).InSequence(s1, s2, s3, s4).WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectQueue(std::get<0>(queue->second)))
+                          .WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectScale(0)).WillOnce(Return(true));
     } else {
         duration = 0;
     }
 
-    mVibrator->perform_1_3(effect, strength, [&](Status status, uint32_t lengthMs) {
+    if (duration) {
+        eSetup += EXPECT_CALL(*mMockApi, setDuration(Ge(duration))).WillOnce(Return(true));
+        eActivate = EXPECT_CALL(*mMockApi, setActivate(true)).After(eSetup).WillOnce(Return(true));
+        ePoll = EXPECT_CALL(*mMockApi, pollVibeState(false))
+                        .After(eActivate)
+                        .WillOnce(Return(true));
+        EXPECT_CALL(*mMockApi, setActivate(false)).After(ePoll).WillOnce(Return(true));
+    }
+
+    mVibrator->perform_1_4(effect, strength, callback, [&](Status status, uint32_t lengthMs) {
         if (duration) {
             EXPECT_EQ(Status::OK, status);
             EXPECT_LE(duration, lengthMs);
@@ -431,6 +452,11 @@ TEST_P(VibratorTest, perform) {
             EXPECT_EQ(0, lengthMs);
         }
     });
+
+    if (duration) {
+        EXPECT_EQ(completionFuture.wait_for(std::chrono::milliseconds(duration + 100)),
+                  std::future_status::ready);
+    }
 }
 
 INSTANTIATE_TEST_CASE_P(VibratorEffects, VibratorTest,
@@ -445,7 +471,7 @@ INSTANTIATE_TEST_CASE_P(VibratorEffects, VibratorTest,
                         });
 
 }  // namespace implementation
-}  // namespace V1_3
+}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android

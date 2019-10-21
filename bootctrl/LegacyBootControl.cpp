@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#define LOG_TAG "android.hardware.boot@1.0-impl"
+#define LOG_TAG "android.hardware.boot@1.1-impl"
 
 #include <log/log.h>
 
@@ -28,8 +28,10 @@ extern const hw_module_t HAL_MODULE_INFO_SYM;
 namespace android {
 namespace hardware {
 namespace boot {
-namespace V1_0 {
+namespace V1_1 {
 namespace implementation {
+
+using ::android::hardware::boot::V1_0::CommandResult;
 
 BootControl::BootControl(boot_control_module_t *module) : mModule(module) {}
 
@@ -125,7 +127,7 @@ IBootControl *HIDL_FETCH_IBootControl(const char * /* hal */) {
 }
 #endif
 }  // namespace implementation
-}  // namespace V1_0
+}  // namespace V1_1
 }  // namespace boot
 }  // namespace hardware
 }  // namespace android

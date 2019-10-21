@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #pragma once
 
+#include <android/hardware/boot/1.1/IBootControl.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
-
-#include "BootControlShared.h"
 
 namespace android {
 namespace hardware {
@@ -28,22 +27,15 @@ namespace V1_1 {
 namespace implementation {
 
 using ::android::hardware::Return;
-using ::android::hardware::boot::V1_0::BoolResult;
 
-struct BootControl : public BootControlShared {
-    BootControl(boot_control_module_t *module);
-    // Methods from ::android::hardware::boot::V1_0::IBootControl follow.
-    Return<uint32_t> getNumberSlots() override;
-    Return<uint32_t> getCurrentSlot() override;
-    Return<void> markBootSuccessful(markBootSuccessful_cb _hidl_cb) override;
-    Return<void> setActiveBootSlot(uint32_t slot, setActiveBootSlot_cb _hidl_cb) override;
-    Return<void> setSlotAsUnbootable(uint32_t slot, setSlotAsUnbootable_cb _hidl_cb) override;
-    Return<BoolResult> isSlotBootable(uint32_t slot) override;
-    Return<BoolResult> isSlotMarkedSuccessful(uint32_t slot) override;
-    Return<void> getSuffix(uint32_t slot, getSuffix_cb _hidl_cb) override;
+struct BootControlShared : public IBootControl {
+    BootControlShared();
 
-  private:
-    boot_control_module_t *mModule;
+    Return<bool> setSnapshotMergeStatus(MergeStatus status) override;
+    Return<MergeStatus> getSnapshotMergeStatus() override;
+
+  protected:
+    std::string misc_device_;
 };
 
 extern "C" IBootControl *HIDL_FETCH_IBootControl(const char *name);

@@ -14,31 +14,32 @@
 // limitations under the License.
 
 cc_defaults {
-    name: "android.hardware.vibrator@1.3-defaults.cs40l25",
+    name: "android.hardware.vibrator@1.4-defaults.cs40l25",
     defaults: ["PixelVibratorDefaults"],
     shared_libs: [
         "android.hardware.vibrator@1.0",
         "android.hardware.vibrator@1.1",
         "android.hardware.vibrator@1.2",
         "android.hardware.vibrator@1.3",
+        "android.hardware.vibrator@1.4",
     ],
     cflags: [
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
-        "-DLOG_TAG=\"android.hardware.vibrator@1.3-cs40l25\"",
+        "-DLOG_TAG=\"android.hardware.vibrator@1.4-cs40l25\"",
     ],
 }
 
 cc_defaults {
     name: "VibratorHalCs40l25TestDefaults",
-    defaults: ["android.hardware.vibrator@1.3-defaults.cs40l25"],
-    static_libs: ["android.hardware.vibrator@1.3-impl.cs40l25"],
+    defaults: ["android.hardware.vibrator@1.4-defaults.cs40l25"],
+    static_libs: ["android.hardware.vibrator@1.4-impl.cs40l25"],
     test_suites: ["device-tests"],
     require_root: true,
 }
 
 cc_library {
-    name: "android.hardware.vibrator@1.3-impl.cs40l25",
-    defaults: ["android.hardware.vibrator@1.3-defaults.cs40l25"],
+    name: "android.hardware.vibrator@1.4-impl.cs40l25",
+    defaults: ["android.hardware.vibrator@1.4-defaults.cs40l25"],
     srcs: ["Vibrator.cpp"],
     export_include_dirs: ["."],
     vendor_available: true,
@@ -46,11 +47,11 @@ cc_library {
 }
 
 cc_binary {
-    name: "android.hardware.vibrator@1.3-service.cs40l25",
-    defaults: ["android.hardware.vibrator@1.3-defaults.cs40l25"],
-    init_rc: ["android.hardware.vibrator@1.3-service.cs40l25.rc"],
-    vintf_fragments: ["android.hardware.vibrator@1.3-service.cs40l25.xml"],
+    name: "android.hardware.vibrator@1.4-service.cs40l25",
+    defaults: ["android.hardware.vibrator@1.4-defaults.cs40l25"],
+    init_rc: ["android.hardware.vibrator@1.4-service.cs40l25.rc"],
+    vintf_fragments: ["android.hardware.vibrator@1.4-service.cs40l25.xml"],
     srcs: ["service.cpp"],
-    static_libs: ["android.hardware.vibrator@1.3-impl.cs40l25"],
+    static_libs: ["android.hardware.vibrator@1.4-impl.cs40l25"],
     proprietary: true,
 }
