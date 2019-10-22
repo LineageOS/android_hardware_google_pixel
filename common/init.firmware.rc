@@ -1,0 +1,11 @@
+on early-init
+    mount_all /vendor/etc/fstab.persist --early
+
+on fs
+    mount_all /vendor/etc/fstab.firmware --early
+
+on late-fs
+    mount_all /vendor/etc/fstab.firmware --late
+
+on property:sys.boot_completed=1
+    swapon_all /vendor/etc/fstab.firmware
