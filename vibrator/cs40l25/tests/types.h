@@ -20,7 +20,7 @@
 
 using EffectIndex = uint16_t;
 using EffectLevel = uint32_t;
-using EffectAmplitude = uint8_t;
+using EffectAmplitude = float;
 using EffectScale = uint16_t;
 using EffectDuration = uint32_t;
 using EffectQueue = std::tuple<std::string, EffectDuration>;

@@ -122,8 +122,12 @@ class Vibrator : public BnVibrator {
                                const std::shared_ptr<IVibratorCallback> &callback,
                                int32_t *_aidl_return) override;
     ndk::ScopedAStatus getSupportedEffects(std::vector<Effect> *_aidl_return) override;
-    ndk::ScopedAStatus setAmplitude(int32_t amplitude) override;
+    ndk::ScopedAStatus setAmplitude(float amplitude) override;
     ndk::ScopedAStatus setExternalControl(bool enabled) override;
+    ndk::ScopedAStatus getCompositionDelayMax(int32_t *maxDelayMs);
+    ndk::ScopedAStatus getCompositionSizeMax(int32_t *maxSize);
+    ndk::ScopedAStatus compose(const std::vector<CompositeEffect> &composite,
+                               const std::shared_ptr<IVibratorCallback> &callback) override;
 
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
@@ -131,7 +135,7 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus on(uint32_t timeoutMs, uint32_t effectIndex,
                           const std::shared_ptr<IVibratorCallback> &callback);
     // set 'amplitude' based on an arbitrary scale determined by 'maximum'
-    ndk::ScopedAStatus setEffectAmplitude(uint8_t amplitude, uint8_t maximum);
+    ndk::ScopedAStatus setEffectAmplitude(float amplitude, float maximum);
     ndk::ScopedAStatus setGlobalAmplitude(bool set);
     // 'simple' effects are those precompiled and loaded into the controller
     ndk::ScopedAStatus getSimpleDetails(Effect effect, EffectStrength strength, uint32_t *outTimeMs,
@@ -140,10 +144,15 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus getCompoundDetails(Effect effect, EffectStrength strength,
                                           uint32_t *outTimeMs, uint32_t *outVolLevel,
                                           std::string *outEffectQueue);
+    ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, float scale,
+                                           uint32_t *outEffectIndex, uint32_t *outVolLevel);
     ndk::ScopedAStatus setEffectQueue(const std::string &effectQueue);
     ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *outTimeMs);
+    ndk::ScopedAStatus performEffect(uint32_t effectIndex, uint32_t volLevel,
+                                     const std::string *effectQueue,
+                                     const std::shared_ptr<IVibratorCallback> &callback);
     bool isUnderExternalControl();
     void waitForComplete(std::shared_ptr<IVibratorCallback> &&callback);
 
