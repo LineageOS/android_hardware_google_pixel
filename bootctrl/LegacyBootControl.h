@@ -31,7 +31,8 @@ using ::android::hardware::Return;
 using ::android::hardware::boot::V1_0::BoolResult;
 
 struct BootControl : public BootControlShared {
-    BootControl(boot_control_module_t *module);
+    explicit BootControl(boot_control_module_t *module);
+
     // Methods from ::android::hardware::boot::V1_0::IBootControl follow.
     Return<uint32_t> getNumberSlots() override;
     Return<uint32_t> getCurrentSlot() override;

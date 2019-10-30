@@ -31,11 +31,10 @@ using ::android::hardware::Return;
 struct BootControlShared : public IBootControl {
     BootControlShared();
 
+    bool Init();
+
     Return<bool> setSnapshotMergeStatus(MergeStatus status) override;
     Return<MergeStatus> getSnapshotMergeStatus() override;
-
-  protected:
-    std::string misc_device_;
 };
 
 extern "C" IBootControl *HIDL_FETCH_IBootControl(const char *name);
