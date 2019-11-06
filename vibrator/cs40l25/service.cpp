@@ -13,37 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <hidl/HidlSupport.h>
-#include <hidl/HidlTransportSupport.h>
-#include <utils/Errors.h>
-#include <utils/StrongPointer.h>
-
 #include "Hardware.h"
 #include "Vibrator.h"
 
-using android::OK;
-using android::sp;
-using android::status_t;
-using android::hardware::configureRpcThreadpool;
-using android::hardware::joinRpcThreadpool;
-using android::hardware::vibrator::V1_4::implementation::HwApi;
-using android::hardware::vibrator::V1_4::implementation::HwCal;
-using android::hardware::vibrator::V1_4::implementation::Vibrator;
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
+#include <log/log.h>
 
-status_t registerVibratorService() {
-    sp<Vibrator> vibrator = new Vibrator(std::make_unique<HwApi>(), std::make_unique<HwCal>());
-
-    return vibrator->registerAsService();
-}
+using aidl::android::hardware::vibrator::HwApi;
+using aidl::android::hardware::vibrator::HwCal;
+using aidl::android::hardware::vibrator::Vibrator;
 
 int main() {
-    configureRpcThreadpool(1, true);
-    status_t status = registerVibratorService();
+    ABinderProcess_setThreadPoolMaxThreadCount(0);
+    std::shared_ptr<Vibrator> vib = ndk::SharedRefBase::make<Vibrator>(std::make_unique<HwApi>(),
+                                                                       std::make_unique<HwCal>());
 
-    if (status != OK) {
-        return status;
-    }
+    const std::string instance = std::string() + Vibrator::descriptor + "/default";
+    binder_status_t status = AServiceManager_addService(vib->asBinder().get(), instance.c_str());
+    LOG_ALWAYS_FATAL_IF(status != STATUS_OK);
 
-    joinRpcThreadpool();
+    ABinderProcess_joinThreadPool();
+    return EXIT_FAILURE;  // should not reach
 }

@@ -16,7 +16,7 @@
 #ifndef ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
 #define ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
 
-#include <android/hardware/vibrator/1.4/IVibrator.h>
+#include <aidl/android/hardware/vibrator/IVibrator.h>
 
 using EffectIndex = uint16_t;
 using EffectLevel = uint32_t;
@@ -24,8 +24,8 @@ using EffectAmplitude = uint8_t;
 using EffectScale = uint16_t;
 using EffectDuration = uint32_t;
 using EffectQueue = std::tuple<std::string, EffectDuration>;
-using EffectTuple = std::tuple<::android::hardware::vibrator::V1_3::Effect,
-                               ::android::hardware::vibrator::V1_0::EffectStrength>;
+using EffectTuple = std::tuple<::aidl::android::hardware::vibrator::Effect,
+                               ::aidl::android::hardware::vibrator::EffectStrength>;
 
 using QueueEffect = std::tuple<EffectIndex, EffectLevel>;
 using QueueDelay = uint32_t;

@@ -20,18 +20,10 @@
 #include "Hardware.h"
 #include "Vibrator.h"
 
-using ::android::sp;
-using ::android::hardware::hidl_enum_range;
-
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_4 {
-namespace implementation {
-
-using ::android::hardware::vibrator::V1_0::EffectStrength;
-using ::android::hardware::vibrator::V1_0::Status;
-using ::android::hardware::vibrator::V1_3::Effect;
 
 class VibratorBench : public benchmark::Fixture {
   private:
@@ -78,15 +70,24 @@ class VibratorBench : public benchmark::Fixture {
             }
         }
 
-        mVibrator = new Vibrator(std::make_unique<HwApi>(), std::make_unique<HwCal>());
+        mVibrator = ndk::SharedRefBase::make<Vibrator>(std::make_unique<HwApi>(),
+                                                       std::make_unique<HwCal>());
     }
 
     static void DefaultArgs(benchmark::internal::Benchmark *b) { b->Unit(benchmark::kMicrosecond); }
 
     static void SupportedEffectArgs(benchmark::internal::Benchmark *b) {
         b->ArgNames({"Effect", "Strength"});
-        for (const auto &effect : hidl_enum_range<Effect>()) {
-            for (const auto &strength : hidl_enum_range<EffectStrength>()) {
+        // TODO(b/143992652): use enum ranges
+        for (Effect effect :
+             {Effect::CLICK,       Effect::DOUBLE_CLICK, Effect::TICK,        Effect::THUD,
+              Effect::POP,         Effect::HEAVY_CLICK,  Effect::RINGTONE_1,  Effect::RINGTONE_2,
+              Effect::RINGTONE_3,  Effect::RINGTONE_4,   Effect::RINGTONE_5,  Effect::RINGTONE_6,
+              Effect::RINGTONE_7,  Effect::RINGTONE_8,   Effect::RINGTONE_9,  Effect::RINGTONE_10,
+              Effect::RINGTONE_11, Effect::RINGTONE_12,  Effect::RINGTONE_13, Effect::RINGTONE_14,
+              Effect::RINGTONE_15, Effect::TEXTURE_TICK}) {
+            for (EffectStrength strength :
+                 {EffectStrength::LIGHT, EffectStrength::MEDIUM, EffectStrength::STRONG}) {
                 b->Args({static_cast<long>(effect), static_cast<long>(strength)});
             }
         }
@@ -94,7 +95,7 @@ class VibratorBench : public benchmark::Fixture {
 
   protected:
     TemporaryDir mFilesDir;
-    sp<IVibrator> mVibrator;
+    std::shared_ptr<IVibrator> mVibrator;
 };
 
 #define BENCHMARK_WRAPPER(fixt, test, code) \
@@ -106,7 +107,7 @@ BENCHMARK_WRAPPER(VibratorBench, on, {
     uint32_t duration = std::rand() ?: 1;
 
     for (auto _ : state) {
-        mVibrator->on(duration);
+        mVibrator->on(duration, nullptr);
     }
 });
 
@@ -116,23 +117,11 @@ BENCHMARK_WRAPPER(VibratorBench, off, {
     }
 });
 
-BENCHMARK_WRAPPER(VibratorBench, supportsAmplitudeControl, {
-    for (auto _ : state) {
-        mVibrator->supportsAmplitudeControl();
-    }
-});
-
 BENCHMARK_WRAPPER(VibratorBench, setAmplitude, {
     uint8_t amplitude = std::rand() ?: 1;
 
     for (auto _ : state) {
         mVibrator->setAmplitude(amplitude);
-    }
-});
-
-BENCHMARK_WRAPPER(VibratorBench, supportsExternalControl, {
-    for (auto _ : state) {
-        mVibrator->supportsExternalControl();
     }
 });
 
@@ -148,36 +137,33 @@ BENCHMARK_WRAPPER(VibratorBench, setExternalControl_disable, {
     }
 });
 
-BENCHMARK_WRAPPER(VibratorBench, supportsExternalAmplitudeControl, {
+BENCHMARK_WRAPPER(VibratorBench, getCapabilities, {
+    int32_t capabilities;
+
     for (auto _ : state) {
-        mVibrator->supportsExternalControl();
+        mVibrator->getCapabilities(&capabilities);
     }
 });
 
-BENCHMARK_WRAPPER(VibratorBench, perform_1_3, {
+BENCHMARK_WRAPPER(VibratorBench, perform, {
     Effect effect = Effect(state.range(0));
     EffectStrength strength = EffectStrength(state.range(1));
-    bool supported = true;
+    int32_t lengthMs;
 
-    mVibrator->perform_1_3(effect, strength, [&](Status status, uint32_t /*lengthMs*/) {
-        if (status == Status::UNSUPPORTED_OPERATION) {
-            supported = false;
-        }
-    });
+    ndk::ScopedAStatus status = mVibrator->perform(effect, strength, nullptr, &lengthMs);
 
-    if (!supported) {
+    if (!status.isOk()) {
         return;
     }
 
     for (auto _ : state) {
-        mVibrator->perform_1_3(effect, strength, [](Status /*status*/, uint32_t /*lengthMs*/) {});
+        mVibrator->perform(effect, strength, nullptr, &lengthMs);
     }
 })->Apply(VibratorBench::SupportedEffectArgs);
 
-}  // namespace implementation
-}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
 
 BENCHMARK_MAIN();
