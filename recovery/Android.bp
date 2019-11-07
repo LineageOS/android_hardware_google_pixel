@@ -1,0 +1,24 @@
+cc_library_static {
+    name: "librecovery_ui_pixel",
+    owner: "google",
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+    ],
+    srcs: [
+        "recovery_ui.cpp",
+    ],
+
+    static_libs: [
+        "libbase",
+        "libbootloader_message",
+        "libnos_for_recovery",
+        "libnos_citadel_for_recovery",
+    ],
+
+    shared_libs: [
+        "librecovery_ui",
+    ],
+}
