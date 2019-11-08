@@ -32,7 +32,7 @@ on early-boot
     chown system system /sys/class/leds/vibrator/device/vbatt_min
     chown system system /sys/class/leds/vibrator/device/vibe_state
 
-service vendor.vibrator-1-4 /vendor/bin/hw/android.hardware.vibrator@1.4-service.cs40l25
+service vendor.vibrator.cs40l24 /vendor/bin/hw/android.hardware.vibrator-service.cs40l25
     class hal
     user system
     group system

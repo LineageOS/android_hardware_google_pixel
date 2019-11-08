@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <aidl/android/hardware/vibrator/BnVibratorCallback.h>
 #include <android-base/logging.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -25,16 +26,10 @@
 #include "types.h"
 #include "utils.h"
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_4 {
-namespace implementation {
-
-using ::android::hardware::Void;
-using ::android::hardware::vibrator::V1_0::EffectStrength;
-using ::android::hardware::vibrator::V1_0::Status;
-using ::android::hardware::vibrator::V1_3::Effect;
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -132,12 +127,12 @@ EffectQueue Queue(const T &first, const U &second, Args... rest) {
     return {string, duration};
 }
 
-class CompletionCallback : public IVibratorCallback {
+class CompletionCallback : public BnVibratorCallback {
   public:
     CompletionCallback(std::function<void()> callback) : mCallback(callback) {}
-    hardware::Return<void> onComplete() override {
+    ndk::ScopedAStatus onComplete() override {
         mCallback();
-        return Void();
+        return ndk::ScopedAStatus::ok();
     }
 
   private:
@@ -182,7 +177,7 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
         if (relaxed) {
             relaxMock(true);
         }
-        mVibrator = new Vibrator(std::move(mockapi), std::move(mockcal));
+        mVibrator = ndk::SharedRefBase::make<Vibrator>(std::move(mockapi), std::move(mockcal));
         if (relaxed) {
             relaxMock(false);
         }
@@ -192,7 +187,7 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
         if (relaxed) {
             relaxMock(true);
         }
-        mVibrator.clear();
+        mVibrator.reset();
     }
 
   private:
@@ -235,7 +230,7 @@ class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
   protected:
     MockApi *mMockApi;
     MockCal *mMockCal;
-    sp<IVibrator> mVibrator;
+    std::shared_ptr<IVibrator> mVibrator;
 };
 
 TEST_F(VibratorTest, Constructor) {
@@ -292,68 +287,50 @@ TEST_F(VibratorTest, on) {
     EXPECT_CALL(*mMockApi, setDuration(Ge(duration))).InSequence(s3).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setActivate(true)).InSequence(s1, s2, s3).WillOnce(Return(true));
 
-    EXPECT_EQ(Status::OK, mVibrator->on(duration));
+    EXPECT_TRUE(mVibrator->on(duration, nullptr).isOk());
 }
 
 TEST_F(VibratorTest, off) {
     EXPECT_CALL(*mMockApi, setActivate(false)).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setGlobalScale(0)).WillOnce(Return(true));
 
-    EXPECT_EQ(Status::OK, mVibrator->off());
+    EXPECT_TRUE(mVibrator->off().isOk());
 }
 
 TEST_F(VibratorTest, supportsAmplitudeControl_supported) {
     EXPECT_CALL(*mMockApi, hasEffectScale()).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, getAspEnable(_)).WillOnce(DoAll(SetArgPointee<0>(false), Return(true)));
+    EXPECT_CALL(*mMockApi, hasAspEnable()).WillOnce(Return(true));
 
-    EXPECT_EQ(true, mVibrator->supportsAmplitudeControl());
+    int32_t capabilities;
+    EXPECT_TRUE(mVibrator->getCapabilities(&capabilities).isOk());
+    EXPECT_GT(capabilities & IVibrator::CAP_AMPLITUDE_CONTROL, 0);
 }
 
 TEST_F(VibratorTest, supportsAmplitudeControl_unsupported1) {
-    MockFunction<void()> either;
+    EXPECT_CALL(*mMockApi, hasEffectScale()).WillOnce(Return(false));
+    EXPECT_CALL(*mMockApi, hasAspEnable()).WillOnce(Return(true));
 
-    EXPECT_CALL(*mMockApi, hasEffectScale())
-            .Times(AtMost(1))
-            .WillOnce(
-                    DoAll(InvokeWithoutArgs(&either, &MockFunction<void()>::Call), Return(false)));
-    EXPECT_CALL(*mMockApi, getAspEnable(_))
-            .Times(AtMost(1))
-            .WillOnce(DoAll(InvokeWithoutArgs(&either, &MockFunction<void()>::Call),
-                            SetArgPointee<0>(false), Return(true)));
-    EXPECT_CALL(either, Call()).Times(AtLeast(1));
-
-    EXPECT_EQ(false, mVibrator->supportsAmplitudeControl());
+    int32_t capabilities;
+    EXPECT_TRUE(mVibrator->getCapabilities(&capabilities).isOk());
+    EXPECT_EQ(capabilities & IVibrator::CAP_AMPLITUDE_CONTROL, 0);
 }
 
 TEST_F(VibratorTest, supportsAmplitudeControl_unsupported2) {
-    MockFunction<void()> either;
+    EXPECT_CALL(*mMockApi, hasEffectScale()).WillOnce(Return(false));
+    EXPECT_CALL(*mMockApi, hasAspEnable()).WillOnce(Return(false));
 
-    EXPECT_CALL(*mMockApi, hasEffectScale())
-            .Times(AtMost(1))
-            .WillOnce(
-                    DoAll(InvokeWithoutArgs(&either, &MockFunction<void()>::Call), Return(false)));
-    EXPECT_CALL(*mMockApi, getAspEnable(_))
-            .Times(AtMost(1))
-            .WillOnce(DoAll(InvokeWithoutArgs(&either, &MockFunction<void()>::Call),
-                            SetArgPointee<0>(true), Return(true)));
-    EXPECT_CALL(either, Call()).Times(AtLeast(1));
-
-    EXPECT_EQ(false, mVibrator->supportsAmplitudeControl());
+    int32_t capabilities;
+    EXPECT_TRUE(mVibrator->getCapabilities(&capabilities).isOk());
+    EXPECT_EQ(capabilities & IVibrator::CAP_AMPLITUDE_CONTROL, 0);
 }
 
-TEST_F(VibratorTest, supportsAmplitudeControl_unsupported3) {
-    MockFunction<void()> either;
+TEST_F(VibratorTest, supportsExternalAmplitudeControl_unsupported) {
+    EXPECT_CALL(*mMockApi, hasEffectScale()).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, hasAspEnable()).WillOnce(Return(true));
 
-    EXPECT_CALL(*mMockApi, hasEffectScale())
-            .Times(AtMost(1))
-            .WillOnce(DoAll(InvokeWithoutArgs(&either, &MockFunction<void()>::Call), Return(true)));
-    EXPECT_CALL(*mMockApi, getAspEnable(_))
-            .Times(AtMost(1))
-            .WillOnce(DoAll(InvokeWithoutArgs(&either, &MockFunction<void()>::Call),
-                            SetArgPointee<0>(true), Return(true)));
-    EXPECT_CALL(either, Call()).Times(AtLeast(1));
-
-    EXPECT_EQ(false, mVibrator->supportsAmplitudeControl());
+    int32_t capabilities;
+    EXPECT_TRUE(mVibrator->getCapabilities(&capabilities).isOk());
+    EXPECT_EQ(capabilities & IVibrator::CAP_EXTERNAL_AMPLITUDE_CONTROL, 0);
 }
 
 TEST_F(VibratorTest, setAmplitude_supported) {
@@ -367,25 +344,31 @@ TEST_F(VibratorTest, setAmplitude_supported) {
             .InSequence(s)
             .WillOnce(Return(true));
 
-    EXPECT_EQ(Status::OK, mVibrator->setAmplitude(amplitude));
+    EXPECT_TRUE(mVibrator->setAmplitude(amplitude).isOk());
 }
 
 TEST_F(VibratorTest, setAmplitude_unsupported) {
     EXPECT_CALL(*mMockApi, getAspEnable(_)).WillOnce(DoAll(SetArgPointee<0>(true), Return(true)));
 
-    EXPECT_EQ(Status::UNSUPPORTED_OPERATION, mVibrator->setAmplitude(1));
+    EXPECT_EQ(EX_UNSUPPORTED_OPERATION, mVibrator->setAmplitude(1).getExceptionCode());
 }
 
 TEST_F(VibratorTest, supportsExternalControl_supported) {
+    EXPECT_CALL(*mMockApi, hasEffectScale()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, hasAspEnable()).WillOnce(Return(true));
 
-    EXPECT_EQ(true, mVibrator->supportsExternalControl());
+    int32_t capabilities;
+    EXPECT_TRUE(mVibrator->getCapabilities(&capabilities).isOk());
+    EXPECT_GT(capabilities & IVibrator::CAP_EXTERNAL_CONTROL, 0);
 }
 
 TEST_F(VibratorTest, supportsExternalControl_unsupported) {
+    EXPECT_CALL(*mMockApi, hasEffectScale()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, hasAspEnable()).WillOnce(Return(false));
 
-    EXPECT_EQ(false, mVibrator->supportsExternalControl());
+    int32_t capabilities;
+    EXPECT_TRUE(mVibrator->getCapabilities(&capabilities).isOk());
+    EXPECT_EQ(capabilities & IVibrator::CAP_EXTERNAL_CONTROL, 0);
 }
 
 TEST_F(VibratorTest, setExternalControl_enable) {
@@ -394,14 +377,14 @@ TEST_F(VibratorTest, setExternalControl_enable) {
     EXPECT_CALL(*mMockApi, setGlobalScale(ON_GLOBAL_SCALE)).InSequence(s).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setAspEnable(true)).InSequence(s).WillOnce(Return(true));
 
-    EXPECT_EQ(Status::OK, mVibrator->setExternalControl(true));
+    EXPECT_TRUE(mVibrator->setExternalControl(true).isOk());
 }
 
 TEST_F(VibratorTest, setExternalControl_disable) {
     EXPECT_CALL(*mMockApi, setAspEnable(false)).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setGlobalScale(0)).WillOnce(Return(true));
 
-    EXPECT_EQ(Status::OK, mVibrator->setExternalControl(false));
+    EXPECT_TRUE(mVibrator->setExternalControl(false).isOk());
 }
 
 TEST_P(VibratorTest, perform) {
@@ -413,8 +396,8 @@ TEST_P(VibratorTest, perform) {
     EffectDuration duration;
     std::promise<void> completionPromise;
     std::future<void> completionFuture{completionPromise.get_future()};
-    sp<CompletionCallback> callback =
-            new CompletionCallback([&completionPromise] { completionPromise.set_value(); });
+    std::shared_ptr<CompletionCallback> callback = ndk::SharedRefBase::make<CompletionCallback>(
+            [&completionPromise] { completionPromise.set_value(); });
     ExpectationSet eSetup;
     Expectation eActivate, ePoll;
 
@@ -443,15 +426,14 @@ TEST_P(VibratorTest, perform) {
         EXPECT_CALL(*mMockApi, setActivate(false)).After(ePoll).WillOnce(Return(true));
     }
 
-    mVibrator->perform_1_4(effect, strength, callback, [&](Status status, uint32_t lengthMs) {
-        if (duration) {
-            EXPECT_EQ(Status::OK, status);
-            EXPECT_LE(duration, lengthMs);
-        } else {
-            EXPECT_EQ(Status::UNSUPPORTED_OPERATION, status);
-            EXPECT_EQ(0, lengthMs);
-        }
-    });
+    int32_t lengthMs;
+    ndk::ScopedAStatus status = mVibrator->perform(effect, strength, callback, &lengthMs);
+    if (status.isOk()) {
+        EXPECT_LE(duration, lengthMs);
+    } else {
+        EXPECT_EQ(EX_UNSUPPORTED_OPERATION, status.getExceptionCode());
+        EXPECT_EQ(0, lengthMs);
+    }
 
     if (duration) {
         EXPECT_EQ(completionFuture.wait_for(std::chrono::milliseconds(duration + 100)),
@@ -459,19 +441,30 @@ TEST_P(VibratorTest, perform) {
     }
 }
 
+// TODO(b/143992652): autogenerate
+const std::vector<Effect> kEffects = {
+        Effect::CLICK,       Effect::DOUBLE_CLICK, Effect::TICK,        Effect::THUD,
+        Effect::POP,         Effect::HEAVY_CLICK,  Effect::RINGTONE_1,  Effect::RINGTONE_2,
+        Effect::RINGTONE_3,  Effect::RINGTONE_4,   Effect::RINGTONE_5,  Effect::RINGTONE_6,
+        Effect::RINGTONE_7,  Effect::RINGTONE_8,   Effect::RINGTONE_9,  Effect::RINGTONE_10,
+        Effect::RINGTONE_11, Effect::RINGTONE_12,  Effect::RINGTONE_13, Effect::RINGTONE_14,
+        Effect::RINGTONE_15, Effect::TEXTURE_TICK};
+
+// TODO(b/143992652): autogenerate
+const std::vector<EffectStrength> kEffectStrengths = {EffectStrength::LIGHT, EffectStrength::MEDIUM,
+                                                      EffectStrength::STRONG};
+
 INSTANTIATE_TEST_CASE_P(VibratorEffects, VibratorTest,
-                        Combine(ValuesIn(hidl_enum_range<Effect>().begin(),
-                                         hidl_enum_range<Effect>().end()),
-                                ValuesIn(hidl_enum_range<EffectStrength>().begin(),
-                                         hidl_enum_range<EffectStrength>().end())),
+                        Combine(ValuesIn(kEffects.begin(), kEffects.end()),
+                                ValuesIn(kEffectStrengths.begin(), kEffectStrengths.end())),
                         [](const TestParamInfo<VibratorTest::ParamType> &info) {
                             auto effect = std::get<0>(info.param);
                             auto strength = std::get<1>(info.param);
-                            return toString(effect) + "_" + toString(strength);
+                            return std::to_string(static_cast<int>(effect)) + "_" +
+                                   std::to_string(static_cast<int>(strength));
                         });
 
-}  // namespace implementation
-}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl

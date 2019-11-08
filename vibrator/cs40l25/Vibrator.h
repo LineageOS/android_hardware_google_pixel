@@ -13,22 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef ANDROID_HARDWARE_VIBRATOR_CS40L25_VIBRATOR_H
-#define ANDROID_HARDWARE_VIBRATOR_CS40L25_VIBRATOR_H
+#pragma once
 
-#include <android/hardware/vibrator/1.4/IVibrator.h>
-#include <hidl/Status.h>
+#include <aidl/android/hardware/vibrator/BnVibrator.h>
 
+#include <array>
 #include <fstream>
 #include <future>
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_4 {
-namespace implementation {
 
-class Vibrator : public IVibrator {
+class Vibrator : public BnVibrator {
   public:
     // APIs for interfacing with the kernel driver.
     class HwApi {
@@ -116,58 +114,38 @@ class Vibrator : public IVibrator {
   public:
     Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal);
 
-    // Methods from ::android::hardware::vibrator::V1_0::IVibrator follow.
-    using Status = ::android::hardware::vibrator::V1_0::Status;
-    Return<Status> on(uint32_t timeoutMs) override;
-    Return<Status> off() override;
-    Return<bool> supportsAmplitudeControl() override;
-    Return<Status> setAmplitude(uint8_t amplitude) override;
+    ndk::ScopedAStatus getCapabilities(int32_t *_aidl_return) override;
+    ndk::ScopedAStatus off() override;
+    ndk::ScopedAStatus on(int32_t timeoutMs,
+                          const std::shared_ptr<IVibratorCallback> &callback) override;
+    ndk::ScopedAStatus perform(Effect effect, EffectStrength strength,
+                               const std::shared_ptr<IVibratorCallback> &callback,
+                               int32_t *_aidl_return) override;
+    ndk::ScopedAStatus getSupportedEffects(std::vector<Effect> *_aidl_return) override;
+    ndk::ScopedAStatus setAmplitude(int32_t amplitude) override;
+    ndk::ScopedAStatus setExternalControl(bool enabled) override;
 
-    // Methods from ::android::hardware::vibrator::V1_3::IVibrator follow.
-    Return<bool> supportsExternalControl() override;
-    Return<Status> setExternalControl(bool enabled) override;
-
-    // Methods from ::android::hardware::vibrator::V1_4::IVibrator follow.
-    Return<hidl_bitfield<Capabilities>> getCapabilities() override;
-    Return<Status> on_1_4(uint32_t timeoutMs, const sp<IVibratorCallback> &callback) override;
-
-    using EffectStrength = ::android::hardware::vibrator::V1_0::EffectStrength;
-    using Effect = ::android::hardware::vibrator::V1_3::Effect;
-    Return<void> perform(V1_0::Effect effect, EffectStrength strength,
-                         perform_cb _hidl_cb) override;
-    Return<void> perform_1_1(V1_1::Effect_1_1 effect, EffectStrength strength,
-                             perform_cb _hidl_cb) override;
-    Return<void> perform_1_2(V1_2::Effect effect, EffectStrength strength,
-                             perform_cb _hidl_cb) override;
-    Return<void> perform_1_3(V1_3::Effect effect, EffectStrength strength,
-                             perform_cb _hidl_cb) override;
-    Return<void> perform_1_4(Effect effect, EffectStrength strength,
-                             const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) override;
-
-    // Methods from ::android.hidl.base::V1_0::IBase follow.
-    Return<void> debug(const hidl_handle &handle, const hidl_vec<hidl_string> &options) override;
+    binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   private:
-    Return<Status> on(uint32_t timeoutMs, uint32_t effectIndex,
-                      const sp<IVibratorCallback> &callback);
-    Return<Status> onWrapper(uint32_t timeoutMs, const sp<IVibratorCallback> &callback);
-    template <typename T>
-    Return<void> performWrapper(T effect, EffectStrength strength,
-                                const sp<IVibratorCallback> &callback, perform_cb _hidl_cb);
+    ndk::ScopedAStatus on(uint32_t timeoutMs, uint32_t effectIndex,
+                          const std::shared_ptr<IVibratorCallback> &callback);
     // set 'amplitude' based on an arbitrary scale determined by 'maximum'
-    Return<Status> setEffectAmplitude(uint8_t amplitude, uint8_t maximum);
-    Return<Status> setGlobalAmplitude(bool set);
+    ndk::ScopedAStatus setEffectAmplitude(uint8_t amplitude, uint8_t maximum);
+    ndk::ScopedAStatus setGlobalAmplitude(bool set);
     // 'simple' effects are those precompiled and loaded into the controller
-    Return<Status> getSimpleDetails(Effect effect, EffectStrength strength, uint32_t *outTimeMs,
-                                    uint32_t *outVolLevel);
+    ndk::ScopedAStatus getSimpleDetails(Effect effect, EffectStrength strength, uint32_t *outTimeMs,
+                                        uint32_t *outVolLevel);
     // 'compound' effects are those composed by stringing multiple 'simple' effects
-    Return<Status> getCompoundDetails(Effect effect, EffectStrength strength, uint32_t *outTimeMs,
-                                      uint32_t *outVolLevel, std::string *outEffectQueue);
-    Return<Status> setEffectQueue(const std::string &effectQueue);
-    Return<void> performEffect(Effect effect, EffectStrength strength,
-                               const sp<IVibratorCallback> &callback, perform_cb _hidl_cb);
+    ndk::ScopedAStatus getCompoundDetails(Effect effect, EffectStrength strength,
+                                          uint32_t *outTimeMs, uint32_t *outVolLevel,
+                                          std::string *outEffectQueue);
+    ndk::ScopedAStatus setEffectQueue(const std::string &effectQueue);
+    ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
+                                     const std::shared_ptr<IVibratorCallback> &callback,
+                                     int32_t *outTimeMs);
     bool isUnderExternalControl();
-    void waitForComplete(sp<IVibratorCallback> &&callback);
+    void waitForComplete(std::shared_ptr<IVibratorCallback> &&callback);
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
@@ -176,10 +154,7 @@ class Vibrator : public IVibrator {
     std::future<void> mAsyncHandle;
 };
 
-}  // namespace implementation
-}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
-
-#endif  // ANDROID_HARDWARE_VIBRATOR_CS40L25_VIBRATOR_H
+}  // namespace aidl
