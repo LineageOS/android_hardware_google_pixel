@@ -26,19 +26,16 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
 #endif
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
-namespace V1_4 {
-namespace implementation {
-
-using Status = ::android::hardware::vibrator::V1_0::Status;
-using EffectStrength = ::android::hardware::vibrator::V1_0::EffectStrength;
 
 static constexpr uint32_t BASE_CONTINUOUS_EFFECT_OFFSET = 32768;
 
@@ -113,23 +110,31 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     mHwApi->setGpioRiseScale(scaleRise);
 }
 
-Return<Status> Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
-                            const sp<IVibratorCallback> &callback) {
-    if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
-        ALOGE("Previous vibration pending.");
-        return Status::UNKNOWN_ERROR;
+ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
+    ATRACE_NAME("Vibrator::getCapabilities");
+    int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK;
+    if (mHwApi->hasEffectScale()) {
+        ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
     }
-
-    mHwApi->setEffectIndex(effectIndex);
-    mHwApi->setDuration(timeoutMs);
-    mHwApi->setActivate(1);
-
-    mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
-
-    return Status::OK;
+    if (mHwApi->hasAspEnable()) {
+        ret |= IVibrator::CAP_EXTERNAL_CONTROL;
+    }
+    *_aidl_return = ret;
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<Status> Vibrator::onWrapper(uint32_t timeoutMs, const sp<IVibratorCallback> &callback) {
+ndk::ScopedAStatus Vibrator::off() {
+    ATRACE_NAME("Vibrator::off");
+    setGlobalAmplitude(false);
+    if (!mHwApi->setActivate(0)) {
+        ALOGE("Failed to turn vibrator off (%d): %s", errno, strerror(errno));
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
+                                const std::shared_ptr<IVibratorCallback> &callback) {
     ATRACE_NAME("Vibrator::on");
     const uint32_t index = timeoutMs < WAVEFORM_LONG_VIBRATION_THRESHOLD_MS
                                    ? WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX
@@ -141,77 +146,80 @@ Return<Status> Vibrator::onWrapper(uint32_t timeoutMs, const sp<IVibratorCallbac
     return on(timeoutMs, index, callback);
 }
 
-Return<Status> Vibrator::on(uint32_t timeoutMs) {
-    return onWrapper(timeoutMs, nullptr);
+ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
+                                     const std::shared_ptr<IVibratorCallback> &callback,
+                                     int32_t *_aidl_return) {
+    ATRACE_NAME("Vibrator::perform");
+    return performEffect(effect, strength, callback, _aidl_return);
 }
 
-Return<Status> Vibrator::off() {
-    ATRACE_NAME("Vibrator::off");
-    setGlobalAmplitude(false);
-    if (!mHwApi->setActivate(0)) {
-        ALOGE("Failed to turn vibrator off (%d): %s", errno, strerror(errno));
-        return Status::UNKNOWN_ERROR;
-    }
-    return Status::OK;
+ndk::ScopedAStatus Vibrator::getSupportedEffects(std::vector<Effect> *_aidl_return) {
+    *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK,
+                     Effect::DOUBLE_CLICK};
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<bool> Vibrator::supportsAmplitudeControl() {
-    ATRACE_NAME("Vibrator::supportsAmplitudeControl");
-    return !isUnderExternalControl() && mHwApi->hasEffectScale();
-}
-
-Return<Status> Vibrator::setAmplitude(uint8_t amplitude) {
+ndk::ScopedAStatus Vibrator::setAmplitude(int32_t amplitude) {
     ATRACE_NAME("Vibrator::setAmplitude");
-    if (!amplitude) {
-        return Status::BAD_VALUE;
+    if (amplitude <= 0 || amplitude > 255) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
     if (!isUnderExternalControl()) {
         return setEffectAmplitude(amplitude, UINT8_MAX);
     } else {
-        return Status::UNSUPPORTED_OPERATION;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
 
-Return<Status> Vibrator::setEffectAmplitude(uint8_t amplitude, uint8_t maximum) {
-    int32_t scale = amplitudeToScale(amplitude, maximum);
-
-    if (!mHwApi->setEffectScale(scale)) {
-        ALOGE("Failed to set effect amplitude (%d): %s", errno, strerror(errno));
-        return Status::UNKNOWN_ERROR;
-    }
-
-    return Status::OK;
-}
-
-Return<Status> Vibrator::setGlobalAmplitude(bool set) {
-    uint8_t amplitude = set ? mVolLevels[VOLTAGE_GLOBAL_SCALE_LEVEL] : VOLTAGE_SCALE_MAX;
-    int32_t scale = amplitudeToScale(amplitude, VOLTAGE_SCALE_MAX);
-
-    if (!mHwApi->setGlobalScale(scale)) {
-        ALOGE("Failed to set global amplitude (%d): %s", errno, strerror(errno));
-        return Status::UNKNOWN_ERROR;
-    }
-
-    return Status::OK;
-}
-
-// Methods from ::android::hardware::vibrator::V1_3::IVibrator follow.
-
-Return<bool> Vibrator::supportsExternalControl() {
-    ATRACE_NAME("Vibrator::supportsExternalControl");
-    return (mHwApi->hasAspEnable() ? true : false);
-}
-
-Return<Status> Vibrator::setExternalControl(bool enabled) {
+ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
     ATRACE_NAME("Vibrator::setExternalControl");
     setGlobalAmplitude(enabled);
 
     if (!mHwApi->setAspEnable(enabled)) {
         ALOGE("Failed to set external control (%d): %s", errno, strerror(errno));
-        return Status::UNKNOWN_ERROR;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
-    return Status::OK;
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
+                                const std::shared_ptr<IVibratorCallback> &callback) {
+    if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
+        ALOGE("Previous vibration pending.");
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+
+    mHwApi->setEffectIndex(effectIndex);
+    mHwApi->setDuration(timeoutMs);
+    mHwApi->setActivate(1);
+
+    mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
+
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::setEffectAmplitude(uint8_t amplitude, uint8_t maximum) {
+    int32_t scale = amplitudeToScale(amplitude, maximum);
+
+    if (!mHwApi->setEffectScale(scale)) {
+        ALOGE("Failed to set effect amplitude (%d): %s", errno, strerror(errno));
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
+    uint8_t amplitude = set ? mVolLevels[VOLTAGE_GLOBAL_SCALE_LEVEL] : VOLTAGE_SCALE_MAX;
+    int32_t scale = amplitudeToScale(amplitude, VOLTAGE_SCALE_MAX);
+
+    if (!mHwApi->setGlobalScale(scale)) {
+        ALOGE("Failed to set global amplitude (%d): %s", errno, strerror(errno));
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+
+    return ndk::ScopedAStatus::ok();
 }
 
 bool Vibrator::isUnderExternalControl() {
@@ -220,26 +228,14 @@ bool Vibrator::isUnderExternalControl() {
     return isAspEnabled;
 }
 
-// Methods from ::android::hardware::vibrator::V1_4::IVibrator follow.
-
-Return<hidl_bitfield<Capabilities>> Vibrator::getCapabilities() {
-    return Capabilities::ON_COMPLETION_CALLBACK | Capabilities::PERFORM_COMPLETION_CALLBACK;
-}
-
-Return<Status> Vibrator::on_1_4(uint32_t timeoutMs, const sp<IVibratorCallback> &callback) {
-    return onWrapper(timeoutMs, callback);
-}
-
-// Methods from ::android.hidl.base::V1_0::IBase follow.
-
-Return<void> Vibrator::debug(const hidl_handle &handle,
-                             const hidl_vec<hidl_string> & /* options */) {
-    if (handle == nullptr || handle->numFds < 1 || handle->data[0] < 0) {
+binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
+    if (fd < 0) {
         ALOGE("Called debug() with invalid fd.");
-        return Void();
+        return STATUS_OK;
     }
 
-    int fd = handle->data[0];
+    (void)args;
+    (void)numArgs;
 
     dprintf(fd, "HIDL:\n");
 
@@ -260,47 +256,11 @@ Return<void> Vibrator::debug(const hidl_handle &handle,
     mHwCal->debug(fd);
 
     fsync(fd);
-    return Void();
+    return STATUS_OK;
 }
 
-template <typename T>
-Return<void> Vibrator::performWrapper(T effect, EffectStrength strength,
-                                      const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) {
-    ATRACE_NAME("Vibrator::performWrapper");
-    auto validRange = hidl_enum_range<T>();
-    if (effect < *validRange.begin() || effect > *std::prev(validRange.end())) {
-        _hidl_cb(Status::UNSUPPORTED_OPERATION, 0);
-        return Void();
-    }
-    return performEffect(static_cast<Effect>(effect), strength, callback, _hidl_cb);
-}
-
-Return<void> Vibrator::perform(V1_0::Effect effect, EffectStrength strength, perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, nullptr, _hidl_cb);
-}
-
-Return<void> Vibrator::perform_1_1(V1_1::Effect_1_1 effect, EffectStrength strength,
-                                   perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, nullptr, _hidl_cb);
-}
-
-Return<void> Vibrator::perform_1_2(V1_2::Effect effect, EffectStrength strength,
-                                   perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, nullptr, _hidl_cb);
-}
-
-Return<void> Vibrator::perform_1_3(V1_3::Effect effect, EffectStrength strength,
-                                   perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, nullptr, _hidl_cb);
-}
-
-Return<void> Vibrator::perform_1_4(Effect effect, EffectStrength strength,
-                                   const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) {
-    return performWrapper(effect, strength, callback, _hidl_cb);
-}
-
-Return<Status> Vibrator::getSimpleDetails(Effect effect, EffectStrength strength,
-                                          uint32_t *outTimeMs, uint32_t *outVolLevel) {
+ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength strength,
+                                              uint32_t *outTimeMs, uint32_t *outVolLevel) {
     uint32_t timeMs;
     uint32_t volLevel;
     uint32_t volIndex;
@@ -317,7 +277,7 @@ Return<Status> Vibrator::getSimpleDetails(Effect effect, EffectStrength strength
             volOffset = 1;
             break;
         default:
-            return Status::UNSUPPORTED_OPERATION;
+            return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
     switch (effect) {
@@ -336,7 +296,7 @@ Return<Status> Vibrator::getSimpleDetails(Effect effect, EffectStrength strength
             volIndex = WAVEFORM_HEAVY_CLICK_EFFECT_LEVEL;
             break;
         default:
-            return Status::UNSUPPORTED_OPERATION;
+            return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
     volLevel = mVolLevels[volIndex + volOffset];
@@ -345,13 +305,13 @@ Return<Status> Vibrator::getSimpleDetails(Effect effect, EffectStrength strength
     *outTimeMs = timeMs;
     *outVolLevel = volLevel;
 
-    return Status::OK;
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<Status> Vibrator::getCompoundDetails(Effect effect, EffectStrength strength,
-                                            uint32_t *outTimeMs, uint32_t * /*outVolLevel*/,
-                                            std::string *outEffectQueue) {
-    Status status;
+ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength strength,
+                                                uint32_t *outTimeMs, uint32_t * /*outVolLevel*/,
+                                                std::string *outEffectQueue) {
+    ndk::ScopedAStatus status;
     uint32_t timeMs;
     std::ostringstream effectBuilder;
     uint32_t thisTimeMs;
@@ -362,7 +322,7 @@ Return<Status> Vibrator::getCompoundDetails(Effect effect, EffectStrength streng
             timeMs = 0;
 
             status = getSimpleDetails(Effect::CLICK, strength, &thisTimeMs, &thisVolLevel);
-            if (status != Status::OK) {
+            if (!status.isOk()) {
                 return status;
             }
             effectBuilder << WAVEFORM_SIMPLE_EFFECT_INDEX << "." << thisVolLevel;
@@ -376,7 +336,7 @@ Return<Status> Vibrator::getCompoundDetails(Effect effect, EffectStrength streng
             effectBuilder << ",";
 
             status = getSimpleDetails(Effect::HEAVY_CLICK, strength, &thisTimeMs, &thisVolLevel);
-            if (status != Status::OK) {
+            if (!status.isOk()) {
                 return status;
             }
             effectBuilder << WAVEFORM_SIMPLE_EFFECT_INDEX << "." << thisVolLevel;
@@ -384,28 +344,29 @@ Return<Status> Vibrator::getCompoundDetails(Effect effect, EffectStrength streng
 
             break;
         default:
-            return Status::UNSUPPORTED_OPERATION;
+            return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
     *outTimeMs = timeMs;
     *outEffectQueue = effectBuilder.str();
 
-    return Status::OK;
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<Status> Vibrator::setEffectQueue(const std::string &effectQueue) {
+ndk::ScopedAStatus Vibrator::setEffectQueue(const std::string &effectQueue) {
     if (!mHwApi->setEffectQueue(effectQueue)) {
         ALOGE("Failed to write \"%s\" to effect queue (%d): %s", effectQueue.c_str(), errno,
               strerror(errno));
-        return Status::UNKNOWN_ERROR;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
-    return Status::OK;
+    return ndk::ScopedAStatus::ok();
 }
 
-Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength,
-                                     const sp<IVibratorCallback> &callback, perform_cb _hidl_cb) {
-    Status status = Status::OK;
+ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strength,
+                                           const std::shared_ptr<IVibratorCallback> &callback,
+                                           int32_t *outTimeMs) {
+    ndk::ScopedAStatus status;
     uint32_t timeMs = 0;
     uint32_t effectIndex;
     uint32_t volLevel;
@@ -425,16 +386,16 @@ Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength,
             status = getCompoundDetails(effect, strength, &timeMs, &volLevel, &effectQueue);
             break;
         default:
-            status = Status::UNSUPPORTED_OPERATION;
+            status = ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
             break;
     }
-    if (status != Status::OK) {
+    if (!status.isOk()) {
         goto exit;
     }
 
     if (!effectQueue.empty()) {
         status = setEffectQueue(effectQueue);
-        if (status != Status::OK) {
+        if (!status.isOk()) {
             goto exit;
         }
         setEffectAmplitude(VOLTAGE_SCALE_MAX, VOLTAGE_SCALE_MAX);
@@ -444,29 +405,27 @@ Return<void> Vibrator::performEffect(Effect effect, EffectStrength strength,
         effectIndex = WAVEFORM_SIMPLE_EFFECT_INDEX;
     }
 
-    on(MAX_TIME_MS, effectIndex, callback);
+    status = on(MAX_TIME_MS, effectIndex, callback);
 
 exit:
 
-    _hidl_cb(status, timeMs);
-
-    return Void();
+    *outTimeMs = timeMs;
+    return status;
 }
 
-void Vibrator::waitForComplete(sp<IVibratorCallback> &&callback) {
+void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     mHwApi->pollVibeState(false);
     mHwApi->setActivate(false);
 
     if (callback) {
         auto ret = callback->onComplete();
         if (!ret.isOk()) {
-            ALOGE("Failed completion callback: %s", ret.description().c_str());
+            ALOGE("Failed completion callback: %d", ret.getExceptionCode());
         }
     }
 }
 
-}  // namespace implementation
-}  // namespace V1_4
 }  // namespace vibrator
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
