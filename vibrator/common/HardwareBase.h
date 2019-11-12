@@ -82,6 +82,7 @@ class HwApiBase {
     std::string mPathPrefix;
     NamesMap mNames;
     Records mRecords{RECORDS_SIZE};
+    std::mutex mRecordsMutex;
 };
 
 #define HWAPI_RECORD(args...) HwApiBase::record(__FUNCTION__, ##args)
@@ -147,6 +148,7 @@ bool HwApiBase::poll(const T &value, std::istream *stream) {
 
 template <typename T>
 void HwApiBase::record(const char *func, const T &value, const std::ios *stream) {
+    std::lock_guard<std::mutex> lock(mRecordsMutex);
     mRecords.emplace_back(std::make_unique<Record<T>>(func, value, stream));
     mRecords.pop_front();
 }
