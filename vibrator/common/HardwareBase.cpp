@@ -55,6 +55,7 @@ void HwApiBase::debug(int fd) {
         }
     }
 
+    mRecordsMutex.lock();
     dprintf(fd, "  Records:\n");
     for (auto &r : mRecords) {
         if (r == nullptr) {
@@ -62,6 +63,7 @@ void HwApiBase::debug(int fd) {
         }
         dprintf(fd, "    %s\n", r->toString(mNames).c_str());
     }
+    mRecordsMutex.unlock();
 }
 
 HwCalBase::HwCalBase() {
