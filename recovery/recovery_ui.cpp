@@ -24,7 +24,7 @@
 #include <android-base/endian.h>
 #include <android-base/logging.h>
 #include <app_nugget.h>
-#include <bootloader_message/bootloader_message.h>
+#include <misc_writer/misc_writer.h>
 #include <nos/NuggetClient.h>
 #include <nos/debug.h>
 #include <recovery_ui/device.h>
@@ -66,22 +66,19 @@ bool WipeTitanM() {
 // Wipes the provisioned flag as part of data wipe.
 bool WipeProvisionedFlag() {
     // Must be consistent with the one in init.hardware.rc (10-byte `theme-dark`).
-    const std::string wipe_str(10, '\x00');
-    constexpr size_t kProvisionedFlagOffsetInVendorSpace = 0;
-    if (std::string err; !WriteMiscPartitionVendorSpace(
-            wipe_str.data(), wipe_str.size(), kProvisionedFlagOffsetInVendorSpace, &err)) {
-        LOG(ERROR) << "Failed to write kWipeProvisionedString: " << err;
+    MiscWriter misc_writer(MiscWriterActions::kClearDarkThemeFlag);
+    if (!misc_writer.PerformAction()) {
+        LOG(ERROR) << "Failed to clear the dark theme flag";
         return false;
     }
     LOG(INFO) << "Provisioned flag wiped successful";
     return true;
 }
 
-} // namespace
+}  // namespace
 
-class PixelDevice : public ::Device
-{
-public:
+class PixelDevice : public ::Device {
+  public:
     explicit PixelDevice(::ScreenRecoveryUI* const ui) : ::Device(ui) {}
 
     /** Hook to wipe user data not stored in /data */
@@ -105,12 +102,11 @@ public:
     }
 };
 
-} // namespace pixel
-} // namespace google
-} // namespace hardware
-} // namespace android
+}  // namespace pixel
+}  // namespace google
+}  // namespace hardware
+}  // namespace android
 
-Device *make_device()
-{
+Device *make_device() {
     return new ::android::hardware::google::pixel::PixelDevice(new ::ScreenRecoveryUI);
 }

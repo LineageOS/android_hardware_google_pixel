@@ -11,14 +11,15 @@ cc_library_static {
         "recovery_ui.cpp",
     ],
 
-    static_libs: [
-        "libbase",
+    whole_static_libs: [
+        "libmisc_writer",
         "libbootloader_message",
         "libnos_for_recovery",
         "libnos_citadel_for_recovery",
     ],
 
     shared_libs: [
+        "libbase",
         "librecovery_ui",
     ],
 }
