@@ -22,6 +22,7 @@ cc_library {
         "android.hardware.boot@1.1",
     ],
     static_libs: [
+        "libboot_control",
         "libbootloader_message_vendor",
         "libfstab",
     ],
