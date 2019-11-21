@@ -381,8 +381,7 @@ class EffectsTest : public VibratorTest, public WithParamInterface<EffectTuple> 
         auto param = info.param;
         auto effect = std::get<0>(param);
         auto strength = std::get<1>(param);
-        return std::to_string(static_cast<int>(effect)) + "_" +
-               std::to_string(static_cast<int>(strength));
+        return toString(effect) + "_" + toString(strength);
     }
 };
 
