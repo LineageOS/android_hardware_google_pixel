@@ -23,6 +23,7 @@
 
 #include <android-base/endian.h>
 #include <android-base/logging.h>
+#include <android-base/strings.h>
 #include <app_nugget.h>
 #include <misc_writer/misc_writer.h>
 #include <nos/NuggetClient.h>
@@ -75,6 +76,19 @@ bool WipeProvisionedFlag() {
     return true;
 }
 
+// Provision Silent OTA(SOTA) flag while reason is "enable-sota"
+bool ProvisionSilentOtaFlag(const std::string& reason) {
+    if (android::base::StartsWith(reason, MiscWriter::kSotaFlag)) {
+        MiscWriter misc_writer(MiscWriterActions::kSetSotaFlag);
+        if (!misc_writer.PerformAction()) {
+            LOG(ERROR) << "Failed to set the silent ota flag";
+            return false;
+        }
+        LOG(INFO) << "Silent ota flag set successful";
+    }
+    return true;
+}
+
 }  // namespace
 
 class PixelDevice : public ::Device {
@@ -97,6 +111,13 @@ class PixelDevice : public ::Device {
         }
 
         // Extendable to wipe other components
+
+        // Additional behavior along with wiping data
+        auto reason = GetReason();
+        CHECK(reason.has_value());
+        if (!ProvisionSilentOtaFlag(reason.value())) {
+            totalSuccess = false;
+        }
 
         return totalSuccess;
     }
