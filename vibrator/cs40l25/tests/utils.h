@@ -20,7 +20,7 @@
 
 #include "types.h"
 
-static inline EffectScale toScale(uint8_t target, uint8_t maximum) {
+static inline EffectScale toScale(float target, float maximum) {
     return std::round((-20 * std::log10(target / static_cast<float>(maximum))) / 0.125f);
 }
 
@@ -29,7 +29,7 @@ static inline EffectScale levelToScale(EffectLevel level) {
 }
 
 static inline EffectScale amplitudeToScale(EffectAmplitude amplitude) {
-    return toScale(amplitude, UINT8_MAX);
+    return toScale(amplitude, 1.0f);
 }
 
 static inline uint32_t msToCycles(EffectDuration ms) {

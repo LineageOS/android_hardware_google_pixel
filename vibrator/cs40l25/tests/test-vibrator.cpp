@@ -127,19 +127,7 @@ EffectQueue Queue(const T &first, const U &second, Args... rest) {
     return {string, duration};
 }
 
-class CompletionCallback : public BnVibratorCallback {
-  public:
-    CompletionCallback(std::function<void()> callback) : mCallback(callback) {}
-    ndk::ScopedAStatus onComplete() override {
-        mCallback();
-        return ndk::ScopedAStatus::ok();
-    }
-
-  private:
-    std::function<void()> mCallback;
-};
-
-class VibratorTest : public Test, public WithParamInterface<EffectTuple> {
+class VibratorTest : public Test {
   public:
     void SetUp() override {
         std::unique_ptr<MockApi> mockapi;
@@ -335,7 +323,7 @@ TEST_F(VibratorTest, supportsExternalAmplitudeControl_unsupported) {
 
 TEST_F(VibratorTest, setAmplitude_supported) {
     Sequence s;
-    EffectAmplitude amplitude = std::rand() + 1;
+    EffectAmplitude amplitude = static_cast<float>(std::rand()) / RAND_MAX ?: 1.0f;
 
     EXPECT_CALL(*mMockApi, getAspEnable(_))
             .InSequence(s)
@@ -387,17 +375,32 @@ TEST_F(VibratorTest, setExternalControl_disable) {
     EXPECT_TRUE(mVibrator->setExternalControl(false).isOk());
 }
 
-TEST_P(VibratorTest, perform) {
+class EffectsTest : public VibratorTest, public WithParamInterface<EffectTuple> {
+  public:
+    static auto PrintParam(const TestParamInfo<ParamType> &info) {
+        auto param = info.param;
+        auto effect = std::get<0>(param);
+        auto strength = std::get<1>(param);
+        return std::to_string(static_cast<int>(effect)) + "_" +
+               std::to_string(static_cast<int>(strength));
+    }
+};
+
+TEST_P(EffectsTest, perform) {
     auto param = GetParam();
     auto effect = std::get<0>(param);
     auto strength = std::get<1>(param);
     auto scale = EFFECT_SCALE.find(param);
     auto queue = EFFECT_QUEUE.find(param);
     EffectDuration duration;
-    std::promise<void> completionPromise;
-    std::future<void> completionFuture{completionPromise.get_future()};
-    std::shared_ptr<CompletionCallback> callback = ndk::SharedRefBase::make<CompletionCallback>(
-            [&completionPromise] { completionPromise.set_value(); });
+    auto callback = ndk::SharedRefBase::make<MockVibratorCallback>();
+    std::promise<void> promise;
+    std::future<void> future{promise.get_future()};
+    auto complete = [&promise] {
+        promise.set_value();
+        return ndk::ScopedAStatus::ok();
+    };
+
     ExpectationSet eSetup;
     Expectation eActivate, ePoll;
 
@@ -424,6 +427,7 @@ TEST_P(VibratorTest, perform) {
                         .After(eActivate)
                         .WillOnce(Return(true));
         EXPECT_CALL(*mMockApi, setActivate(false)).After(ePoll).WillOnce(Return(true));
+        EXPECT_CALL(*callback, onComplete()).After(ePoll).WillOnce(complete);
     }
 
     int32_t lengthMs;
@@ -436,8 +440,7 @@ TEST_P(VibratorTest, perform) {
     }
 
     if (duration) {
-        EXPECT_EQ(completionFuture.wait_for(std::chrono::milliseconds(duration + 100)),
-                  std::future_status::ready);
+        EXPECT_EQ(future.wait_for(std::chrono::milliseconds(100)), std::future_status::ready);
     }
 }
 
@@ -454,15 +457,80 @@ const std::vector<Effect> kEffects = {
 const std::vector<EffectStrength> kEffectStrengths = {EffectStrength::LIGHT, EffectStrength::MEDIUM,
                                                       EffectStrength::STRONG};
 
-INSTANTIATE_TEST_CASE_P(VibratorEffects, VibratorTest,
+INSTANTIATE_TEST_CASE_P(VibratorTests, EffectsTest,
                         Combine(ValuesIn(kEffects.begin(), kEffects.end()),
                                 ValuesIn(kEffectStrengths.begin(), kEffectStrengths.end())),
-                        [](const TestParamInfo<VibratorTest::ParamType> &info) {
-                            auto effect = std::get<0>(info.param);
-                            auto strength = std::get<1>(info.param);
-                            return std::to_string(static_cast<int>(effect)) + "_" +
-                                   std::to_string(static_cast<int>(strength));
-                        });
+                        EffectsTest::PrintParam);
+
+struct ComposeParam {
+    std::string name;
+    std::vector<CompositeEffect> composite;
+    EffectQueue queue;
+};
+
+class ComposeTest : public VibratorTest, public WithParamInterface<ComposeParam> {
+  public:
+    static auto PrintParam(const TestParamInfo<ParamType> &info) { return info.param.name; }
+};
+
+TEST_P(ComposeTest, compose) {
+    auto param = GetParam();
+    auto composite = param.composite;
+    auto queue = std::get<0>(param.queue);
+    ExpectationSet eSetup;
+    Expectation eActivate, ePoll;
+    auto callback = ndk::SharedRefBase::make<MockVibratorCallback>();
+    std::promise<void> promise;
+    std::future<void> future{promise.get_future()};
+    auto complete = [&promise] {
+        promise.set_value();
+        return ndk::ScopedAStatus::ok();
+    };
+
+    eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(Return(true));
+    eSetup += EXPECT_CALL(*mMockApi, setEffectQueue(queue)).WillOnce(Return(true));
+    eSetup += EXPECT_CALL(*mMockApi, setEffectScale(0)).WillOnce(Return(true));
+    eSetup += EXPECT_CALL(*mMockApi, setDuration(UINT32_MAX)).WillOnce(Return(true));
+    eActivate = EXPECT_CALL(*mMockApi, setActivate(true)).After(eSetup).WillOnce(Return(true));
+    ePoll = EXPECT_CALL(*mMockApi, pollVibeState(false)).After(eActivate).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, setActivate(false)).After(ePoll).WillOnce(Return(true));
+    EXPECT_CALL(*callback, onComplete()).After(ePoll).WillOnce(complete);
+
+    EXPECT_EQ(EX_NONE, mVibrator->compose(composite, callback).getExceptionCode());
+
+    EXPECT_EQ(future.wait_for(std::chrono::milliseconds(100)), std::future_status::ready);
+}
+
+const std::vector<ComposeParam> kComposeParams = {
+        {"click",
+         {{0, CompositePrimitive::CLICK, 1.0f}},
+         Queue(QueueEffect(2, 1.0f * V_LEVELS[4]), 0)},
+        {"thud",
+         {{1, CompositePrimitive::THUD, 0.8f}},
+         Queue(1, QueueEffect(4, 0.8f * V_LEVELS[4]), 0)},
+        {"spin",
+         {{2, CompositePrimitive::SPIN, 0.6f}},
+         Queue(2, QueueEffect(5, 0.6f * V_LEVELS[4]), 0)},
+        {"quick_rise",
+         {{3, CompositePrimitive::QUICK_RISE, 0.4f}},
+         Queue(3, QueueEffect(6, 0.4f * V_LEVELS[4]), 0)},
+        {"slow_rise",
+         {{4, CompositePrimitive::SLOW_RISE, 0.2f}},
+         Queue(4, QueueEffect(7, 0.2f * V_LEVELS[4]), 0)},
+        {"quick_fall",
+         {{5, CompositePrimitive::QUICK_FALL, 1.0f}},
+         Queue(5, QueueEffect(8, V_LEVELS[4]), 0)},
+        {"pop",
+         {{6, CompositePrimitive::SLOW_RISE, 1.0f}, {50, CompositePrimitive::THUD, 1.0f}},
+         Queue(6, QueueEffect(7, V_LEVELS[4]), 50, QueueEffect(4, V_LEVELS[4]), 0)},
+        {"snap",
+         {{7, CompositePrimitive::QUICK_RISE, 1.0f}, {0, CompositePrimitive::QUICK_FALL, 1.0f}},
+         Queue(7, QueueEffect(6, V_LEVELS[4]), QueueEffect(8, V_LEVELS[4]), 0)},
+};
+
+INSTANTIATE_TEST_CASE_P(VibratorTests, ComposeTest,
+                        ValuesIn(kComposeParams.begin(), kComposeParams.end()),
+                        ComposeTest::PrintParam);
 
 }  // namespace vibrator
 }  // namespace hardware

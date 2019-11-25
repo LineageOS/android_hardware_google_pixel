@@ -16,6 +16,8 @@
 #ifndef ANDROID_HARDWARE_VIBRATOR_TEST_MOCKS_H
 #define ANDROID_HARDWARE_VIBRATOR_TEST_MOCKS_H
 
+#include <aidl/android/hardware/vibrator/BnVibratorCallback.h>
+
 #include "Vibrator.h"
 
 class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
@@ -56,6 +58,11 @@ class MockCal : public ::aidl::android::hardware::vibrator::Vibrator::HwCal {
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockCal() override { destructor(); };
+};
+
+class MockVibratorCallback : public aidl::android::hardware::vibrator::BnVibratorCallback {
+  public:
+    MOCK_METHOD(ndk::ScopedAStatus, onComplete, ());
 };
 
 #endif  // ANDROID_HARDWARE_VIBRATOR_TEST_MOCKS_H
