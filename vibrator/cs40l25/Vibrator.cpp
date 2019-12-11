@@ -302,7 +302,7 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     (void)args;
     (void)numArgs;
 
-    dprintf(fd, "HIDL:\n");
+    dprintf(fd, "AIDL:\n");
 
     dprintf(fd, "  Voltage Levels:");
     for (auto v : mVolLevels) {
