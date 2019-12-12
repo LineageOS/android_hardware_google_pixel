@@ -45,6 +45,7 @@ using ::testing::ExpectationSet;
 using ::testing::Ge;
 using ::testing::Mock;
 using ::testing::MockFunction;
+using ::testing::Range;
 using ::testing::Return;
 using ::testing::Sequence;
 using ::testing::SetArgPointee;
@@ -69,11 +70,6 @@ static constexpr EffectDuration EFFECT_DURATION{15};
 
 static constexpr EffectIndex EFFECT_INDEX{2};
 static constexpr EffectIndex QUEUE_INDEX{65534};
-
-static constexpr EffectIndex GPIO_FALL_INDEX{EFFECT_INDEX};
-static const EffectScale GPIO_FALL_SCALE{levelToScale(V_LEVELS[2])};
-static constexpr EffectIndex GPIO_RISE_INDEX{EFFECT_INDEX};
-static const EffectScale GPIO_RISE_SCALE{levelToScale(V_LEVELS[3])};
 
 static const EffectScale ON_GLOBAL_SCALE{levelToScale(V_LEVELS[5])};
 static const EffectIndex ON_EFFECT_INDEX{0};
@@ -258,11 +254,6 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).InSequence(durSeq).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, getEffectDuration(_)).InSequence(durSeq).WillOnce(DoDefault());
 
-    EXPECT_CALL(*mMockApi, setGpioFallIndex(GPIO_FALL_INDEX)).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setGpioFallScale(GPIO_FALL_SCALE)).After(volGet).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setGpioRiseIndex(GPIO_RISE_INDEX)).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setGpioRiseScale(GPIO_RISE_SCALE)).After(volGet).WillOnce(Return(true));
-
     createVibrator(std::move(mockapi), std::move(mockcal), false);
 }
 
@@ -443,6 +434,26 @@ TEST_P(EffectsTest, perform) {
     }
 }
 
+TEST_P(EffectsTest, alwaysOnEnable) {
+    auto param = GetParam();
+    auto effect = std::get<0>(param);
+    auto strength = std::get<1>(param);
+    auto scale = EFFECT_SCALE.find(param);
+    bool supported = (scale != EFFECT_SCALE.end());
+
+    if (supported) {
+        EXPECT_CALL(*mMockApi, setGpioRiseIndex(EFFECT_INDEX)).WillOnce(Return(true));
+        EXPECT_CALL(*mMockApi, setGpioRiseScale(scale->second)).WillOnce(Return(true));
+    }
+
+    ndk::ScopedAStatus status = mVibrator->alwaysOnEnable(0, effect, strength);
+    if (supported) {
+        EXPECT_EQ(EX_NONE, status.getExceptionCode());
+    } else {
+        EXPECT_EQ(EX_UNSUPPORTED_OPERATION, status.getExceptionCode());
+    }
+}
+
 // TODO(b/143992652): autogenerate
 const std::vector<Effect> kEffects = {
         Effect::CLICK,       Effect::DOUBLE_CLICK, Effect::TICK,        Effect::THUD,
@@ -530,6 +541,55 @@ const std::vector<ComposeParam> kComposeParams = {
 INSTANTIATE_TEST_CASE_P(VibratorTests, ComposeTest,
                         ValuesIn(kComposeParams.begin(), kComposeParams.end()),
                         ComposeTest::PrintParam);
+
+class AlwaysOnTest : public VibratorTest, public WithParamInterface<int32_t> {
+  public:
+    static auto PrintParam(const TestParamInfo<ParamType> &info) {
+        return std::to_string(info.param);
+    }
+};
+
+TEST_P(AlwaysOnTest, alwaysOnEnable) {
+    auto param = GetParam();
+    auto scale = EFFECT_SCALE.begin();
+
+    std::advance(scale, std::rand() % EFFECT_SCALE.size());
+
+    switch (param) {
+        case 0:
+            EXPECT_CALL(*mMockApi, setGpioRiseIndex(EFFECT_INDEX)).WillOnce(Return(true));
+            EXPECT_CALL(*mMockApi, setGpioRiseScale(scale->second)).WillOnce(Return(true));
+            break;
+        case 1:
+            EXPECT_CALL(*mMockApi, setGpioFallIndex(EFFECT_INDEX)).WillOnce(Return(true));
+            EXPECT_CALL(*mMockApi, setGpioFallScale(scale->second)).WillOnce(Return(true));
+            break;
+    }
+
+    auto effect = std::get<0>(scale->first);
+    auto strength = std::get<1>(scale->first);
+
+    ndk::ScopedAStatus status = mVibrator->alwaysOnEnable(param, effect, strength);
+    EXPECT_EQ(EX_NONE, status.getExceptionCode());
+}
+
+TEST_P(AlwaysOnTest, alwaysOnDisable) {
+    auto param = GetParam();
+
+    switch (param) {
+        case 0:
+            EXPECT_CALL(*mMockApi, setGpioRiseIndex(0)).WillOnce(Return(true));
+            break;
+        case 1:
+            EXPECT_CALL(*mMockApi, setGpioFallIndex(0)).WillOnce(Return(true));
+            break;
+    }
+
+    ndk::ScopedAStatus status = mVibrator->alwaysOnDisable(param);
+    EXPECT_EQ(EX_NONE, status.getExceptionCode());
+}
+
+INSTANTIATE_TEST_CASE_P(VibratorTests, AlwaysOnTest, Range(0, 1), AlwaysOnTest::PrintParam);
 
 }  // namespace vibrator
 }  // namespace hardware
