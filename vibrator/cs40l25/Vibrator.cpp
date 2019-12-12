@@ -84,6 +84,12 @@ static uint8_t amplitudeToScale(float amplitude, float maximum) {
     return std::round((-20 * std::log10(amplitude / static_cast<float>(maximum))) /
                       (AMP_ATTENUATE_STEP_SIZE));
 }
+
+enum class AlwaysOnId : uint32_t {
+    GPIO_RISE,
+    GPIO_FALL,
+};
+
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
     uint32_t caldata;
@@ -108,22 +114,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     mHwApi->getEffectDuration(&effectDuration);
 
     mSimpleEffectDuration = std::ceil(effectDuration / EFFECT_FREQUENCY_KHZ);
-
-    const uint32_t scaleFall =
-            amplitudeToScale(mVolLevels[WAVEFORM_CLICK_EFFECT_LEVEL], VOLTAGE_SCALE_MAX);
-    const uint32_t scaleRise =
-            amplitudeToScale(mVolLevels[WAVEFORM_HEAVY_CLICK_EFFECT_LEVEL], VOLTAGE_SCALE_MAX);
-
-    mHwApi->setGpioFallIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
-    mHwApi->setGpioFallScale(scaleFall);
-    mHwApi->setGpioRiseIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
-    mHwApi->setGpioRiseScale(scaleRise);
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     ATRACE_NAME("Vibrator::getCapabilities");
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
-                  IVibrator::CAP_COMPOSE_EFFECTS;
+                  IVibrator::CAP_COMPOSE_EFFECTS | IVibrator::CAP_ALWAYS_ON_CONTROL;
     if (mHwApi->hasEffectScale()) {
         ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
     }
@@ -285,6 +281,50 @@ ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
     }
 
     return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> *_aidl_return) {
+    *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK};
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t id, Effect effect, EffectStrength strength) {
+    ndk::ScopedAStatus status;
+    uint32_t timeMs;
+    uint32_t volLevel;
+    uint32_t scale;
+
+    status = getSimpleDetails(effect, strength, &timeMs, &volLevel);
+    if (!status.isOk()) {
+        return status;
+    }
+
+    scale = amplitudeToScale(volLevel, VOLTAGE_SCALE_MAX);
+
+    switch (static_cast<AlwaysOnId>(id)) {
+        case AlwaysOnId::GPIO_RISE:
+            mHwApi->setGpioRiseIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
+            mHwApi->setGpioRiseScale(scale);
+            return ndk::ScopedAStatus::ok();
+        case AlwaysOnId::GPIO_FALL:
+            mHwApi->setGpioFallIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
+            mHwApi->setGpioFallScale(scale);
+            return ndk::ScopedAStatus::ok();
+    }
+
+    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t id) {
+    switch (static_cast<AlwaysOnId>(id)) {
+        case AlwaysOnId::GPIO_RISE:
+            mHwApi->setGpioRiseIndex(0);
+            return ndk::ScopedAStatus::ok();
+        case AlwaysOnId::GPIO_FALL:
+            mHwApi->setGpioFallIndex(0);
+            return ndk::ScopedAStatus::ok();
+    }
+
+    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 bool Vibrator::isUnderExternalControl() {
