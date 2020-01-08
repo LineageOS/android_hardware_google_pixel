@@ -20,13 +20,13 @@ cc_defaults {
         "PixelVibratorCommon",
     ],
     shared_libs: [
+        "android.hardware.vibrator-ndk_platform",
         "libbase",
         "libbinder_ndk",
         "libcutils",
         "libhardware",
         "liblog",
         "libutils",
-        "vintf-vibrator-ndk_platform",
     ],
     cflags: [
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
