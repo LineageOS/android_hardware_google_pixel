@@ -78,16 +78,8 @@ class VibratorBench : public benchmark::Fixture {
 
     static void SupportedEffectArgs(benchmark::internal::Benchmark *b) {
         b->ArgNames({"Effect", "Strength"});
-        // TODO(b/143992652): use enum ranges
-        for (Effect effect :
-             {Effect::CLICK,       Effect::DOUBLE_CLICK, Effect::TICK,        Effect::THUD,
-              Effect::POP,         Effect::HEAVY_CLICK,  Effect::RINGTONE_1,  Effect::RINGTONE_2,
-              Effect::RINGTONE_3,  Effect::RINGTONE_4,   Effect::RINGTONE_5,  Effect::RINGTONE_6,
-              Effect::RINGTONE_7,  Effect::RINGTONE_8,   Effect::RINGTONE_9,  Effect::RINGTONE_10,
-              Effect::RINGTONE_11, Effect::RINGTONE_12,  Effect::RINGTONE_13, Effect::RINGTONE_14,
-              Effect::RINGTONE_15, Effect::TEXTURE_TICK}) {
-            for (EffectStrength strength :
-                 {EffectStrength::LIGHT, EffectStrength::MEDIUM, EffectStrength::STRONG}) {
+        for (Effect effect : ndk::enum_range<Effect>()) {
+            for (EffectStrength strength : ndk::enum_range<EffectStrength>()) {
                 b->Args({static_cast<long>(effect), static_cast<long>(strength)});
             }
         }
