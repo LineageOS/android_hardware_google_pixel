@@ -64,7 +64,8 @@ static EffectQueue Queue(const T &first, const U &second, Args... rest);
 // Constants With Arbitrary Values
 
 static constexpr std::array<EffectLevel, 6> V_LEVELS{40, 50, 60, 70, 80, 90};
-static constexpr EffectDuration EFFECT_DURATION{15};
+static constexpr std::array<EffectDuration, 9> EFFECT_DURATIONS{0,   0,   15,  0,  50,
+                                                                100, 150, 200, 250};
 
 // Constants With Prescribed Values
 
@@ -105,7 +106,7 @@ EffectQueue Queue(const QueueEffect &effect) {
     auto index = std::get<0>(effect);
     auto level = std::get<1>(effect);
     auto string = std::to_string(index) + "." + std::to_string(level);
-    auto duration = EFFECT_DURATION;
+    auto duration = EFFECT_DURATIONS[index];
     return {string, duration};
 }
 
@@ -145,8 +146,14 @@ class VibratorTest : public Test {
 
         ON_CALL(*mMockApi, destructor()).WillByDefault(Assign(&mMockApi, nullptr));
 
+        ON_CALL(*mMockApi, getEffectCount(_))
+                .WillByDefault(DoAll(SetArgPointee<0>(EFFECT_DURATIONS.size()), Return(true)));
+
+        ON_CALL(*mMockApi, setEffectIndex(_))
+                .WillByDefault(Invoke(this, &VibratorTest::setEffectIndex));
+
         ON_CALL(*mMockApi, getEffectDuration(_))
-                .WillByDefault(DoAll(SetArgPointee<0>(msToCycles(EFFECT_DURATION)), Return(true)));
+                .WillByDefault(Invoke(this, &VibratorTest::getEffectDuration));
 
         ON_CALL(*mMockCal, destructor()).WillByDefault(Assign(&mMockCal, nullptr));
 
@@ -174,6 +181,20 @@ class VibratorTest : public Test {
         mVibrator.reset();
     }
 
+    bool setEffectIndex(EffectIndex index) {
+        mEffectIndex = index;
+        return true;
+    }
+
+    bool getEffectDuration(EffectDuration *duration) {
+        if (mEffectIndex < EFFECT_DURATIONS.size()) {
+            *duration = msToCycles(EFFECT_DURATIONS[mEffectIndex]);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
   private:
     void relaxMock(bool relax) {
         auto times = relax ? AnyNumber() : Exactly(0);
@@ -187,6 +208,7 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockApi, setQ(_)).Times(times);
         EXPECT_CALL(*mMockApi, setActivate(_)).Times(times);
         EXPECT_CALL(*mMockApi, setDuration(_)).Times(times);
+        EXPECT_CALL(*mMockApi, getEffectCount(_)).Times(times);
         EXPECT_CALL(*mMockApi, getEffectDuration(_)).Times(times);
         EXPECT_CALL(*mMockApi, setEffectIndex(_)).Times(times);
         EXPECT_CALL(*mMockApi, setEffectQueue(_)).Times(times);
@@ -215,6 +237,7 @@ class VibratorTest : public Test {
     MockApi *mMockApi;
     MockCal *mMockCal;
     std::shared_ptr<IVibrator> mVibrator;
+    uint32_t mEffectIndex;
 };
 
 TEST_F(VibratorTest, Constructor) {
@@ -251,8 +274,14 @@ TEST_F(VibratorTest, Constructor) {
     volGet = EXPECT_CALL(*mMockCal, getVolLevels(_)).WillOnce(DoDefault());
 
     EXPECT_CALL(*mMockApi, setState(true)).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).InSequence(durSeq).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, getEffectDuration(_)).InSequence(durSeq).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockApi, getEffectCount(_)).InSequence(durSeq).WillOnce(DoDefault());
+
+    for (auto &d : EFFECT_DURATIONS) {
+        EXPECT_CALL(*mMockApi, setEffectIndex(&d - &EFFECT_DURATIONS[0]))
+                .InSequence(durSeq)
+                .WillOnce(DoDefault());
+        EXPECT_CALL(*mMockApi, getEffectDuration(_)).InSequence(durSeq).WillOnce(DoDefault());
+    }
 
     createVibrator(std::move(mockapi), std::move(mockcal), false);
 }
@@ -262,7 +291,7 @@ TEST_F(VibratorTest, on) {
     uint16_t duration = std::rand() + 1;
 
     EXPECT_CALL(*mMockApi, setGlobalScale(ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setEffectIndex(ON_EFFECT_INDEX)).InSequence(s2).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, setEffectIndex(ON_EFFECT_INDEX)).InSequence(s2).WillOnce(DoDefault());
     EXPECT_CALL(*mMockApi, setDuration(Ge(duration))).InSequence(s3).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setActivate(true)).InSequence(s1, s2, s3).WillOnce(Return(true));
 
@@ -395,14 +424,14 @@ TEST_P(EffectsTest, perform) {
     Expectation eActivate, ePoll;
 
     if (scale != EFFECT_SCALE.end()) {
-        duration = EFFECT_DURATION;
+        duration = EFFECT_DURATIONS[2];
 
-        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, setEffectScale(scale->second)).WillOnce(Return(true));
     } else if (queue != EFFECT_QUEUE.end()) {
         duration = std::get<1>(queue->second);
 
-        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(Return(true));
+        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, setEffectQueue(std::get<0>(queue->second)))
                           .WillOnce(Return(true));
         eSetup += EXPECT_CALL(*mMockApi, setEffectScale(0)).WillOnce(Return(true));
@@ -464,6 +493,39 @@ INSTANTIATE_TEST_CASE_P(VibratorTests, EffectsTest,
                                 ValuesIn(kEffectStrengths.begin(), kEffectStrengths.end())),
                         EffectsTest::PrintParam);
 
+struct PrimitiveParam {
+    CompositePrimitive primitive;
+    EffectIndex index;
+};
+
+class PrimitiveTest : public VibratorTest, public WithParamInterface<PrimitiveParam> {
+  public:
+    static auto PrintParam(const TestParamInfo<ParamType> &info) {
+        return toString(info.param.primitive);
+    }
+};
+
+const std::vector<PrimitiveParam> kPrimitiveParams = {
+        {CompositePrimitive::NOOP, 0},       {CompositePrimitive::CLICK, 2},
+        {CompositePrimitive::THUD, 4},       {CompositePrimitive::SPIN, 5},
+        {CompositePrimitive::QUICK_RISE, 6}, {CompositePrimitive::SLOW_RISE, 7},
+        {CompositePrimitive::QUICK_FALL, 8},
+};
+
+TEST_P(PrimitiveTest, getPrimitiveDuration) {
+    auto param = GetParam();
+    auto primitive = param.primitive;
+    auto index = param.index;
+    int32_t duration;
+
+    EXPECT_EQ(EX_NONE, mVibrator->getPrimitiveDuration(primitive, &duration).getExceptionCode());
+    EXPECT_EQ(EFFECT_DURATIONS[index], duration);
+}
+
+INSTANTIATE_TEST_CASE_P(VibratorTests, PrimitiveTest,
+                        ValuesIn(kPrimitiveParams.begin(), kPrimitiveParams.end()),
+                        PrimitiveTest::PrintParam);
+
 struct ComposeParam {
     std::string name;
     std::vector<CompositeEffect> composite;
@@ -489,7 +551,7 @@ TEST_P(ComposeTest, compose) {
         return ndk::ScopedAStatus::ok();
     };
 
-    eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(Return(true));
+    eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(DoDefault());
     eSetup += EXPECT_CALL(*mMockApi, setEffectQueue(queue)).WillOnce(Return(true));
     eSetup += EXPECT_CALL(*mMockApi, setEffectScale(0)).WillOnce(Return(true));
     eSetup += EXPECT_CALL(*mMockApi, setDuration(UINT32_MAX)).WillOnce(Return(true));
