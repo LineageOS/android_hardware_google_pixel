@@ -62,6 +62,7 @@ static constexpr uint32_t WAVEFORM_SPIN_INDEX = 5;
 static constexpr uint32_t WAVEFORM_QUICK_RISE_INDEX = 6;
 static constexpr uint32_t WAVEFORM_SLOW_RISE_INDEX = 7;
 static constexpr uint32_t WAVEFORM_QUICK_FALL_INDEX = 8;
+static constexpr uint32_t WAVEFORM_LIGHT_TICK_INDEX = 9;
 
 static constexpr uint32_t WAVEFORM_TRIGGER_QUEUE_INDEX = 65534;
 
@@ -93,7 +94,7 @@ enum class AlwaysOnId : uint32_t {
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
     uint32_t caldata;
-    uint32_t effectDuration;
+    uint32_t effectCount;
 
     if (!mHwApi->setState(true)) {
         ALOGE("Failed to set state (%d): %s", errno, strerror(errno));
@@ -110,10 +111,15 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
     mHwCal->getVolLevels(&mVolLevels);
 
-    mHwApi->setEffectIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
-    mHwApi->getEffectDuration(&effectDuration);
-
-    mSimpleEffectDuration = std::ceil(effectDuration / EFFECT_FREQUENCY_KHZ);
+    mHwApi->getEffectCount(&effectCount);
+    mEffectDurations.resize(effectCount);
+    for (size_t effectIndex = 0; effectIndex < effectCount; effectIndex++) {
+        mHwApi->setEffectIndex(effectIndex);
+        uint32_t effectDuration;
+        if (mHwApi->getEffectDuration(&effectDuration)) {
+            mEffectDurations[effectIndex] = std::ceil(effectDuration / EFFECT_FREQUENCY_KHZ);
+        }
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -199,6 +205,35 @@ ndk::ScopedAStatus Vibrator::getCompositionDelayMax(int32_t *maxDelayMs) {
 ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
     ATRACE_NAME("Vibrator::getCompositionSizeMax");
     *maxSize = COMPOSE_SIZE_MAX;
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
+    *supported = {
+            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
+            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
+            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
+            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
+    };
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::getPrimitiveDuration(CompositePrimitive primitive,
+                                                  int32_t *durationMs) {
+    ndk::ScopedAStatus status;
+    uint32_t effectIndex, volLevel;
+
+    if (primitive != CompositePrimitive::NOOP) {
+        status = getPrimitiveDetails(primitive, 1.0f, &effectIndex, &volLevel);
+        if (!status.isOk()) {
+            return status;
+        }
+
+        *durationMs = mEffectDurations[effectIndex];
+    } else {
+        *durationMs = 0;
+    }
+
     return ndk::ScopedAStatus::ok();
 }
 
@@ -350,7 +385,11 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     }
     dprintf(fd, "\n");
 
-    dprintf(fd, "  Effect Duration: %" PRIu32 "\n", mSimpleEffectDuration);
+    dprintf(fd, "  Effect Durations:");
+    for (auto d : mEffectDurations) {
+        dprintf(fd, " %" PRIu32, d);
+    }
+    dprintf(fd, "\n");
 
     dprintf(fd, "\n");
 
@@ -405,7 +444,7 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
     }
 
     volLevel = mVolLevels[volIndex + volOffset];
-    timeMs = mSimpleEffectDuration + MAX_COLD_START_LATENCY_MS;
+    timeMs = mEffectDurations[WAVEFORM_SIMPLE_EFFECT_INDEX] + MAX_COLD_START_LATENCY_MS;
 
     *outTimeMs = timeMs;
     *outVolLevel = volLevel;
@@ -486,6 +525,9 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive, f
             break;
         case CompositePrimitive::QUICK_FALL:
             effectIndex = WAVEFORM_QUICK_FALL_INDEX;
+            break;
+        case CompositePrimitive::LIGHT_TICK:
+            effectIndex = WAVEFORM_LIGHT_TICK_INDEX;
             break;
         default:
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);

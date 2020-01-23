@@ -52,6 +52,7 @@ class HwApiTest : public Test {
             "device/gpio1_fall_dig_scale",
             "device/gpio1_rise_index",
             "device/gpio1_rise_dig_scale",
+            "device/num_waves",
     };
 
   public:
@@ -227,6 +228,8 @@ TEST_P(GetUint32Test, failure) {
 
 INSTANTIATE_TEST_CASE_P(HwApiTests, GetUint32Test,
                         ValuesIn({
+                                GetUint32Test::MakeParam("device/num_waves",
+                                                         &Vibrator::HwApi::getEffectCount),
                                 GetUint32Test::MakeParam("device/cp_trigger_duration",
                                                          &Vibrator::HwApi::getEffectDuration),
                         }),
