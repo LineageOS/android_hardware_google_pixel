@@ -46,6 +46,8 @@ class Vibrator : public BnVibrator {
         virtual bool setActivate(bool value) = 0;
         // Specifies the vibration duration in milliseconds.
         virtual bool setDuration(uint32_t value) = 0;
+        // Reports the number of effect waveforms loaded in firmware.
+        virtual bool getEffectCount(uint32_t *value) = 0;
         // Reports the duration of the waveform selected by
         // setEffectIndex(), measured in 48-kHz periods.
         virtual bool getEffectDuration(uint32_t *value) = 0;
@@ -126,6 +128,9 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus setExternalControl(bool enabled) override;
     ndk::ScopedAStatus getCompositionDelayMax(int32_t *maxDelayMs);
     ndk::ScopedAStatus getCompositionSizeMax(int32_t *maxSize);
+    ndk::ScopedAStatus getSupportedPrimitives(std::vector<CompositePrimitive> *supported) override;
+    ndk::ScopedAStatus getPrimitiveDuration(CompositePrimitive primitive,
+                                            int32_t *durationMs) override;
     ndk::ScopedAStatus compose(const std::vector<CompositeEffect> &composite,
                                const std::shared_ptr<IVibratorCallback> &callback) override;
     ndk::ScopedAStatus getSupportedAlwaysOnEffects(std::vector<Effect> *_aidl_return) override;
@@ -162,7 +167,7 @@ class Vibrator : public BnVibrator {
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
     std::array<uint32_t, 6> mVolLevels;
-    uint32_t mSimpleEffectDuration;
+    std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
 };
 

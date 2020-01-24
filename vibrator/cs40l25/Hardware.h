@@ -46,6 +46,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         open("device/gpio1_rise_index", &mGpioRiseIndex);
         open("device/gpio1_rise_dig_scale", &mGpioRiseScale);
         open("device/vibe_state", &mVibeState);
+        open("device/num_waves", &mEffectCount);
     }
 
     bool setF0(uint32_t value) override { return set(value, &mF0); }
@@ -53,6 +54,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setQ(uint32_t value) override { return set(value, &mQ); }
     bool setActivate(bool value) override { return set(value, &mActivate); }
     bool setDuration(uint32_t value) override { return set(value, &mDuration); }
+    bool getEffectCount(uint32_t *value) override { return get(value, &mEffectCount); }
     bool getEffectDuration(uint32_t *value) override { return get(value, &mEffectDuration); }
     bool setEffectIndex(uint32_t value) override { return set(value, &mEffectIndex); }
     bool setEffectQueue(std::string value) override { return set(value, &mEffectQueue); }
@@ -76,6 +78,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mQ;
     std::ofstream mActivate;
     std::ofstream mDuration;
+    std::ifstream mEffectCount;
     std::ifstream mEffectDuration;
     std::ofstream mEffectIndex;
     std::ofstream mEffectQueue;

@@ -28,6 +28,7 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(setQ, bool(uint32_t value));
     MOCK_METHOD1(setActivate, bool(bool value));
     MOCK_METHOD1(setDuration, bool(uint32_t value));
+    MOCK_METHOD1(getEffectCount, bool(uint32_t *value));
     MOCK_METHOD1(getEffectDuration, bool(uint32_t *value));
     MOCK_METHOD1(setEffectIndex, bool(uint32_t value));
     MOCK_METHOD1(setEffectQueue, bool(std::string value));
