@@ -90,10 +90,13 @@ int BatteryDefender::readFileToInt(const char *path) {
     return value;
 }
 
-void BatteryDefender::writeIntToFile(const char *path, const int value) {
-    if (!android::base::WriteStringToFile(std::to_string(value), path)) {
+bool BatteryDefender::writeIntToFile(const char *path, const int value) {
+    bool success = android::base::WriteStringToFile(std::to_string(value), path);
+    if (!success) {
         LOG(ERROR) << "Failed to write " << path;
     }
+
+    return success;
 }
 
 void BatteryDefender::writeTimeToFile(const char *path, const int value, int64_t *previous) {
@@ -114,16 +117,18 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
         chargeLevelStop = kChargeLevelDefenderStop;
     }
 
-    // Disable battery defender in charger mode until
+    // Disable battery defender effects in charger mode until
     // b/149598262 is resolved
     if (android::base::GetProperty(kPropBootmode, "undefined") != "charger") {
         if (chargeLevelStart != mChargeLevelStartPrevious) {
-            writeIntToFile(kPathChargeLevelStart, chargeLevelStart);
-            mChargeLevelStartPrevious = chargeLevelStart;
+            if (writeIntToFile(kPathChargeLevelStart, chargeLevelStart)) {
+                mChargeLevelStartPrevious = chargeLevelStart;
+            }
         }
         if (chargeLevelStop != mChargeLevelStopPrevious) {
-            writeIntToFile(kPathChargeLevelStop, chargeLevelStop);
-            mChargeLevelStopPrevious = chargeLevelStop;
+            if (writeIntToFile(kPathChargeLevelStop, chargeLevelStop)) {
+                mChargeLevelStopPrevious = chargeLevelStop;
+            }
         }
     }
 }
