@@ -128,7 +128,7 @@ class BatteryDefender {
     int32_t getTimeToActivate(void);
     void removeLineEndings(std::string *str);
     int readFileToInt(const char *path);
-    void writeIntToFile(const char *path, const int value);
+    bool writeIntToFile(const char *path, const int value);
     void writeTimeToFile(const char *path, const int value, int64_t *previous);
     void writeChargeLevelsToFile(const int vendorStart, const int vendorStop);
     bool isChargePowerAvailable(void);
