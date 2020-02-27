@@ -45,6 +45,7 @@ using android::frameworks::stats::V1_0::SpeakerImpedance;
 using android::frameworks::stats::V1_0::SpeechDspStat;
 using android::frameworks::stats::V1_0::VendorAtom;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
+using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -57,7 +58,10 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kCodec1Path(sysfs_paths.Codec1Path),
       kSpeechDspPath(sysfs_paths.SpeechDspPath),
       kBatteryCapacityCC(sysfs_paths.BatteryCapacityCC),
-      kBatteryCapacityVFSOC(sysfs_paths.BatteryCapacityVFSOC) {}
+      kBatteryCapacityVFSOC(sysfs_paths.BatteryCapacityVFSOC),
+      kUFSLifetimeA(sysfs_paths.UFSLifetimeA),
+      kUFSLifetimeB(sysfs_paths.UFSLifetimeB),
+      kUFSLifetimeC(sysfs_paths.UFSLifetimeC) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -277,6 +281,50 @@ void SysfsCollector::logBatteryCapacity() {
         ALOGE("Unable to report ChargeStats to Stats service");
 }
 
+void SysfsCollector::logUFSLifetime() {
+    std::string file_contents;
+    if (kUFSLifetimeA == nullptr || strlen(kUFSLifetimeA) == 0) {
+        ALOGV("UFS lifetimeA path not specified");
+        return;
+    }
+    if (kUFSLifetimeB == nullptr || strlen(kUFSLifetimeB) == 0) {
+        ALOGV("UFS lifetimeB path not specified");
+        return;
+    }
+    if (kUFSLifetimeC == nullptr || strlen(kUFSLifetimeC) == 0) {
+        ALOGV("UFS lifetimeC path not specified");
+        return;
+    }
+
+    int lifetimeA = 0, lifetimeB = 0, lifetimeC = 0;
+    if (!ReadFileToInt(kUFSLifetimeA, &lifetimeA) ||
+        !ReadFileToInt(kUFSLifetimeB, &lifetimeB) ||
+        !ReadFileToInt(kUFSLifetimeC, &lifetimeC)) {
+        ALOGE("Unable to read UFS lifetime : %s", strerror(errno));
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtom::Value> values(3);
+    VendorAtom::Value tmp;
+    tmp.intValue(lifetimeA);
+    values[StorageUfsHealth::kLifetimeAFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(lifetimeB);
+    values[StorageUfsHealth::kLifetimeBFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(lifetimeC);
+    values[StorageUfsHealth::kLifetimeCFieldNumber - kVendorAtomOffset] = tmp;
+
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::STORAGE_UFS_HEALTH,
+                        .values = values};
+    Return<void> ret = stats_->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report UfsHealthStat to Stats service");
+    }
+}
+
 void SysfsCollector::logAll() {
     stats_ = IStats::tryGetService();
     if (!stats_) {
@@ -291,6 +339,7 @@ void SysfsCollector::logAll() {
     logSpeakerImpedance();
     logSpeechDspStat();
     logBatteryCapacity();
+    logUFSLifetime();
 
     stats_.clear();
 }
