@@ -41,6 +41,7 @@ enum Ids {
     F2FS_STATS = 105004;
     ZRAM_MM_STAT = 105005;
     ZRAM_BD_STAT = 105006;
+    BOOT_STATS = 105007;
     // AOSP atom ID range ends at 109999
 }
 
@@ -185,4 +186,14 @@ message ZramBdStat {
     optional int64 bd_reads = 3;
     /* The number of pages written to backing device */
     optional int64 bd_writes = 4;
+}
+
+/* A message containing boot times */
+message BootStatsInfo {
+    /* The F2FS fsck time in secs */
+    optional int32 fsck_time_sec = 2;
+    /* The F2FS mounted time in secs */
+    optional int32 mounted_time_sec = 3;
+    /* The F2FS checkpoint=disable time in secs */
+    optional int32 checkpoint_time_sec = 4;
 }
