@@ -20,6 +20,7 @@
 
 #include <android-base/file.h>
 #include <android-base/parseint.h>
+#include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
@@ -45,6 +46,8 @@ using android::frameworks::stats::V1_0::SpeakerImpedance;
 using android::frameworks::stats::V1_0::SpeechDspStat;
 using android::frameworks::stats::V1_0::VendorAtom;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
+using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
+using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -57,7 +60,12 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kCodec1Path(sysfs_paths.Codec1Path),
       kSpeechDspPath(sysfs_paths.SpeechDspPath),
       kBatteryCapacityCC(sysfs_paths.BatteryCapacityCC),
-      kBatteryCapacityVFSOC(sysfs_paths.BatteryCapacityVFSOC) {}
+      kBatteryCapacityVFSOC(sysfs_paths.BatteryCapacityVFSOC),
+      kUFSLifetimeA(sysfs_paths.UFSLifetimeA),
+      kUFSLifetimeB(sysfs_paths.UFSLifetimeB),
+      kUFSLifetimeC(sysfs_paths.UFSLifetimeC),
+      kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
+      kUserdataBlockProp(sysfs_paths.UserdataBlockProp) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -277,6 +285,135 @@ void SysfsCollector::logBatteryCapacity() {
         ALOGE("Unable to report ChargeStats to Stats service");
 }
 
+void SysfsCollector::logUFSLifetime() {
+    std::string file_contents;
+    if (kUFSLifetimeA == nullptr || strlen(kUFSLifetimeA) == 0) {
+        ALOGV("UFS lifetimeA path not specified");
+        return;
+    }
+    if (kUFSLifetimeB == nullptr || strlen(kUFSLifetimeB) == 0) {
+        ALOGV("UFS lifetimeB path not specified");
+        return;
+    }
+    if (kUFSLifetimeC == nullptr || strlen(kUFSLifetimeC) == 0) {
+        ALOGV("UFS lifetimeC path not specified");
+        return;
+    }
+
+    int lifetimeA = 0, lifetimeB = 0, lifetimeC = 0;
+    if (!ReadFileToInt(kUFSLifetimeA, &lifetimeA) ||
+        !ReadFileToInt(kUFSLifetimeB, &lifetimeB) ||
+        !ReadFileToInt(kUFSLifetimeC, &lifetimeC)) {
+        ALOGE("Unable to read UFS lifetime : %s", strerror(errno));
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtom::Value> values(3);
+    VendorAtom::Value tmp;
+    tmp.intValue(lifetimeA);
+    values[StorageUfsHealth::kLifetimeAFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(lifetimeB);
+    values[StorageUfsHealth::kLifetimeBFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(lifetimeC);
+    values[StorageUfsHealth::kLifetimeCFieldNumber - kVendorAtomOffset] = tmp;
+
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::STORAGE_UFS_HEALTH,
+                        .values = values};
+    Return<void> ret = stats_->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report UfsHealthStat to Stats service");
+    }
+}
+
+void SysfsCollector::logF2fsStats() {
+    std::string userdataBlock;
+    int dirty, free, cp_calls_fg, gc_calls_fg, moved_block_fg, vblocks;
+    int cp_calls_bg, gc_calls_bg, moved_block_bg;
+
+    if (kF2fsStatsPath == nullptr) {
+        ALOGE("F2fs stats path not specified");
+        return;
+    }
+
+    if (kUserdataBlockProp == nullptr) {
+        ALOGE("Userdata block property not specified");
+        return;
+    }
+
+    userdataBlock = android::base::GetProperty(kUserdataBlockProp, "");
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/dirty_segments"), &dirty)) {
+        ALOGV("Unable to read dirty segments");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/free_segments"), &free)) {
+        ALOGV("Unable to read free segments");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/cp_foreground_calls"), &cp_calls_fg)) {
+        ALOGV("Unable to read cp_foreground_calls");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/cp_background_calls"), &cp_calls_bg)) {
+        ALOGV("Unable to read cp_background_calls");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/gc_foreground_calls"), &gc_calls_fg)) {
+        ALOGV("Unable to read gc_foreground_calls");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/gc_background_calls"), &gc_calls_bg)) {
+        ALOGV("Unable to read gc_background_calls");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/moved_blocks_foreground"), &moved_block_fg)) {
+        ALOGV("Unable to read moved_blocks_foreground");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/moved_blocks_background"), &moved_block_bg)) {
+        ALOGV("Unable to read moved_blocks_background");
+    }
+
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/avg_vblocks"), &vblocks)) {
+        ALOGV("Unable to read avg_vblocks");
+    }
+
+    // Load values array
+    std::vector<VendorAtom::Value> values(10);
+    VendorAtom::Value tmp;
+    tmp.intValue(dirty);
+    values[F2fsStatsInfo::kDirtySegmentsFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(free);
+    values[F2fsStatsInfo::kFreeSegmentsFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(cp_calls_fg);
+    values[F2fsStatsInfo::kCpCallsFgFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(cp_calls_bg);
+    values[F2fsStatsInfo::kCpCallsBgFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(gc_calls_fg);
+    values[F2fsStatsInfo::kGcCallsFgFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(gc_calls_bg);
+    values[F2fsStatsInfo::kGcCallsBgFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(moved_block_fg);
+    values[F2fsStatsInfo::kMovedBlocksFgFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(moved_block_bg);
+    values[F2fsStatsInfo::kMovedBlocksBgFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(vblocks);
+    values[F2fsStatsInfo::kValidBlocksFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::F2FS_STATS,
+                        .values = values};
+    Return<void> ret = stats_->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report F2fs stats to Stats service");
+    }
+}
+
 void SysfsCollector::logAll() {
     stats_ = IStats::tryGetService();
     if (!stats_) {
@@ -291,6 +428,8 @@ void SysfsCollector::logAll() {
     logSpeakerImpedance();
     logSpeechDspStat();
     logBatteryCapacity();
+    logUFSLifetime();
+    logF2fsStats();
 
     stats_.clear();
 }
