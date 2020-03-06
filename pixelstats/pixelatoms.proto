@@ -39,6 +39,8 @@ enum Ids {
     BATTERY_CAPACITY = 105002;
     STORAGE_UFS_HEALTH = 105003;
     F2FS_STATS = 105004;
+    ZRAM_MM_STAT = 105005;
+    ZRAM_BD_STAT = 105006;
     // AOSP atom ID range ends at 109999
 }
 
@@ -161,4 +163,26 @@ message F2fsStatsInfo {
     optional int32 moved_blocks_bg = 10;
     /* The average of how many valid blocks is in a segment */
     optional int32 valid_blocks = 11;
+}
+
+message ZramMmStat {
+    /* The value of original memory size */
+    optional int64 orig_data_size = 2;
+    /* The value of compressed memory size */
+    optional int64 compr_data_size = 3;
+    /* The value of consumed memory size to store compressed memory */
+    optional int64 mem_used_total = 4;
+    /* The value of number of page filled with same elements data */
+    optional int64 same_pages = 5;
+    /* The value of number of incompressible page */
+    optional int64 huge_pages = 6;
+}
+
+message ZramBdStat {
+    /* the number of pages in backing device */
+    optional int64 bd_count = 2;
+    /* The number of pages readed from backing device */
+    optional int64 bd_reads = 3;
+    /* The number of pages written to backing device */
+    optional int64 bd_writes = 4;
 }
