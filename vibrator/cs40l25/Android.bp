@@ -15,18 +15,7 @@
 
 cc_defaults {
     name: "android.hardware.vibrator-defaults.cs40l25",
-    relative_install_path: "hw",
-    static_libs: [
-        "PixelVibratorCommon",
-    ],
-    shared_libs: [
-        "libbase",
-        "libbinder_ndk",
-        "libcutils",
-        "libhardware",
-        "liblog",
-        "libutils",
-    ],
+    defaults: ["PixelVibratorDefaults"],
     cflags: [
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
         "-DLOG_TAG=\"android.hardware.vibrator-cs40l25\"",
@@ -36,10 +25,7 @@ cc_defaults {
 cc_defaults {
     name: "VibratorHalCs40l25TestDefaults",
     defaults: ["android.hardware.vibrator-defaults.cs40l25"],
-    static_libs: [
-        "android.hardware.vibrator-impl.cs40l25",
-        "android.hardware.vibrator-ndk_platform",
-    ],
+    static_libs: ["android.hardware.vibrator-impl.cs40l25"],
     test_suites: ["device-tests"],
     require_root: true,
 }
@@ -47,9 +33,6 @@ cc_defaults {
 cc_library {
     name: "android.hardware.vibrator-impl.cs40l25",
     defaults: ["android.hardware.vibrator-defaults.cs40l25"],
-    shared_libs: [
-        "android.hardware.vibrator-ndk_platform",
-    ],
     srcs: ["Vibrator.cpp"],
     export_include_dirs: ["."],
     vendor_available: true,
@@ -59,9 +42,6 @@ cc_library {
 cc_binary {
     name: "android.hardware.vibrator-service.cs40l25",
     defaults: ["android.hardware.vibrator-defaults.cs40l25"],
-    shared_libs: [
-        "android.hardware.vibrator-ndk_platform",
-    ],
     init_rc: ["android.hardware.vibrator-service.cs40l25.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l25.xml"],
     srcs: ["service.cpp"],
