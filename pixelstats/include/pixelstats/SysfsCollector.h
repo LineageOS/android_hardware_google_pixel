@@ -48,6 +48,8 @@ class SysfsCollector {
         const char *const UFSLifetimeC;
         const char *const F2fsStatsPath;
         const char *const UserdataBlockProp;
+        const char *const ZramMmStatPath;
+        const char *const ZramBdStatPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -67,8 +69,12 @@ class SysfsCollector {
     void logBatteryCapacity();
     void logUFSLifetime();
     void logF2fsStats();
+    void logZramStats();
 
     void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
+    void reportZramMmStat();
+    void reportZramBdStat();
+
     unsigned int getValueFromStatus(std::string &f2fsStatus, const char * key);
 
     const char *const kSlowioReadCntPath;
@@ -87,6 +93,8 @@ class SysfsCollector {
     const char *const kUFSLifetimeC;
     const char *const kF2fsStatsPath;
     const char *const kUserdataBlockProp;
+    const char *const kZramMmStatPath;
+    const char *const kZramBdStatPath;
     sp<IStats> stats_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
