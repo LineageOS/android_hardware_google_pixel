@@ -15,17 +15,17 @@
 
 cc_defaults {
     name: "PixelVibratorDefaults",
-    defaults: ["hidl_defaults"],
     relative_install_path: "hw",
     static_libs: [
         "PixelVibratorCommon",
     ],
     shared_libs: [
+        "android.hardware.vibrator-ndk_platform",
         "libbase",
-        "libhidlbase",
+        "libbinder_ndk",
         "libcutils",
+        "libhardware",
         "liblog",
         "libutils",
-        "libhardware",
     ],
 }
