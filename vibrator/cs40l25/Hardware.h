@@ -23,9 +23,6 @@ namespace android {
 namespace hardware {
 namespace vibrator {
 
-using ::android::hardware::vibrator::common::implementation::HwApiBase;
-using ::android::hardware::vibrator::common::implementation::HwCalBase;
-
 class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
     HwApi() {
