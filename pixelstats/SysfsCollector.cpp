@@ -48,6 +48,8 @@ using android::frameworks::stats::V1_0::VendorAtom;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
+using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -65,7 +67,9 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kUFSLifetimeB(sysfs_paths.UFSLifetimeB),
       kUFSLifetimeC(sysfs_paths.UFSLifetimeC),
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
-      kUserdataBlockProp(sysfs_paths.UserdataBlockProp) {}
+      kUserdataBlockProp(sysfs_paths.UserdataBlockProp),
+      kZramMmStatPath(sysfs_paths.ZramMmStatPath),
+      kZramBdStatPath(sysfs_paths.ZramBdStatPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -414,6 +418,103 @@ void SysfsCollector::logF2fsStats() {
     }
 }
 
+void SysfsCollector::reportZramMmStat() {
+    std::string file_contents;
+    if (!kZramMmStatPath) {
+        ALOGV("ZramMmStat path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kZramMmStatPath, &file_contents)) {
+        ALOGE("Unable to ZramMmStat %s - %s", kZramMmStatPath, strerror(errno));
+        return;
+    } else {
+        int64_t orig_data_size = 0;
+        int64_t compr_data_size = 0;
+        int64_t mem_used_total = 0;
+        int64_t mem_limit = 0;
+        int64_t max_used_total = 0;
+        int64_t same_pages = 0;
+        int64_t pages_compacted = 0;
+        int64_t huge_pages = 0;
+
+        if (sscanf(file_contents.c_str(), "%lu %lu %lu %lu %lu %lu %lu %lu",
+                    &orig_data_size, &compr_data_size, &mem_used_total, &mem_limit,
+                    &max_used_total, &same_pages, &pages_compacted, &huge_pages) != 8) {
+            ALOGE("Unable to parse ZramMmStat %s from file %s to int.",
+                    file_contents.c_str(), kZramMmStatPath);
+        }
+
+        // Load values array
+        std::vector<VendorAtom::Value> values(5);
+        VendorAtom::Value tmp;
+        tmp.intValue(orig_data_size);
+        values[ZramMmStat::kOrigDataSizeFieldNumber - kVendorAtomOffset] = tmp;
+        tmp.intValue(compr_data_size);
+        values[ZramMmStat::kComprDataSizeFieldNumber - kVendorAtomOffset] = tmp;
+        tmp.intValue(mem_used_total);
+        values[ZramMmStat::kMemUsedTotalFieldNumber - kVendorAtomOffset] = tmp;
+        tmp.intValue(same_pages);
+        values[ZramMmStat::kSamePagesFieldNumber - kVendorAtomOffset] = tmp;
+        tmp.intValue(huge_pages);
+        values[ZramMmStat::kHugePagesFieldNumber - kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+            .atomId = PixelAtoms::Ids::ZRAM_MM_STAT,
+            .values = values};
+        Return<void> ret = stats_->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Zram Unable to report ZramMmStat to Stats service");
+    }
+}
+
+void SysfsCollector::reportZramBdStat() {
+    std::string file_contents;
+    if (!kZramBdStatPath) {
+        ALOGV("ZramBdStat path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kZramBdStatPath, &file_contents)) {
+        ALOGE("Unable to ZramBdStat %s - %s", kZramBdStatPath, strerror(errno));
+        return;
+    } else {
+        int64_t bd_count = 0;
+        int64_t bd_reads = 0;
+        int64_t bd_writes = 0;
+
+        if (sscanf(file_contents.c_str(), "%lu %lu %lu",
+                                &bd_count, &bd_reads, &bd_writes) != 3) {
+            ALOGE("Unable to parse ZramBdStat %s from file %s to int.",
+                    file_contents.c_str(), kZramBdStatPath);
+        }
+
+        // Load values array
+        std::vector<VendorAtom::Value> values(3);
+        VendorAtom::Value tmp;
+        tmp.intValue(bd_count);
+        values[ZramBdStat::kBdCountFieldNumber - kVendorAtomOffset] = tmp;
+        tmp.intValue(bd_reads);
+        values[ZramBdStat::kBdReadsFieldNumber - kVendorAtomOffset] = tmp;
+        tmp.intValue(bd_writes);
+        values[ZramBdStat::kBdWritesFieldNumber - kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+            .atomId = PixelAtoms::Ids::ZRAM_BD_STAT,
+            .values = values};
+        Return<void> ret = stats_->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Zram Unable to report ZramBdStat to Stats service");
+    }
+}
+
+void SysfsCollector::logZramStats() {
+    reportZramMmStat();
+    reportZramBdStat();
+}
+
 void SysfsCollector::logAll() {
     stats_ = IStats::tryGetService();
     if (!stats_) {
@@ -430,6 +531,7 @@ void SysfsCollector::logAll() {
     logBatteryCapacity();
     logUFSLifetime();
     logF2fsStats();
+    logZramStats();
 
     stats_.clear();
 }
