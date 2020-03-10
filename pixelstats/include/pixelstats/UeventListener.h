@@ -41,7 +41,9 @@ class UeventListener {
             const std::string audio_uevent, const std::string ssoc_details_path = "",
             const std::string overheat_path =
                     "/sys/devices/platform/soc/soc:google,overheat_mitigation",
-            const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats");
+            const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats",
+            const std::string typec_partner_vid_path = "/sys/class/typec/port0-partner/identity/id_header",
+            const std::string typec_partner_pid_path = "/sys/class/typec/port0-partner/identity/product");
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
@@ -57,11 +59,14 @@ class UeventListener {
     void ReportChargeMetricsEvent(const char *driver);
     void ReportWlc(const char *driver);
     void ReportBatteryCapacityFGEvent(const char *subsystem);
+    void ReportTypeCPartnerId();
 
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
     const std::string kUsbPortOverheatPath;
     const std::string kChargeMetricsPath;
+    const std::string kTypeCPartnerVidPath;
+    const std::string kTypeCPartnerPidPath;
 
     BatteryCapacityReporter battery_capacity_reporter_;
 
