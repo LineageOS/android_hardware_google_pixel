@@ -57,8 +57,6 @@ static constexpr uint32_t WAVEFORM_LONG_VIBRATION_EFFECT_INDEX = 0;
 static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 static constexpr uint32_t WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX = 3 + BASE_CONTINUOUS_EFFECT_OFFSET;
 
-static constexpr uint32_t WAVEFORM_THUD_INDEX = 4;
-static constexpr uint32_t WAVEFORM_SPIN_INDEX = 5;
 static constexpr uint32_t WAVEFORM_QUICK_RISE_INDEX = 6;
 static constexpr uint32_t WAVEFORM_SLOW_RISE_INDEX = 7;
 static constexpr uint32_t WAVEFORM_QUICK_FALL_INDEX = 8;
@@ -211,7 +209,6 @@ ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
 ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
     *supported = {
             CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
-            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
             CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
             CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
     };
@@ -501,7 +498,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive, f
                                                  uint32_t *outEffectIndex, uint32_t *outVolLevel) {
     uint32_t effectIndex;
 
-    if (scale <= 0.0f || scale > 1.0f) {
+    if (scale < 0.0f || scale > 1.0f) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
@@ -510,12 +507,6 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive, f
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         case CompositePrimitive::CLICK:
             effectIndex = WAVEFORM_SIMPLE_EFFECT_INDEX;
-            break;
-        case CompositePrimitive::THUD:
-            effectIndex = WAVEFORM_THUD_INDEX;
-            break;
-        case CompositePrimitive::SPIN:
-            effectIndex = WAVEFORM_SPIN_INDEX;
             break;
         case CompositePrimitive::QUICK_RISE:
             effectIndex = WAVEFORM_QUICK_RISE_INDEX;
@@ -534,7 +525,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive, f
     }
 
     *outEffectIndex = effectIndex;
-    *outVolLevel = std::lround(scale * mVolLevels[WAVEFORM_EFFECT_MAX_LEVEL]);
+    *outVolLevel = std::lround(scale * (mVolLevels[WAVEFORM_EFFECT_MAX_LEVEL] - 1)) + 1;
 
     return ndk::ScopedAStatus::ok();
 }
