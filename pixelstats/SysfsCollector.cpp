@@ -38,6 +38,7 @@ namespace pixel {
 
 using android::sp;
 using android::base::ReadFileToString;
+using android::base::StartsWith;
 using android::frameworks::stats::V1_0::ChargeCycles;
 using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
@@ -81,6 +82,11 @@ bool SysfsCollector::ReadFileToInt(const char *const path, int *val) {
     if (!ReadFileToString(path, &file_contents)) {
         ALOGE("Unable to read %s - %s", path, strerror(errno));
         return false;
+    } else if (StartsWith(file_contents, "0x")) {
+        if (sscanf(file_contents.c_str(), "0x%x", val) != 1) {
+            ALOGE("Unable to convert %s to hex - %s", path, strerror(errno));
+            return false;
+        }
     } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
         ALOGE("Unable to convert %s to int - %s", path, strerror(errno));
         return false;
