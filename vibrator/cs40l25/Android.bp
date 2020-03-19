@@ -15,7 +15,6 @@
 
 cc_defaults {
     name: "android.hardware.vibrator-defaults.cs40l25",
-    defaults: ["PixelVibratorDefaults"],
     cflags: [
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
         "-DLOG_TAG=\"android.hardware.vibrator-cs40l25\"",
@@ -23,16 +22,25 @@ cc_defaults {
 }
 
 cc_defaults {
+    name: "VibratorHalCs40l25BinaryDefaults",
+    defaults: [
+        "PixelVibratorBinaryDefaults",
+        "android.hardware.vibrator-defaults.cs40l25",
+    ],
+}
+
+cc_defaults {
     name: "VibratorHalCs40l25TestDefaults",
-    defaults: ["android.hardware.vibrator-defaults.cs40l25"],
+    defaults: [
+        "PixelVibratorTestDefaults",
+        "android.hardware.vibrator-defaults.cs40l25",
+    ],
     static_libs: ["android.hardware.vibrator-impl.cs40l25"],
-    test_suites: ["device-tests"],
-    require_root: true,
 }
 
 cc_library {
     name: "android.hardware.vibrator-impl.cs40l25",
-    defaults: ["android.hardware.vibrator-defaults.cs40l25"],
+    defaults: ["VibratorHalCs40l25BinaryDefaults"],
     srcs: ["Vibrator.cpp"],
     export_include_dirs: ["."],
     vendor_available: true,
@@ -41,7 +49,7 @@ cc_library {
 
 cc_binary {
     name: "android.hardware.vibrator-service.cs40l25",
-    defaults: ["android.hardware.vibrator-defaults.cs40l25"],
+    defaults: ["VibratorHalCs40l25BinaryDefaults"],
     init_rc: ["android.hardware.vibrator-service.cs40l25.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l25.xml"],
     srcs: ["service.cpp"],
