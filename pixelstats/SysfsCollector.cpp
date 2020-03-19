@@ -29,6 +29,7 @@
 #include <utils/Timers.h>
 
 #include <sys/timerfd.h>
+#include <mntent.h>
 #include <string>
 
 namespace android {
@@ -51,6 +52,7 @@ using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
+using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -339,6 +341,22 @@ void SysfsCollector::logUFSLifetime() {
     }
 }
 
+static std::string getUserDataBlock() {
+    std::unique_ptr<std::FILE, int (*)(std::FILE*)> fp(setmntent("/proc/mounts", "re"), endmntent);
+    if (fp == nullptr) {
+        ALOGE("Error opening /proc/mounts");
+        return "";
+    }
+
+    mntent* mentry;
+    while ((mentry = getmntent(fp.get())) != nullptr) {
+        if (strcmp(mentry->mnt_dir, "/data") == 0) {
+            return std::string(basename(mentry->mnt_fsname));
+        }
+    }
+    return "";
+}
+
 void SysfsCollector::logF2fsStats() {
     std::string userdataBlock;
     int dirty, free, cp_calls_fg, gc_calls_fg, moved_block_fg, vblocks;
@@ -349,12 +367,7 @@ void SysfsCollector::logF2fsStats() {
         return;
     }
 
-    if (kUserdataBlockProp == nullptr) {
-        ALOGE("Userdata block property not specified");
-        return;
-    }
-
-    userdataBlock = android::base::GetProperty(kUserdataBlockProp, "");
+    userdataBlock = getUserDataBlock();
 
     if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/dirty_segments"), &dirty)) {
         ALOGV("Unable to read dirty segments");
@@ -521,6 +534,44 @@ void SysfsCollector::logZramStats() {
     reportZramBdStat();
 }
 
+void SysfsCollector::logBootStats() {
+    std::string userdataBlock = getUserDataBlock();
+    int mounted_time_sec = 0;
+    if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/mounted_time_sec"), &mounted_time_sec)) {
+        ALOGV("Unable to read mounted_time_sec");
+        return;
+    }
+
+    int fsck_time_ms = android::base::GetIntProperty("ro.boottime.init.fsck.data", 0);
+    int checkpoint_time_ms = android::base::GetIntProperty("ro.boottime.init.mount.data", 0);
+
+    if (fsck_time_ms == 0 && checkpoint_time_ms == 0) {
+        ALOGV("Not yet initialized");
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtom::Value> values(3);
+    VendorAtom::Value tmp;
+    tmp.intValue(mounted_time_sec);
+    values[BootStatsInfo::kMountedTimeSecFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(fsck_time_ms / 1000);
+    values[BootStatsInfo::kFsckTimeSecFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(checkpoint_time_ms / 1000);
+    values[BootStatsInfo::kCheckpointTimeSecFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::BOOT_STATS,
+                        .values = values};
+    Return<void> ret = stats_->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report Boot stats to Stats service");
+    } else {
+        log_once_reported = true;
+    }
+}
+
 void SysfsCollector::logAll() {
     stats_ = IStats::tryGetService();
     if (!stats_) {
@@ -528,6 +579,10 @@ void SysfsCollector::logAll() {
         return;
     }
 
+    // Collect once per service init; can be multiple due to service reinit
+    if (!log_once_reported) {
+        logBootStats();
+    }
     logBatteryChargeCycles();
     logCodecFailed();
     logCodec1Failed();
