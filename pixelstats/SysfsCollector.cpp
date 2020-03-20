@@ -358,7 +358,6 @@ static std::string getUserDataBlock() {
 }
 
 void SysfsCollector::logF2fsStats() {
-    std::string userdataBlock;
     int dirty, free, cp_calls_fg, gc_calls_fg, moved_block_fg, vblocks;
     int cp_calls_bg, gc_calls_bg, moved_block_bg;
 
@@ -367,7 +366,7 @@ void SysfsCollector::logF2fsStats() {
         return;
     }
 
-    userdataBlock = getUserDataBlock();
+    std::string userdataBlock = getUserDataBlock();
 
     if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/dirty_segments"), &dirty)) {
         ALOGV("Unable to read dirty segments");
@@ -535,8 +534,15 @@ void SysfsCollector::logZramStats() {
 }
 
 void SysfsCollector::logBootStats() {
-    std::string userdataBlock = getUserDataBlock();
     int mounted_time_sec = 0;
+
+    if (kF2fsStatsPath == nullptr) {
+        ALOGE("F2fs stats path not specified");
+        return;
+    }
+
+    std::string userdataBlock = getUserDataBlock();
+
     if (!ReadFileToInt(kF2fsStatsPath + (userdataBlock + "/mounted_time_sec"), &mounted_time_sec)) {
         ALOGV("Unable to read mounted_time_sec");
         return;
