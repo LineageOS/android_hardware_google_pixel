@@ -70,6 +70,7 @@ class SysfsCollector {
     void logUFSLifetime();
     void logF2fsStats();
     void logZramStats();
+    void logBootStats();
 
     void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
     void reportZramMmStat();
@@ -101,6 +102,8 @@ class SysfsCollector {
     // store everything in the values array at the index of the field number
     // -2.
     const int kVendorAtomOffset = 2;
+
+    bool log_once_reported = false;
 };
 
 }  // namespace pixel
