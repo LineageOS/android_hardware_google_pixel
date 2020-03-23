@@ -146,14 +146,14 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus setEffectAmplitude(float amplitude, float maximum);
     ndk::ScopedAStatus setGlobalAmplitude(bool set);
     // 'simple' effects are those precompiled and loaded into the controller
-    ndk::ScopedAStatus getSimpleDetails(Effect effect, EffectStrength strength, uint32_t *outTimeMs,
+    ndk::ScopedAStatus getSimpleDetails(Effect effect, EffectStrength strength,
+                                        uint32_t *outEffectIndex, uint32_t *outTimeMs,
                                         uint32_t *outVolLevel);
     // 'compound' effects are those composed by stringing multiple 'simple' effects
     ndk::ScopedAStatus getCompoundDetails(Effect effect, EffectStrength strength,
                                           uint32_t *outTimeMs, uint32_t *outVolLevel,
                                           std::string *outEffectQueue);
-    ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, float scale,
-                                           uint32_t *outEffectIndex, uint32_t *outVolLevel);
+    ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, uint32_t *outEffectIndex);
     ndk::ScopedAStatus setEffectQueue(const std::string &effectQueue);
     ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
@@ -163,10 +163,13 @@ class Vibrator : public BnVibrator {
                                      const std::shared_ptr<IVibratorCallback> &callback);
     bool isUnderExternalControl();
     void waitForComplete(std::shared_ptr<IVibratorCallback> &&callback);
+    uint32_t intensityToVolLevel(float intensity);
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
-    std::array<uint32_t, 6> mVolLevels;
+    uint32_t mEffectVolMin;
+    uint32_t mEffectVolMax;
+    uint32_t mGlobalVolMax;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
 };
