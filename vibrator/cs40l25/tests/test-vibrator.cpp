@@ -61,6 +61,9 @@ static EffectQueue Queue(const QueueDelay &delay);
 template <typename T, typename U, typename... Args>
 static EffectQueue Queue(const T &first, const U &second, Args... rest);
 
+static EffectLevel Level(float intensity);
+static EffectScale Scale(float intensity);
+
 // Constants With Arbitrary Values
 
 static constexpr std::array<EffectLevel, 6> V_LEVELS{40, 50, 60, 70, 80, 90};
@@ -69,37 +72,43 @@ static constexpr std::array<EffectDuration, 9> EFFECT_DURATIONS{0,   0,   15,  0
 
 // Constants With Prescribed Values
 
-static constexpr EffectIndex EFFECT_INDEX{2};
+static const std::map<Effect, EffectIndex> EFFECT_INDEX{
+        {Effect::CLICK, 2},
+        {Effect::TICK, 9},
+        {Effect::HEAVY_CLICK, 2},
+        {Effect::TEXTURE_TICK, 9},
+};
+
 static constexpr EffectIndex QUEUE_INDEX{65534};
 
 static const EffectScale ON_GLOBAL_SCALE{levelToScale(V_LEVELS[5])};
 static const EffectIndex ON_EFFECT_INDEX{0};
 
 static const std::map<EffectTuple, EffectScale> EFFECT_SCALE{
-        {{Effect::CLICK, EffectStrength::LIGHT}, levelToScale(V_LEVELS[1])},
-        {{Effect::CLICK, EffectStrength::MEDIUM}, levelToScale(V_LEVELS[2])},
-        {{Effect::CLICK, EffectStrength::STRONG}, levelToScale(V_LEVELS[3])},
-        {{Effect::TICK, EffectStrength::LIGHT}, levelToScale(V_LEVELS[1])},
-        {{Effect::TICK, EffectStrength::MEDIUM}, levelToScale(V_LEVELS[1])},
-        {{Effect::TICK, EffectStrength::STRONG}, levelToScale(V_LEVELS[1])},
-        {{Effect::HEAVY_CLICK, EffectStrength::LIGHT}, levelToScale(V_LEVELS[2])},
-        {{Effect::HEAVY_CLICK, EffectStrength::MEDIUM}, levelToScale(V_LEVELS[3])},
-        {{Effect::HEAVY_CLICK, EffectStrength::STRONG}, levelToScale(V_LEVELS[4])},
-        {{Effect::TEXTURE_TICK, EffectStrength::LIGHT}, levelToScale(V_LEVELS[0])},
-        {{Effect::TEXTURE_TICK, EffectStrength::MEDIUM}, levelToScale(V_LEVELS[0])},
-        {{Effect::TEXTURE_TICK, EffectStrength::STRONG}, levelToScale(V_LEVELS[0])},
+        {{Effect::CLICK, EffectStrength::LIGHT}, Scale(0.7f * 0.5f)},
+        {{Effect::CLICK, EffectStrength::MEDIUM}, Scale(0.7f * 0.7f)},
+        {{Effect::CLICK, EffectStrength::STRONG}, Scale(0.7f * 1.0f)},
+        {{Effect::TICK, EffectStrength::LIGHT}, Scale(0.7f * 0.5f)},
+        {{Effect::TICK, EffectStrength::MEDIUM}, Scale(0.7f * 0.7f)},
+        {{Effect::TICK, EffectStrength::STRONG}, Scale(0.7f * 1.0f)},
+        {{Effect::HEAVY_CLICK, EffectStrength::LIGHT}, Scale(1.0f * 0.5f)},
+        {{Effect::HEAVY_CLICK, EffectStrength::MEDIUM}, Scale(1.0f * 0.7f)},
+        {{Effect::HEAVY_CLICK, EffectStrength::STRONG}, Scale(1.0f * 1.0f)},
+        {{Effect::TEXTURE_TICK, EffectStrength::LIGHT}, Scale(0.5f * 0.5f)},
+        {{Effect::TEXTURE_TICK, EffectStrength::MEDIUM}, Scale(0.5f * 0.7f)},
+        {{Effect::TEXTURE_TICK, EffectStrength::STRONG}, Scale(0.5f * 1.0f)},
 };
 
 static const std::map<EffectTuple, EffectQueue> EFFECT_QUEUE{
         {{Effect::DOUBLE_CLICK, EffectStrength::LIGHT},
-         Queue(QueueEffect{EFFECT_INDEX, V_LEVELS[1]}, 100,
-               QueueEffect{EFFECT_INDEX, V_LEVELS[2]})},
+         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 0.5f)}, 100,
+               QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(1.0f * 0.5f)})},
         {{Effect::DOUBLE_CLICK, EffectStrength::MEDIUM},
-         Queue(QueueEffect{EFFECT_INDEX, V_LEVELS[2]}, 100,
-               QueueEffect{EFFECT_INDEX, V_LEVELS[3]})},
+         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 0.7f)}, 100,
+               QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(1.0f * 0.7f)})},
         {{Effect::DOUBLE_CLICK, EffectStrength::STRONG},
-         Queue(QueueEffect{EFFECT_INDEX, V_LEVELS[3]}, 100,
-               QueueEffect{EFFECT_INDEX, V_LEVELS[4]})},
+         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 1.0f)}, 100,
+               QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(1.0f * 1.0f)})},
 };
 
 EffectQueue Queue(const QueueEffect &effect) {
@@ -122,6 +131,16 @@ EffectQueue Queue(const T &first, const U &second, Args... rest) {
     auto string = std::get<0>(head) + "," + std::get<0>(tail);
     auto duration = std::get<1>(head) + std::get<1>(tail);
     return {string, duration};
+}
+
+static EffectLevel Level(float intensity) {
+    auto vMin = std::max(V_LEVELS[0] - (V_LEVELS[4] - V_LEVELS[0]) / 4.0f, 4.0f);
+    auto vMax = V_LEVELS[4];
+    return std::lround(intensity * (vMax - vMin)) + vMin;
+}
+
+static EffectScale Scale(float intensity) {
+    return levelToScale(Level(intensity));
 }
 
 class VibratorTest : public Test {
@@ -426,7 +445,8 @@ TEST_P(EffectsTest, perform) {
     if (scale != EFFECT_SCALE.end()) {
         duration = EFFECT_DURATIONS[2];
 
-        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX)).WillOnce(DoDefault());
+        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX.at(effect)))
+                          .WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, setEffectScale(scale->second)).WillOnce(Return(true));
     } else if (queue != EFFECT_QUEUE.end()) {
         duration = std::get<1>(queue->second);
@@ -471,7 +491,7 @@ TEST_P(EffectsTest, alwaysOnEnable) {
     bool supported = (scale != EFFECT_SCALE.end());
 
     if (supported) {
-        EXPECT_CALL(*mMockApi, setGpioRiseIndex(EFFECT_INDEX)).WillOnce(Return(true));
+        EXPECT_CALL(*mMockApi, setGpioRiseIndex(EFFECT_INDEX.at(effect))).WillOnce(Return(true));
         EXPECT_CALL(*mMockApi, setGpioRiseScale(scale->second)).WillOnce(Return(true));
     }
 
@@ -507,7 +527,6 @@ class PrimitiveTest : public VibratorTest, public WithParamInterface<PrimitivePa
 
 const std::vector<PrimitiveParam> kPrimitiveParams = {
         {CompositePrimitive::NOOP, 0},       {CompositePrimitive::CLICK, 2},
-        {CompositePrimitive::THUD, 4},       {CompositePrimitive::SPIN, 5},
         {CompositePrimitive::QUICK_RISE, 6}, {CompositePrimitive::SLOW_RISE, 7},
         {CompositePrimitive::QUICK_FALL, 8},
 };
@@ -566,30 +585,19 @@ TEST_P(ComposeTest, compose) {
 }
 
 const std::vector<ComposeParam> kComposeParams = {
-        {"click",
-         {{0, CompositePrimitive::CLICK, 1.0f}},
-         Queue(QueueEffect(2, 1.0f * V_LEVELS[4]), 0)},
-        {"thud",
-         {{1, CompositePrimitive::THUD, 0.8f}},
-         Queue(1, QueueEffect(4, 0.8f * V_LEVELS[4]), 0)},
-        {"spin",
-         {{2, CompositePrimitive::SPIN, 0.6f}},
-         Queue(2, QueueEffect(5, 0.6f * V_LEVELS[4]), 0)},
+        {"click", {{0, CompositePrimitive::CLICK, 1.0f}}, Queue(QueueEffect(2, Level(1.0f)), 0)},
         {"quick_rise",
          {{3, CompositePrimitive::QUICK_RISE, 0.4f}},
-         Queue(3, QueueEffect(6, 0.4f * V_LEVELS[4]), 0)},
+         Queue(3, QueueEffect(6, Level(0.4f)), 0)},
         {"slow_rise",
-         {{4, CompositePrimitive::SLOW_RISE, 0.2f}},
-         Queue(4, QueueEffect(7, 0.2f * V_LEVELS[4]), 0)},
+         {{4, CompositePrimitive::SLOW_RISE, 0.0f}},
+         Queue(4, QueueEffect(7, Level(0.0f)), 0)},
         {"quick_fall",
          {{5, CompositePrimitive::QUICK_FALL, 1.0f}},
-         Queue(5, QueueEffect(8, V_LEVELS[4]), 0)},
-        {"pop",
-         {{6, CompositePrimitive::SLOW_RISE, 1.0f}, {50, CompositePrimitive::THUD, 1.0f}},
-         Queue(6, QueueEffect(7, V_LEVELS[4]), 50, QueueEffect(4, V_LEVELS[4]), 0)},
+         Queue(5, QueueEffect(8, Level(1.0f)), 0)},
         {"snap",
          {{7, CompositePrimitive::QUICK_RISE, 1.0f}, {0, CompositePrimitive::QUICK_FALL, 1.0f}},
-         Queue(7, QueueEffect(6, V_LEVELS[4]), QueueEffect(8, V_LEVELS[4]), 0)},
+         Queue(7, QueueEffect(6, Level(1.0f)), QueueEffect(8, Level(1.0f)), 0)},
 };
 
 INSTANTIATE_TEST_CASE_P(VibratorTests, ComposeTest,
@@ -609,19 +617,21 @@ TEST_P(AlwaysOnTest, alwaysOnEnable) {
 
     std::advance(scale, std::rand() % EFFECT_SCALE.size());
 
+    auto effect = std::get<0>(scale->first);
+    auto strength = std::get<1>(scale->first);
+
     switch (param) {
         case 0:
-            EXPECT_CALL(*mMockApi, setGpioRiseIndex(EFFECT_INDEX)).WillOnce(Return(true));
+            EXPECT_CALL(*mMockApi, setGpioRiseIndex(EFFECT_INDEX.at(effect)))
+                    .WillOnce(Return(true));
             EXPECT_CALL(*mMockApi, setGpioRiseScale(scale->second)).WillOnce(Return(true));
             break;
         case 1:
-            EXPECT_CALL(*mMockApi, setGpioFallIndex(EFFECT_INDEX)).WillOnce(Return(true));
+            EXPECT_CALL(*mMockApi, setGpioFallIndex(EFFECT_INDEX.at(effect)))
+                    .WillOnce(Return(true));
             EXPECT_CALL(*mMockApi, setGpioFallScale(scale->second)).WillOnce(Return(true));
             break;
     }
-
-    auto effect = std::get<0>(scale->first);
-    auto strength = std::get<1>(scale->first);
 
     ndk::ScopedAStatus status = mVibrator->alwaysOnEnable(param, effect, strength);
     EXPECT_EQ(EX_NONE, status.getExceptionCode());
