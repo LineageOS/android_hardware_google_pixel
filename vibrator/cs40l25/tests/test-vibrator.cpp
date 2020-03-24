@@ -527,6 +527,7 @@ class PrimitiveTest : public VibratorTest, public WithParamInterface<PrimitivePa
 
 const std::vector<PrimitiveParam> kPrimitiveParams = {
         {CompositePrimitive::NOOP, 0},       {CompositePrimitive::CLICK, 2},
+        {CompositePrimitive::THUD, 4},       {CompositePrimitive::SPIN, 5},
         {CompositePrimitive::QUICK_RISE, 6}, {CompositePrimitive::SLOW_RISE, 7},
         {CompositePrimitive::QUICK_FALL, 8},
 };
@@ -586,6 +587,8 @@ TEST_P(ComposeTest, compose) {
 
 const std::vector<ComposeParam> kComposeParams = {
         {"click", {{0, CompositePrimitive::CLICK, 1.0f}}, Queue(QueueEffect(2, Level(1.0f)), 0)},
+        {"thud", {{1, CompositePrimitive::THUD, 0.8f}}, Queue(1, QueueEffect(4, Level(0.8f)), 0)},
+        {"spin", {{2, CompositePrimitive::SPIN, 0.6f}}, Queue(2, QueueEffect(5, Level(0.6f)), 0)},
         {"quick_rise",
          {{3, CompositePrimitive::QUICK_RISE, 0.4f}},
          Queue(3, QueueEffect(6, Level(0.4f)), 0)},
@@ -595,6 +598,9 @@ const std::vector<ComposeParam> kComposeParams = {
         {"quick_fall",
          {{5, CompositePrimitive::QUICK_FALL, 1.0f}},
          Queue(5, QueueEffect(8, Level(1.0f)), 0)},
+        {"pop",
+         {{6, CompositePrimitive::SLOW_RISE, 1.0f}, {50, CompositePrimitive::THUD, 1.0f}},
+         Queue(6, QueueEffect(7, Level(1.0f)), 50, QueueEffect(4, Level(1.0f)), 0)},
         {"snap",
          {{7, CompositePrimitive::QUICK_RISE, 1.0f}, {0, CompositePrimitive::QUICK_FALL, 1.0f}},
          Queue(7, QueueEffect(6, Level(1.0f)), QueueEffect(8, Level(1.0f)), 0)},
