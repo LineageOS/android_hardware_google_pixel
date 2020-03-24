@@ -20,7 +20,6 @@ cc_defaults {
         "PixelVibratorCommon",
     ],
     shared_libs: [
-        "android.hardware.vibrator-ndk_platform",
         "libbase",
         "libbinder_ndk",
         "libcutils",
@@ -28,4 +27,22 @@ cc_defaults {
         "liblog",
         "libutils",
     ],
+}
+
+cc_defaults {
+    name: "PixelVibratorBinaryDefaults",
+    defaults: ["PixelVibratorDefaults"],
+    shared_libs: [
+        "android.hardware.vibrator-ndk_platform",
+    ],
+}
+
+cc_defaults {
+    name: "PixelVibratorTestDefaults",
+    defaults: ["PixelVibratorDefaults"],
+    static_libs: [
+        "android.hardware.vibrator-ndk_platform",
+    ],
+    test_suites: ["device-tests"],
+    require_root: true,
 }
