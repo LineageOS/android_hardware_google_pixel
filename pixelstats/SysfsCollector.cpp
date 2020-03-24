@@ -71,8 +71,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kUFSLifetimeC(sysfs_paths.UFSLifetimeC),
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
       kUserdataBlockProp(sysfs_paths.UserdataBlockProp),
-      kZramMmStatPath(sysfs_paths.ZramMmStatPath),
-      kZramBdStatPath(sysfs_paths.ZramBdStatPath) {}
+      kZramMmStatPath("/sys/block/zram0/mm_stat"),
+      kZramBdStatPath("/sys/block/zram0/bd_stat") {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
