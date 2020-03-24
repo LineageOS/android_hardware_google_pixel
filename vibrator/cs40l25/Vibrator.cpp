@@ -39,17 +39,9 @@ namespace vibrator {
 
 static constexpr uint32_t BASE_CONTINUOUS_EFFECT_OFFSET = 32768;
 
-static constexpr uint32_t WAVEFORM_SIMPLE_EFFECT_INDEX = 2;
-
-static constexpr uint32_t WAVEFORM_TEXTURE_TICK_EFFECT_LEVEL = 0;
-
-static constexpr uint32_t WAVEFORM_TICK_EFFECT_LEVEL = 1;
-
-static constexpr uint32_t WAVEFORM_CLICK_EFFECT_LEVEL = 2;
-
-static constexpr uint32_t WAVEFORM_HEAVY_CLICK_EFFECT_LEVEL = 3;
-
-static constexpr uint32_t WAVEFORM_EFFECT_MAX_LEVEL = 4;
+static constexpr uint32_t WAVEFORM_EFFECT_0_20_LEVEL = 0;
+static constexpr uint32_t WAVEFORM_EFFECT_1_00_LEVEL = 4;
+static constexpr uint32_t WAVEFORM_EFFECT_LEVEL_MINIMUM = 4;
 
 static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_SILENCE_MS = 100;
 
@@ -57,6 +49,7 @@ static constexpr uint32_t WAVEFORM_LONG_VIBRATION_EFFECT_INDEX = 0;
 static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 static constexpr uint32_t WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX = 3 + BASE_CONTINUOUS_EFFECT_OFFSET;
 
+static constexpr uint32_t WAVEFORM_CLICK_INDEX = 2;
 static constexpr uint32_t WAVEFORM_QUICK_RISE_INDEX = 6;
 static constexpr uint32_t WAVEFORM_SLOW_RISE_INDEX = 7;
 static constexpr uint32_t WAVEFORM_QUICK_FALL_INDEX = 8;
@@ -93,6 +86,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
     uint32_t caldata;
     uint32_t effectCount;
+    std::array<uint32_t, 6> volLevels;
 
     if (!mHwApi->setState(true)) {
         ALOGE("Failed to set state (%d): %s", errno, strerror(errno));
@@ -107,7 +101,19 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     if (mHwCal->getQ(&caldata)) {
         mHwApi->setQ(caldata);
     }
-    mHwCal->getVolLevels(&mVolLevels);
+
+    mHwCal->getVolLevels(&volLevels);
+    /*
+     * Given voltage levels for two intensities, assuming a linear function,
+     * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
+     */
+    mEffectVolMin = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
+                                         (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
+                                          volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
+                                                 4.0f),
+                             static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
+    mEffectVolMax = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
+    mGlobalVolMax = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
 
     mHwApi->getEffectCount(&effectCount);
     mEffectDurations.resize(effectCount);
@@ -218,10 +224,10 @@ ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimiti
 ndk::ScopedAStatus Vibrator::getPrimitiveDuration(CompositePrimitive primitive,
                                                   int32_t *durationMs) {
     ndk::ScopedAStatus status;
-    uint32_t effectIndex, volLevel;
+    uint32_t effectIndex;
 
     if (primitive != CompositePrimitive::NOOP) {
-        status = getPrimitiveDetails(primitive, 1.0f, &effectIndex, &volLevel);
+        status = getPrimitiveDetails(primitive, &effectIndex);
         if (!status.isOk()) {
             return status;
         }
@@ -245,6 +251,10 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     }
 
     for (auto &e : composite) {
+        if (e.scale < 0.0f || e.scale > 1.0f) {
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+        }
+
         if (e.delayMs) {
             if (e.delayMs > COMPOSE_DELAY_MAX_MS) {
                 return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -254,14 +264,13 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         if (e.primitive != CompositePrimitive::NOOP) {
             ndk::ScopedAStatus status;
             uint32_t effectIndex;
-            uint32_t volLevel;
 
-            status = getPrimitiveDetails(e.primitive, e.scale, &effectIndex, &volLevel);
+            status = getPrimitiveDetails(e.primitive, &effectIndex);
             if (!status.isOk()) {
                 return status;
             }
 
-            effectBuilder << effectIndex << "." << volLevel << ",";
+            effectBuilder << effectIndex << "." << intensityToVolLevel(e.scale) << ",";
         }
     }
 
@@ -304,7 +313,7 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) 
 }
 
 ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
-    uint8_t amplitude = set ? mVolLevels[VOLTAGE_GLOBAL_SCALE_LEVEL] : VOLTAGE_SCALE_MAX;
+    uint8_t amplitude = set ? mGlobalVolMax : VOLTAGE_SCALE_MAX;
     int32_t scale = amplitudeToScale(amplitude, VOLTAGE_SCALE_MAX);
 
     if (!mHwApi->setGlobalScale(scale)) {
@@ -322,11 +331,12 @@ ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> *_a
 
 ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t id, Effect effect, EffectStrength strength) {
     ndk::ScopedAStatus status;
+    uint32_t effectIndex;
     uint32_t timeMs;
     uint32_t volLevel;
     uint32_t scale;
 
-    status = getSimpleDetails(effect, strength, &timeMs, &volLevel);
+    status = getSimpleDetails(effect, strength, &effectIndex, &timeMs, &volLevel);
     if (!status.isOk()) {
         return status;
     }
@@ -335,11 +345,11 @@ ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t id, Effect effect, EffectStr
 
     switch (static_cast<AlwaysOnId>(id)) {
         case AlwaysOnId::GPIO_RISE:
-            mHwApi->setGpioRiseIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
+            mHwApi->setGpioRiseIndex(effectIndex);
             mHwApi->setGpioRiseScale(scale);
             return ndk::ScopedAStatus::ok();
         case AlwaysOnId::GPIO_FALL:
-            mHwApi->setGpioFallIndex(WAVEFORM_SIMPLE_EFFECT_INDEX);
+            mHwApi->setGpioFallIndex(effectIndex);
             mHwApi->setGpioFallScale(scale);
             return ndk::ScopedAStatus::ok();
     }
@@ -376,11 +386,10 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     dprintf(fd, "AIDL:\n");
 
-    dprintf(fd, "  Voltage Levels:");
-    for (auto v : mVolLevels) {
-        dprintf(fd, " %" PRIu32, v);
-    }
-    dprintf(fd, "\n");
+    dprintf(fd, "  Voltage Levels:\n");
+    dprintf(fd, "    Effect Min: %" PRIu32 "\n", mEffectVolMin);
+    dprintf(fd, "    Effect Max: %" PRIu32 "\n", mEffectVolMax);
+    dprintf(fd, "    Global Max: %" PRIu32 "\n", mGlobalVolMax);
 
     dprintf(fd, "  Effect Durations:");
     for (auto d : mEffectDurations) {
@@ -401,21 +410,22 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 }
 
 ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength strength,
-                                              uint32_t *outTimeMs, uint32_t *outVolLevel) {
+                                              uint32_t *outEffectIndex, uint32_t *outTimeMs,
+                                              uint32_t *outVolLevel) {
+    uint32_t effectIndex;
     uint32_t timeMs;
+    float intensity;
     uint32_t volLevel;
-    uint32_t volIndex;
-    int8_t volOffset;
 
     switch (strength) {
         case EffectStrength::LIGHT:
-            volOffset = -1;
+            intensity = 0.5f;
             break;
         case EffectStrength::MEDIUM:
-            volOffset = 0;
+            intensity = 0.7f;
             break;
         case EffectStrength::STRONG:
-            volOffset = 1;
+            intensity = 1.0f;
             break;
         default:
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
@@ -423,26 +433,29 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
 
     switch (effect) {
         case Effect::TEXTURE_TICK:
-            volIndex = WAVEFORM_TEXTURE_TICK_EFFECT_LEVEL;
-            volOffset = 0;
+            effectIndex = WAVEFORM_LIGHT_TICK_INDEX;
+            intensity *= 0.5f;
             break;
         case Effect::TICK:
-            volIndex = WAVEFORM_TICK_EFFECT_LEVEL;
-            volOffset = 0;
+            effectIndex = WAVEFORM_LIGHT_TICK_INDEX;
+            intensity *= 0.7f;
             break;
         case Effect::CLICK:
-            volIndex = WAVEFORM_CLICK_EFFECT_LEVEL;
+            effectIndex = WAVEFORM_CLICK_INDEX;
+            intensity *= 0.7f;
             break;
         case Effect::HEAVY_CLICK:
-            volIndex = WAVEFORM_HEAVY_CLICK_EFFECT_LEVEL;
+            effectIndex = WAVEFORM_CLICK_INDEX;
+            intensity *= 1.0f;
             break;
         default:
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
-    volLevel = mVolLevels[volIndex + volOffset];
-    timeMs = mEffectDurations[WAVEFORM_SIMPLE_EFFECT_INDEX] + MAX_COLD_START_LATENCY_MS;
+    volLevel = intensityToVolLevel(intensity);
+    timeMs = mEffectDurations[effectIndex] + MAX_COLD_START_LATENCY_MS;
 
+    *outEffectIndex = effectIndex;
     *outTimeMs = timeMs;
     *outVolLevel = volLevel;
 
@@ -455,6 +468,7 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
     ndk::ScopedAStatus status;
     uint32_t timeMs;
     std::ostringstream effectBuilder;
+    uint32_t thisEffectIndex;
     uint32_t thisTimeMs;
     uint32_t thisVolLevel;
 
@@ -462,11 +476,12 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
         case Effect::DOUBLE_CLICK:
             timeMs = 0;
 
-            status = getSimpleDetails(Effect::CLICK, strength, &thisTimeMs, &thisVolLevel);
+            status = getSimpleDetails(Effect::CLICK, strength, &thisEffectIndex, &thisTimeMs,
+                                      &thisVolLevel);
             if (!status.isOk()) {
                 return status;
             }
-            effectBuilder << WAVEFORM_SIMPLE_EFFECT_INDEX << "." << thisVolLevel;
+            effectBuilder << thisEffectIndex << "." << thisVolLevel;
             timeMs += thisTimeMs;
 
             effectBuilder << ",";
@@ -476,11 +491,12 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
 
             effectBuilder << ",";
 
-            status = getSimpleDetails(Effect::HEAVY_CLICK, strength, &thisTimeMs, &thisVolLevel);
+            status = getSimpleDetails(Effect::HEAVY_CLICK, strength, &thisEffectIndex, &thisTimeMs,
+                                      &thisVolLevel);
             if (!status.isOk()) {
                 return status;
             }
-            effectBuilder << WAVEFORM_SIMPLE_EFFECT_INDEX << "." << thisVolLevel;
+            effectBuilder << thisEffectIndex << "." << thisVolLevel;
             timeMs += thisTimeMs;
 
             break;
@@ -494,19 +510,15 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive, float scale,
-                                                 uint32_t *outEffectIndex, uint32_t *outVolLevel) {
+ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
+                                                 uint32_t *outEffectIndex) {
     uint32_t effectIndex;
-
-    if (scale < 0.0f || scale > 1.0f) {
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-    }
 
     switch (primitive) {
         case CompositePrimitive::NOOP:
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         case CompositePrimitive::CLICK:
-            effectIndex = WAVEFORM_SIMPLE_EFFECT_INDEX;
+            effectIndex = WAVEFORM_CLICK_INDEX;
             break;
         case CompositePrimitive::QUICK_RISE:
             effectIndex = WAVEFORM_QUICK_RISE_INDEX;
@@ -525,7 +537,6 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive, f
     }
 
     *outEffectIndex = effectIndex;
-    *outVolLevel = std::lround(scale * (mVolLevels[WAVEFORM_EFFECT_MAX_LEVEL] - 1)) + 1;
 
     return ndk::ScopedAStatus::ok();
 }
@@ -544,6 +555,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
                                            const std::shared_ptr<IVibratorCallback> &callback,
                                            int32_t *outTimeMs) {
     ndk::ScopedAStatus status;
+    uint32_t effectIndex;
     uint32_t timeMs = 0;
     uint32_t volLevel;
     std::string effectQueue;
@@ -556,7 +568,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
         case Effect::CLICK:
             // fall-through
         case Effect::HEAVY_CLICK:
-            status = getSimpleDetails(effect, strength, &timeMs, &volLevel);
+            status = getSimpleDetails(effect, strength, &effectIndex, &timeMs, &volLevel);
             break;
         case Effect::DOUBLE_CLICK:
             status = getCompoundDetails(effect, strength, &timeMs, &volLevel, &effectQueue);
@@ -569,7 +581,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
         goto exit;
     }
 
-    status = performEffect(WAVEFORM_SIMPLE_EFFECT_INDEX, volLevel, &effectQueue, callback);
+    status = performEffect(effectIndex, volLevel, &effectQueue, callback);
 
 exit:
 
@@ -604,6 +616,10 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
             ALOGE("Failed completion callback: %d", ret.getExceptionCode());
         }
     }
+}
+
+uint32_t Vibrator::intensityToVolLevel(float intensity) {
+    return std::lround(intensity * (mEffectVolMax - mEffectVolMin)) + mEffectVolMin;
 }
 
 }  // namespace vibrator
