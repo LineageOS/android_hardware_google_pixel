@@ -50,6 +50,8 @@ static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 static constexpr uint32_t WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX = 3 + BASE_CONTINUOUS_EFFECT_OFFSET;
 
 static constexpr uint32_t WAVEFORM_CLICK_INDEX = 2;
+static constexpr uint32_t WAVEFORM_THUD_INDEX = 4;
+static constexpr uint32_t WAVEFORM_SPIN_INDEX = 5;
 static constexpr uint32_t WAVEFORM_QUICK_RISE_INDEX = 6;
 static constexpr uint32_t WAVEFORM_SLOW_RISE_INDEX = 7;
 static constexpr uint32_t WAVEFORM_QUICK_FALL_INDEX = 8;
@@ -215,6 +217,7 @@ ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
 ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
     *supported = {
             CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
+            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
             CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
             CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
     };
@@ -519,6 +522,12 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         case CompositePrimitive::CLICK:
             effectIndex = WAVEFORM_CLICK_INDEX;
+            break;
+        case CompositePrimitive::THUD:
+            effectIndex = WAVEFORM_THUD_INDEX;
+            break;
+        case CompositePrimitive::SPIN:
+            effectIndex = WAVEFORM_SPIN_INDEX;
             break;
         case CompositePrimitive::QUICK_RISE:
             effectIndex = WAVEFORM_QUICK_RISE_INDEX;
