@@ -36,6 +36,10 @@ HwApiBase::HwApiBase() {
     }
 }
 
+void HwApiBase::saveName(const std::string &name, const std::ios *stream) {
+    mNames[stream] = name;
+}
+
 bool HwApiBase::has(const std::ios &stream) {
     return !!stream;
 }
