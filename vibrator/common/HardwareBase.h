@@ -64,6 +64,7 @@ class HwApiBase {
     void debug(int fd);
 
   protected:
+    void saveName(const std::string &name, const std::ios *stream);
     template <typename T>
     void open(const std::string &name, T *stream);
     bool has(const std::ios &stream);
@@ -87,7 +88,7 @@ class HwApiBase {
 
 template <typename T>
 void HwApiBase::open(const std::string &name, T *stream) {
-    mNames[stream] = name;
+    saveName(name, stream);
     utils::openNoCreate(mPathPrefix + name, stream);
 }
 
