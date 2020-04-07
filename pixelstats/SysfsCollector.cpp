@@ -405,7 +405,7 @@ void SysfsCollector::logF2fsStats() {
     }
 
     // Load values array
-    std::vector<VendorAtom::Value> values(10);
+    std::vector<VendorAtom::Value> values(9);
     VendorAtom::Value tmp;
     tmp.intValue(dirty);
     values[F2fsStatsInfo::kDirtySegmentsFieldNumber - kVendorAtomOffset] = tmp;
