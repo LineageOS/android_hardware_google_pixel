@@ -153,17 +153,17 @@ message F2fsStatsInfo {
     /* The times of checkpoint function called in foreground*/
     optional int32 cp_calls_fg = 4;
     /* The times of checkpoint function called in background */
-    optional int32 cp_calls_bg = 6;
+    optional int32 cp_calls_bg = 5;
     /* The times of garbage collection function called in foreground */
-    optional int32 gc_calls_fg = 7;
+    optional int32 gc_calls_fg = 6;
     /* The times of garbage collection function called in background */
-    optional int32 gc_calls_bg = 8;
+    optional int32 gc_calls_bg = 7;
     /* The amount of blocks been moved by garbage collection in foreground */
-    optional int32 moved_blocks_fg = 9;
+    optional int32 moved_blocks_fg = 8;
     /* The amount of blocks been moved by garbage collection in background */
-    optional int32 moved_blocks_bg = 10;
+    optional int32 moved_blocks_bg = 9;
     /* The average of how many valid blocks is in a segment */
-    optional int32 valid_blocks = 11;
+    optional int32 valid_blocks = 10;
 }
 
 message ZramMmStat {
