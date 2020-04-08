@@ -44,14 +44,15 @@ class UeventListener {
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
+
   private:
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
     void ReportMicStatusUevents(const char *devpath, const char *mic_status);
     void ReportMicBrokenOrDegraded(const int mic, const bool isBroken);
     void ReportUsbPortOverheatEvent(const char *driver);
-    void ReportChargeStats(sp<IStats> &stats_client, const char *line);
-    void ReportVoltageTierStats(sp<IStats> &stats_client, const char *line);
+    void ReportChargeStats(const sp<IStats> &stats_client, const char *line);
+    void ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line);
     void ReportChargeMetricsEvent(const char *driver);
 
     const std::string kAudioUevent;
