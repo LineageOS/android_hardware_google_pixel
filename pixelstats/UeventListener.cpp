@@ -25,6 +25,7 @@
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/UeventListener.h>
+#include <pixelstats/WlcReporter.h>
 #include <unistd.h>
 #include <utils/StrongPointer.h>
 
@@ -37,6 +38,7 @@ using android::frameworks::stats::V1_0::HardwareFailed;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
 using android::frameworks::stats::V1_0::VendorAtom;
+using android::hardware::google::pixel::WlcReporter;
 using android::hardware::google::pixel::PixelAtoms::ChargeStats;
 using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
@@ -250,12 +252,29 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
     }
 }
 
+/* ReportWlc
+ * Report wireless relate  metrics when wireless charging start
+ */
+void UeventListener::ReportWlc(const char *driver) {
+    if (!driver || strncmp(driver, "POWER_SUPPLY_PRESENT=", strlen("POWER_SUPPLY_PRESENT="))) {
+        return;
+    }
+    if (mIsWirelessChargingSupported) {
+        sp<WlcReporter> wlcReporter = new WlcReporter();
+        if (wlcReporter != nullptr) {
+            mIsWirelessChargingLastState =
+                    wlcReporter->checkAndReport(mIsWirelessChargingLastState);
+        }
+    }
+}
+
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
     const char *action, *power_supply_typec_mode, *driver, *product;
     const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
+    const char *powpresent;
     int n;
 
     if (uevent_fd_ < 0) {
@@ -275,7 +294,7 @@ bool UeventListener::ProcessUevent() {
     msg[n + 1] = '\0';
 
     action = power_supply_typec_mode = driver = product = NULL;
-    mic_break_status = mic_degrade_status = devpath = NULL;
+    mic_break_status = mic_degrade_status = devpath = powpresent = NULL;
 
     /**
      * msg is a sequence of null-terminated strings.
@@ -298,6 +317,8 @@ bool UeventListener::ProcessUevent() {
             mic_degrade_status = cp;
         } else if (!strncmp(cp, "DEVPATH=", strlen("DEVPATH="))) {
             devpath = cp;
+        } else if (!strncmp(cp, "POWER_SUPPLY_PRESENT=", strlen("POWER_SUPPLY_PRESENT="))) {
+            powpresent = cp;
         }
 
         /* advance to after the next \0 */
@@ -310,6 +331,7 @@ bool UeventListener::ProcessUevent() {
     ReportMicStatusUevents(devpath, mic_degrade_status);
     ReportUsbPortOverheatEvent(driver);
     ReportChargeMetricsEvent(driver);
+    ReportWlc(powpresent);
 
     return true;
 }
@@ -319,13 +341,22 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
     : kAudioUevent(audio_uevent),
       kUsbPortOverheatPath(overheat_path),
       kChargeMetricsPath(charge_metrics_path),
-      uevent_fd_(-1) {}
+      uevent_fd_(-1),
+      mIsWirelessChargingLastState(false) {}
 
 /* Thread function to continuously monitor uevents.
  * Exit after kMaxConsecutiveErrors to prevent spinning. */
 void UeventListener::ListenForever() {
     constexpr int kMaxConsecutiveErrors = 10;
     int consecutive_errors = 0;
+    sp<WlcReporter> wlcReporter = new WlcReporter();
+    if (wlcReporter != nullptr) {
+        mIsWirelessChargingSupported = wlcReporter->isWlcSupported();
+    } else {
+        ALOGE("Fail to create WlcReporter.");
+        mIsWirelessChargingSupported = false;
+    }
+
     while (1) {
         if (ProcessUevent()) {
             consecutive_errors = 0;
