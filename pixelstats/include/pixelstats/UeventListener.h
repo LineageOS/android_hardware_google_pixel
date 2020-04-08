@@ -54,6 +54,7 @@ class UeventListener {
     void ReportChargeStats(const sp<IStats> &stats_client, const char *line);
     void ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line);
     void ReportChargeMetricsEvent(const char *driver);
+    void ReportWlc(const char *driver);
 
     const std::string kAudioUevent;
     const std::string kUsbPortOverheatPath;
@@ -64,6 +65,9 @@ class UeventListener {
     const int kVendorAtomOffset = 2;
 
     int uevent_fd_;
+
+    bool mIsWirelessChargingLastState;
+    bool mIsWirelessChargingSupported;
 };
 
 }  // namespace pixel
