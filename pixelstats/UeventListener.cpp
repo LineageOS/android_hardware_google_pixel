@@ -76,8 +76,9 @@ void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroke
         Return<void> ret = stats_client->reportHardwareFailed(failure);
         if (!ret.isOk())
             ALOGE("Unable to report physical drop to Stats service");
-    } else
+    } else {
         ALOGE("Unable to connect to Stats service");
+    }
 }
 
 void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic_status) {
@@ -95,9 +96,9 @@ void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic
             else
                 return;
 
-            if (!value[1].compare("true"))
+            if (!value[1].compare("true")) {
                 ReportMicBrokenOrDegraded(0, isbroken);
-            else {
+            } else {
                 int mic_status = atoi(value[1].c_str());
 
                 if (mic_status > 0 && mic_status <= 7) {
@@ -138,7 +139,7 @@ void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
     }
 }
 
-void UeventListener::ReportChargeStats(sp<IStats> &stats_client, const char *line) {
+void UeventListener::ReportChargeStats(const sp<IStats> &stats_client, const char *line) {
     std::vector<int> charge_stats_fields = {
             ChargeStats::kAdapterTypeFieldNumber,     ChargeStats::kAdapterVoltageFieldNumber,
             ChargeStats::kAdapterAmperageFieldNumber, ChargeStats::kSsocInFieldNumber,
@@ -167,7 +168,7 @@ void UeventListener::ReportChargeStats(sp<IStats> &stats_client, const char *lin
         ALOGE("Unable to report ChargeStats to Stats service");
 }
 
-void UeventListener::ReportVoltageTierStats(sp<IStats> &stats_client, const char *line) {
+void UeventListener::ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line) {
     std::vector<int> voltage_tier_stats_fields = {VoltageTierStats::kVoltageTierFieldNumber,
                                                   VoltageTierStats::kSocInFieldNumber,
                                                   VoltageTierStats::kCcInFieldNumber,
@@ -233,7 +234,7 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
     }
 
     if (!WriteStringToFile(kChargeMetricsPath.c_str(), std::to_string(0))) {
-	ALOGE("Couldn't clear %s", kChargeMetricsPath.c_str());
+        ALOGE("Couldn't clear %s", kChargeMetricsPath.c_str());
     }
 
     sp<IStats> stats_client = IStats::tryGetService();
