@@ -44,8 +44,10 @@ cc_library {
 
   srcs: [
     "DropDetect.cpp",
+    "OrientationCollector.cpp",
     "SysfsCollector.cpp",
     "UeventListener.cpp",
+    "WlcReporter.cpp",
   ],
   cflags: [
     "-Wall",
@@ -59,6 +61,7 @@ cc_library {
     "libhidlbase",
     "liblog",
     "libutils",
+    "libsensorndkbridge",
     "pixelatoms-cpp",
   ],
   export_shared_lib_headers: [
