@@ -42,6 +42,8 @@ enum Ids {
     ZRAM_MM_STAT = 105005;
     ZRAM_BD_STAT = 105006;
     BOOT_STATS = 105007;
+    WIRELESS_CHARGING_STATS = 105008;
+    DEVICE_ORIENTATION = 105009;
     // AOSP atom ID range ends at 109999
 }
 
@@ -196,4 +198,29 @@ message BootStatsInfo {
     optional int32 mounted_time_sec = 3;
     /* The F2FS checkpoint=disable time in secs */
     optional int32 checkpoint_time_sec = 4;
+}
+
+/* A message containing wireless charging health info. */
+message WirelessChargingStats {
+    /* Captures if a google charger used when start wireless charging */
+    enum ChargerVendor {
+        VENDOR_UNKNOWN = 0;
+        VENDOR_GOOGLE = 1;
+    }
+
+    optional ChargerVendor charger_vendor = 2;
+}
+
+/* Current device Orientation */
+message DeviceOrientation {
+    enum Orientation {
+        ORIENTATION_UNKNOWN = 0;
+        ORIENTATION_0 = 1;
+        ORIENTATION_90 = 2;
+        ORIENTATION_180 = 3;
+        ORIENTATION_270 = 4;
+    }
+
+    /* Device orientation. */
+    optional Orientation orientation = 2;
 }
