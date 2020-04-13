@@ -66,8 +66,8 @@ class UeventListener {
 
     int uevent_fd_;
 
-    bool mIsWirelessChargingLastState;
-    bool mIsWirelessChargingSupported;
+    bool wireless_charging_state_;
+    bool wireless_charging_supported_;
 };
 
 }  // namespace pixel
