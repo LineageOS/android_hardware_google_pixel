@@ -437,8 +437,8 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
             intensity *= 0.5f;
             break;
         case Effect::TICK:
-            effectIndex = WAVEFORM_LIGHT_TICK_INDEX;
-            intensity *= 0.7f;
+            effectIndex = WAVEFORM_CLICK_INDEX;
+            intensity *= 0.5f;
             break;
         case Effect::CLICK:
             effectIndex = WAVEFORM_CLICK_INDEX;
