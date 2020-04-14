@@ -259,11 +259,11 @@ void UeventListener::ReportWlc(const char *driver) {
     if (!driver || strncmp(driver, "POWER_SUPPLY_PRESENT=", strlen("POWER_SUPPLY_PRESENT="))) {
         return;
     }
-    if (mIsWirelessChargingSupported) {
-        sp<WlcReporter> wlcReporter = new WlcReporter();
-        if (wlcReporter != nullptr) {
-            mIsWirelessChargingLastState =
-                    wlcReporter->checkAndReport(mIsWirelessChargingLastState);
+    if (wireless_charging_supported_) {
+        sp<WlcReporter> wlc_reporter = new WlcReporter();
+        if (wlc_reporter != nullptr) {
+            wireless_charging_state_ =
+                    wlc_reporter->checkAndReport(wireless_charging_state_);
         }
     }
 }
@@ -271,7 +271,7 @@ void UeventListener::ReportWlc(const char *driver) {
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
-    const char *action, *power_supply_typec_mode, *driver, *product;
+    const char *driver, *product;
     const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
     const char *powpresent;
@@ -293,7 +293,7 @@ bool UeventListener::ProcessUevent() {
     msg[n] = '\0';
     msg[n + 1] = '\0';
 
-    action = power_supply_typec_mode = driver = product = NULL;
+    driver = product = NULL;
     mic_break_status = mic_degrade_status = devpath = powpresent = NULL;
 
     /**
@@ -303,11 +303,7 @@ bool UeventListener::ProcessUevent() {
      */
     cp = msg;
     while (*cp) {
-        if (!strncmp(cp, "ACTION=", strlen("ACTION="))) {
-            action = cp;
-        } else if (!strncmp(cp, "POWER_SUPPLY_TYPEC_MODE=", strlen("POWER_SUPPLY_TYPEC_MODE="))) {
-            power_supply_typec_mode = cp;
-        } else if (!strncmp(cp, "DRIVER=", strlen("DRIVER="))) {
+        if (!strncmp(cp, "DRIVER=", strlen("DRIVER="))) {
             driver = cp;
         } else if (!strncmp(cp, "PRODUCT=", strlen("PRODUCT="))) {
             product = cp;
@@ -317,7 +313,8 @@ bool UeventListener::ProcessUevent() {
             mic_degrade_status = cp;
         } else if (!strncmp(cp, "DEVPATH=", strlen("DEVPATH="))) {
             devpath = cp;
-        } else if (!strncmp(cp, "POWER_SUPPLY_PRESENT=", strlen("POWER_SUPPLY_PRESENT="))) {
+        } else if (!strncmp(cp, "POWER_SUPPLY_PRESENT=",
+                            strlen("POWER_SUPPLY_PRESENT="))) {
             powpresent = cp;
         }
 
@@ -342,19 +339,19 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
       kUsbPortOverheatPath(overheat_path),
       kChargeMetricsPath(charge_metrics_path),
       uevent_fd_(-1),
-      mIsWirelessChargingLastState(false) {}
+      wireless_charging_state_(false) {}
 
 /* Thread function to continuously monitor uevents.
  * Exit after kMaxConsecutiveErrors to prevent spinning. */
 void UeventListener::ListenForever() {
     constexpr int kMaxConsecutiveErrors = 10;
     int consecutive_errors = 0;
-    sp<WlcReporter> wlcReporter = new WlcReporter();
-    if (wlcReporter != nullptr) {
-        mIsWirelessChargingSupported = wlcReporter->isWlcSupported();
+    sp<WlcReporter> wlc_reporter = new WlcReporter();
+    if (wlc_reporter != nullptr) {
+        wireless_charging_supported_ = wlc_reporter->isWlcSupported();
     } else {
         ALOGE("Fail to create WlcReporter.");
-        mIsWirelessChargingSupported = false;
+        wireless_charging_supported_ = false;
     }
 
     while (1) {
