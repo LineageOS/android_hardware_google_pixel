@@ -19,6 +19,7 @@
 
 #include <android-base/chrono_utils.h>
 #include <android/frameworks/stats/1.0/IStats.h>
+#include <pixelstats/BatteryCapacityReporter.h>
 
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
@@ -37,7 +38,7 @@ namespace pixel {
 class UeventListener {
   public:
     UeventListener(
-            const std::string audio_uevent,
+            const std::string audio_uevent, const std::string ssoc_details_path = "",
             const std::string overheat_path =
                     "/sys/devices/platform/soc/soc:google,overheat_mitigation",
             const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats");
@@ -55,10 +56,15 @@ class UeventListener {
     void ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line);
     void ReportChargeMetricsEvent(const char *driver);
     void ReportWlc(const char *driver);
+    void ReportBatteryCapacityFGEvent(const char *subsystem);
 
     const std::string kAudioUevent;
+    const std::string kBatterySSOCPath;
     const std::string kUsbPortOverheatPath;
     const std::string kChargeMetricsPath;
+
+    BatteryCapacityReporter battery_capacity_reporter_;
+
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
     // -2.
