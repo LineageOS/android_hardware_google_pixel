@@ -22,7 +22,6 @@
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
-#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/UeventListener.h>
 #include <pixelstats/WlcReporter.h>
@@ -268,10 +267,40 @@ void UeventListener::ReportWlc(const char *driver) {
     }
 }
 
+/**
+ * Report raw battery capacity, system battery capacity and associated
+ * battery capacity curves. This data is collected to verify the filter
+ * applied on the battery capacity. This will allow debugging of issues
+ * ranging from incorrect fuel gauge hardware calculations to issues
+ * with the software reported battery capacity.
+ *
+ * The data is retrieved by parsing the battery power supply's ssoc_details.
+ *
+ * This atom logs data in 5 potential events:
+ *      1. When a device is connected
+ *      2. When a device is disconnected
+ *      3. When a device has reached a full charge (from the UI's perspective)
+ *      4. When there is a >= 2 percent skip in the UI reported SOC
+ *      5. When there is a difference of >= 4 percent between the raw hardware
+ *          battery capacity and the system reported battery capacity.
+ */
+void UeventListener::ReportBatteryCapacityFGEvent(const char *subsystem) {
+    if (!subsystem || strcmp(subsystem, "SUBSYSTEM=power_supply")) {
+        return;
+    }
+
+    // Indicates an implicit disable of the battery capacity reporting
+    if (kBatterySSOCPath.empty()) {
+        return;
+    }
+
+    battery_capacity_reporter_.checkAndReport(kBatterySSOCPath);
+}
+
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
-    const char *driver, *product;
+    const char *driver, *product, *subsystem;
     const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
     const char *powpresent;
@@ -293,7 +322,7 @@ bool UeventListener::ProcessUevent() {
     msg[n] = '\0';
     msg[n + 1] = '\0';
 
-    driver = product = NULL;
+    driver = product = subsystem = NULL;
     mic_break_status = mic_degrade_status = devpath = powpresent = NULL;
 
     /**
@@ -316,6 +345,8 @@ bool UeventListener::ProcessUevent() {
         } else if (!strncmp(cp, "POWER_SUPPLY_PRESENT=",
                             strlen("POWER_SUPPLY_PRESENT="))) {
             powpresent = cp;
+        } else if (!strncmp(cp, "SUBSYSTEM=", strlen("SUBSYSTEM="))) {
+            subsystem = cp;
         }
 
         /* advance to after the next \0 */
@@ -329,13 +360,16 @@ bool UeventListener::ProcessUevent() {
     ReportUsbPortOverheatEvent(driver);
     ReportChargeMetricsEvent(driver);
     ReportWlc(powpresent);
+    ReportBatteryCapacityFGEvent(subsystem);
 
     return true;
 }
 
-UeventListener::UeventListener(const std::string audio_uevent, const std::string overheat_path,
+UeventListener::UeventListener(const std::string audio_uevent, const std::string ssoc_details_path,
+                               const std::string overheat_path,
                                const std::string charge_metrics_path)
     : kAudioUevent(audio_uevent),
+      kBatterySSOCPath(ssoc_details_path),
       kUsbPortOverheatPath(overheat_path),
       kChargeMetricsPath(charge_metrics_path),
       uevent_fd_(-1),
