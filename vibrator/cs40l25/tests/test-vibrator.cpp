@@ -67,8 +67,8 @@ static EffectScale Scale(float intensity);
 // Constants With Arbitrary Values
 
 static constexpr std::array<EffectLevel, 6> V_LEVELS{40, 50, 60, 70, 80, 90};
-static constexpr std::array<EffectDuration, 9> EFFECT_DURATIONS{0,   0,   15,  0,  50,
-                                                                100, 150, 200, 250};
+static constexpr std::array<EffectDuration, 10> EFFECT_DURATIONS{0,   0,   15,  0,   50,
+                                                                 100, 150, 200, 250, 8};
 
 // Constants With Prescribed Values
 
@@ -443,10 +443,10 @@ TEST_P(EffectsTest, perform) {
     Expectation eActivate, ePoll;
 
     if (scale != EFFECT_SCALE.end()) {
-        duration = EFFECT_DURATIONS[2];
+        EffectIndex index = EFFECT_INDEX.at(effect);
+        duration = EFFECT_DURATIONS[index];
 
-        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(EFFECT_INDEX.at(effect)))
-                          .WillOnce(DoDefault());
+        eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(index)).WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, setEffectScale(scale->second)).WillOnce(Return(true));
     } else if (queue != EFFECT_QUEUE.end()) {
         duration = std::get<1>(queue->second);
