@@ -44,6 +44,8 @@ class VibratorBench : public benchmark::Fixture {
             "device/gpio1_fall_dig_scale",
             "device/gpio1_rise_index",
             "device/gpio1_rise_dig_scale",
+            "device/vibe_state",
+            "device/num_waves",
     };
 
   public:
@@ -52,6 +54,9 @@ class VibratorBench : public benchmark::Fixture {
         const std::map<const std::string, const std::string> content{
                 {"duration", std::to_string((uint32_t)std::rand() ?: 1)},
                 {"device/asp_enable", std::to_string(0)},
+                {"device/cp_trigger_duration", std::to_string(0)},
+                {"device/num_waves", std::to_string(10)},
+                {"device/vibe_state", std::to_string(0)},
         };
 
         setenv("HWAPI_PATH_PREFIX", prefix.c_str(), true);
