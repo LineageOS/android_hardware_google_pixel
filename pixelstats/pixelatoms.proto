@@ -44,6 +44,7 @@ enum Ids {
     BOOT_STATS = 105007;
     WIRELESS_CHARGING_STATS = 105008;
     DEVICE_ORIENTATION = 105009;
+    FG_CAPACITY = 105010;
     // AOSP atom ID range ends at 109999
 }
 
@@ -224,3 +225,28 @@ message DeviceOrientation {
     /* Device orientation. */
     optional Orientation orientation = 2;
 }
+
+/* Raw battery capacity stats */
+message BatteryCapacityFG {
+    enum LogReason {
+        LOG_REASON_UNKNOWN = 0;
+        LOG_REASON_CONNECTED = 1;
+        LOG_REASON_DISCONNECTED = 2;
+        LOG_REASON_FULL_CHARGE = 3;
+        LOG_REASON_PERCENT_SKIP = 4;
+        LOG_REASON_DIVERGING_FG = 5;
+    }
+
+    /* Uevent logging reason, enumerated above. */
+    optional LogReason capacity_log_reason = 2;
+
+    /* The battery capacity reported from the FG (fuel gauge) hardware  */
+    optional float capacity_gdf = 3;
+    /* The filtered system battery capacity reported to the UI */
+    optional float capacity_ssoc = 4;
+    /* The fuel gauge capacity curve midpoint FG (fuel gauge) value */
+    optional float capacity_gdf_curve = 5;
+    /* The fuel gauge capacity curve midpoint UI value */
+    optional float capacity_ssoc_curve = 6;
+}
+

@@ -48,6 +48,7 @@ cc_library {
     "SysfsCollector.cpp",
     "UeventListener.cpp",
     "WlcReporter.cpp",
+    "BatteryCapacityReporter.cpp",
   ],
   cflags: [
     "-Wall",
