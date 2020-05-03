@@ -1,17 +1,31 @@
 #!/vendor/bin/sh
 
-########################################################
-### init.insmod.cfg format:                          ###
-### -----------------------------------------------  ###
-### [insmod|setprop|enable/moprobe] [path|prop name] ###
-### ...                                              ###
-########################################################
+#############################################################
+### init.insmod.cfg format:                               ###
+### ----------------------------------------------------- ###
+### [insmod|setprop|enable/moprobe|wait] [path|prop name] ###
+### ...                                                   ###
+#############################################################
+
+# imitates wait_for_file() in init
+wait_for_file()
+{
+    filename="${1}"
+    timeout="${2:-5}"
+
+    expiry=$(($(date "+%s")+timeout))
+    while [[ ! -e "${filename}" ]] && [[ "$(date "+%s")" -le "${expiry}" ]]
+    do
+        sleep 0.01
+    done
+}
 
 if [ $# -eq 1 ]; then
   cfg_file=$1
 else
   exit 1
 fi
+
 
 if [ -f $cfg_file ]; then
   while IFS="|" read -r action arg
@@ -21,6 +35,7 @@ if [ -f $cfg_file ]; then
       "setprop") setprop $arg 1 ;;
       "enable") echo 1 > $arg ;;
       "modprobe") modprobe -a -d /vendor/lib/modules $arg ;;
+      "wait") wait_for_file $arg ;;
     esac
   done < $cfg_file
 fi
