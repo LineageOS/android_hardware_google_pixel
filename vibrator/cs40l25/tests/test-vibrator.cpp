@@ -74,7 +74,7 @@ static constexpr std::array<EffectDuration, 10> EFFECT_DURATIONS{0,   0,   15,  
 
 static const std::map<Effect, EffectIndex> EFFECT_INDEX{
         {Effect::CLICK, 2},
-        {Effect::TICK, 9},
+        {Effect::TICK, 2},
         {Effect::HEAVY_CLICK, 2},
         {Effect::TEXTURE_TICK, 9},
 };
@@ -88,9 +88,9 @@ static const std::map<EffectTuple, EffectScale> EFFECT_SCALE{
         {{Effect::CLICK, EffectStrength::LIGHT}, Scale(0.7f * 0.5f)},
         {{Effect::CLICK, EffectStrength::MEDIUM}, Scale(0.7f * 0.7f)},
         {{Effect::CLICK, EffectStrength::STRONG}, Scale(0.7f * 1.0f)},
-        {{Effect::TICK, EffectStrength::LIGHT}, Scale(0.7f * 0.5f)},
-        {{Effect::TICK, EffectStrength::MEDIUM}, Scale(0.7f * 0.7f)},
-        {{Effect::TICK, EffectStrength::STRONG}, Scale(0.7f * 1.0f)},
+        {{Effect::TICK, EffectStrength::LIGHT}, Scale(0.5f * 0.5f)},
+        {{Effect::TICK, EffectStrength::MEDIUM}, Scale(0.5f * 0.7f)},
+        {{Effect::TICK, EffectStrength::STRONG}, Scale(0.5f * 1.0f)},
         {{Effect::HEAVY_CLICK, EffectStrength::LIGHT}, Scale(1.0f * 0.5f)},
         {{Effect::HEAVY_CLICK, EffectStrength::MEDIUM}, Scale(1.0f * 0.7f)},
         {{Effect::HEAVY_CLICK, EffectStrength::STRONG}, Scale(1.0f * 1.0f)},
