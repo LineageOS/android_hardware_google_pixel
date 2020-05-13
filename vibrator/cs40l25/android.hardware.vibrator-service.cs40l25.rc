@@ -1,10 +1,15 @@
-on early-boot
+on property:vendor.all.modules.ready=1
 
     mkdir /mnt/vendor/persist/haptics 0770 system system
     chmod 770 /mnt/vendor/persist/haptics
     chmod 440 /mnt/vendor/persist/haptics/cs40l25a.cal
     chown system system /mnt/vendor/persist/haptics
     chown system system /mnt/vendor/persist/haptics/cs40l25a.cal
+
+    chown system system /sys/class/leds/vibrator/activate
+    chown system system /sys/class/leds/vibrator/brightness
+    chown system system /sys/class/leds/vibrator/duration
+    chown system system /sys/class/leds/vibrator/state
 
     chown system system /sys/class/leds/vibrator/device/asp_enable
     chown system system /sys/class/leds/vibrator/device/comp_enable
@@ -32,6 +37,8 @@ on early-boot
     chown system system /sys/class/leds/vibrator/device/vbatt_min
     chown system system /sys/class/leds/vibrator/device/vibe_state
 
+    enable vendor.vibrator.cs40l25
+
 service vendor.vibrator.cs40l25 /vendor/bin/hw/android.hardware.vibrator-service.cs40l25
     class hal
     user system
@@ -55,3 +62,5 @@ service vendor.vibrator.cs40l25 /vendor/bin/hw/android.hardware.vibrator-service
         device/redc_stored
         state
         "
+
+    disabled
