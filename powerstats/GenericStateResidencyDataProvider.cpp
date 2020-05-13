@@ -178,11 +178,13 @@ bool GenericStateResidencyDataProvider::getResults(
         // return true if b matches the header contained in a, ignoring whitespace
         return (a.second.mHeader == android::base::Trim(std::string(b)));
     };
+    bool skipFindNext = false;
 
     // Search for entity headers until we have found them all or can't find anymore
     while ((numEntitiesRead < numEntities) &&
-           (nextConfig = findNext<decltype(mPowerEntityConfigs)::value_type>(
-                    mPowerEntityConfigs, fp.get(), &line, &len, pred)) != endConfig) {
+           (skipFindNext ||
+            (nextConfig = findNext<decltype(mPowerEntityConfigs)::value_type>(
+                     mPowerEntityConfigs, fp.get(), &line, &len, pred)) != endConfig)) {
         // Found a matching header. Retrieve its state data
         PowerEntityStateResidencyResult result = {.powerEntityId = nextConfig->first};
         if (getStateData(&result, nextConfig->second.mStateResidencyConfigs, fp.get(), &line,
@@ -203,6 +205,16 @@ bool GenericStateResidencyDataProvider::getResults(
             ++numEntitiesRead;
         } else {
             break;
+        }
+
+        // If the header of the next PowerEntityConfig is equal to the
+        // current, don't search for it within the file since we'll be search
+        // for more states.
+        auto currConfig = nextConfig++;
+        if (nextConfig != endConfig && nextConfig->second.mHeader == currConfig->second.mHeader) {
+            skipFindNext = true;
+        } else {
+            skipFindNext = false;
         }
     }
 
