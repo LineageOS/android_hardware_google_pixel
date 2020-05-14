@@ -34,7 +34,14 @@ if [ -f $cfg_file ]; then
       "insmod") insmod $arg ;;
       "setprop") setprop $arg 1 ;;
       "enable") echo 1 > $arg ;;
-      "modprobe") modprobe -a -d /vendor/lib/modules $arg ;;
+      "modprobe")
+        case ${arg} in
+          "-b *" | "-b")
+            arg="-b $(cat /vendor/lib/modules/modules.load)" ;;
+          "*" | "")
+            arg="$(cat /vendor/lib/modules/modules.load)" ;;
+        esac
+        modprobe -a -d /vendor/lib/modules $arg ;;
       "wait") wait_for_file $arg ;;
     esac
   done < $cfg_file
