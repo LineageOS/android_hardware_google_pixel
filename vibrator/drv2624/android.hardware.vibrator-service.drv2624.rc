@@ -16,6 +16,7 @@ on property:vendor.all.modules.ready=1
     chown system system /sys/class/leds/vibrator/device/autocal_result
     chown system system /sys/class/leds/vibrator/device/ctrl_loop
     chown system system /sys/class/leds/vibrator/device/lp_trigger_effect
+    chown system system /sys/class/leds/vibrator/device/lp_trigger_scale
     chown system system /sys/class/leds/vibrator/device/lra_wave_shape
     chown system system /sys/class/leds/vibrator/device/mode
     chown system system /sys/class/leds/vibrator/device/od_clamp
@@ -38,6 +39,7 @@ service vendor.vibrator.drv2624 /vendor/bin/hw/android.hardware.vibrator-service
     setenv HWAPI_DEBUG_PATHS "
         device/autocal
         device/lp_trigger_effect
+        device/lp_trigger_scale
         device/ol_lra_period
         state
         "
