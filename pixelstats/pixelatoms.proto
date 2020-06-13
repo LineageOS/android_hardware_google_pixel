@@ -45,6 +45,7 @@ enum Ids {
     WIRELESS_CHARGING_STATS = 105008;
     DEVICE_ORIENTATION = 105009;
     FG_CAPACITY = 105010;
+    PD_VID_PID = 105011;
     // AOSP atom ID range ends at 109999
 }
 
@@ -250,3 +251,9 @@ message BatteryCapacityFG {
     optional float capacity_ssoc_curve = 6;
 }
 
+message  PdVidPid {
+    /* Vendor ID of wired charger */
+    optional int32 vid = 2;
+    /* Product ID of wired charger */
+    optional int32 pid = 3;
+}
