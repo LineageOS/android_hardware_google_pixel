@@ -22,6 +22,7 @@
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/UeventListener.h>
 #include <pixelstats/WlcReporter.h>
@@ -263,19 +264,13 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
 /* ReportWlc
  * Report wireless relate  metrics when wireless charging start
  */
-void UeventListener::ReportWlc(const char *driver) {
-    if (!driver || strncmp(driver, "POWER_SUPPLY_PRESENT=", strlen("POWER_SUPPLY_PRESENT="))) {
+void UeventListener::ReportWlc(const bool pow_wireless, const bool online, const char *ptmc) {
+    if (!pow_wireless) {
         return;
     }
-    if (wireless_charging_supported_) {
-        sp<WlcReporter> wlc_reporter = new WlcReporter();
-        if (wlc_reporter != nullptr) {
-            wireless_charging_state_ =
-                    wlc_reporter->checkAndReport(wireless_charging_state_);
-        }
-    }
-}
 
+    wlc_reporter_.checkAndReport(online, ptmc);
+}
 /**
  * Report raw battery capacity, system battery capacity and associated
  * battery capacity curves. This data is collected to verify the filter
@@ -323,14 +318,14 @@ void UeventListener::ReportTypeCPartnerId() {
 
     if (!ReadFileToString(kTypeCPartnerPidPath.c_str(), &file_contents_pid)) {
         ALOGE("Unable to read %s - %s", kTypeCPartnerPidPath.c_str(), strerror(errno));
-	    return;
+        return;
     }
 
     if (sscanf(file_contents_pid.substr(PID_OFFSET, PID_LENGTH).c_str(), "%x", &pid) != 1) {
         ALOGE("Unable to parse pid %s from file %s to int.",
               file_contents_pid.substr(PID_OFFSET, PID_LENGTH).c_str(),
               kTypeCPartnerPidPath.c_str());
-	return;
+        return;
     }
 
     // Upload data only for chargers
@@ -372,8 +367,10 @@ bool UeventListener::ProcessUevent() {
     const char *driver, *product, *subsystem;
     const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
-    const char *powpresent;
     bool collect_partner_id = false;
+    bool pow_online;
+    bool pow_wireless;
+    const char *pow_ptmc;
     int n;
 
     if (uevent_fd_ < 0) {
@@ -393,7 +390,8 @@ bool UeventListener::ProcessUevent() {
     msg[n + 1] = '\0';
 
     driver = product = subsystem = NULL;
-    mic_break_status = mic_degrade_status = devpath = powpresent = NULL;
+    mic_break_status = mic_degrade_status = devpath = pow_ptmc = NULL;
+    pow_online = pow_wireless = false;
 
     /**
      * msg is a sequence of null-terminated strings.
@@ -412,15 +410,18 @@ bool UeventListener::ProcessUevent() {
             mic_degrade_status = cp;
         } else if (!strncmp(cp, "DEVPATH=", strlen("DEVPATH="))) {
             devpath = cp;
-        } else if (!strncmp(cp, "POWER_SUPPLY_PRESENT=",
-                            strlen("POWER_SUPPLY_PRESENT="))) {
-            powpresent = cp;
         } else if (!strncmp(cp, "SUBSYSTEM=", strlen("SUBSYSTEM="))) {
             subsystem = cp;
         } else if (!strncmp(cp, "DEVTYPE=typec_partner", strlen("DEVTYPE=typec_partner"))) {
             collect_partner_id = true;
+        } else if (!strncmp(cp, "POWER_SUPPLY_NAME=wireless",
+                            strlen("POWER_SUPPLY_NAME=wireless"))) {
+            pow_wireless = true;
+        } else if (!strncmp(cp, "POWER_SUPPLY_ONLINE=1", strlen("POWER_SUPPLY_ONLINE=1"))) {
+            pow_online = true;
+        } else if (!strncmp(cp, "POWER_SUPPLY_PTMC_ID=", strlen("POWER_SUPPLY_PTMC_ID="))) {
+            pow_ptmc = cp;
         }
-
         /* advance to after the next \0 */
         while (*cp++) {
         }
@@ -431,7 +432,7 @@ bool UeventListener::ProcessUevent() {
     ReportMicStatusUevents(devpath, mic_degrade_status);
     ReportUsbPortOverheatEvent(driver);
     ReportChargeMetricsEvent(driver);
-    ReportWlc(powpresent);
+    ReportWlc(pow_wireless, pow_online, pow_ptmc);
     ReportBatteryCapacityFGEvent(subsystem);
     if (collect_partner_id) {
         ReportTypeCPartnerId();
@@ -442,29 +443,22 @@ bool UeventListener::ProcessUevent() {
 
 UeventListener::UeventListener(const std::string audio_uevent, const std::string ssoc_details_path,
                                const std::string overheat_path,
-                               const std::string charge_metrics_path, const std::string
-                               typec_partner_vid_path, const std::string typec_partner_pid_path)
+                               const std::string charge_metrics_path,
+                               const std::string typec_partner_vid_path,
+                               const std::string typec_partner_pid_path)
     : kAudioUevent(audio_uevent),
       kBatterySSOCPath(ssoc_details_path),
       kUsbPortOverheatPath(overheat_path),
       kChargeMetricsPath(charge_metrics_path),
       kTypeCPartnerVidPath(typec_partner_vid_path),
       kTypeCPartnerPidPath(typec_partner_pid_path),
-      uevent_fd_(-1),
-      wireless_charging_state_(false){}
+      uevent_fd_(-1) {}
 
 /* Thread function to continuously monitor uevents.
  * Exit after kMaxConsecutiveErrors to prevent spinning. */
 void UeventListener::ListenForever() {
     constexpr int kMaxConsecutiveErrors = 10;
     int consecutive_errors = 0;
-    sp<WlcReporter> wlc_reporter = new WlcReporter();
-    if (wlc_reporter != nullptr) {
-        wireless_charging_supported_ = wlc_reporter->isWlcSupported();
-    } else {
-        ALOGE("Fail to create WlcReporter.");
-        wireless_charging_supported_ = false;
-    }
 
     while (1) {
         if (ProcessUevent()) {

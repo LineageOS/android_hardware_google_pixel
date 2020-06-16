@@ -17,13 +17,14 @@
 #define LOG_TAG "pixelstats-wlc"
 
 #include <android-base/file.h>
+#include <android-base/strings.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/OrientationCollector.h>
 #include <pixelstats/WlcReporter.h>
 
-#define POWER_SUPPLY_SYSFS_PATH "/sys/class/power_supply/wireless/online"
-#define POWER_SUPPLY_PTMC_PATH "/sys/class/power_supply/wireless/ptmc_id"
-#define GOOGLE_PTMC_ID 72
+#define GOOGLE_PTMC_ID 0x72
+#define ID_UNKNOWN 0
 
 using android::base::ReadFileToString;
 using android::frameworks::stats::V1_0::IStats;
@@ -34,31 +35,74 @@ namespace hardware {
 namespace google {
 namespace pixel {
 
-bool WlcReporter::checkAndReport(bool isWirelessChargingLast) {
-    bool wireless_charging = isWlcOnline();
-    if (wireless_charging && !isWirelessChargingLast) {
-        doLog();
+WlcReporter::WlcStatus::WlcStatus()
+    : is_charging(false), check_charger_vendor_id(false), check_vendor_id_attempts(0) {}
+
+void WlcReporter::checkAndReport(bool online, const char *ptmc_uevent) {
+    bool wireless_charging = online;
+    bool started_wireless_charging = wireless_charging && !wlc_status_.is_charging;
+    wlc_status_.is_charging = wireless_charging;
+
+    if (started_wireless_charging) {
+        reportOrientation();
+        wlc_status_.check_vendor_id_attempts = 0;
+        wlc_status_.check_charger_vendor_id = true;
     }
-    return wireless_charging;
+    if (!wireless_charging) {
+        wlc_status_.check_charger_vendor_id = false;
+    }
+    if (wireless_charging) {
+        checkVendorId(ptmc_uevent);
+    }
 }
 
-bool WlcReporter::readFileToInt(const char *const path, int *val) {
-    std::string file_contents;
+void WlcReporter::checkVendorId(const char *ptmc_uevent) {
+    if (!ptmc_uevent || !wlc_status_.check_charger_vendor_id) {
+        return;
+    }
+    if (reportVendor(ptmc_uevent)) {
+        wlc_status_.check_charger_vendor_id = false;
+    }
+}
 
-    if (!ReadFileToString(path, &file_contents)) {
-        ALOGE("Unable to read %s - %s", path, strerror(errno));
-        return false;
-    } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
-        ALOGE("Unable to convert %s (%s) to int - %s", path, file_contents.c_str(),
-              strerror(errno));
-        return false;
+bool WlcReporter::reportVendor(const char *ptmc_uevent) {
+    int ptmcId = readPtmcId(ptmc_uevent);
+    if (ptmcId == ID_UNKNOWN) {
+        if (++(wlc_status_.check_vendor_id_attempts) < kMaxVendorIdAttempts) {
+            return false;
+        } /* else if ptmc not ready after retry assume ptmc not supported by charger */
+    }
+    sp<IStats> stats_client = IStats::tryGetService();
+    std::vector<VendorAtom::Value> values(1);
+
+    if (stats_client == nullptr) {
+        ALOGE("logWlc get IStats fail.");
+        return true;
+    }
+
+    int vendorCharger = (ptmcId == GOOGLE_PTMC_ID)
+                                ? PixelAtoms::WirelessChargingStats::VENDOR_GOOGLE
+                                : PixelAtoms::WirelessChargingStats::VENDOR_UNKNOWN;
+    VendorAtom::Value tmp;
+    tmp.intValue(vendorCharger);
+    values[PixelAtoms::WirelessChargingStats::kChargerVendorFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::WIRELESS_CHARGING_STATS,
+                        .values = values};
+    Return<void> retStat = stats_client->reportVendorAtom(event);
+    if (!retStat.isOk()) {
+        ALOGE("Unable to report WLC_STATS to Stats service");
     }
     return true;
 }
 
-int WlcReporter::readPtmcId() {
-    int id = 0;
-    readFileToInt(POWER_SUPPLY_PTMC_PATH, &id);
+int WlcReporter::readPtmcId(const char *ptmc_uevent) {
+    int id;
+    if (sscanf(ptmc_uevent, "POWER_SUPPLY_PTMC_ID=%x", &id) != 1) {
+        return ID_UNKNOWN;
+    }
     return id;
 }
 
@@ -81,7 +125,7 @@ int WlcReporter::translateDeviceOrientationToAtomValue(int orientation) {
     }
 }
 
-void WlcReporter::doLog() {
+void WlcReporter::reportOrientation() {
     sp<IStats> stats_client = IStats::tryGetService();
 
     if (stats_client == nullptr) {
@@ -90,20 +134,6 @@ void WlcReporter::doLog() {
     }
     std::vector<VendorAtom::Value> values(1);
 
-    int vendoriCharger = (readPtmcId() == GOOGLE_PTMC_ID)
-                                 ? PixelAtoms::WirelessChargingStats::VENDOR_GOOGLE
-                                 : PixelAtoms::WirelessChargingStats::VENDOR_UNKNOWN;
-    VendorAtom::Value tmp;
-    tmp.intValue(vendoriCharger);
-    values[PixelAtoms::WirelessChargingStats::kChargerVendorFieldNumber - kVendorAtomOffset] = tmp;
-
-    // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::WIRELESS_CHARGING_STATS,
-                        .values = values};
-    Return<void> retStat = stats_client->reportVendorAtom(event);
-    if (!retStat.isOk())
-        ALOGE("Unable to report WLC_STATS to Stats service");
 
     int orientationFromSensor;
     sp<OrientationCollector> orientationCollector;
@@ -122,28 +152,6 @@ void WlcReporter::doLog() {
             ALOGE("Unable to report Orientation to Stats service");
         orientationCollector->disableOrientationSensor();
     }
-}
-
-bool WlcReporter::isWlcSupported() {
-    std::string file_contents;
-
-    if (!ReadFileToString(POWER_SUPPLY_SYSFS_PATH, &file_contents)) {
-        ALOGV("Unable to read %s - %s", POWER_SUPPLY_SYSFS_PATH, strerror(errno));
-        return false;
-    } else {
-        return true;
-    }
-}
-
-bool WlcReporter::isWlcOnline() {
-    std::string file_contents;
-
-    if (!ReadFileToString(POWER_SUPPLY_SYSFS_PATH, &file_contents)) {
-        ALOGE("Unable to read %s - %s", POWER_SUPPLY_SYSFS_PATH, strerror(errno));
-        return false;
-    }
-    ALOGV("isWlcOnline value: %s", file_contents.c_str());
-    return file_contents == "1\n";
 }
 
 }  // namespace pixel
