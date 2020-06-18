@@ -46,6 +46,8 @@ enum Ids {
     DEVICE_ORIENTATION = 105009;
     FG_CAPACITY = 105010;
     PD_VID_PID = 105011;
+    CITADEL_VERSION = 100018; // Moved from vendor proprietary
+    CITADEL_EVENT = 100019;  // Moved from vendor proprietary
     // AOSP atom ID range ends at 109999
 }
 
@@ -256,4 +258,43 @@ message  PdVidPid {
     optional int32 vid = 2;
     /* Product ID of wired charger */
     optional int32 pid = 3;
+}
+
+/* A message containing an exceptional event from citadel. */
+message CitadelEvent {
+  enum Event {
+    ALERT = 1;
+    REBOOTED = 2;
+    UPGRADED = 3;
+  };
+  optional Event event = 2;
+  optional int32 reset_count = 3;
+  optional int64 uptime_micros = 4;
+  enum Priority {
+    LOW = 0;
+    MEDIUM = 1;
+    HIGH = 2;
+  };
+  optional Priority priority = 5;
+
+  // ALERT-specific fields.  These fields correspond to the interrupt status
+  // bits for alerts within citadel.  When alerts fire one or more of these
+  // bits are set to indicate the alert source.
+  optional int32 intr_sts_0 = 6;
+  optional int32 intr_sts_1 = 7;
+  optional int32 intr_sts_2 = 8;
+
+  // REBOOTED-specific fields.  These fields correspond to the details of how
+  // the hardware reboot occurred.  A reboot is a noteworthy event for citadel,
+  // as it can be triggered by events like stack overflow or other software
+  // bugs.
+  optional int32 rstsrc = 9;
+  optional int32 exitpd = 10;
+  optional int32 which0 = 11;
+  optional int32 which1 = 12;
+}
+
+/* A message containing the citadel firmware version. */
+message CitadelVersion {
+    optional string version = 2;
 }
