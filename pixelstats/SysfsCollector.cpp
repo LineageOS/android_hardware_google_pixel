@@ -28,6 +28,7 @@
 #include <utils/StrongPointer.h>
 #include <utils/Timers.h>
 
+#include <cinttypes>
 #include <sys/timerfd.h>
 #include <mntent.h>
 #include <string>
@@ -277,8 +278,8 @@ void SysfsCollector::logBatteryCapacity() {
     }
     int delta_cc_sum, delta_vfsoc_sum;
     if (!ReadFileToInt(kBatteryCapacityCC, &delta_cc_sum) ||
-	!ReadFileToInt(kBatteryCapacityVFSOC, &delta_vfsoc_sum))
-	return;
+            !ReadFileToInt(kBatteryCapacityVFSOC, &delta_vfsoc_sum))
+        return;
 
     // Load values array
     std::vector<VendorAtom::Value> values(2);
@@ -456,9 +457,12 @@ void SysfsCollector::reportZramMmStat() {
         int64_t pages_compacted = 0;
         int64_t huge_pages = 0;
 
-        if (sscanf(file_contents.c_str(), "%lu %lu %lu %lu %lu %lu %lu %lu",
-                    &orig_data_size, &compr_data_size, &mem_used_total, &mem_limit,
-                    &max_used_total, &same_pages, &pages_compacted, &huge_pages) != 8) {
+        if (sscanf(file_contents.c_str(),
+                "%" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64 \
+                " %" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64,
+                &orig_data_size, &compr_data_size, &mem_used_total,
+                &mem_limit, &max_used_total, &same_pages,
+                &pages_compacted, &huge_pages) != 8) {
             ALOGE("Unable to parse ZramMmStat %s from file %s to int.",
                     file_contents.c_str(), kZramMmStatPath);
         }
@@ -502,7 +506,7 @@ void SysfsCollector::reportZramBdStat() {
         int64_t bd_reads = 0;
         int64_t bd_writes = 0;
 
-        if (sscanf(file_contents.c_str(), "%lu %lu %lu",
+        if (sscanf(file_contents.c_str(), "%" SCNd64 " %" SCNd64 " %" SCNd64,
                                 &bd_count, &bd_reads, &bd_writes) != 3) {
             ALOGE("Unable to parse ZramBdStat %s from file %s to int.",
                     file_contents.c_str(), kZramBdStatPath);
