@@ -76,6 +76,7 @@ class UeventListener {
     const int kVendorAtomOffset = 2;
 
     int uevent_fd_;
+    int log_fd_;
 
     bool wireless_charging_state_;
     bool wireless_charging_supported_;

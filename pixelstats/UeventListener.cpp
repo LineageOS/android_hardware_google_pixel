@@ -14,6 +14,27 @@
  * limitations under the License.
  */
 
+/* If you are watching for a new uevent, uncomment the following define.
+ * After flashing your test build, run:
+ *    adb root && adb shell
+ *    stop vendor.pixelstats_vendor
+ *    touch /data/local/tmp/uevents
+ *    /vendor/bin/pixelstats-vendor &
+ *
+ *    then trigger any events.
+ *    If you leave adb connected, you can watch them with
+ *    tail -f /data/local/tmp/uevents
+ *
+ *    Once you are done,
+ *
+ *    adb pull /data/local/tmp/uevents
+ *    adb rm /data/local/tmp/uevents
+ *    adb reboot
+ *
+ *    provide this log in the bug as support for your feature.
+ */
+// #define LOG_UEVENTS_TO_FILE_ONLY_FOR_DEVEL "/data/local/tmp/uevents"
+
 #define LOG_TAG "pixelstats-uevent"
 
 #include <android-base/file.h>
@@ -30,6 +51,10 @@
 
 #include <string>
 #include <thread>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 using android::sp;
 using android::base::ReadFileToString;
@@ -384,6 +409,15 @@ bool UeventListener::ProcessUevent() {
         }
     }
 
+#ifdef LOG_UEVENTS_TO_FILE_ONLY_FOR_DEVEL
+    if (log_fd_ < 0) {
+        /* Intentionally no O_CREAT so no logging will happen
+         * unless the user intentionally 'touch's the file.
+         */
+        log_fd_ = open(LOG_UEVENTS_TO_FILE_ONLY_FOR_DEVEL, O_WRONLY);
+    }
+#endif
+
     n = uevent_kernel_multicast_recv(uevent_fd_, msg, UEVENT_MSG_LEN);
     if (n <= 0 || n >= UEVENT_MSG_LEN)
         return false;
@@ -402,6 +436,10 @@ bool UeventListener::ProcessUevent() {
      */
     cp = msg;
     while (*cp) {
+        if (log_fd_ > 0) {
+            write(log_fd_, cp, strlen(cp));
+            write(log_fd_, "\n", 1);
+        }
         if (!strncmp(cp, "DRIVER=", strlen("DRIVER="))) {
             driver = cp;
         } else if (!strncmp(cp, "PRODUCT=", strlen("PRODUCT="))) {
@@ -437,6 +475,9 @@ bool UeventListener::ProcessUevent() {
         ReportTypeCPartnerId();
     }
 
+    if (log_fd_ > 0) {
+        write(log_fd_, "\n", 1);
+    }
     return true;
 }
 
@@ -451,6 +492,7 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
       kTypeCPartnerVidPath(typec_partner_vid_path),
       kTypeCPartnerPidPath(typec_partner_pid_path),
       uevent_fd_(-1),
+      log_fd_(-1),
       wireless_charging_state_(false){}
 
 /* Thread function to continuously monitor uevents.
