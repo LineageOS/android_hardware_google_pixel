@@ -20,6 +20,7 @@
 #include <android-base/chrono_utils.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <pixelstats/BatteryCapacityReporter.h>
+#include <pixelstats/WlcReporter.h>
 
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
@@ -42,8 +43,10 @@ class UeventListener {
             const std::string overheat_path =
                     "/sys/devices/platform/soc/soc:google,overheat_mitigation",
             const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats",
-            const std::string typec_partner_vid_path = "/sys/class/typec/port0-partner/identity/id_header",
-            const std::string typec_partner_pid_path = "/sys/class/typec/port0-partner/identity/product");
+            const std::string typec_partner_vid_path =
+                    "/sys/class/typec/port0-partner/identity/id_header",
+            const std::string typec_partner_pid_path =
+                    "/sys/class/typec/port0-partner/identity/product");
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
@@ -57,7 +60,7 @@ class UeventListener {
     void ReportChargeStats(const sp<IStats> &stats_client, const char *line);
     void ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line);
     void ReportChargeMetricsEvent(const char *driver);
-    void ReportWlc(const char *driver);
+    void ReportWlc(const bool pow_wireless, const bool online, const char *ptmc);
     void ReportBatteryCapacityFGEvent(const char *subsystem);
     void ReportTypeCPartnerId();
 
@@ -77,8 +80,7 @@ class UeventListener {
 
     int uevent_fd_;
 
-    bool wireless_charging_state_;
-    bool wireless_charging_supported_;
+    WlcReporter wlc_reporter_;
 };
 
 }  // namespace pixel
