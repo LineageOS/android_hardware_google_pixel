@@ -31,7 +31,7 @@
 #include <utils/Trace.h>
 
 #include "AudioStreaming.h"
-#include "disp-power/display-helper.h"
+#include "disp-power/DisplayLowPower.h"
 
 namespace android {
 namespace hardware {
@@ -62,6 +62,7 @@ static const std::map<enum CameraStreamingMode, std::string> kCamStreamingHint =
 Power::Power()
     : mHintManager(nullptr),
       mInteractionHandler(nullptr),
+      mDisplayLowPower(nullptr),
       mVRModeOn(false),
       mSustainedPerfModeOn(false),
       mCameraStreamingMode(CAMERA_STREAMING_OFF),
@@ -74,6 +75,8 @@ Power::Power()
         }
         mInteractionHandler = std::make_unique<InteractionHandler>(mHintManager);
         mInteractionHandler->Init();
+        mDisplayLowPower = std::make_unique<DisplayLowPower>();
+        mDisplayLowPower->Init();
         std::string state = android::base::GetProperty(kPowerHalStateProp, "");
         if (state == "CAMERA_STREAMING") {
             ALOGI("Initialize with CAMERA_STREAMING on");
@@ -199,13 +202,7 @@ Return<void> Power::powerHint(PowerHint_1_0 hint, int32_t data) {
             }
             break;
         case PowerHint_1_0::LOW_POWER:
-            if (data) {
-                // Device in battery saver mode, enable display low power mode
-                set_display_lpm(true);
-            } else {
-                // Device exiting battery saver mode, disable display low power mode
-                set_display_lpm(false);
-            }
+            mDisplayLowPower->SetDisplayLowPower(static_cast<bool>(data));
             break;
         default:
             break;
