@@ -90,7 +90,7 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
     std::string cpu_name;
     std::string data;
     if (!android::base::ReadFileToString(kCpuUsageFile.data(), &data)) {
-        LOG(ERROR) << "Error reading Cpu usage file: " << kCpuUsageFile;
+        LOG(ERROR) << "Error reading cpu usage file: " << kCpuUsageFile;
         return;
     }
 
@@ -116,7 +116,11 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
                 std::string is_online;
                 if (!android::base::ReadFileToString(cpu_online_path, &is_online)) {
                     LOG(ERROR) << "Could not open Cpu online file: " << cpu_online_path;
-                    return;
+                    if (cpu_num != 0) {
+                        return;
+                    }
+                    // Some architecture cannot offline cpu0, so assuming it is online
+                    is_online = "1";
                 }
                 is_online = android::base::Trim(is_online);
 
