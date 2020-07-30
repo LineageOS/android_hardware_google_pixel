@@ -39,3 +39,9 @@ on property:init.svc.bugreport=running
 
 on property:init.svc.bugreport=stopped
     write /sys/kernel/tracing/instances/pixel-trace/tracing_on 1
+
+on property:init.svc.bugreportd=running
+    write /sys/kernel/tracing/instances/pixel-trace/tracing_on 0
+
+on property:init.svc.bugreportd=stopped
+    write /sys/kernel/tracing/instances/pixel-trace/tracing_on 1
