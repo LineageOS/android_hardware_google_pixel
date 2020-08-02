@@ -64,7 +64,7 @@ using android::base::StringPrintf;
  * For Android systems this approach is safer than using cpufeatures, see bug
  * b/36941727.
  */
-std::size_t getNumberOfCores() {
+static int getNumberOfCores() {
     std::string file;
     if (!android::base::ReadFileToString(kCpuPresentFile.data(), &file)) {
         LOG(ERROR) << "Error reading Cpu present file: " << kCpuPresentFile;
@@ -83,11 +83,9 @@ std::size_t getNumberOfCores() {
     }
     return static_cast<std::size_t>(max_core - min_core + 1);
 }
-const std::size_t kMaxCpus = getNumberOfCores();
+const int kMaxCpus = getNumberOfCores();
 
 void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
-    uint64_t cpu_num, user, nice, system, idle;
-    std::string cpu_name;
     std::string data;
     if (!android::base::ReadFileToString(kCpuUsageFile.data(), &data)) {
         LOG(ERROR) << "Error reading cpu usage file: " << kCpuUsageFile;
@@ -100,14 +98,14 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
         if (line.find("cpu") == 0 && isdigit(line[3])) {
             // Split the string using spaces.
             std::vector<std::string> words = android::base::Split(line, " ");
-            cpu_name = words[0];
-            cpu_num = std::stoi(cpu_name.substr(3));
+            std::string cpu_name = words[0];
+            int cpu_num = std::stoi(cpu_name.substr(3));
 
             if (cpu_num < kMaxCpus) {
-                user = std::stoi(words[1]);
-                nice = std::stoi(words[2]);
-                system = std::stoi(words[3]);
-                idle = std::stoi(words[4]);
+                uint64_t user = std::stoull(words[1]);
+                uint64_t nice = std::stoull(words[2]);
+                uint64_t system = std::stoull(words[3]);
+                uint64_t idle = std::stoull(words[4]);
 
                 // Check if the CPU is online by reading the online file.
                 std::string cpu_online_path =
@@ -124,7 +122,6 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
                 }
                 is_online = android::base::Trim(is_online);
 
-                (*cpu_usages)[cpu_num].name = cpu_name;
                 (*cpu_usages)[cpu_num].active = user + nice + system;
                 (*cpu_usages)[cpu_num].total = user + nice + system + idle;
                 (*cpu_usages)[cpu_num].isOnline = (is_online == "1") ? true : false;
@@ -553,6 +550,12 @@ bool ThermalHelper::fillCurrentCoolingDevices(bool filterType, CoolingType type,
 
 bool ThermalHelper::fillCpuUsages(hidl_vec<CpuUsage> *cpu_usages) const {
     cpu_usages->resize(kMaxCpus);
+    for (int i = 0; i < kMaxCpus; i++) {
+        (*cpu_usages)[i].name = StringPrintf("cpu%d", i);
+        (*cpu_usages)[i].active = 0;
+        (*cpu_usages)[i].total = 0;
+        (*cpu_usages)[i].isOnline = false;
+    }
     parseCpuUsagesFileAndAssignUsages(cpu_usages);
     return true;
 }
