@@ -17,7 +17,11 @@
 #include "benchmark/benchmark.h"
 
 #include <android/hardware/vibrator/1.3/IVibrator.h>
+#include <android/hardware/vibrator/BnVibratorCallback.h>
+#include <android/hardware/vibrator/IVibrator.h>
+#include <binder/IServiceManager.h>
 
+using ::android::enum_range;
 using ::android::sp;
 using ::android::hardware::hidl_enum_range;
 using ::android::hardware::Return;
@@ -31,16 +35,15 @@ using ::std::chrono::duration;
 using ::std::chrono::duration_cast;
 using ::std::chrono::high_resolution_clock;
 
+namespace Aidl = ::android::hardware::vibrator;
 namespace V1_0 = ::android::hardware::vibrator::V1_0;
 namespace V1_1 = ::android::hardware::vibrator::V1_1;
 namespace V1_2 = ::android::hardware::vibrator::V1_2;
 namespace V1_3 = ::android::hardware::vibrator::V1_3;
 
 template <typename I>
-class VibratorBench : public Fixture {
+class BaseBench : public Fixture {
   public:
-    void SetUp(State & /*state*/) override { mVibrator = I::getService(); }
-
     void TearDown(State & /*state*/) override {
         if (!mVibrator) {
             return;
@@ -50,8 +53,7 @@ class VibratorBench : public Fixture {
 
     static void DefaultConfig(Benchmark *b) { b->Unit(kMicrosecond); }
 
-    static void DefaultArgs(Benchmark * /*b*/) {
-        // none
+    static void DefaultArgs(Benchmark * /*b*/) { /* none */
     }
 
   protected:
@@ -59,6 +61,12 @@ class VibratorBench : public Fixture {
 
   protected:
     sp<I> mVibrator;
+};
+
+template <typename I>
+class VibratorBench : public BaseBench<I> {
+  public:
+    void SetUp(State & /*state*/) override { this->mVibrator = I::getService(); }
 };
 
 enum class EmptyEnum : uint32_t;
@@ -268,5 +276,302 @@ using VibratorEffectsBench_V1_3 = VibratorEffectsBench<V1_3::IVibrator, V1_3::Ef
 
 BENCHMARK_WRAPPER(VibratorEffectsBench_V1_3, perform_1_3,
                   { performBench(&state, &V1_3::IVibrator::perform_1_3); });
+
+class VibratorBench_Aidl : public BaseBench<Aidl::IVibrator> {
+  public:
+    void SetUp(State & /*state*/) override {
+        this->mVibrator = android::waitForVintfService<Aidl::IVibrator>();
+    }
+};
+
+class HalCallback : public Aidl::BnVibratorCallback {
+  public:
+    HalCallback() = default;
+    ~HalCallback() = default;
+
+    android::binder::Status onComplete() override { return android::binder::Status::ok(); }
+};
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, on, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+
+    int32_t ms = INT32_MAX;
+    auto cb = (capabilities & Aidl::IVibrator::CAP_ON_CALLBACK) ? new HalCallback() : nullptr;
+
+    for (auto _ : state) {
+        state.ResumeTiming();
+        mVibrator->on(ms, cb);
+        state.PauseTiming();
+        mVibrator->off();
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, off, {
+    for (auto _ : state) {
+        state.PauseTiming();
+        mVibrator->on(INT32_MAX, nullptr);
+        state.ResumeTiming();
+        mVibrator->off();
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, getCapabilities, {
+    int32_t capabilities = 0;
+
+    for (auto _ : state) {
+        mVibrator->getCapabilities(&capabilities);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, setAmplitude, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_AMPLITUDE_CONTROL) == 0) {
+        return;
+    }
+
+    float amplitude = 1.0f;
+    mVibrator->on(INT32_MAX, nullptr);
+
+    for (auto _ : state) {
+        mVibrator->setAmplitude(amplitude);
+    }
+
+    mVibrator->off();
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, setExternalControl, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_EXTERNAL_CONTROL) == 0) {
+        return;
+    }
+
+    for (auto _ : state) {
+        state.ResumeTiming();
+        mVibrator->setExternalControl(true);
+        state.PauseTiming();
+        mVibrator->setExternalControl(false);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, setExternalAmplitude, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_EXTERNAL_CONTROL) == 0 ||
+        (capabilities & Aidl::IVibrator::CAP_EXTERNAL_AMPLITUDE_CONTROL) == 0) {
+        return;
+    }
+
+    float amplitude = 1.0f;
+    mVibrator->setExternalControl(true);
+
+    for (auto _ : state) {
+        mVibrator->setAmplitude(amplitude);
+    }
+
+    mVibrator->setExternalControl(false);
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, getSupportedEffects, {
+    std::vector<Aidl::Effect> supportedEffects;
+
+    for (auto _ : state) {
+        mVibrator->getSupportedEffects(&supportedEffects);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, getSupportedAlwaysOnEffects, {
+    std::vector<Aidl::Effect> supportedEffects;
+
+    for (auto _ : state) {
+        mVibrator->getSupportedAlwaysOnEffects(&supportedEffects);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, getSupportedPrimitives, {
+    std::vector<Aidl::CompositePrimitive> supportedPrimitives;
+
+    for (auto _ : state) {
+        mVibrator->getSupportedPrimitives(&supportedPrimitives);
+    }
+});
+
+class VibratorEffectsBench_Aidl : public VibratorBench_Aidl {
+  public:
+    static void DefaultArgs(Benchmark *b) {
+        b->ArgNames({"Effect", "Strength"});
+        for (const auto &effect : enum_range<Aidl::Effect>()) {
+            for (const auto &strength : enum_range<Aidl::EffectStrength>()) {
+                b->Args({static_cast<long>(effect), static_cast<long>(strength)});
+            }
+        }
+    }
+
+  protected:
+    auto getEffect(const State &state) const {
+        return static_cast<Aidl::Effect>(this->getOtherArg(state, 0));
+    }
+
+    auto getStrength(const State &state) const {
+        return static_cast<Aidl::EffectStrength>(this->getOtherArg(state, 1));
+    }
+};
+
+BENCHMARK_WRAPPER(VibratorEffectsBench_Aidl, alwaysOnEnable, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_ALWAYS_ON_CONTROL) == 0) {
+        return;
+    }
+
+    int32_t id = 1;
+    auto effect = getEffect(state);
+    auto strength = getStrength(state);
+
+    std::vector<Aidl::Effect> supported;
+    mVibrator->getSupportedAlwaysOnEffects(&supported);
+    if (std::find(supported.begin(), supported.end(), effect) == supported.end()) {
+        return;
+    }
+
+    for (auto _ : state) {
+        state.ResumeTiming();
+        mVibrator->alwaysOnEnable(id, effect, strength);
+        state.PauseTiming();
+        mVibrator->alwaysOnDisable(id);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorEffectsBench_Aidl, alwaysOnDisable, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_ALWAYS_ON_CONTROL) == 0) {
+        return;
+    }
+
+    int32_t id = 1;
+    auto effect = getEffect(state);
+    auto strength = getStrength(state);
+
+    std::vector<Aidl::Effect> supported;
+    mVibrator->getSupportedAlwaysOnEffects(&supported);
+    if (std::find(supported.begin(), supported.end(), effect) == supported.end()) {
+        return;
+    }
+
+    for (auto _ : state) {
+        state.PauseTiming();
+        mVibrator->alwaysOnEnable(id, effect, strength);
+        state.ResumeTiming();
+        mVibrator->alwaysOnDisable(id);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorEffectsBench_Aidl, perform, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+
+    auto effect = getEffect(state);
+    auto strength = getStrength(state);
+    auto cb = (capabilities & Aidl::IVibrator::CAP_PERFORM_CALLBACK) ? new HalCallback() : nullptr;
+    int32_t lengthMs = 0;
+
+    std::vector<Aidl::Effect> supported;
+    mVibrator->getSupportedEffects(&supported);
+    if (std::find(supported.begin(), supported.end(), effect) == supported.end()) {
+        return;
+    }
+
+    for (auto _ : state) {
+        state.ResumeTiming();
+        mVibrator->perform(effect, strength, cb, &lengthMs);
+        state.PauseTiming();
+        mVibrator->off();
+    }
+});
+
+class VibratorPrimitivesBench_Aidl : public VibratorBench_Aidl {
+  public:
+    static void DefaultArgs(Benchmark *b) {
+        b->ArgNames({"Primitive"});
+        for (const auto &primitive : enum_range<Aidl::CompositePrimitive>()) {
+            b->Args({static_cast<long>(primitive)});
+        }
+    }
+
+  protected:
+    auto getPrimitive(const State &state) const {
+        return static_cast<Aidl::CompositePrimitive>(this->getOtherArg(state, 0));
+    }
+};
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, getCompositionDelayMax, {
+    int32_t ms = 0;
+
+    for (auto _ : state) {
+        mVibrator->getCompositionDelayMax(&ms);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorBench_Aidl, getCompositionSizeMax, {
+    int32_t size = 0;
+
+    for (auto _ : state) {
+        mVibrator->getCompositionSizeMax(&size);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorPrimitivesBench_Aidl, getPrimitiveDuration, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_COMPOSE_EFFECTS) == 0) {
+        return;
+    }
+
+    auto primitive = getPrimitive(state);
+    int32_t ms = 0;
+
+    std::vector<Aidl::CompositePrimitive> supported;
+    mVibrator->getSupportedPrimitives(&supported);
+    if (std::find(supported.begin(), supported.end(), primitive) == supported.end()) {
+        return;
+    }
+
+    for (auto _ : state) {
+        mVibrator->getPrimitiveDuration(primitive, &ms);
+    }
+});
+
+BENCHMARK_WRAPPER(VibratorPrimitivesBench_Aidl, compose, {
+    int32_t capabilities = 0;
+    mVibrator->getCapabilities(&capabilities);
+    if ((capabilities & Aidl::IVibrator::CAP_COMPOSE_EFFECTS) == 0) {
+        return;
+    }
+
+    Aidl::CompositeEffect effect;
+    effect.primitive = getPrimitive(state);
+    effect.scale = 1.0f;
+    effect.delayMs = 0;
+
+    std::vector<Aidl::CompositePrimitive> supported;
+    mVibrator->getSupportedPrimitives(&supported);
+    if (std::find(supported.begin(), supported.end(), effect.primitive) == supported.end()) {
+        return;
+    }
+
+    auto cb = new HalCallback();
+    std::vector<Aidl::CompositeEffect> effects;
+    effects.push_back(effect);
+
+    for (auto _ : state) {
+        state.ResumeTiming();
+        mVibrator->compose(effects, cb);
+        state.PauseTiming();
+        mVibrator->off();
+    }
+});
 
 BENCHMARK_MAIN();
