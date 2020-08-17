@@ -46,8 +46,11 @@ enum Ids {
     DEVICE_ORIENTATION = 105009;
     FG_CAPACITY = 105010;
     PD_VID_PID = 105011;
+    BATTERY_EEPROM = 105012;
+
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
+
     // AOSP atom ID range ends at 109999
 }
 
@@ -258,6 +261,54 @@ message  PdVidPid {
     optional int32 vid = 2;
     /* Product ID of wired charger */
     optional int32 pid = 3;
+}
+
+message BatteryEEPROM {
+    /* The cycle count number; record of charge/discharge times */
+    optional int32 cycle_cnt = 2;
+    /* The current full capacity of the battery under nominal conditions */
+    optional int32 full_cap = 3;
+    /* The battery equivalent series resistance */
+    optional int32 esr = 4;
+    /* Battery resistance related to temperature change */
+    optional int32 rslow = 5;
+    /* Battery health indicator reflecting the battery age state */
+    optional int32 soh = 6;
+    /* The battery temperature */
+    optional int32 batt_temp = 7;
+
+    /* Battery state of charge (SOC) shutdown point */
+    optional int32 cutoff_soc = 8;
+    /* Raw battery state of charge (SOC), based on battery current (CC = Coulomb Counter) */
+    optional int32 cc_soc = 9;
+    /* Estimated battery state of charge (SOC) from batt_soc with endpoint limiting (0% and 100%) */
+    optional int32 sys_soc = 10;
+    /* Filtered monotonic SOC, handles situations where the cutoff_soc is increased and
+     * then decreased from the battery physical properties
+     */
+    optional int32 msoc = 11;
+    /* Estimated SOC derived from cc_soc that provides voltage loop feedback correction using
+     * battery voltage, current, and status values
+     */
+    optional int32 batt_soc = 12;
+
+    /* Field used for data padding in the EEPROM data */
+    optional int32 reserve = 13;
+
+    /* The maximum battery temperature ever seen */
+    optional int32 max_temp = 14;
+    /* The minimum battery temperature ever seen */
+    optional int32 min_temp = 15;
+    /* The maximum battery voltage ever seen */
+    optional int32 max_vbatt = 16;
+    /* The minimum battery voltage ever seen */
+    optional int32 min_vbatt = 17;
+    /* The maximum battery current ever seen */
+    optional int32 max_ibatt = 18;
+    /* The minimum battery current ever seen */
+    optional int32 min_ibatt = 19;
+    /* Field used to verify the integrity of the EEPROM data */
+    optional int32 checksum = 20;
 }
 
 /* A message containing an exceptional event from citadel. */
