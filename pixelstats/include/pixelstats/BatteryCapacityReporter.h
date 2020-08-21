@@ -22,6 +22,8 @@ namespace hardware {
 namespace google {
 namespace pixel {
 
+#define MAX_LOG_EVENTS_PER_HOUR 4
+
 /**
  * A class to upload battery capacity metrics
  */
@@ -34,8 +36,9 @@ class BatteryCapacityReporter {
     int64_t getTimeSecs();
 
     bool parse(const std::string &path);
-    bool check(void);
-    void report(void);
+    bool checkLogEvent(void);
+    bool shouldReportEvent(void);
+    void reportEvent(void);
 
     /**
      * SOC status translation from sysfs node
@@ -64,9 +67,10 @@ class BatteryCapacityReporter {
     float ssoc_curve_ = 0.0f;
     float ssoc_previous_ = -1.0f;
     float ssoc_gdf_diff_previous_ = 0.0f;
-    int64_t unexpected_event_timer_secs_ = 0;
-    bool unexpected_event_timer_active_ = false;
     LogReason log_reason_ = LOG_REASON_UNKNOWN;
+
+    int num_events_in_last_hour_ = 0;
+    int64_t log_event_time_secs_[MAX_LOG_EVENTS_PER_HOUR] = {0};
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
