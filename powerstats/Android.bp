@@ -24,3 +24,28 @@ cc_library_static {
         "libbinder",
     ],
 }
+
+cc_library {
+    name: "android.hardware.powerstats-impl.pixel",
+    vendor_available: true,
+    export_include_dirs: ["include"],
+
+    srcs: [
+        "PowerStatsAidl.cpp",
+    ],
+
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+
+    shared_libs: [
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libhardware",
+        "liblog",
+        "libutils",
+        "android.hardware.powerstats-ndk_platform",
+    ],
+}
