@@ -226,13 +226,13 @@ void UeventListener::ReportVoltageTierStats(const sp<IStats> &stats_client, cons
     float ssoc_tmp;
     int32_t i = 0, tmp[15] = {0};
 
-    ALOGD("VoltageTierStats: processing %s", line);
     if (sscanf(line, "%d, %f,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d", &tmp[0], &ssoc_tmp,
                &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5], &tmp[6], &tmp[7], &tmp[8], &tmp[9],
                &tmp[10], &tmp[11], &tmp[12], &tmp[13], &tmp[14]) != 16) {
-        ALOGE("Couldn't process %s", line);
+        /* If format isn't as expected, then ignore line on purpose */
         return;
     }
+    ALOGD("VoltageTierStats: processed %s", line);
     val.intValue(tmp[0]);
     values[voltage_tier_stats_fields[0] - kVendorAtomOffset] = val;
     val.floatValue(ssoc_tmp);
@@ -262,6 +262,7 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
         ALOGE("Unable to read %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
         return;
     }
+
     ss.str(file_contents);
 
     if (!std::getline(ss, line)) {
@@ -269,8 +270,8 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
         return;
     }
 
-    if (!WriteStringToFile(kChargeMetricsPath.c_str(), std::to_string(0))) {
-        ALOGE("Couldn't clear %s", kChargeMetricsPath.c_str());
+    if (!WriteStringToFile(std::to_string(0), kChargeMetricsPath.c_str())) {
+        ALOGE("Couldn't clear %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
     }
 
     sp<IStats> stats_client = IStats::tryGetService();
