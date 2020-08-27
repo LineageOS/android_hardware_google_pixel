@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
+#define ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
 
-#ifndef POWER_LIBPERFMGR_DISPLAY_HELPER_H_
-#define POWER_LIBPERFMGR_DISPLAY_HELPER_H_
+#include <aidl/android/hardware/vibrator/IVibrator.h>
 
-enum display_lpm_state {
-    DISPLAY_LPM_OFF = 0,
-    DISPLAY_LPM_ON,
-    DISPLAY_LPM_UNKNOWN,
-};
+using EffectAmplitude = float;
+using EffectDuration = uint32_t;
+using EffectSequence = std::tuple<std::string, uint8_t>;
+using EffectTuple = std::tuple<::aidl::android::hardware::vibrator::Effect,
+                               ::aidl::android::hardware::vibrator::EffectStrength>;
 
-void set_display_lpm(int enable);
-
-#endif  // POWER_LIBPERFMGR_DISPLAY_HELPER_H_
+#endif  // ANDROID_HARDWARE_VIBRATOR_TEST_TYPES_H
