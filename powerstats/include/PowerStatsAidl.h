@@ -18,24 +18,44 @@
 
 #include <aidl/android/hardware/powerstats/BnPowerStats.h>
 
+#include <utils/RefBase.h>
+
+#include <unordered_map>
+
 namespace aidl {
 namespace android {
 namespace hardware {
 namespace powerstats {
 
+using ::android::sp;
+
+class IStateResidencyDataProvider : public virtual ::android::RefBase {
+  public:
+    virtual ~IStateResidencyDataProvider() = default;
+    virtual bool getResults(
+            std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
+                    *results) = 0;
+    virtual std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() = 0;
+};
+
 class PowerStats : public BnPowerStats {
   public:
     PowerStats() = default;
+    void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
+
+    // Methods from aidl::android::hardware::powerstats::IPowerStats
     ndk::ScopedAStatus getEnergyData(const std::vector<int32_t> &in_railIndices,
                                      std::vector<EnergyData> *_aidl_return) override;
     ndk::ScopedAStatus getPowerEntityInfo(std::vector<PowerEntityInfo> *_aidl_return) override;
-    ndk::ScopedAStatus getPowerEntityStateInfo(
-            const std::vector<int32_t> &in_powerEntityIds,
-            std::vector<PowerEntityStateSpace> *_aidl_return) override;
     ndk::ScopedAStatus getPowerEntityStateResidencyData(
             const std::vector<int32_t> &in_powerEntityIds,
             std::vector<PowerEntityStateResidencyResult> *_aidl_return) override;
     ndk::ScopedAStatus getRailInfo(std::vector<RailInfo> *_aidl_return) override;
+    binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
+
+  private:
+    std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
+    std::vector<PowerEntityInfo> mPowerEntityInfos;
 };
 
 }  // namespace powerstats
