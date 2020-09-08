@@ -33,6 +33,7 @@ cc_library {
 
     srcs: [
         "PowerStatsAidl.cpp",
+        "dataproviders/GenericStateResidencyDataProvider.cpp",
     ],
 
     cflags: [
