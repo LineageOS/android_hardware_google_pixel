@@ -17,20 +17,21 @@
 #define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 #define LOG_TAG "android.hardware.power@1.3-service.pixel-libperfmgr"
 
+#include "Power.h"
+
+#include <mutex>
+
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 
-#include <mutex>
-
 #include <utils/Log.h>
 #include <utils/Trace.h>
 
 #include "AudioStreaming.h"
-#include "Power.h"
-#include "display-helper.h"
+#include "disp-power/DisplayLowPower.h"
 
 namespace android {
 namespace hardware {
@@ -61,6 +62,7 @@ static const std::map<enum CameraStreamingMode, std::string> kCamStreamingHint =
 Power::Power()
     : mHintManager(nullptr),
       mInteractionHandler(nullptr),
+      mDisplayLowPower(nullptr),
       mVRModeOn(false),
       mSustainedPerfModeOn(false),
       mCameraStreamingMode(CAMERA_STREAMING_OFF),
@@ -73,6 +75,8 @@ Power::Power()
         }
         mInteractionHandler = std::make_unique<InteractionHandler>(mHintManager);
         mInteractionHandler->Init();
+        mDisplayLowPower = std::make_unique<DisplayLowPower>();
+        mDisplayLowPower->Init();
         std::string state = android::base::GetProperty(kPowerHalStateProp, "");
         if (state == "CAMERA_STREAMING") {
             ALOGI("Initialize with CAMERA_STREAMING on");
@@ -198,13 +202,7 @@ Return<void> Power::powerHint(PowerHint_1_0 hint, int32_t data) {
             }
             break;
         case PowerHint_1_0::LOW_POWER:
-            if (data) {
-                // Device in battery saver mode, enable display low power mode
-                set_display_lpm(true);
-            } else {
-                // Device exiting battery saver mode, disable display low power mode
-                set_display_lpm(false);
-            }
+            mDisplayLowPower->SetDisplayLowPower(static_cast<bool>(data));
             break;
         default:
             break;
@@ -312,8 +310,8 @@ Return<void> Power::powerHintAsync_1_2(PowerHint_1_2 hint, int32_t data) {
 
             mCameraStreamingMode = mode;
             const auto prop = (mCameraStreamingMode == CAMERA_STREAMING_OFF)
-                                  ? ""
-                                  : kCamStreamingHint.at(mode).c_str();
+                                      ? ""
+                                      : kCamStreamingHint.at(mode).c_str();
             if (!android::base::SetProperty(kPowerHalStateProp, prop)) {
                 ALOGE("%s: could set powerHAL state %s property", __func__, prop);
             }
@@ -366,13 +364,13 @@ Return<void> Power::debug(const hidl_handle &handle, const hidl_vec<hidl_string>
         int fd = handle->data[0];
 
         std::string buf(android::base::StringPrintf(
-            "HintManager Running: %s\n"
-            "VRMode: %s\n"
-            "CameraStreamingMode: %s\n"
-            "SustainedPerformanceMode: %s\n",
-            boolToString(mHintManager->IsRunning()), boolToString(mVRModeOn),
-            kCamStreamingHint.at(mCameraStreamingMode).c_str(),
-            boolToString(mSustainedPerfModeOn)));
+                "HintManager Running: %s\n"
+                "VRMode: %s\n"
+                "CameraStreamingMode: %s\n"
+                "SustainedPerformanceMode: %s\n",
+                boolToString(mHintManager->IsRunning()), boolToString(mVRModeOn),
+                kCamStreamingHint.at(mCameraStreamingMode).c_str(),
+                boolToString(mSustainedPerfModeOn)));
         // Dump nodes through libperfmgr
         mHintManager->DumpToFd(fd);
         if (!android::base::WriteStringToFd(buf, fd)) {
