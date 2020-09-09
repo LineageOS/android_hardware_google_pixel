@@ -61,7 +61,7 @@ ndk::ScopedAStatus PowerStats::getPowerEntityStateResidencyData(
         const std::vector<int32_t> &in_powerEntityIds,
         std::vector<PowerEntityStateResidencyResult> *_aidl_return) {
     // If powerEntityIds is empty then return data for all supported entities
-    if (in_powerEntityIds.empty()) {
+    if (in_powerEntityIds.empty() && !mPowerEntityInfos.empty()) {
         std::vector<int32_t> v(mPowerEntityInfos.size());
         std::iota(std::begin(v), std::end(v), 0);
         return getPowerEntityStateResidencyData(v, _aidl_return);
