@@ -18,7 +18,8 @@
 
 #include <aidl/android/hardware/powerstats/BnPowerStats.h>
 
-#include <utils/RefBase.h>
+#include <utils/LightRefBase.h>
+#include <utils/StrongPointer.h>
 
 #include <unordered_map>
 
@@ -27,19 +28,20 @@ namespace android {
 namespace hardware {
 namespace powerstats {
 
+using ::android::LightRefBase;
 using ::android::sp;
-
-class IStateResidencyDataProvider : public virtual ::android::RefBase {
-  public:
-    virtual ~IStateResidencyDataProvider() = default;
-    virtual bool getResults(
-            std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
-                    *results) = 0;
-    virtual std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() = 0;
-};
 
 class PowerStats : public BnPowerStats {
   public:
+    class IStateResidencyDataProvider : public LightRefBase<IStateResidencyDataProvider> {
+      public:
+        virtual ~IStateResidencyDataProvider() = default;
+        virtual bool getResults(
+                std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
+                        *results) = 0;
+        virtual std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() = 0;
+    };
+
     PowerStats() = default;
     void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
 
@@ -54,6 +56,16 @@ class PowerStats : public BnPowerStats {
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   private:
+    void getEntityStateMaps(
+            std::unordered_map<int32_t, std::string> *entityNames,
+            std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames);
+    void dumpStateResidency(std::ostringstream &oss, bool delta);
+    void dumpStateResidencyDelta(std::ostringstream &oss,
+                                 const std::vector<PowerEntityStateResidencyResult> &results);
+    void dumpStateResidencyOneShot(std::ostringstream &oss,
+                                   const std::vector<PowerEntityStateResidencyResult> &results);
+    void dumpRailEnergy(std::ostringstream &oss, bool delta);
+
     std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
 };
