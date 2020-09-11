@@ -16,7 +16,10 @@
 
 #define LOG_TAG "android.hardware.powerstats-service.pixel"
 
+#include <inttypes.h>
+#include <chrono>
 #include <numeric>
+#include <string>
 
 #include "include/PowerStatsAidl.h"
 #include <aidl/android/hardware/powerstats/BnPowerStats.h>
@@ -109,33 +112,143 @@ ndk::ScopedAStatus PowerStats::getRailInfo(std::vector<RailInfo> *_aidl_return) 
     return ndk::ScopedAStatus::ok();
 }
 
-binder_status_t PowerStats::dump(int fd, const char **, uint32_t) {
-    std::ostringstream dumpStats;
+void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
+    // TODO(b/167218032): Implement this once getEnergyData and getRailInfo are implemented
+    (void)oss;
+    (void)delta;
+}
 
+void PowerStats::getEntityStateMaps(
+        std::unordered_map<int32_t, std::string> *entityNames,
+        std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames) {
     std::vector<PowerEntityInfo> infos;
     getPowerEntityInfo(&infos);
 
-    dumpStats << ::android::base::StringPrintf("infos:\n");
-    for (auto i : infos) {
-        for (auto j : i.states) {
-            dumpStats << ::android::base::StringPrintf(
-                    "%s, %d, %s, %d\n", i.powerEntityName.c_str(), i.powerEntityId,
-                    j.powerEntityStateName.c_str(), j.powerEntityStateId);
+    for (const auto &info : infos) {
+        entityNames->emplace(info.powerEntityId, info.powerEntityName);
+        stateNames->emplace(info.powerEntityId, std::unordered_map<int32_t, std::string>());
+        auto &entityStateNames = stateNames->at(info.powerEntityId);
+        for (const auto &state : info.states) {
+            entityStateNames.emplace(state.powerEntityStateId, state.powerEntityStateName);
         }
     }
+}
 
-    dumpStats << ::android::base::StringPrintf("residencies:\n");
+void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
+    const char *headerFormat = "  %14s   %14s   %16s   %15s   %17s\n";
+    const char *dataFormat =
+            "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %14" PRIu64 " ms\n";
+    const char *headerFormatDelta = "  %14s   %14s   %16s (%14s)   %15s (%16s)   %17s (%14s)\n";
+    const char *dataFormatDelta = "  %14s   %14s   %13" PRIu64 " ms (%14" PRId64 ")   %15" PRIu64
+                                  " (%16" PRId64 ")   %14" PRIu64 " ms (%14" PRId64 ")\n";
+
+    // Construct maps to entity and state names
+    std::unordered_map<int32_t, std::string> entityNames;
+    std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> stateNames;
+    getEntityStateMaps(&entityNames, &stateNames);
+
+    oss << "\n============= PowerStats HAL 2.0 state residencies ==============\n";
+
     std::vector<PowerEntityStateResidencyResult> results;
     getPowerEntityStateResidencyData({}, &results);
-    for (auto i : results) {
-        for (auto j : i.stateResidencyData) {
-            dumpStats << ::android::base::StringPrintf(
-                    "%d, %d, %ld, %ld, %ld\n", i.powerEntityId, j.powerEntityStateId,
-                    j.totalTimeInStateMs, j.totalStateEntryCount, j.lastEntryTimestampMs);
+
+    if (delta) {
+        static std::vector<PowerEntityStateResidencyResult> prevResults;
+        static std::chrono::steady_clock::time_point prevTime;
+        auto curTime = std::chrono::steady_clock::now();
+
+        oss << "Elapsed time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count()
+            << " ms";
+
+        oss << ::android::base::StringPrintf(headerFormatDelta, "Entity", "State", "Total time",
+                                             "Delta   ", "Total entries", "Delta   ",
+                                             "Last entry tstamp", "Delta ");
+
+        // Process prevResults into a 2-tier lookup table for easy reference
+        std::unordered_map<int32_t, std::unordered_map<int32_t, PowerEntityStateResidencyData>>
+                prevResultsMap;
+        for (const auto &prevResult : prevResults) {
+            prevResultsMap.emplace(prevResult.powerEntityId,
+                                   std::unordered_map<int32_t, PowerEntityStateResidencyData>());
+            for (auto stateResidency : prevResult.stateResidencyData) {
+                prevResultsMap.at(prevResult.powerEntityId)
+                        .emplace(stateResidency.powerEntityStateId, stateResidency);
+            }
+        }
+
+        // Iterate over the new result data (one "result" per entity)
+        for (const auto &result : results) {
+            const char *entityName = entityNames.at(result.powerEntityId).c_str();
+
+            // Look up previous result data for the same entity
+            auto prevEntityResultIt = prevResultsMap.find(result.powerEntityId);
+
+            // Iterate over individual states within the current entity's new result
+            for (const auto &stateResidency : result.stateResidencyData) {
+                const char *stateName = stateNames.at(result.powerEntityId)
+                                                .at(stateResidency.powerEntityStateId)
+                                                .c_str();
+
+                // If a previous result was found for the same entity, see if that
+                // result also contains data for the current state
+                int64_t deltaTotalTime = 0;
+                int64_t deltaTotalCount = 0;
+                int64_t deltaTimestamp = 0;
+                if (prevEntityResultIt != prevResultsMap.end()) {
+                    auto prevStateResidencyIt =
+                            prevEntityResultIt->second.find(stateResidency.powerEntityStateId);
+                    // If a previous result was found for the current entity and state, calculate
+                    // the deltas and display them along with new result
+                    if (prevStateResidencyIt != prevEntityResultIt->second.end()) {
+                        deltaTotalTime = stateResidency.totalTimeInStateMs -
+                                         prevStateResidencyIt->second.totalTimeInStateMs;
+                        deltaTotalCount = stateResidency.totalStateEntryCount -
+                                          prevStateResidencyIt->second.totalStateEntryCount;
+                        deltaTimestamp = stateResidency.lastEntryTimestampMs -
+                                         prevStateResidencyIt->second.lastEntryTimestampMs;
+                    }
+                }
+
+                oss << ::android::base::StringPrintf(
+                        dataFormatDelta, entityName, stateName, stateResidency.totalTimeInStateMs,
+                        deltaTotalTime, stateResidency.totalStateEntryCount, deltaTotalCount,
+                        stateResidency.lastEntryTimestampMs, deltaTimestamp);
+            }
+        }
+
+        prevResults = results;
+        prevTime = curTime;
+    } else {
+        oss << ::android::base::StringPrintf(headerFormat, "Entity", "State", "Total time",
+                                             "Total entries", "Last entry tstamp");
+        for (const auto &result : results) {
+            for (const auto &stateResidency : result.stateResidencyData) {
+                oss << ::android::base::StringPrintf(
+                        dataFormat, entityNames.at(result.powerEntityId).c_str(),
+                        stateNames.at(result.powerEntityId)
+                                .at(stateResidency.powerEntityStateId)
+                                .c_str(),
+                        stateResidency.totalTimeInStateMs, stateResidency.totalStateEntryCount,
+                        stateResidency.lastEntryTimestampMs);
+            }
         }
     }
 
-    ::android::base::WriteStringToFd(dumpStats.str(), fd);
+    oss << "========== End of PowerStats HAL 2.0 state residencies ==========\n";
+}
+
+binder_status_t PowerStats::dump(int fd, const char **args, uint32_t numArgs) {
+    std::ostringstream oss;
+    bool delta = (numArgs == 1) && (std::string(args[0]) == "delta");
+
+    // Generate debug output for state residency
+    dumpStateResidency(oss, delta);
+
+    // Generate debug output for rail energy
+    dumpRailEnergy(oss, delta);
+
+    ::android::base::WriteStringToFd(oss.str(), fd);
     fsync(fd);
     return STATUS_OK;
 }
