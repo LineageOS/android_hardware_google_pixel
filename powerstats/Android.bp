@@ -9,6 +9,7 @@ cc_library_static {
         "GenericStateResidencyDataProvider.cpp",
         "WlanStateResidencyDataProvider.cpp",
         "AidlStateResidencyDataProvider.cpp",
+        "DisplayStateResidencyDataProvider.cpp",
     ],
 
     cflags: [
