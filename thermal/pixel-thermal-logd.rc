@@ -12,3 +12,81 @@ service vendor.thermal.logd /vendor/bin/thermal_logd ${persist.vendor.log.therma
     user root
     group root system
     disabled
+
+# Switch thermal protection for Pixels
+on property:persist.vendor.disable.thermal.control=*
+    setprop vendor.disable.thermal.controld ${persist.vendor.disable.thermal.control}
+
+on property:persist.vendor.disable.usb.overheat.mitigation.control=*
+    setprop vendor.disable.usb.overheat.mitigation.controld ${persist.vendor.disable.usb.overheat.mitigation.control}
+
+on property:vendor.disable.thermal.controld=1
+    # common
+    stop vendor.thermal-engine
+    write /sys/module/overheat_mitigation/parameters/enable 0
+    # sdm845
+    write /sys/devices/virtual/thermal/tz-by-name/quiet-therm-adc/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/quiet-therm-monitor/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/fps-therm-adc/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/fps-therm-monitor/mode disabled
+    # sdm670
+    write /sys/devices/virtual/thermal/tz-by-name/mb-therm-adc/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/mb-therm-monitor/mode disabled
+    # sm8150
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm-monitor/mode disabled
+    # sm7150
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-adc/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-monitor/mode disabled
+    # sm7250
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm/emul_temp 25000
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-cpu/emul_temp 25000
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-cpu/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-monitor/emul_temp 25000
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-monitor/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/panel-audio-therm/emul_temp 25000
+    write /sys/devices/virtual/thermal/tz-by-name/panel-audio-therm/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/cellular-emergency/emul_temp 25000
+    write /sys/devices/virtual/thermal/tz-by-name/cellular-emergency/mode disabled
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm/emul_temp 25000
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm/mode disabled
+
+on property:vendor.disable.thermal.controld=0
+    # common
+    start vendor.thermal-engine
+    write /sys/module/overheat_mitigation/parameters/enable 1
+    # sdm845
+    write /sys/devices/virtual/thermal/tz-by-name/quiet-therm-adc/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/quiet-therm-monitor/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/fps-therm-adc/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/fps-therm-monitor/mode enabled
+    # sdm670
+    write /sys/devices/virtual/thermal/tz-by-name/mb-therm-adc/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/mb-therm-monitor/mode enabled
+    # sm8150
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm-monitor/mode enabled
+    # sm7150
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-adc/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-monitor/mode enabled
+    # sm7250
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm/emul_temp 0
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-cpu/emul_temp 0
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-cpu/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-monitor/emul_temp 0
+    write /sys/devices/virtual/thermal/tz-by-name/skin-therm-monitor/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/panel-audio-therm/emul_temp 0
+    write /sys/devices/virtual/thermal/tz-by-name/panel-audio-therm/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/cellular-emergency/emul_temp 0
+    write /sys/devices/virtual/thermal/tz-by-name/cellular-emergency/mode enabled
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm/emul_temp 0
+    write /sys/devices/virtual/thermal/tz-by-name/sdm-therm/mode enabled
+
+# Switch USB port overheat protection
+on property:vendor.disable.usb.overheat.mitigation.controld=1
+    write /sys/module/overheat_mitigation/parameters/enable 0
+
+on property:vendor.disable.usb.overheat.mitigation.controld=0
+    write /sys/module/overheat_mitigation/parameters/enable 1
