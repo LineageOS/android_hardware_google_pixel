@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+// TODO(b/167628903): Delete this file
 #define LOG_TAG "libpixelpowerstats"
 
 #include <android-base/logging.h>
