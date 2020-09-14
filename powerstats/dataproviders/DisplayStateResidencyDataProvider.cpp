@@ -13,36 +13,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// TODO(b/167628903): Delete this file
-#define LOG_TAG "libpixelpowerstats"
+
+#define LOG_TAG "android.hardware.powerstats-service.pixel"
+
+#include <dataproviders/DisplayStateResidencyDataProvider.h>
 
 #include <android-base/chrono_utils.h>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 
-#include <pixelpowerstats/DisplayStateResidencyDataProvider.h>
-#include <pixelpowerstats/PowerStatsUtils.h>
-
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 
+namespace aidl {
 namespace android {
 namespace hardware {
-namespace google {
-namespace pixel {
 namespace powerstats {
 
 DisplayStateResidencyDataProvider::DisplayStateResidencyDataProvider(
-        uint32_t id, std::string path, std::vector<std::string> states)
+        std::string name, std::string path, std::vector<std::string> states)
     : Thread(false),
       mPath(std::move(path)),
-      mPowerEntityId(id),
+      mName(std::move(name)),
       mStates(states),
       mCurState(-1),
-      mLooper(new Looper(true)) {
+      mLooper(new ::android::Looper(true)) {
     // Construct mResidencies
-    for (uint32_t i = 0; i < mStates.size(); ++i) {
+    mResidencies.reserve(mStates.size());
+    for (int32_t i = 0; i < mStates.size(); ++i) {
         PowerEntityStateResidencyData p = {.powerEntityStateId = i};
         mResidencies.emplace_back(p);
     }
@@ -56,55 +55,46 @@ DisplayStateResidencyDataProvider::DisplayStateResidencyDataProvider(
     }
 
     // Add display state file descriptor to be polled by the looper
-    mLooper->addFd(mFd, 0, Looper::EVENT_ERROR, nullptr, nullptr);
+    mLooper->addFd(mFd, 0, ::android::Looper::EVENT_ERROR, nullptr, nullptr);
 
     // Run the thread that will poll for changes to display state
     LOG(VERBOSE) << "Starting DisplayStateWatcherThread";
-    if (run("DisplayStateWatcherThread", PRIORITY_HIGHEST) != NO_ERROR) {
+    if (run("DisplayStateWatcherThread", ::android::PRIORITY_HIGHEST) != ::android::NO_ERROR) {
         LOG(ERROR) << "DisplayStateWatcherThread start fail";
     }
 }
 
 DisplayStateResidencyDataProvider::~DisplayStateResidencyDataProvider() {
-    if (mFd > 0) {
+    if (mFd >= 0) {
         close(mFd);
     }
 }
 
 bool DisplayStateResidencyDataProvider::getResults(
-        std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) {
+        std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>> *results) {
     std::scoped_lock lk(mLock);
 
     // Get current time since boot in milliseconds
-    uint64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(
-                           android::base::boot_clock::now())
-                           .time_since_epoch()
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           ::android::base::boot_clock::now().time_since_epoch())
                            .count();
 
     // Construct residency result based on current residency data
-    PowerEntityStateResidencyResult result = {.powerEntityId = mPowerEntityId};
-    result.stateResidencyData.resize(mStates.size());
-    for (uint32_t i = 0; i < mResidencies.size(); ++i) {
-        result.stateResidencyData[i] = mResidencies[i];
-
-        // Account for time spent in current state
-        if (mCurState == i) {
-            result.stateResidencyData[i].totalTimeInStateMs +=
-                    now - result.stateResidencyData[i].lastEntryTimestampMs;
-        }
-    }
-    results.emplace(mPowerEntityId, result);
+    auto result = mResidencies;
+    result[mCurState].totalTimeInStateMs += now - result[mCurState].lastEntryTimestampMs;
+    results->emplace(mName, result);
     return true;
 }
 
-std::vector<PowerEntityStateSpace> DisplayStateResidencyDataProvider::getStateSpaces() {
-    PowerEntityStateSpace s = {.powerEntityId = mPowerEntityId};
-    s.states.resize(mStates.size());
-    for (uint32_t i = 0; i < mStates.size(); ++i) {
-        s.states[i] = {.powerEntityStateId = i, .powerEntityStateName = mStates[i]};
+std::unordered_map<std::string, std::vector<PowerEntityStateInfo>>
+DisplayStateResidencyDataProvider::getInfo() {
+    std::vector<PowerEntityStateInfo> stateInfos;
+    stateInfos.reserve(mStates.size());
+    for (int32_t i = 0; i < mStates.size(); ++i) {
+        stateInfos.push_back({.powerEntityStateId = i, .powerEntityStateName = mStates[i]});
     }
 
-    return {s};
+    return {{mName, stateInfos}};
 }
 
 // Called when there is new data to be read from
@@ -113,11 +103,9 @@ void DisplayStateResidencyDataProvider::updateStats() {
     char data[32];
 
     // Get current time since boot in milliseconds
-    uint64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(
-                           android::base::boot_clock::now())
-                           .time_since_epoch()
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           ::android::base::boot_clock::now().time_since_epoch())
                            .count();
-
     // Read display state
     ssize_t ret = pread(mFd, data, sizeof(data) - 1, 0);
     if (ret < 0) {
@@ -159,8 +147,8 @@ bool DisplayStateResidencyDataProvider::threadLoop() {
 
     return true;
 }
+
 }  // namespace powerstats
-}  // namespace pixel
-}  // namespace google
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
