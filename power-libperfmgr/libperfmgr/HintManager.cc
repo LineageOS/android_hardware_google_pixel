@@ -20,9 +20,11 @@
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/stringprintf.h>
 #include <json/reader.h>
 #include <json/value.h>
 
+#include <inttypes.h>
 #include <algorithm>
 #include <set>
 
@@ -31,6 +33,12 @@
 
 namespace android {
 namespace perfmgr {
+
+namespace {
+constexpr std::chrono::milliseconds kMilliSecondZero = std::chrono::milliseconds(0);
+constexpr std::chrono::steady_clock::time_point kTimePointMax =
+        std::chrono::steady_clock::time_point::max();
+}  // namespace
 
 bool HintManager::ValidateHint(const std::string& hint_type) const {
     if (nm_.get() == nullptr) {
@@ -48,11 +56,62 @@ bool HintManager::IsHintSupported(const std::string& hint_type) const {
     return true;
 }
 
+bool HintManager::InitHintStatus(const std::unique_ptr<HintManager> &hm) {
+    if (hm.get() == nullptr) {
+        return false;
+    }
+    for (const auto &a : hm->actions_) {
+        // timeout_ms equaling kMilliSecondZero means forever until cancelling.
+        // As a result, if there's one NodeAction has timeout_ms of 0, we will store
+        // 0 instead of max.
+        auto [min, max] = std::minmax_element(a.second.begin(), a.second.end(),
+                                              [](const NodeAction act1, const NodeAction act2) {
+                                                  return act1.timeout_ms < act2.timeout_ms;
+                                              });
+        hm->hint_status_map_.emplace(std::make_pair(
+                a.first, std::make_unique<HintStatus>(min->timeout_ms == kMilliSecondZero
+                                                              ? kMilliSecondZero
+                                                              : max->timeout_ms)));
+    }
+    return true;
+}
+
+void HintManager::DoHintStatus(const std::string &hint_type, std::chrono::milliseconds timeout_ms) {
+    std::lock_guard<std::mutex> lock(hint_status_map_.at(hint_type)->mutex);
+    hint_status_map_.at(hint_type)->stats.count.fetch_add(1);
+    auto now = std::chrono::steady_clock::now();
+    if (now > hint_status_map_.at(hint_type)->end_time) {
+        hint_status_map_.at(hint_type)->stats.duration_ms.fetch_add(
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                        hint_status_map_.at(hint_type)->end_time -
+                        hint_status_map_.at(hint_type)->start_time)
+                        .count());
+        hint_status_map_.at(hint_type)->start_time = now;
+    }
+    hint_status_map_.at(hint_type)->end_time =
+            (timeout_ms == kMilliSecondZero) ? kTimePointMax : now + timeout_ms;
+}
+
+void HintManager::EndHintStatus(const std::string &hint_type) {
+    std::lock_guard<std::mutex> lock(hint_status_map_.at(hint_type)->mutex);
+    // Update HintStats if the hint ends earlier than expected end_time
+    auto now = std::chrono::steady_clock::now();
+    if (now < hint_status_map_.at(hint_type)->end_time) {
+        hint_status_map_.at(hint_type)->stats.duration_ms.fetch_add(
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - hint_status_map_.at(hint_type)->start_time)
+                        .count());
+        hint_status_map_.at(hint_type)->end_time = now;
+    }
+}
+
 bool HintManager::DoHint(const std::string& hint_type) {
     LOG(VERBOSE) << "Do Powerhint: " << hint_type;
-    return ValidateHint(hint_type)
-               ? nm_->Request(actions_.at(hint_type), hint_type)
-               : false;
+    if (!ValidateHint(hint_type) || !nm_->Request(actions_.at(hint_type), hint_type)) {
+        return false;
+    }
+    DoHintStatus(hint_type, hint_status_map_.at(hint_type)->max_timeout);
+    return true;
 }
 
 bool HintManager::DoHint(const std::string& hint_type,
@@ -66,14 +125,20 @@ bool HintManager::DoHint(const std::string& hint_type,
     for (auto& action : actions_override) {
         action.timeout_ms = timeout_ms_override;
     }
-    return nm_->Request(actions_override, hint_type);
+    if (!nm_->Request(actions_override, hint_type)) {
+        return false;
+    }
+    DoHintStatus(hint_type, timeout_ms_override);
+    return true;
 }
 
 bool HintManager::EndHint(const std::string& hint_type) {
     LOG(VERBOSE) << "End Powerhint: " << hint_type;
-    return ValidateHint(hint_type)
-               ? nm_->Cancel(actions_.at(hint_type), hint_type)
-               : false;
+    if (!ValidateHint(hint_type) || !nm_->Cancel(actions_.at(hint_type), hint_type)) {
+        return false;
+    }
+    EndHintStatus(hint_type);
+    return true;
 }
 
 bool HintManager::IsRunning() const {
@@ -88,6 +153,17 @@ std::vector<std::string> HintManager::GetHints() const {
     return hints;
 }
 
+HintStats HintManager::GetHintStats(const std::string &hint_type) const {
+    HintStats hint_stats;
+    if (ValidateHint(hint_type)) {
+        hint_stats.count =
+                hint_status_map_.at(hint_type)->stats.count.load(std::memory_order_relaxed);
+        hint_stats.duration_ms =
+                hint_status_map_.at(hint_type)->stats.duration_ms.load(std::memory_order_relaxed);
+    }
+    return hint_stats;
+}
+
 void HintManager::DumpToFd(int fd) {
     std::string header(
         "========== Begin perfmgr nodes ==========\n"
@@ -100,6 +176,29 @@ void HintManager::DumpToFd(int fd) {
     }
     nm_->DumpToFd(fd);
     std::string footer("==========  End perfmgr nodes  ==========\n");
+    if (!android::base::WriteStringToFd(footer, fd)) {
+        LOG(ERROR) << "Failed to dump fd: " << fd;
+    }
+    header = "========== Begin perfmgr stats ==========\n"
+             "Hint Name\t"
+             "Counts\t"
+             "Duration\n";
+    if (!android::base::WriteStringToFd(header, fd)) {
+        LOG(ERROR) << "Failed to dump fd: " << fd;
+    }
+    std::string hint_stats_string;
+    std::vector<std::string> keys(GetHints());
+    std::sort(keys.begin(), keys.end());
+    for (const auto &ordered_key : keys) {
+        HintStats hint_stats(GetHintStats(ordered_key));
+        hint_stats_string +=
+                android::base::StringPrintf("%s\t%" PRIu32 "\t%" PRIu64 "\n", ordered_key.c_str(),
+                                            hint_stats.count, hint_stats.duration_ms);
+    }
+    if (!android::base::WriteStringToFd(hint_stats_string, fd)) {
+        LOG(ERROR) << "Failed to dump fd: " << fd;
+    }
+    footer = "==========  End perfmgr stats  ==========\n";
     if (!android::base::WriteStringToFd(footer, fd)) {
         LOG(ERROR) << "Failed to dump fd: " << fd;
     }
@@ -135,6 +234,11 @@ std::unique_ptr<HintManager> HintManager::GetFromJSON(
     sp<NodeLooperThread> nm = new NodeLooperThread(std::move(nodes));
     std::unique_ptr<HintManager> hm =
         std::make_unique<HintManager>(std::move(nm), actions);
+
+    if (!HintManager::InitHintStatus(hm)) {
+        LOG(ERROR) << "Failed to initialize hint status";
+        return nullptr;
+    }
 
     LOG(INFO) << "Initialized HintManager from JSON config: " << config_path;
 
