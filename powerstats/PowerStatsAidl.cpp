@@ -16,18 +16,19 @@
 
 #define LOG_TAG "android.hardware.powerstats-service.pixel"
 
-#include <inttypes.h>
-#include <chrono>
-#include <numeric>
-#include <string>
-
 #include "include/PowerStatsAidl.h"
 #include <aidl/android/hardware/powerstats/BnPowerStats.h>
 
+#include <android-base/chrono_utils.h>
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
+
+#include <inttypes.h>
+#include <chrono>
+#include <numeric>
+#include <string>
 
 namespace aidl {
 namespace android {
@@ -154,8 +155,8 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
 
     if (delta) {
         static std::vector<PowerEntityStateResidencyResult> prevResults;
-        static std::chrono::steady_clock::time_point prevTime;
-        auto curTime = std::chrono::steady_clock::now();
+        ::android::base::boot_clock::time_point curTime = ::android::base::boot_clock::now();
+        static ::android::base::boot_clock::time_point prevTime = curTime;
 
         oss << "Elapsed time: "
             << std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count()
