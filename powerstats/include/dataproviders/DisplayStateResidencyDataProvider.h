@@ -14,39 +14,41 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_PIXEL_POWERSTATS_DISPLAYSTATERESIDENCYDATAPROVIDER_H
-#define HARDWARE_GOOGLE_PIXEL_POWERSTATS_DISPLAYSTATERESIDENCYDATAPROVIDER_H
-// TODO(b/167628903): Delete this file
-#include <pixelpowerstats/PowerStats.h>
+#pragma once
+
+#include <PowerStatsAidl.h>
+
 #include <utils/Looper.h>
 #include <utils/Thread.h>
+
 #include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
 
+namespace aidl {
 namespace android {
 namespace hardware {
-namespace google {
-namespace pixel {
 namespace powerstats {
 
-class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider,
-                                          public android::Thread {
+class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider,
+                                          public ::android::Thread {
   public:
-    // id = powerEntityId to be associated with this data provider
+    // name = powerEntityName to be associated with this data provider
     // path = path to the display state file descriptor
     // state = list of states to be tracked
-    DisplayStateResidencyDataProvider(uint32_t id, std::string path,
+    DisplayStateResidencyDataProvider(std::string name, std::string path,
                                       std::vector<std::string> states);
     ~DisplayStateResidencyDataProvider();
-    bool getResults(
-            std::unordered_map<uint32_t, PowerEntityStateResidencyResult> &results) override;
-    std::vector<PowerEntityStateSpace> getStateSpaces() override;
+
+    // Methods from PowerStats::IStateResidencyDataProvider
+    bool getResults(std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
+                            *results) override;
+    std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() override;
 
   private:
-    // The thread that will poll for display state changes
+    // Method associated with ::android::Thread. Poll for display state changes
     bool threadLoop() override;
     // Main function to update the stats when display state change is detected
     void updateStats();
@@ -55,8 +57,8 @@ class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider,
     int mFd;
     // Path to display state file descriptor
     const std::string mPath;
-    // powerEntityId associated with this data provider
-    const uint32_t mPowerEntityId;
+    // Power Entity name associated with this data provider
+    const std::string mName;
     // List of states to track indexed by mCurState
     std::vector<std::string> mStates;
     // Lock to protect concurrent read/write to mResidencies and mCurState
@@ -66,13 +68,10 @@ class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider,
     // Index of current state
     int mCurState;
     // Looper to facilitate polling of display state file desciptor
-    sp<Looper> mLooper;
+    sp<::android::Looper> mLooper;
 };
 
 }  // namespace powerstats
-}  // namespace pixel
-}  // namespace google
 }  // namespace hardware
 }  // namespace android
-
-#endif  // HARDWARE_GOOGLE_PIXEL_POWERSTATS_DISPLAYSTATERESIDENCYDATAPROVIDER_H
+}  // namespace aidl
