@@ -22,10 +22,16 @@ cc_library {
     relative_install_path: "hw",
     export_include_dirs: ["include"],
     shared_libs: [
+        "liblog",
         "libbase",
         "libhidlbase",
         "libutils",
         "libcutils",
         "android.hardware.fastboot@1.0",
+    ],
+    static_libs: [
+        "libnos_for_fastboot",
+        "libnos_citadel_for_fastboot",
+        "libfstab",
     ],
 }
