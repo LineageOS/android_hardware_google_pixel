@@ -35,6 +35,10 @@ namespace android {
 namespace hardware {
 namespace powerstats {
 
+void PowerStats::setRailDataProvider(std::unique_ptr<IRailEnergyDataProvider> p) {
+    mRailEnergyDataProvider = std::move(p);
+}
+
 void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p) {
     int32_t id = mPowerEntityInfos.size();
 
@@ -51,9 +55,10 @@ void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p
 
 ndk::ScopedAStatus PowerStats::getEnergyData(const std::vector<int32_t> &in_railIndices,
                                              std::vector<EnergyData> *_aidl_return) {
-    (void)in_railIndices;
-    (void)_aidl_return;
-    return ndk::ScopedAStatus::ok();
+    if (!mRailEnergyDataProvider) {
+        return ndk::ScopedAStatus::ok();
+    }
+    return mRailEnergyDataProvider->getEnergyData(in_railIndices, _aidl_return);
 }
 
 ndk::ScopedAStatus PowerStats::getPowerEntityInfo(std::vector<PowerEntityInfo> *_aidl_return) {
@@ -109,14 +114,10 @@ ndk::ScopedAStatus PowerStats::getPowerEntityStateResidencyData(
 }
 
 ndk::ScopedAStatus PowerStats::getRailInfo(std::vector<RailInfo> *_aidl_return) {
-    (void)_aidl_return;
-    return ndk::ScopedAStatus::ok();
-}
-
-void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
-    // TODO(b/167218032): Implement this once getEnergyData and getRailInfo are implemented
-    (void)oss;
-    (void)delta;
+    if (!mRailEnergyDataProvider) {
+        return ndk::ScopedAStatus::ok();
+    }
+    return mRailEnergyDataProvider->getRailInfo(_aidl_return);
 }
 
 void PowerStats::getEntityStateMaps(
@@ -133,6 +134,78 @@ void PowerStats::getEntityStateMaps(
             entityStateNames.emplace(state.powerEntityStateId, state.powerEntityStateName);
         }
     }
+}
+
+void PowerStats::getRailEnergyMaps(
+        std::unordered_map<int32_t, std::pair<std::string, std::string>> *railNames) {
+    std::vector<RailInfo> infos;
+    getRailInfo(&infos);
+
+    for (const auto &info : infos) {
+        railNames->emplace(info.railIndex, std::make_pair(info.subsysName, info.railName));
+    }
+}
+
+void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
+    const char *headerFormat = "  %14s   %18s   %18s\n";
+    const char *dataFormat = "  %14s   %18s   %14.2f mWs\n";
+    const char *headerFormatDelta = "  %14s   %18s   %18s (%14s)\n";
+    const char *dataFormatDelta = "  %14s   %18s   %14.2f mWs (%14.2f)\n";
+
+    std::unordered_map<int32_t, std::pair<std::string, std::string>> railNames;
+    getRailEnergyMaps(&railNames);
+
+    oss << "\n============= PowerStats HAL 2.0 rail energy ==============\n";
+
+    std::vector<EnergyData> energyData;
+    getEnergyData({}, &energyData);
+
+    if (delta) {
+        static std::vector<EnergyData> prevEnergyData;
+        ::android::base::boot_clock::time_point curTime = ::android::base::boot_clock::now();
+        static ::android::base::boot_clock::time_point prevTime = curTime;
+
+        oss << "Elapsed time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count()
+            << " ms";
+
+        oss << ::android::base::StringPrintf(headerFormatDelta, "Subsys", "Rail",
+                                             "Cumulative Energy", "Delta   ");
+
+        std::unordered_map<int32_t, int64_t> prevEnergyDataMap;
+        for (const auto &data : prevEnergyData) {
+            prevEnergyDataMap.emplace(data.railIndex, data.energyUWs);
+        }
+
+        for (const auto &data : energyData) {
+            const char *subsysName = railNames.at(data.railIndex).first.c_str();
+            const char *railName = railNames.at(data.railIndex).second.c_str();
+
+            auto prevEnergyDataIt = prevEnergyDataMap.find(data.railIndex);
+            int64_t deltaEnergy = 0;
+            if (prevEnergyDataIt != prevEnergyDataMap.end()) {
+                deltaEnergy = data.energyUWs - prevEnergyDataIt->second;
+            }
+
+            oss << ::android::base::StringPrintf(dataFormatDelta, subsysName, railName,
+                                                 static_cast<float>(data.energyUWs) / 1000.0,
+                                                 static_cast<float>(deltaEnergy) / 1000.0);
+        }
+
+        prevEnergyData = energyData;
+        prevTime = curTime;
+    } else {
+        oss << ::android::base::StringPrintf(headerFormat, "Subsys", "Rail", "Cumulative Energy");
+
+        for (const auto &data : energyData) {
+            oss << ::android::base::StringPrintf(dataFormat,
+                                                 railNames.at(data.railIndex).first.c_str(),
+                                                 railNames.at(data.railIndex).second.c_str(),
+                                                 static_cast<float>(data.energyUWs) / 1000.0);
+        }
+    }
+
+    oss << "========== End of PowerStats HAL 2.0 rail energy ==========\n";
 }
 
 void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {

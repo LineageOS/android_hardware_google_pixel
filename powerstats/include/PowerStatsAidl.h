@@ -18,8 +18,7 @@
 
 #include <aidl/android/hardware/powerstats/BnPowerStats.h>
 
-#include <utils/LightRefBase.h>
-#include <utils/StrongPointer.h>
+#include <utils/RefBase.h>
 
 #include <unordered_map>
 
@@ -28,12 +27,11 @@ namespace android {
 namespace hardware {
 namespace powerstats {
 
-using ::android::LightRefBase;
 using ::android::sp;
 
 class PowerStats : public BnPowerStats {
   public:
-    class IStateResidencyDataProvider : public LightRefBase<IStateResidencyDataProvider> {
+    class IStateResidencyDataProvider : public virtual ::android::RefBase {
       public:
         virtual ~IStateResidencyDataProvider() = default;
         virtual bool getResults(
@@ -42,7 +40,16 @@ class PowerStats : public BnPowerStats {
         virtual std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() = 0;
     };
 
+    class IRailEnergyDataProvider {
+      public:
+        virtual ~IRailEnergyDataProvider() = default;
+        virtual ndk::ScopedAStatus getEnergyData(const std::vector<int32_t> &in_railIndices,
+                                                 std::vector<EnergyData> *_aidl_return) = 0;
+        virtual ndk::ScopedAStatus getRailInfo(std::vector<RailInfo> *_aidl_return) = 0;
+    };
+
     PowerStats() = default;
+    void setRailDataProvider(std::unique_ptr<IRailEnergyDataProvider> p);
     void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
 
     // Methods from aidl::android::hardware::powerstats::IPowerStats
@@ -59,6 +66,8 @@ class PowerStats : public BnPowerStats {
     void getEntityStateMaps(
             std::unordered_map<int32_t, std::string> *entityNames,
             std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames);
+    void getRailEnergyMaps(
+            std::unordered_map<int32_t, std::pair<std::string, std::string>> *railNames);
     void dumpStateResidency(std::ostringstream &oss, bool delta);
     void dumpStateResidencyDelta(std::ostringstream &oss,
                                  const std::vector<PowerEntityStateResidencyResult> &results);
@@ -68,6 +77,8 @@ class PowerStats : public BnPowerStats {
 
     std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
+
+    std::unique_ptr<IRailEnergyDataProvider> mRailEnergyDataProvider;
 };
 
 }  // namespace powerstats
