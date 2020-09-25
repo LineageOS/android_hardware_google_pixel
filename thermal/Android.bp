@@ -54,3 +54,12 @@ sh_binary {
     "pixel-thermal-logd.rc",
   ],
 }
+
+sh_binary {
+  name: "thermal_symlinks",
+  src: "init.thermal.symlinks.sh",
+  vendor: true,
+  init_rc: [
+    "pixel-thermal-symlinks.rc",
+  ],
+}
