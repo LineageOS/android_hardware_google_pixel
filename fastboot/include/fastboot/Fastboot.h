@@ -27,6 +27,7 @@ namespace V1_0 {
 namespace implementation {
 
 #define FB_OEM_SET_BRIGHTNESS "setbrightness"
+#define FB_OEM_POST_WIPEDATA "postwipedata"
 
 using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
