@@ -24,6 +24,9 @@
 #include <android-base/logging.h>
 #include <android-base/strings.h>
 #include <android-base/unique_fd.h>
+#include <app_nugget.h>
+#include <nos/NuggetClient.h>
+#include <nos/debug.h>
 
 namespace android {
 namespace hardware {
@@ -96,10 +99,43 @@ Result SetBrightnessLevel(const std::vector<std::string>& args) {
     return { Status::FAILURE_UNKNOWN, "Unable to set display brightness" };
 }
 
+Result PostWipeData(const std::vector<std::string>& args) {
+    if (!args.size()||((args[0] != "userdata")&&(args[0] != "support"))) {
+        return { Status::INVALID_ARGUMENT, "Invalid oem command" };
+    }
+
+    if (args[0] == "support") {
+        return { Status::SUCCESS, "" };
+    }
+
+    // Connect to Titan M
+    ::nos::NuggetClient client;
+    client.Open();
+    if (!client.IsOpen()) {
+        return { Status::FAILURE_UNKNOWN, "open Titan M fail" };
+    }
+
+    // Tell Titan M to wipe user data
+    const uint32_t magicValue = htole32(ERASE_CONFIRMATION);
+    std::vector<uint8_t> magic(sizeof(magicValue));
+    memcpy(magic.data(), &magicValue, sizeof(magicValue));
+    const uint8_t retry_count = 5;
+    for(uint8_t i = 0; i < retry_count; i++) {
+        const uint32_t status
+            = client.CallApp(APP_ID_NUGGET, NUGGET_PARAM_NUKE_FROM_ORBIT, magic, nullptr);
+        if (status == APP_SUCCESS) {
+            return { Status::SUCCESS, "" };
+        }
+    }
+
+    return { Status::FAILURE_UNKNOWN, "Titan M user data wipe failed" };
+}
+
 Return<void> Fastboot::doOemCommand(const ::android::hardware::hidl_string& oemCmdArgs,
                           doOemCommand_cb _hidl_cb) {
     const std::unordered_map<std::string, OEMCommandHandler> kOEMCmdMap = {
         {FB_OEM_SET_BRIGHTNESS, SetBrightnessLevel},
+        {FB_OEM_POST_WIPEDATA, PostWipeData},
     };
 
     auto args = android::base::Split(oemCmdArgs, " ");
