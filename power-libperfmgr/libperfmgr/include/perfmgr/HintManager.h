@@ -17,10 +17,14 @@
 #ifndef ANDROID_LIBPERFMGR_HINTMANAGER_H_
 #define ANDROID_LIBPERFMGR_HINTMANAGER_H_
 
+#include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -28,6 +32,29 @@
 
 namespace android {
 namespace perfmgr {
+
+struct HintStats {
+    HintStats() : count(0), duration_ms(0) {}
+    uint32_t count;
+    uint64_t duration_ms;
+};
+
+struct HintStatus {
+    const std::chrono::milliseconds max_timeout;
+    HintStatus() : max_timeout(std::chrono::milliseconds(0)) {}
+    HintStatus(std::chrono::milliseconds max_timeout)
+        : max_timeout(max_timeout),
+          start_time(std::chrono::steady_clock::time_point::min()),
+          end_time(std::chrono::steady_clock::time_point::min()) {}
+    std::chrono::steady_clock::time_point start_time;
+    std::chrono::steady_clock::time_point end_time;
+    std::mutex mutex;
+    struct HintStatsInternal {
+        HintStatsInternal() : count(0), duration_ms(0) {}
+        std::atomic<uint32_t> count;
+        std::atomic<uint64_t> duration_ms;
+    } stats;
+};
 
 // HintManager is the external interface of the library to be used by PowerHAL
 // to do power hints with sysfs nodes. HintManager maintains a representation of
@@ -70,6 +97,9 @@ class HintManager {
     // Return available hints managed by HintManager
     std::vector<std::string> GetHints() const;
 
+    // Return stats of hints managed by HintManager
+    HintStats GetHintStats(const std::string &hint_type) const;
+
     // Dump internal status to fd
     void DumpToFd(int fd);
 
@@ -82,14 +112,21 @@ class HintManager {
     static std::map<std::string, std::vector<NodeAction>> ParseActions(
         const std::string& json_doc,
         const std::vector<std::unique_ptr<Node>>& nodes);
+    // Initialize hint_status_map_
+    static bool InitHintStatus(const std::unique_ptr<HintManager> &hm);
 
   private:
     HintManager(HintManager const&) = delete;
     void operator=(HintManager const&) = delete;
     bool ValidateHint(const std::string& hint_type) const;
+    // Helper function to update the HintStatus when DoHint
+    void DoHintStatus(const std::string &hint_type, std::chrono::milliseconds timeout_ms);
+    // Helper function to update the HintStatus when EndHint
+    void EndHintStatus(const std::string &hint_type);
 
     sp<NodeLooperThread> nm_;
     const std::map<std::string, std::vector<NodeAction>> actions_;
+    std::unordered_map<std::string, std::unique_ptr<HintStatus>> hint_status_map_;
 };
 
 }  // namespace perfmgr
