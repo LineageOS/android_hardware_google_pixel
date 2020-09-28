@@ -30,9 +30,9 @@ class IioRailEnergyDataProvider : public PowerStats::IRailEnergyDataProvider {
     IioRailEnergyDataProvider(const std::string &deviceName);
 
     // Methods from PowerStats::IRailEnergyDataProvider
-    ndk::ScopedAStatus getEnergyData(const std::vector<int32_t> &in_railIndices,
-                                     std::vector<EnergyData> *_aidl_return) override;
-    ndk::ScopedAStatus getRailInfo(std::vector<RailInfo> *_aidl_return) override;
+    ndk::ScopedAStatus getRailEnergy(const std::vector<int32_t> &in_railIds,
+                                     std::vector<EnergyMeasurement> *_aidl_return) override;
+    ndk::ScopedAStatus getRailInfo(std::vector<ChannelInfo> *_aidl_return) override;
 
   private:
     void findIioPowerMonitorNodes();
@@ -41,9 +41,9 @@ class IioRailEnergyDataProvider : public PowerStats::IRailEnergyDataProvider {
 
     std::mutex mLock;
     std::vector<std::string> mDevicePaths;
-    std::unordered_map<std::string, int32_t> mRailIndices;  // key: railName, value: railIndex
-    std::vector<RailInfo> mRailInfos;
-    std::vector<EnergyData> mReading;
+    std::unordered_map<std::string, int32_t> mRailIds;  // key: name, value: id
+    std::vector<ChannelInfo> mRailInfos;
+    std::vector<EnergyMeasurement> mReading;
 
     const std::string kDeviceName;
     const std::string kDeviceType = "iio:device";

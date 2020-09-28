@@ -43,9 +43,8 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     ~DisplayStateResidencyDataProvider();
 
     // Methods from PowerStats::IStateResidencyDataProvider
-    bool getResults(std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
-                            *results) override;
-    std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() override;
+    bool getResults(std::unordered_map<std::string, std::vector<StateResidency>> *results) override;
+    std::unordered_map<std::string, std::vector<StateInfo>> getInfo() override;
 
   private:
     // Method associated with ::android::Thread. Poll for display state changes
@@ -64,7 +63,7 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     // Lock to protect concurrent read/write to mResidencies and mCurState
     std::mutex mLock;
     // Accumulated display state stats indexed by mCurState
-    std::vector<PowerEntityStateResidencyData> mResidencies;
+    std::vector<StateResidency> mResidencies;
     // Index of current state
     int mCurState;
     // Looper to facilitate polling of display state file desciptor
