@@ -201,6 +201,13 @@ static inline void _VerifyPathValue(const std::string& path,
     EXPECT_EQ(value, s);
 }
 
+static inline void _VerifyStats(const HintStats &stats, uint32_t count, uint64_t duration_min,
+                                uint64_t duration_max) {
+    EXPECT_EQ(stats.count, count);
+    EXPECT_GE(stats.duration_ms, duration_min);
+    EXPECT_LT(stats.duration_ms, duration_max);
+}
+
 // Test GetHints
 TEST_F(HintManagerTest, GetHintsTest) {
     HintManager hm(nm_, actions_);
@@ -210,6 +217,19 @@ TEST_F(HintManagerTest, GetHintsTest) {
     EXPECT_EQ(2u, hints.size());
     EXPECT_NE(std::find(hints.begin(), hints.end(), "INTERACTION"), hints.end());
     EXPECT_NE(std::find(hints.begin(), hints.end(), "LAUNCH"), hints.end());
+}
+
+// Test GetHintStats
+TEST_F(HintManagerTest, GetHintStatsTest) {
+    auto hm = std::make_unique<HintManager>(nm_, actions_);
+    EXPECT_TRUE(InitHintStatus(hm));
+    EXPECT_TRUE(hm->Start());
+    HintStats launch_stats(hm->GetHintStats("LAUNCH"));
+    EXPECT_EQ(0, launch_stats.count);
+    EXPECT_EQ(0, launch_stats.duration_ms);
+    HintStats interaction_stats(hm->GetHintStats("INTERACTION"));
+    EXPECT_EQ(0, interaction_stats.count);
+    EXPECT_EQ(0, interaction_stats.duration_ms);
 }
 
 // Test initialization of default values
@@ -233,22 +253,25 @@ TEST_F(HintManagerTest, HintSupportedTest) {
 
 // Test DumpToFd
 TEST_F(HintManagerTest, DumpToFdTest) {
-    HintManager hm(nm_, actions_);
+    auto hm = std::make_unique<HintManager>(nm_, actions_);
+    EXPECT_TRUE(InitHintStatus(hm));
     TemporaryFile dumptf;
-    hm.DumpToFd(dumptf.fd);
+    hm->DumpToFd(dumptf.fd);
     fsync(dumptf.fd);
     std::ostringstream dump_buf;
     dump_buf << "========== Begin perfmgr nodes ==========\nNode Name\tNode "
                 "Path\tCurrent Index\tCurrent Value\nn0\t"
              << files_[0]->path << "\t2\t\nn1\t" << files_[1]->path
              << "\t2\t\nn2\tvendor.pwhal.mode\t2\t\n==========  End perfmgr "
-                "nodes  ==========\n";
+                "nodes  ==========\n========== Begin perfmgr stats ==========\n"
+                "Hint Name\tCounts\tDuration\nINTERACTION\t0\t0\nLAUNCH\t0\t0\n"
+                "==========  End perfmgr stats  ==========\n";
     _VerifyPathValue(dumptf.path, dump_buf.str());
     TemporaryFile dumptf_started;
-    EXPECT_TRUE(hm.Start());
+    EXPECT_TRUE(hm->Start());
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
-    EXPECT_TRUE(hm.IsRunning());
-    hm.DumpToFd(dumptf_started.fd);
+    EXPECT_TRUE(hm->IsRunning());
+    hm->DumpToFd(dumptf_started.fd);
     fsync(dumptf_started.fd);
     dump_buf.str("");
     dump_buf.clear();
@@ -256,29 +279,32 @@ TEST_F(HintManagerTest, DumpToFdTest) {
                 "Path\tCurrent Index\tCurrent Value\nn0\t"
              << files_[0]->path << "\t2\t\nn1\t" << files_[1]->path
              << "\t2\tn1_value2\nn2\tvendor.pwhal.mode\t2\tn2_value2\n========="
-                "=  End perfmgr nodes  ==========\n";
+                "=  End perfmgr nodes  ==========\n========== Begin perfmgr "
+                "stats ==========\nHint Name\tCounts\tDuration\nINTERACTION\t0\t"
+                "0\nLAUNCH\t0\t0\n==========  End perfmgr stats  ==========\n";
     _VerifyPathValue(dumptf_started.path, dump_buf.str());
 }
 
 // Test hint/cancel/expire with dummy actions
 TEST_F(HintManagerTest, HintTest) {
-    HintManager hm(nm_, actions_);
-    EXPECT_TRUE(hm.Start());
-    EXPECT_TRUE(hm.IsRunning());
-    EXPECT_TRUE(hm.DoHint("INTERACTION"));
+    auto hm = std::make_unique<HintManager>(nm_, actions_);
+    EXPECT_TRUE(InitHintStatus(hm));
+    EXPECT_TRUE(hm->Start());
+    EXPECT_TRUE(hm->IsRunning());
+    EXPECT_TRUE(hm->DoHint("INTERACTION"));
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
     _VerifyPathValue(files_[0]->path, "n0_value1");
     _VerifyPathValue(files_[1]->path, "n1_value1");
     _VerifyPropertyValue(prop_, "n2_value1");
     // this won't change the expire time of INTERACTION hint
-    EXPECT_TRUE(hm.DoHint("INTERACTION", 200ms));
+    EXPECT_TRUE(hm->DoHint("INTERACTION", 200ms));
     // now place new hint
-    EXPECT_TRUE(hm.DoHint("LAUNCH"));
+    EXPECT_TRUE(hm->DoHint("LAUNCH"));
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
     _VerifyPathValue(files_[0]->path, "n0_value0");
     _VerifyPathValue(files_[1]->path, "n1_value0");
     _VerifyPropertyValue(prop_, "n2_value0");
-    EXPECT_TRUE(hm.DoHint("LAUNCH", 500ms));
+    EXPECT_TRUE(hm->DoHint("LAUNCH", 500ms));
     // "LAUNCH" node1 not expired
     std::this_thread::sleep_for(400ms);
     _VerifyPathValue(files_[0]->path, "n0_value0");
@@ -289,7 +315,7 @@ TEST_F(HintManagerTest, HintTest) {
     _VerifyPathValue(files_[0]->path, "n0_value0");
     _VerifyPathValue(files_[1]->path, "n1_value1");
     _VerifyPropertyValue(prop_, "n2_value1");
-    EXPECT_TRUE(hm.EndHint("LAUNCH"));
+    EXPECT_TRUE(hm->EndHint("LAUNCH"));
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
     // "LAUNCH" canceled
     _VerifyPathValue(files_[0]->path, "n0_value1");
@@ -300,12 +326,54 @@ TEST_F(HintManagerTest, HintTest) {
     _VerifyPathValue(files_[0]->path, "n0_value2");
     _VerifyPathValue(files_[1]->path, "n1_value1");
     _VerifyPropertyValue(prop_, "n2_value2");
-    EXPECT_TRUE(hm.EndHint("INTERACTION"));
+    EXPECT_TRUE(hm->EndHint("INTERACTION"));
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
     // "INTERACTION" canceled
     _VerifyPathValue(files_[0]->path, "n0_value2");
     _VerifyPathValue(files_[1]->path, "n1_value2");
     _VerifyPropertyValue(prop_, "n2_value2");
+}
+
+// Test collecting stats with simple actions
+TEST_F(HintManagerTest, HintStatsTest) {
+    auto hm = std::make_unique<HintManager>(nm_, actions_);
+    EXPECT_TRUE(InitHintStatus(hm));
+    EXPECT_TRUE(hm->Start());
+    EXPECT_TRUE(hm->IsRunning());
+    EXPECT_TRUE(hm->DoHint("INTERACTION"));
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0]->path, "n0_value1");
+    _VerifyPathValue(files_[1]->path, "n1_value1");
+    _VerifyPropertyValue(prop_, "n2_value1");
+    // now place "LAUNCH" hint with timeout of 500ms
+    EXPECT_TRUE(hm->DoHint("LAUNCH", 500ms));
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0]->path, "n0_value0");
+    _VerifyPathValue(files_[1]->path, "n1_value0");
+    _VerifyPropertyValue(prop_, "n2_value0");
+    // "LAUNCH" expired
+    std::this_thread::sleep_for(500ms + kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0]->path, "n0_value1");
+    _VerifyPathValue(files_[1]->path, "n1_value1");
+    _VerifyPropertyValue(prop_, "n2_value1");
+    HintStats launch_stats(hm->GetHintStats("LAUNCH"));
+    // Since duration is recorded at the next DoHint,
+    // duration should be 0.
+    _VerifyStats(launch_stats, 1, 0, 100);
+    std::this_thread::sleep_for(100ms + kSLEEP_TOLERANCE_MS);
+    EXPECT_TRUE(hm->EndHint("INTERACTION"));
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    // "INTERACTION" canceled
+    _VerifyPathValue(files_[0]->path, "n0_value2");
+    _VerifyPathValue(files_[1]->path, "n1_value2");
+    _VerifyPropertyValue(prop_, "n2_value2");
+    HintStats interaction_stats(hm->GetHintStats("INTERACTION"));
+    _VerifyStats(interaction_stats, 1, 800, 900);
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    // Second LAUNCH hint sent to get the first duration recorded.
+    EXPECT_TRUE(hm->DoHint("LAUNCH"));
+    launch_stats = hm->GetHintStats("LAUNCH");
+    _VerifyStats(launch_stats, 2, 500, 600);
 }
 
 // Test parsing nodes
