@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "0040c898_641f2a11",
+        "filename": "common/init.pixel.rc",
+        "patchSetId": 2
+      },
+      "lineNbr": 23,
+      "author": {
+        "id": 2195
+      },
+      "writtenOn": "2020-09-30T16:40:33Z",
+      "side": 1,
+      "message": "Maybe just make this \"Always set the dark splash\" and get rid of commented out the lines below",
+      "revId": "aa38cf0d02d3c8953e1212d3a4e40016edbe93f2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": true
+    }
+  ]
+}
