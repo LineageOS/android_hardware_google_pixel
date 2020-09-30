@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "f6c7a341_c2e37532",
+        "filename": "common/init.pixel.rc",
+        "patchSetId": 1
+      },
+      "lineNbr": 24,
+      "author": {
+        "id": 16208
+      },
+      "writtenOn": "2020-09-30T13:57:37Z",
+      "side": 1,
+      "message": "space",
+      "revId": "4d0972c86b1655fe709f11ad2df0d89e76191abf",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": true
+    }
+  ]
+}
