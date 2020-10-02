@@ -16,6 +16,24 @@
       "revId": "aa38cf0d02d3c8953e1212d3a4e40016edbe93f2",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
       "unresolved": true
+    },
+    {
+      "key": {
+        "uuid": "eebd93ae_fbb0c48a",
+        "filename": "common/init.pixel.rc",
+        "patchSetId": 2
+      },
+      "lineNbr": 23,
+      "author": {
+        "id": 16185
+      },
+      "writtenOn": "2020-10-02T19:06:16Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "0040c898_641f2a11",
+      "revId": "aa38cf0d02d3c8953e1212d3a4e40016edbe93f2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
     }
   ]
 }
