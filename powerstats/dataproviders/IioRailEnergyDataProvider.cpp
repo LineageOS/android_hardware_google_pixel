@@ -56,7 +56,7 @@ void IioRailEnergyDataProvider::findIioPowerMonitorNodes() {
 
 void IioRailEnergyDataProvider::parsePowerRails() {
     std::string data;
-    int32_t index = 0;
+    int32_t id = 0;
     for (const auto &path : mDevicePaths) {
         // Get sampling rate
         unsigned long samplingRate;
@@ -78,12 +78,9 @@ void IioRailEnergyDataProvider::parsePowerRails() {
         while (std::getline(railNames, line)) {
             std::vector<std::string> words = ::android::base::Split(line, ":");
             if (words.size() == 2) {
-                mRailInfos.push_back({.railIndex = index,
-                                      .railName = words[0],
-                                      .subsysName = words[1],
-                                      .samplingRateHz = static_cast<int32_t>(samplingRate)});
-                mRailIndices.emplace(words[0], index);
-                index++;
+                mRailInfos.push_back({.channelId = id, .channelName = words[0]});
+                mRailIds.emplace(words[0], id);
+                id++;
             } else {
                 LOG(WARNING) << "Unexpected enabled rail format in " << path;
             }
@@ -122,13 +119,13 @@ int IioRailEnergyDataProvider::parseIioEnergyNode(std::string path) {
             }
         } else if (words.size() == 2) {
             std::string railName = words[0];
-            if (mRailIndices.count(railName) != 0) {
-                size_t index = mRailIndices[railName];
-                mReading[index].railIndex = index;
-                mReading[index].timestampMs = timestamp;
-                mReading[index].energyUWs = std::stoull(words[1]);
-                if (mReading[index].energyUWs == ULLONG_MAX) {
-                    LOG(WARNING) << "Potentially wrong energy value: " << mReading[index].energyUWs;
+            if (mRailIds.count(railName) != 0) {
+                size_t id = mRailIds[railName];
+                mReading[id].channelId = id;
+                mReading[id].timestampMs = timestamp;
+                mReading[id].energyUWs = std::stoull(words[1]);
+                if (mReading[id].energyUWs == ULLONG_MAX) {
+                    LOG(WARNING) << "Potentially wrong energy value: " << mReading[id].energyUWs;
                 }
             }
         } else {
@@ -140,8 +137,8 @@ int IioRailEnergyDataProvider::parseIioEnergyNode(std::string path) {
     return ret;
 }
 
-ndk::ScopedAStatus IioRailEnergyDataProvider::getEnergyData(
-        const std::vector<int32_t> &in_railIndices, std::vector<EnergyData> *_aidl_return) {
+ndk::ScopedAStatus IioRailEnergyDataProvider::getRailEnergy(
+        const std::vector<int32_t> &in_railIds, std::vector<EnergyMeasurement> *_aidl_return) {
     std::scoped_lock lock(mLock);
     binder_status_t ret = STATUS_OK;
     for (const auto &devicePath : mDevicePaths) {
@@ -151,13 +148,13 @@ ndk::ScopedAStatus IioRailEnergyDataProvider::getEnergyData(
         }
     }
 
-    if (in_railIndices.empty()) {
+    if (in_railIds.empty()) {
         *_aidl_return = mReading;
     } else {
-        _aidl_return->reserve(in_railIndices.size());
-        for (const auto &railIndex : in_railIndices) {
-            if (railIndex < mRailInfos.size()) {
-                _aidl_return->emplace_back(mReading[railIndex]);
+        _aidl_return->reserve(in_railIds.size());
+        for (const auto &railId : in_railIds) {
+            if (railId < mRailInfos.size()) {
+                _aidl_return->emplace_back(mReading[railId]);
             } else {
                 ret = STATUS_BAD_VALUE;
             }
@@ -166,7 +163,7 @@ ndk::ScopedAStatus IioRailEnergyDataProvider::getEnergyData(
     return ndk::ScopedAStatus::fromStatus(ret);
 }
 
-ndk::ScopedAStatus IioRailEnergyDataProvider::getRailInfo(std::vector<RailInfo> *_aidl_return) {
+ndk::ScopedAStatus IioRailEnergyDataProvider::getRailInfo(std::vector<ChannelInfo> *_aidl_return) {
     std::scoped_lock lk(mLock);
     *_aidl_return = mRailInfos;
     return ndk::ScopedAStatus::ok();
