@@ -35,17 +35,16 @@ class PowerStats : public BnPowerStats {
       public:
         virtual ~IStateResidencyDataProvider() = default;
         virtual bool getResults(
-                std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
-                        *results) = 0;
-        virtual std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() = 0;
+                std::unordered_map<std::string, std::vector<StateResidency>> *results) = 0;
+        virtual std::unordered_map<std::string, std::vector<StateInfo>> getInfo() = 0;
     };
 
     class IRailEnergyDataProvider {
       public:
         virtual ~IRailEnergyDataProvider() = default;
-        virtual ndk::ScopedAStatus getEnergyData(const std::vector<int32_t> &in_railIndices,
-                                                 std::vector<EnergyData> *_aidl_return) = 0;
-        virtual ndk::ScopedAStatus getRailInfo(std::vector<RailInfo> *_aidl_return) = 0;
+        virtual ndk::ScopedAStatus getRailEnergy(const std::vector<int32_t> &in_railIds,
+                                                 std::vector<EnergyMeasurement> *_aidl_return) = 0;
+        virtual ndk::ScopedAStatus getRailInfo(std::vector<ChannelInfo> *_aidl_return) = 0;
     };
 
     PowerStats() = default;
@@ -53,26 +52,28 @@ class PowerStats : public BnPowerStats {
     void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
 
     // Methods from aidl::android::hardware::powerstats::IPowerStats
-    ndk::ScopedAStatus getEnergyData(const std::vector<int32_t> &in_railIndices,
-                                     std::vector<EnergyData> *_aidl_return) override;
     ndk::ScopedAStatus getPowerEntityInfo(std::vector<PowerEntityInfo> *_aidl_return) override;
-    ndk::ScopedAStatus getPowerEntityStateResidencyData(
+    ndk::ScopedAStatus getPowerEntityStateResidency(
             const std::vector<int32_t> &in_powerEntityIds,
-            std::vector<PowerEntityStateResidencyResult> *_aidl_return) override;
-    ndk::ScopedAStatus getRailInfo(std::vector<RailInfo> *_aidl_return) override;
+            std::vector<StateResidencyResult> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyConsumerInfo(std::vector<EnergyConsumerId> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyConsumed(const std::vector<EnergyConsumerId> &in_energyConsumerIds,
+                                         std::vector<EnergyConsumerResult> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) override;
+    ndk::ScopedAStatus readEnergyMeters(const std::vector<int32_t> &in_channelIds,
+                                        std::vector<EnergyMeasurement> *_aidl_return) override;
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   private:
     void getEntityStateMaps(
             std::unordered_map<int32_t, std::string> *entityNames,
             std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames);
-    void getRailEnergyMaps(
-            std::unordered_map<int32_t, std::pair<std::string, std::string>> *railNames);
+    void getRailEnergyMaps(std::unordered_map<int32_t, std::string> *railNames);
     void dumpStateResidency(std::ostringstream &oss, bool delta);
     void dumpStateResidencyDelta(std::ostringstream &oss,
-                                 const std::vector<PowerEntityStateResidencyResult> &results);
+                                 const std::vector<StateResidencyResult> &results);
     void dumpStateResidencyOneShot(std::ostringstream &oss,
-                                   const std::vector<PowerEntityStateResidencyResult> &results);
+                                   const std::vector<StateResidencyResult> &results);
     void dumpRailEnergy(std::ostringstream &oss, bool delta);
 
     std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;

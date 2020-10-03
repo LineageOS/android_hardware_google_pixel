@@ -52,7 +52,7 @@ static bool extractStat(const char *line, const std::string &prefix, uint64_t *s
     return true;
 }
 
-static bool parseState(PowerEntityStateResidencyData *data,
+static bool parseState(StateResidency *data,
                        const GenericStateResidencyDataProvider::StateResidencyConfig &config,
                        FILE *fp, char **line, size_t *len) {
     size_t numFieldsRead = 0;
@@ -106,7 +106,7 @@ static int32_t findNextIndex(const std::vector<T> &collection, FILE *fp, char **
     return -1;
 }
 
-static bool getStateData(std::vector<PowerEntityStateResidencyData> *result,
+static bool getStateData(std::vector<StateResidency> *result,
                          const std::vector<GenericStateResidencyDataProvider::StateResidencyConfig>
                                  &stateResidencyConfigs,
                          FILE *fp, char **line, size_t *len) {
@@ -125,7 +125,7 @@ static bool getStateData(std::vector<PowerEntityStateResidencyData> *result,
            (nextState = findNextIndex<GenericStateResidencyDataProvider::StateResidencyConfig>(
                     stateResidencyConfigs, fp, line, len, pred)) >= 0) {
         // Found a matching state header. Parse the contents
-        PowerEntityStateResidencyData data = {.powerEntityStateId = nextState};
+        StateResidency data = {.stateId = nextState};
         if (parseState(&data, stateResidencyConfigs[nextState], fp, line, len)) {
             result->emplace_back(data);
             ++numStatesRead;
@@ -143,7 +143,7 @@ static bool getStateData(std::vector<PowerEntityStateResidencyData> *result,
 }
 
 bool GenericStateResidencyDataProvider::getResults(
-        std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>> *results) {
+        std::unordered_map<std::string, std::vector<StateResidency>> *results) {
     // Using FILE* instead of std::ifstream for performance reasons
     std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
     if (!fp) {
@@ -166,7 +166,7 @@ bool GenericStateResidencyDataProvider::getResults(
            (nextConfig = findNextIndex<decltype(mPowerEntityConfigs)::value_type>(
                     mPowerEntityConfigs, fp.get(), &line, &len, pred)) >= 0) {
         // Found a matching header. Retrieve its state data
-        std::vector<PowerEntityStateResidencyData> result;
+        std::vector<StateResidency> result;
         if (getStateData(&result, mPowerEntityConfigs[nextConfig].mStateResidencyConfigs, fp.get(),
                          &line, &len)) {
             results->emplace(mPowerEntityConfigs[nextConfig].mName, result);
@@ -187,15 +187,14 @@ bool GenericStateResidencyDataProvider::getResults(
     return true;
 }
 
-std::unordered_map<std::string, std::vector<PowerEntityStateInfo>>
+std::unordered_map<std::string, std::vector<StateInfo>>
 GenericStateResidencyDataProvider::getInfo() {
-    std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> ret;
+    std::unordered_map<std::string, std::vector<StateInfo>> ret;
     for (const auto &entityConfig : mPowerEntityConfigs) {
         int32_t stateId = 0;
-        std::vector<PowerEntityStateInfo> stateInfos;
+        std::vector<StateInfo> stateInfos;
         for (const auto &stateConfig : entityConfig.mStateResidencyConfigs) {
-            PowerEntityStateInfo stateInfo = {.powerEntityStateId = stateId++,
-                                              .powerEntityStateName = stateConfig.name};
+            StateInfo stateInfo = {.stateId = stateId++, .stateName = stateConfig.name};
             stateInfos.emplace_back(stateInfo);
         }
 

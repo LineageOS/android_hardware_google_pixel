@@ -42,7 +42,7 @@ DisplayStateResidencyDataProvider::DisplayStateResidencyDataProvider(
     // Construct mResidencies
     mResidencies.reserve(mStates.size());
     for (int32_t i = 0; i < mStates.size(); ++i) {
-        PowerEntityStateResidencyData p = {.powerEntityStateId = i};
+        StateResidency p = {.stateId = i};
         mResidencies.emplace_back(p);
     }
 
@@ -71,7 +71,7 @@ DisplayStateResidencyDataProvider::~DisplayStateResidencyDataProvider() {
 }
 
 bool DisplayStateResidencyDataProvider::getResults(
-        std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>> *results) {
+        std::unordered_map<std::string, std::vector<StateResidency>> *results) {
     std::scoped_lock lk(mLock);
 
     // Get current time since boot in milliseconds
@@ -86,12 +86,12 @@ bool DisplayStateResidencyDataProvider::getResults(
     return true;
 }
 
-std::unordered_map<std::string, std::vector<PowerEntityStateInfo>>
+std::unordered_map<std::string, std::vector<StateInfo>>
 DisplayStateResidencyDataProvider::getInfo() {
-    std::vector<PowerEntityStateInfo> stateInfos;
+    std::vector<StateInfo> stateInfos;
     stateInfos.reserve(mStates.size());
     for (int32_t i = 0; i < mStates.size(); ++i) {
-        stateInfos.push_back({.powerEntityStateId = i, .powerEntityStateName = mStates[i]});
+        stateInfos.push_back({.stateId = i, .stateName = mStates[i]});
     }
 
     return {{mName, stateInfos}};
