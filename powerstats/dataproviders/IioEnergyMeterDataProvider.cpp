@@ -16,7 +16,7 @@
 
 #define LOG_TAG "android.hardware.powerstats-service.pixel"
 
-#include <dataproviders/IioRailEnergyDataProvider.h>
+#include <dataproviders/IioEnergyMeterDataProvider.h>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
@@ -28,7 +28,7 @@ namespace android {
 namespace hardware {
 namespace powerstats {
 
-void IioRailEnergyDataProvider::findIioPowerMonitorNodes() {
+void IioEnergyMeterDataProvider::findIioEnergyMeterNodes() {
     struct dirent *ent;
     DIR *iioDir = opendir(kIioRootDir.c_str());
     if (!iioDir) {
@@ -54,7 +54,7 @@ void IioRailEnergyDataProvider::findIioPowerMonitorNodes() {
     return;
 }
 
-void IioRailEnergyDataProvider::parsePowerRails() {
+void IioEnergyMeterDataProvider::parseEnabledRails() {
     std::string data;
     int32_t id = 0;
     for (const auto &path : mDevicePaths) {
@@ -78,8 +78,8 @@ void IioRailEnergyDataProvider::parsePowerRails() {
         while (std::getline(railNames, line)) {
             std::vector<std::string> words = ::android::base::Split(line, ":");
             if (words.size() == 2) {
-                mRailInfos.push_back({.channelId = id, .channelName = words[0]});
-                mRailIds.emplace(words[0], id);
+                mChannelInfos.push_back({.channelId = id, .channelName = words[0]});
+                mChannelIds.emplace(words[0], id);
                 id++;
             } else {
                 LOG(WARNING) << "Unexpected enabled rail format in " << path;
@@ -88,14 +88,14 @@ void IioRailEnergyDataProvider::parsePowerRails() {
     }
 }
 
-IioRailEnergyDataProvider::IioRailEnergyDataProvider(const std::string &deviceName)
+IioEnergyMeterDataProvider::IioEnergyMeterDataProvider(const std::string &deviceName)
     : kDeviceName(std::move(deviceName)) {
-    findIioPowerMonitorNodes();
-    parsePowerRails();
-    mReading.resize(mRailInfos.size());
+    findIioEnergyMeterNodes();
+    parseEnabledRails();
+    mReading.resize(mChannelInfos.size());
 }
 
-int IioRailEnergyDataProvider::parseIioEnergyNode(std::string path) {
+int IioEnergyMeterDataProvider::parseEnergyValue(std::string path) {
     int ret = 0;
     std::string data;
     if (!::android::base::ReadFileToString(path + kEnergyValueNode, &data)) {
@@ -119,8 +119,8 @@ int IioRailEnergyDataProvider::parseIioEnergyNode(std::string path) {
             }
         } else if (words.size() == 2) {
             std::string railName = words[0];
-            if (mRailIds.count(railName) != 0) {
-                size_t id = mRailIds[railName];
+            if (mChannelIds.count(railName) != 0) {
+                size_t id = mChannelIds[railName];
                 mReading[id].channelId = id;
                 mReading[id].timestampMs = timestamp;
                 mReading[id].energyUWs = std::stoull(words[1]);
@@ -137,24 +137,24 @@ int IioRailEnergyDataProvider::parseIioEnergyNode(std::string path) {
     return ret;
 }
 
-ndk::ScopedAStatus IioRailEnergyDataProvider::getRailEnergy(
-        const std::vector<int32_t> &in_railIds, std::vector<EnergyMeasurement> *_aidl_return) {
+ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeters(
+        const std::vector<int32_t> &in_channelIds, std::vector<EnergyMeasurement> *_aidl_return) {
     std::scoped_lock lock(mLock);
     binder_status_t ret = STATUS_OK;
     for (const auto &devicePath : mDevicePaths) {
-        if (parseIioEnergyNode(devicePath) < 0) {
+        if (parseEnergyValue(devicePath) < 0) {
             LOG(ERROR) << "Error in parsing " << devicePath;
             return ndk::ScopedAStatus::fromStatus(STATUS_FAILED_TRANSACTION);
         }
     }
 
-    if (in_railIds.empty()) {
+    if (in_channelIds.empty()) {
         *_aidl_return = mReading;
     } else {
-        _aidl_return->reserve(in_railIds.size());
-        for (const auto &railId : in_railIds) {
-            if (railId < mRailInfos.size()) {
-                _aidl_return->emplace_back(mReading[railId]);
+        _aidl_return->reserve(in_channelIds.size());
+        for (const auto &channelId : in_channelIds) {
+            if (channelId < mChannelInfos.size()) {
+                _aidl_return->emplace_back(mReading[channelId]);
             } else {
                 ret = STATUS_BAD_VALUE;
             }
@@ -163,9 +163,10 @@ ndk::ScopedAStatus IioRailEnergyDataProvider::getRailEnergy(
     return ndk::ScopedAStatus::fromStatus(ret);
 }
 
-ndk::ScopedAStatus IioRailEnergyDataProvider::getRailInfo(std::vector<ChannelInfo> *_aidl_return) {
+ndk::ScopedAStatus IioEnergyMeterDataProvider::getEnergyMeterInfo(
+        std::vector<ChannelInfo> *_aidl_return) {
     std::scoped_lock lk(mLock);
-    *_aidl_return = mRailInfos;
+    *_aidl_return = mChannelInfos;
     return ndk::ScopedAStatus::ok();
 }
 

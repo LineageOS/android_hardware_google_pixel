@@ -34,7 +34,7 @@ cc_library {
     srcs: [
         "dataproviders/DisplayStateResidencyDataProvider.cpp",
         "dataproviders/GenericStateResidencyDataProvider.cpp",
-        "dataproviders/IioRailEnergyDataProvider.cpp",
+        "dataproviders/IioEnergyMeterDataProvider.cpp",
         "dataproviders/WlanStateResidencyDataProvider.cpp",
         "PowerStatsAidl.cpp",
     ],

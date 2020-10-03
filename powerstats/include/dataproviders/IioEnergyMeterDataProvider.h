@@ -25,24 +25,24 @@ namespace android {
 namespace hardware {
 namespace powerstats {
 
-class IioRailEnergyDataProvider : public PowerStats::IRailEnergyDataProvider {
+class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
   public:
-    IioRailEnergyDataProvider(const std::string &deviceName);
+    IioEnergyMeterDataProvider(const std::string &deviceName);
 
     // Methods from PowerStats::IRailEnergyDataProvider
-    ndk::ScopedAStatus getRailEnergy(const std::vector<int32_t> &in_railIds,
-                                     std::vector<EnergyMeasurement> *_aidl_return) override;
-    ndk::ScopedAStatus getRailInfo(std::vector<ChannelInfo> *_aidl_return) override;
+    ndk::ScopedAStatus readEnergyMeters(const std::vector<int32_t> &in_channelIds,
+                                        std::vector<EnergyMeasurement> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) override;
 
   private:
-    void findIioPowerMonitorNodes();
-    void parsePowerRails();
-    int parseIioEnergyNode(std::string path);
+    void findIioEnergyMeterNodes();
+    void parseEnabledRails();
+    int parseEnergyValue(std::string path);
 
     std::mutex mLock;
     std::vector<std::string> mDevicePaths;
-    std::unordered_map<std::string, int32_t> mRailIds;  // key: name, value: id
-    std::vector<ChannelInfo> mRailInfos;
+    std::unordered_map<std::string, int32_t> mChannelIds;  // key: name, value: id
+    std::vector<ChannelInfo> mChannelInfos;
     std::vector<EnergyMeasurement> mReading;
 
     const std::string kDeviceName;
