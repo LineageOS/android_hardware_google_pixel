@@ -61,9 +61,8 @@ class GenericStateResidencyDataProvider : public PowerStats::IStateResidencyData
     ~GenericStateResidencyDataProvider() = default;
 
     // Methods from PowerStats::IStateResidencyDataProvider
-    bool getResults(std::unordered_map<std::string, std::vector<PowerEntityStateResidencyData>>
-                            *results) override;
-    std::unordered_map<std::string, std::vector<PowerEntityStateInfo>> getInfo() override;
+    bool getResults(std::unordered_map<std::string, std::vector<StateResidency>> *results) override;
+    std::unordered_map<std::string, std::vector<StateInfo>> getInfo() override;
 
   private:
     const std::string mPath;
