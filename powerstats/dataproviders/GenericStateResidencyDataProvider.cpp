@@ -142,8 +142,8 @@ static bool getStateData(std::vector<StateResidency> *result,
     return true;
 }
 
-bool GenericStateResidencyDataProvider::getResults(
-        std::unordered_map<std::string, std::vector<StateResidency>> *results) {
+bool GenericStateResidencyDataProvider::getStateResidencies(
+        std::unordered_map<std::string, std::vector<StateResidency>> *residencies) {
     // Using FILE* instead of std::ifstream for performance reasons
     std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(mPath.c_str(), "r"), fclose);
     if (!fp) {
@@ -169,7 +169,7 @@ bool GenericStateResidencyDataProvider::getResults(
         std::vector<StateResidency> result;
         if (getStateData(&result, mPowerEntityConfigs[nextConfig].mStateResidencyConfigs, fp.get(),
                          &line, &len)) {
-            results->emplace(mPowerEntityConfigs[nextConfig].mName, result);
+            residencies->emplace(mPowerEntityConfigs[nextConfig].mName, result);
             ++numEntitiesRead;
         } else {
             break;

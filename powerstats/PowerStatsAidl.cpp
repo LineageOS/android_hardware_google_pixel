@@ -54,14 +54,13 @@ ndk::ScopedAStatus PowerStats::getPowerEntityInfo(std::vector<PowerEntityInfo> *
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus PowerStats::getPowerEntityStateResidency(
-        const std::vector<int32_t> &in_powerEntityIds,
-        std::vector<StateResidencyResult> *_aidl_return) {
+ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_powerEntityIds,
+                                                 std::vector<StateResidencyResult> *_aidl_return) {
     // If powerEntityIds is empty then return data for all supported entities
     if (in_powerEntityIds.empty() && !mPowerEntityInfos.empty()) {
         std::vector<int32_t> v(mPowerEntityInfos.size());
         std::iota(std::begin(v), std::end(v), 0);
-        return getPowerEntityStateResidency(v, _aidl_return);
+        return getStateResidency(v, _aidl_return);
     }
 
     binder_status_t err = STATUS_OK;
@@ -78,7 +77,7 @@ ndk::ScopedAStatus PowerStats::getPowerEntityStateResidency(
         // Check to see if we already have data for the given id
         std::string powerEntityName = mPowerEntityInfos[id].powerEntityName;
         if (stateResidencies.find(powerEntityName) == stateResidencies.end()) {
-            mStateResidencyDataProviders[id]->getResults(&stateResidencies);
+            mStateResidencyDataProviders[id]->getStateResidencies(&stateResidencies);
         }
 
         // Append results if we have them
@@ -114,26 +113,26 @@ ndk::ScopedAStatus PowerStats::getEnergyConsumed(
     return ndk::ScopedAStatus::ok();
 }
 
-void PowerStats::setRailDataProvider(std::unique_ptr<IRailEnergyDataProvider> p) {
-    mRailEnergyDataProvider = std::move(p);
+void PowerStats::setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p) {
+    mEnergyMeterDataProvider = std::move(p);
 }
 
 ndk::ScopedAStatus PowerStats::getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) {
-    if (!mRailEnergyDataProvider) {
+    if (!mEnergyMeterDataProvider) {
         return ndk::ScopedAStatus::ok();
     }
-    return mRailEnergyDataProvider->getRailInfo(_aidl_return);
+    return mEnergyMeterDataProvider->getEnergyMeterInfo(_aidl_return);
 }
 
 ndk::ScopedAStatus PowerStats::readEnergyMeters(const std::vector<int32_t> &in_channelIds,
                                                 std::vector<EnergyMeasurement> *_aidl_return) {
-    if (!mRailEnergyDataProvider) {
+    if (!mEnergyMeterDataProvider) {
         return ndk::ScopedAStatus::ok();
     }
-    return mRailEnergyDataProvider->getRailEnergy(in_channelIds, _aidl_return);
+    return mEnergyMeterDataProvider->readEnergyMeters(in_channelIds, _aidl_return);
 }
 
-void PowerStats::getEntityStateMaps(
+void PowerStats::getEntityStateNames(
         std::unordered_map<int32_t, std::string> *entityNames,
         std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames) {
     std::vector<PowerEntityInfo> infos;
@@ -149,25 +148,25 @@ void PowerStats::getEntityStateMaps(
     }
 }
 
-void PowerStats::getRailEnergyMaps(std::unordered_map<int32_t, std::string> *railNames) {
+void PowerStats::getChannelNames(std::unordered_map<int32_t, std::string> *channelNames) {
     std::vector<ChannelInfo> infos;
     getEnergyMeterInfo(&infos);
 
     for (const auto &info : infos) {
-        railNames->emplace(info.channelId, info.channelName);
+        channelNames->emplace(info.channelId, info.channelName);
     }
 }
 
-void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
+void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
     const char *headerFormat = "  %18s   %18s\n";
     const char *dataFormat = "  %18s   %14.2f mWs\n";
     const char *headerFormatDelta = "  %18s   %18s (%14s)\n";
     const char *dataFormatDelta = "  %18s   %14.2f mWs (%14.2f)\n";
 
-    std::unordered_map<int32_t, std::string> railNames;
-    getRailEnergyMaps(&railNames);
+    std::unordered_map<int32_t, std::string> channelNames;
+    getChannelNames(&channelNames);
 
-    oss << "\n============= PowerStats HAL 2.0 rail energy ==============\n";
+    oss << "\n============= PowerStats HAL 2.0 energy meter ==============\n";
 
     std::vector<EnergyMeasurement> energyData;
     readEnergyMeters({}, &energyData);
@@ -181,7 +180,7 @@ void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
             << std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count()
             << " ms";
 
-        oss << ::android::base::StringPrintf(headerFormatDelta, "Rail", "Cumulative Energy",
+        oss << ::android::base::StringPrintf(headerFormatDelta, "Channel", "Cumulative Energy",
                                              "Delta   ");
 
         std::unordered_map<int32_t, int64_t> prevEnergyDataMap;
@@ -197,7 +196,7 @@ void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
             }
 
             oss << ::android::base::StringPrintf(dataFormatDelta,
-                                                 railNames.at(data.channelId).c_str(),
+                                                 channelNames.at(data.channelId).c_str(),
                                                  static_cast<float>(data.energyUWs) / 1000.0,
                                                  static_cast<float>(deltaEnergy) / 1000.0);
         }
@@ -205,15 +204,16 @@ void PowerStats::dumpRailEnergy(std::ostringstream &oss, bool delta) {
         prevEnergyData = energyData;
         prevTime = curTime;
     } else {
-        oss << ::android::base::StringPrintf(headerFormat, "Rail", "Cumulative Energy");
+        oss << ::android::base::StringPrintf(headerFormat, "Channel", "Cumulative Energy");
 
         for (const auto &data : energyData) {
-            oss << ::android::base::StringPrintf(dataFormat, railNames.at(data.channelId).c_str(),
+            oss << ::android::base::StringPrintf(dataFormat,
+                                                 channelNames.at(data.channelId).c_str(),
                                                  static_cast<float>(data.energyUWs) / 1000.0);
         }
     }
 
-    oss << "========== End of PowerStats HAL 2.0 rail energy ==========\n";
+    oss << "========== End of PowerStats HAL 2.0 energy meter ==========\n";
 }
 
 void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
@@ -227,12 +227,12 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
     // Construct maps to entity and state names
     std::unordered_map<int32_t, std::string> entityNames;
     std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> stateNames;
-    getEntityStateMaps(&entityNames, &stateNames);
+    getEntityStateNames(&entityNames, &stateNames);
 
     oss << "\n============= PowerStats HAL 2.0 state residencies ==============\n";
 
     std::vector<StateResidencyResult> results;
-    getPowerEntityStateResidency({}, &results);
+    getStateResidency({}, &results);
 
     if (delta) {
         static std::vector<StateResidencyResult> prevResults;
@@ -323,8 +323,8 @@ binder_status_t PowerStats::dump(int fd, const char **args, uint32_t numArgs) {
     // Generate debug output for state residency
     dumpStateResidency(oss, delta);
 
-    // Generate debug output for rail energy
-    dumpRailEnergy(oss, delta);
+    // Generate debug output energy meter
+    dumpEnergyMeter(oss, delta);
 
     ::android::base::WriteStringToFd(oss.str(), fd);
     fsync(fd);
