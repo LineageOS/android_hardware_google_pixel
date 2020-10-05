@@ -27,7 +27,7 @@ cc_library_static {
 }
 
 cc_library {
-    name: "android.hardware.powerstats-impl.pixel",
+    name: "android.hardware.power.stats-impl.pixel",
     vendor_available: true,
     export_include_dirs: ["include"],
 
@@ -51,6 +51,6 @@ cc_library {
         "libhardware",
         "liblog",
         "libutils",
-        "android.hardware.powerstats-ndk_platform",
+        "android.hardware.power.stats-ndk_platform",
     ],
 }

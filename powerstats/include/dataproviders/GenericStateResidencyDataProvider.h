@@ -21,7 +21,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 class GenericStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider {
   public:
@@ -75,7 +76,8 @@ generateGenericStateResidencyConfigs(
         const GenericStateResidencyDataProvider::StateResidencyConfig &stateConfig,
         const std::vector<std::pair<std::string, std::string>> &stateHeaders);
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl

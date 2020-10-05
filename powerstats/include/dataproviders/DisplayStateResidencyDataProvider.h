@@ -30,7 +30,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider,
                                           public ::android::Thread {
@@ -71,7 +72,8 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     sp<::android::Looper> mLooper;
 };
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl
