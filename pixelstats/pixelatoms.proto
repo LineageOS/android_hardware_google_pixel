@@ -292,6 +292,10 @@ message CitadelEvent {
   optional int32 exitpd = 10;
   optional int32 which0 = 11;
   optional int32 which1 = 12;
+
+  // UPGRADED-specific field. This field corresponds to the result of FW
+  // upgrade for citadel.
+  optional int32 upgrade_state = 13;
 }
 
 /* A message containing the citadel firmware version. */
