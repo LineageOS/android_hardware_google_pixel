@@ -43,7 +43,8 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     ~DisplayStateResidencyDataProvider();
 
     // Methods from PowerStats::IStateResidencyDataProvider
-    bool getResults(std::unordered_map<std::string, std::vector<StateResidency>> *results) override;
+    bool getStateResidencies(
+            std::unordered_map<std::string, std::vector<StateResidency>> *residencies) override;
     std::unordered_map<std::string, std::vector<StateInfo>> getInfo() override;
 
   private:
