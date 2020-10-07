@@ -70,8 +70,8 @@ DisplayStateResidencyDataProvider::~DisplayStateResidencyDataProvider() {
     }
 }
 
-bool DisplayStateResidencyDataProvider::getResults(
-        std::unordered_map<std::string, std::vector<StateResidency>> *results) {
+bool DisplayStateResidencyDataProvider::getStateResidencies(
+        std::unordered_map<std::string, std::vector<StateResidency>> *residencies) {
     std::scoped_lock lk(mLock);
 
     // Get current time since boot in milliseconds
@@ -82,7 +82,7 @@ bool DisplayStateResidencyDataProvider::getResults(
     // Construct residency result based on current residency data
     auto result = mResidencies;
     result[mCurState].totalTimeInStateMs += now - result[mCurState].lastEntryTimestampMs;
-    results->emplace(mName, result);
+    residencies->emplace(mName, result);
     return true;
 }
 

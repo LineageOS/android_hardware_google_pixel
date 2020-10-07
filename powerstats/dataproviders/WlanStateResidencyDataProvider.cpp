@@ -43,15 +43,15 @@ static bool extractStat(const char *line, const std::string &prefix, uint64_t *s
     return true;
 }
 
-bool WlanStateResidencyDataProvider::getResults(
-        std::unordered_map<std::string, std::vector<StateResidency>> *results) {
+bool WlanStateResidencyDataProvider::getStateResidencies(
+        std::unordered_map<std::string, std::vector<StateResidency>> *residencies) {
     std::vector<StateResidency> result = {{.stateId = ACTIVE_ID}, {.stateId = DEEPSLEEP_ID}};
 
     std::string wlanDriverStatus = ::android::base::GetProperty("wlan.driver.status", "unloaded");
     if (wlanDriverStatus != "ok") {
         LOG(ERROR) << ": wlan is " << wlanDriverStatus;
         // Return 0s for Wlan stats, because the driver is unloaded
-        results->emplace(mName, result);
+        residencies->emplace(mName, result);
         return true;
     }
 
@@ -93,7 +93,7 @@ bool WlanStateResidencyDataProvider::getResults(
         return false;
     }
 
-    results->emplace(mName, result);
+    residencies->emplace(mName, result);
 
     return true;
 }
