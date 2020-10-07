@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.powerstats-service.pixel"
+#define LOG_TAG "android.hardware.power.stats-service.pixel"
 
 #include "include/PowerStatsAidl.h"
-#include <aidl/android/hardware/powerstats/BnPowerStats.h>
+#include <aidl/android/hardware/power/stats/BnPowerStats.h>
 
 #include <android-base/chrono_utils.h>
 #include <android-base/file.h>
@@ -33,7 +33,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p) {
     int32_t id = mPowerEntityInfos.size();
@@ -331,7 +332,8 @@ binder_status_t PowerStats::dump(int fd, const char **args, uint32_t numArgs) {
     return STATUS_OK;
 }
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl

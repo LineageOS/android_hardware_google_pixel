@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.powerstats-service.pixel"
+#define LOG_TAG "android.hardware.power.stats-service.pixel"
 
 #include <dataproviders/IioEnergyMeterDataProvider.h>
 
@@ -26,7 +26,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 void IioEnergyMeterDataProvider::findIioEnergyMeterNodes() {
     struct dirent *ent;
@@ -170,7 +171,8 @@ ndk::ScopedAStatus IioEnergyMeterDataProvider::getEnergyMeterInfo(
     return ndk::ScopedAStatus::ok();
 }
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.powerstats-service.pixel"
+#define LOG_TAG "android.hardware.power.stats-service.pixel"
 
 #include <android-base/logging.h>
 #include <android-base/properties.h>
@@ -25,7 +25,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 enum {
     ACTIVE_ID = 0,
@@ -107,7 +108,8 @@ std::unordered_map<std::string, std::vector<StateInfo>> WlanStateResidencyDataPr
     return ret;
 }
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl
