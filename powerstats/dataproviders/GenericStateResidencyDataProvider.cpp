@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.powerstats-service.pixel"
+#define LOG_TAG "android.hardware.power.stats-service.pixel"
 
 #include <android-base/logging.h>
 #include <android-base/strings.h>
@@ -24,7 +24,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 std::vector<GenericStateResidencyDataProvider::StateResidencyConfig>
 generateGenericStateResidencyConfigs(
@@ -203,7 +204,8 @@ GenericStateResidencyDataProvider::getInfo() {
     return ret;
 }
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl

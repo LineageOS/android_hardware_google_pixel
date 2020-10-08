@@ -21,7 +21,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 class WlanStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider {
   public:
@@ -39,7 +40,8 @@ class WlanStateResidencyDataProvider : public PowerStats::IStateResidencyDataPro
     const std::string mPath;
 };
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl
