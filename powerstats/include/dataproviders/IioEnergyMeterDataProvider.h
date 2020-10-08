@@ -23,7 +23,8 @@
 namespace aidl {
 namespace android {
 namespace hardware {
-namespace powerstats {
+namespace power {
+namespace stats {
 
 class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
   public:
@@ -54,7 +55,8 @@ class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
     const std::string kEnergyValueNode = "/energy_value";
 };
 
-}  // namespace powerstats
+}  // namespace stats
+}  // namespace power
 }  // namespace hardware
 }  // namespace android
 }  // namespace aidl
