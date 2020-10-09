@@ -18,7 +18,6 @@
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_WLCREPORTER_H
 
 #include <android/frameworks/stats/1.0/IStats.h>
-#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 
 using android::frameworks::stats::V1_0::IStats;
 
@@ -32,19 +31,21 @@ namespace pixel {
  */
 class WlcReporter : public RefBase {
   public:
-    /* checkAndReport
-     * isWirelessChargingLast: last wireless charge state
-     *                             true, for wireless charging
-     * Return: current wireless charge state
-     */
-    bool checkAndReport(bool isWirelessChargingLast);
-    bool isWlcSupported();
+    void checkAndReport(const bool online, const char *ptmc_uevent);
 
   private:
-    bool isWlcOnline();
-    bool readFileToInt(const char *path, int *val);
+    struct WlcStatus {
+        bool is_charging;
+        bool check_charger_vendor_id;
+        int check_vendor_id_attempts;
+        WlcStatus();
+    };
+    WlcStatus wlc_status_;
 
-    void doLog();
+    void checkVendorId(const char *ptmc_uevent);
+
+    void reportOrientation();
+    bool reportVendor(const char *ptmc_uevent);
     // Translate device orientation value from sensor Hal to atom enum value
     int translateDeviceOrientationToAtomValue(int orientation);
 
@@ -52,7 +53,9 @@ class WlcReporter : public RefBase {
     // store everything in the values array at the index of the field number
     // -2.
     const int kVendorAtomOffset = 2;
-    int readPtmcId();
+    const int kMaxVendorIdAttempts = 5;
+
+    int readPtmcId(const char *ptmc_uevent);
 };
 
 }  // namespace pixel
