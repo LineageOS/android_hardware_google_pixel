@@ -7,5 +7,9 @@ BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common
 PRODUCT_PACKAGES += \
     misc_writer
 
+# Enable atrace hal for pixel devices
+PRODUCT_PACKAGES += \
+    android.hardware.atrace@1.0-service.pixel
+
 # Common ramdump file type.
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
