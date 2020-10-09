@@ -142,13 +142,11 @@ const char *kPropChargeLevelVendorStop = "persist.vendor.charge.stop.level";
 const char *kPropBatteryDefenderState = "vendor.battery.defender.state";
 const char *kPropBatteryDefenderDisable = "vendor.battery.defender.disable";
 const char *kPropBatteryDefenderThreshold = "vendor.battery.defender.threshold";
-const char *kPropDebuggable = "ro.debuggable";
 
 static void enableDefender(void) {
     ON_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStart, _, _, _)).WillByDefault(Return(0));
     ON_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStop, _, _, _)).WillByDefault(Return(100));
     ON_CALL(*mock, GetBoolProperty(kPropBatteryDefenderDisable, _)).WillByDefault(Return(false));
-    ON_CALL(*mock, GetBoolProperty(kPropDebuggable, _)).WillByDefault(Return(true));
 }
 
 static void powerAvailable(void) {
@@ -197,16 +195,6 @@ TEST_F(BatteryDefenderTest, DisableNonDefaultLevels) {
     // Enable Battery Defender
     EXPECT_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStart, _, _, _)).WillOnce(Return(30));
     EXPECT_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStop, _, _, _)).WillOnce(Return(35));
-
-    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "DISABLED"));
-    battDefender.update();
-}
-
-TEST_F(BatteryDefenderTest, DisableDebuggable) {
-    BatteryDefender battDefender;
-
-    // Enable Battery Defender
-    EXPECT_CALL(*mock, GetBoolProperty(kPropDebuggable, _)).WillOnce(Return(false));
 
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "DISABLED"));
     battDefender.update();
