@@ -89,7 +89,6 @@ class BatteryDefender {
     const char *const kPropBatteryDefenderState = "vendor.battery.defender.state";
     const char *const kPropBatteryDefenderDisable = "vendor.battery.defender.disable";
     const char *const kPropBatteryDefenderThreshold = "vendor.battery.defender.threshold";
-    const char *const kPropDebuggable = "ro.debuggable";
     const char *const kPropBootmode = "ro.bootmode";
 
     // Default thresholds
