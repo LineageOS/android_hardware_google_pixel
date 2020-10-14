@@ -17,6 +17,8 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_HEALTH_BATTERYDEFENDER_H
 #define HARDWARE_GOOGLE_PIXEL_HEALTH_BATTERYDEFENDER_H
 
+#include <batteryservice/BatteryService.h>
+
 #include <stdbool.h>
 #include <time.h>
 #include <string>
@@ -50,7 +52,7 @@ class BatteryDefender {
                     const int32_t timeToClearTimerSecs = DEFAULT_TIME_TO_CLEAR_SECONDS);
 
     // This function shall be called periodically in HealthService
-    void update(void);
+    void update(struct android::BatteryProperties *props);
 
   private:
     enum state_E {
@@ -75,9 +77,7 @@ class BatteryDefender {
     const int32_t kTimeToClearTimerSecs;
 
     // Sysfs
-    const char *const kPathWirelessChargerOnline = "/sys/class/power_supply/wireless/online";
-    const char *const kPathWiredChargerPresent = "/sys/class/power_supply/usb/present";
-    const char *const kPathBatteryCapacity = "/sys/class/power_supply/battery/capacity";
+    const char *const kPathUSBChargerPresent = "/sys/class/power_supply/usb/present";
     const char *const kPathPersistChargerPresentTime =
             "/mnt/vendor/persist/battery/defender_charger_time";
     const char *const kPathPersistDefenderActiveTime =
@@ -101,6 +101,7 @@ class BatteryDefender {
     // Inputs
     int64_t mTimeBetweenUpdateCalls = 0;
     int64_t mTimePreviousSecs;
+    bool mIsUsbPresent = false;
     bool mIsPowerAvailable = false;
     bool mIsDefenderDisabled = false;
     int32_t mTimeToActivateSecsModified;
@@ -115,10 +116,17 @@ class BatteryDefender {
     int mChargeLevelStartPrevious = DEFAULT_CHARGE_LEVEL_START;
     int mChargeLevelStopPrevious = DEFAULT_CHARGE_LEVEL_STOP;
     bool mHasReachedHighCapacityLevel = false;
+    bool mWasAcOnline = false;
+    bool mWasUsbOnline = false;
 
-    void stateMachine_runAction(const state_E state);        // Process state actions
-    state_E stateMachine_getNextState(const state_E state);  // Check transitions
-    void stateMachine_firstAction(const state_E state);      // Process entry actions
+    // Process state actions
+    void stateMachine_runAction(const state_E state, struct android::BatteryProperties *props);
+
+    // Check state transitions
+    state_E stateMachine_getNextState(const state_E state);
+
+    // Process state entry actions
+    void stateMachine_firstAction(const state_E state);
 
     void clearStateData(void);
     void loadPersistentStorage(void);
@@ -130,7 +138,7 @@ class BatteryDefender {
     bool writeIntToFile(const char *path, const int value);
     void writeTimeToFile(const char *path, const int value, int64_t *previous);
     void writeChargeLevelsToFile(const int vendorStart, const int vendorStop);
-    bool isChargePowerAvailable(void);
+    bool isChargePowerAvailable(const bool chargerWirelessOnline);
     bool isDefaultChargeLevel(const int start, const int stop);
     bool isBatteryDefenderDisabled(const int vendorStart, const int vendorStop);
     void addTimeToChargeTimers(void);
