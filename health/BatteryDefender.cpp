@@ -133,14 +133,12 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
     }
 }
 
-bool BatteryDefender::isChargePowerAvailable(void) {
-    // USB presence is an indicator of connectivity
-    const bool chargerPresentWired = readFileToInt(kPathWiredChargerPresent) != 0;
+bool BatteryDefender::isChargePowerAvailable(const bool chargerWirelessOnline) {
+    // USB presence is an indicator of power availability
+    const bool chargerPresentWired = readFileToInt(kPathUSBChargerPresent) != 0;
+    mIsUsbPresent = chargerPresentWired;
 
-    // Wireless online is an indicator of a device having charge power
-    const bool chargerOnlineWireless = readFileToInt(kPathWirelessChargerOnline) != 0;
-
-    return chargerPresentWired || chargerOnlineWireless;
+    return chargerPresentWired || chargerWirelessOnline;
 }
 
 bool BatteryDefender::isDefaultChargeLevel(const int start, const int stop) {
@@ -173,27 +171,53 @@ int32_t BatteryDefender::getTimeToActivate(void) {
                                          (int32_t)ONE_MIN_IN_SECONDS, INT32_MAX);
 }
 
-void BatteryDefender::stateMachine_runAction(const state_E state) {
+void BatteryDefender::stateMachine_runAction(const state_E state,
+                                             struct android::BatteryProperties *props) {
     switch (state) {
         case STATE_INIT:
             loadPersistentStorage();
+            mWasAcOnline = props->chargerAcOnline;
+            mWasUsbOnline = props->chargerUsbOnline;
             break;
 
         case STATE_DISABLED:
         case STATE_DISCONNECTED:
             clearStateData();
+            mWasAcOnline = false;
+            mWasUsbOnline = false;
             break;
 
         case STATE_CONNECTED:
             addTimeToChargeTimers();
-            if (readFileToInt(kPathBatteryCapacity) == kChargeHighCapacityLevel) {
+            if (props->batteryLevel == kChargeHighCapacityLevel) {
                 mHasReachedHighCapacityLevel = true;
             }
+
+            mWasAcOnline = props->chargerAcOnline;
+            mWasUsbOnline = props->chargerUsbOnline;
             break;
 
         case STATE_ACTIVE:
             addTimeToChargeTimers();
             mTimeActiveSecs += mTimeBetweenUpdateCalls;
+
+            /* Force online if active and still connected to power.
+             * Setting a charge limit below the current charge level may
+             * disable the adapter. This does not occur for wireless adapters.
+             */
+            if (mIsUsbPresent) {
+                /* If both previous fields are incorrectly false, force USB online */
+                if ((mWasAcOnline == false) && (mWasUsbOnline == false)) {
+                    props->chargerUsbOnline = true;
+                } else {
+                    if (mWasAcOnline) {
+                        props->chargerAcOnline = true;
+                    }
+                    if (mWasUsbOnline) {
+                        props->chargerUsbOnline = true;
+                    }
+                }
+            }
             break;
 
         default:
@@ -259,9 +283,8 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
 void BatteryDefender::stateMachine_firstAction(const state_E state) {
     switch (state) {
         case STATE_DISABLED:
-            clearStateData();
             LOG(INFO) << "Disabled!";
-            break;
+            FALLTHROUGH_INTENDED;
 
         case STATE_DISCONNECTED:
             clearStateData();
@@ -288,18 +311,22 @@ void BatteryDefender::stateMachine_firstAction(const state_E state) {
     }
 }
 
-void BatteryDefender::update(void) {
+void BatteryDefender::update(struct android::BatteryProperties *props) {
+    if (!props) {
+        return;
+    }
+
     // Update module inputs
     const int chargeLevelVendorStart =
             android::base::GetIntProperty(kPropChargeLevelVendorStart, kChargeLevelDefaultStart);
     const int chargeLevelVendorStop =
             android::base::GetIntProperty(kPropChargeLevelVendorStop, kChargeLevelDefaultStop);
     mIsDefenderDisabled = isBatteryDefenderDisabled(chargeLevelVendorStart, chargeLevelVendorStop);
-    mIsPowerAvailable = isChargePowerAvailable();
+    mIsPowerAvailable = isChargePowerAvailable(props->chargerWirelessOnline);
     mTimeBetweenUpdateCalls = getDeltaTimeSeconds(&mTimePreviousSecs);
 
     // Run state machine
-    stateMachine_runAction(mCurrentState);
+    stateMachine_runAction(mCurrentState, props); /* May override battery properties */
     const state_E nextState = stateMachine_getNextState(mCurrentState);
     if (nextState != mCurrentState) {
         stateMachine_firstAction(nextState);
