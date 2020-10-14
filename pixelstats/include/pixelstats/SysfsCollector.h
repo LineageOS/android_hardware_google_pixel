@@ -20,6 +20,8 @@
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <utils/StrongPointer.h>
 
+#include "BatteryEEPROMReporter.h"
+
 using android::sp;
 using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::SlowIo;
@@ -50,6 +52,7 @@ class SysfsCollector {
         const char *const UserdataBlockProp;
         const char *const ZramMmStatPath;
         const char *const ZramBdStatPath;
+        const char *const EEPROMPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -71,6 +74,7 @@ class SysfsCollector {
     void logF2fsStats();
     void logZramStats();
     void logBootStats();
+    void logBatteryEEPROM();
 
     void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
     void reportZramMmStat();
@@ -96,7 +100,10 @@ class SysfsCollector {
     const char *const kUserdataBlockProp;
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
+    const char *const kEEPROMPath;
     sp<IStats> stats_;
+
+    BatteryEEPROMReporter battery_EEPROM_reporter_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
