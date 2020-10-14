@@ -15,12 +15,12 @@ service vendor.thermal.logd /vendor/bin/thermal_logd ${persist.vendor.log.therma
 
 # Switch thermal protection for Pixels
 on property:persist.vendor.disable.thermal.control=*
-    setprop vendor.disable.thermal.controld ${persist.vendor.disable.thermal.control}
+    setprop vendor.disable.thermal.control ${persist.vendor.disable.thermal.control}
 
-on property:persist.vendor.disable.usb.overheat.mitigation.control=*
-    setprop vendor.disable.usb.overheat.mitigation.controld ${persist.vendor.disable.usb.overheat.mitigation.control}
+on property:persist.vendor.disable.usb.overheat.mitigation=*
+    setprop vendor.disable.usb.overheat.mitigation.control ${persist.vendor.disable.usb.overheat.mitigation}
 
-on property:vendor.disable.thermal.controld=1 && property:vendor.thermal.link_ready=1
+on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_ready=1
     # common
     stop vendor.thermal-engine
     write /sys/module/overheat_mitigation/parameters/enable 0
@@ -51,8 +51,10 @@ on property:vendor.disable.thermal.controld=1 && property:vendor.thermal.link_re
     write /dev/thermal/tz-by-name/cellular-emergency/mode disabled
     write /dev/thermal/tz-by-name/sdm-therm/emul_temp 25000
     write /dev/thermal/tz-by-name/sdm-therm/mode disabled
+    write /dev/thermal/tz-by-name/charger-therm/emul_temp 25000
+    write /dev/thermal/tz-by-name/charger-therm/mode disabled
 
-on property:vendor.disable.thermal.controld=0 && property:vendor.thermal.link_ready=1
+on property:vendor.disable.thermal.control=0 && property:vendor.thermal.link_ready=1
     # common
     start vendor.thermal-engine
     write /sys/module/overheat_mitigation/parameters/enable 1
@@ -83,10 +85,12 @@ on property:vendor.disable.thermal.controld=0 && property:vendor.thermal.link_re
     write /dev/thermal/tz-by-name/cellular-emergency/mode enabled
     write /dev/thermal/tz-by-name/sdm-therm/emul_temp 0
     write /dev/thermal/tz-by-name/sdm-therm/mode enabled
+    write /dev/thermal/tz-by-name/charger-therm/emul_temp 0
+    write /dev/thermal/tz-by-name/charger-therm/mode enabled
 
 # Switch USB port overheat protection
-on property:vendor.disable.usb.overheat.mitigation.controld=1
+on property:vendor.disable.usb.overheat.mitigation.control=1
     write /sys/module/overheat_mitigation/parameters/enable 0
 
-on property:vendor.disable.usb.overheat.mitigation.controld=0
+on property:vendor.disable.usb.overheat.mitigation.control=0
     write /sys/module/overheat_mitigation/parameters/enable 1
