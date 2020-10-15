@@ -41,11 +41,11 @@ class PowerStats : public BnPowerStats {
         virtual std::unordered_map<std::string, std::vector<StateInfo>> getInfo() = 0;
     };
 
-    class IEnergyConsumerDataProvider : public virtual ::android::RefBase {
+    class IEnergyConsumer : public virtual ::android::RefBase {
       public:
-        virtual ~IEnergyConsumerDataProvider() = default;
+        virtual ~IEnergyConsumer() = default;
         virtual EnergyConsumerId getId() = 0;
-        virtual std::optional<EnergyConsumerResult> getResult() = 0;
+        virtual std::optional<EnergyConsumerResult> getEnergyConsumed() = 0;
     };
 
     class IEnergyMeterDataProvider {
@@ -59,7 +59,7 @@ class PowerStats : public BnPowerStats {
 
     PowerStats() = default;
     void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
-    void addEnergyConsumerDataProvider(sp<IEnergyConsumerDataProvider> p);
+    void addEnergyConsumer(sp<IEnergyConsumer> p);
     void setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p);
 
     // Methods from aidl::android::hardware::power::stats::IPowerStats
@@ -90,8 +90,7 @@ class PowerStats : public BnPowerStats {
     std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
 
-    std::unordered_map<EnergyConsumerId, sp<IEnergyConsumerDataProvider>>
-            mEnergyConsumerDataProviders;
+    std::unordered_map<EnergyConsumerId, sp<IEnergyConsumer>> mEnergyConsumers;
 
     std::unique_ptr<IEnergyMeterDataProvider> mEnergyMeterDataProvider;
 };

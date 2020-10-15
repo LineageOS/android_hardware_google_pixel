@@ -32,10 +32,7 @@ cc_library {
     export_include_dirs: ["include"],
 
     srcs: [
-        "dataproviders/DisplayStateResidencyDataProvider.cpp",
-        "dataproviders/GenericStateResidencyDataProvider.cpp",
-        "dataproviders/IioEnergyMeterDataProvider.cpp",
-        "dataproviders/WlanStateResidencyDataProvider.cpp",
+        "dataproviders/*.cpp",
         "PowerStatsAidl.cpp",
     ],
 
