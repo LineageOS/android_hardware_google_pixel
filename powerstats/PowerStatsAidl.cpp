@@ -37,6 +37,10 @@ namespace power {
 namespace stats {
 
 void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p) {
+    if (!p) {
+        return;
+    }
+
     int32_t id = mPowerEntityInfos.size();
 
     for (const auto &[entityName, states] : p->getInfo()) {
@@ -105,12 +109,16 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
     return ndk::ScopedAStatus::fromStatus(err);
 }
 
-void PowerStats::addEnergyConsumerDataProvider(sp<IEnergyConsumerDataProvider> p) {
-    mEnergyConsumerDataProviders.emplace(p->getId(), p);
+void PowerStats::addEnergyConsumer(sp<IEnergyConsumer> p) {
+    if (!p) {
+        return;
+    }
+
+    mEnergyConsumers.emplace(p->getId(), p);
 }
 
 ndk::ScopedAStatus PowerStats::getEnergyConsumerInfo(std::vector<EnergyConsumerId> *_aidl_return) {
-    for (const auto &[id, ignored] : mEnergyConsumerDataProviders) {
+    for (const auto &[id, ignored] : mEnergyConsumers) {
         _aidl_return->push_back(id);
     }
     return ndk::ScopedAStatus::ok();
@@ -119,7 +127,7 @@ ndk::ScopedAStatus PowerStats::getEnergyConsumerInfo(std::vector<EnergyConsumerI
 ndk::ScopedAStatus PowerStats::getEnergyConsumed(
         const std::vector<EnergyConsumerId> &in_energyConsumerIds,
         std::vector<EnergyConsumerResult> *_aidl_return) {
-    if (mEnergyConsumerDataProviders.empty()) {
+    if (mEnergyConsumers.empty()) {
         return ndk::ScopedAStatus::ok();
     }
 
@@ -134,12 +142,12 @@ ndk::ScopedAStatus PowerStats::getEnergyConsumed(
 
     for (const auto id : in_energyConsumerIds) {
         // skip any unavailable ids
-        if (mEnergyConsumerDataProviders.find(id) == mEnergyConsumerDataProviders.end()) {
+        if (mEnergyConsumers.find(id) == mEnergyConsumers.end()) {
             err = STATUS_BAD_VALUE;
             continue;
         }
 
-        auto res = mEnergyConsumerDataProviders.at(id)->getResult();
+        auto res = mEnergyConsumers.at(id)->getEnergyConsumed();
         if (res) {
             _aidl_return->emplace_back(res.value());
         } else {
