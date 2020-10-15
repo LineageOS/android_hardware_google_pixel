@@ -20,6 +20,7 @@
 
 #include <utils/RefBase.h>
 
+#include <optional>
 #include <unordered_map>
 
 namespace aidl {
@@ -40,6 +41,13 @@ class PowerStats : public BnPowerStats {
         virtual std::unordered_map<std::string, std::vector<StateInfo>> getInfo() = 0;
     };
 
+    class IEnergyConsumerDataProvider : public virtual ::android::RefBase {
+      public:
+        virtual ~IEnergyConsumerDataProvider() = default;
+        virtual EnergyConsumerId getId() = 0;
+        virtual std::optional<EnergyConsumerResult> getResult() = 0;
+    };
+
     class IEnergyMeterDataProvider {
       public:
         virtual ~IEnergyMeterDataProvider() = default;
@@ -50,8 +58,9 @@ class PowerStats : public BnPowerStats {
     };
 
     PowerStats() = default;
-    void setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p);
     void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
+    void addEnergyConsumerDataProvider(sp<IEnergyConsumerDataProvider> p);
+    void setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p);
 
     // Methods from aidl::android::hardware::power::stats::IPowerStats
     ndk::ScopedAStatus getPowerEntityInfo(std::vector<PowerEntityInfo> *_aidl_return) override;
@@ -75,10 +84,14 @@ class PowerStats : public BnPowerStats {
                                  const std::vector<StateResidencyResult> &results);
     void dumpStateResidencyOneShot(std::ostringstream &oss,
                                    const std::vector<StateResidencyResult> &results);
+    void dumpEnergyConsumer(std::ostringstream &oss, bool delta);
     void dumpEnergyMeter(std::ostringstream &oss, bool delta);
 
     std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
     std::vector<PowerEntityInfo> mPowerEntityInfos;
+
+    std::unordered_map<EnergyConsumerId, sp<IEnergyConsumerDataProvider>>
+            mEnergyConsumerDataProviders;
 
     std::unique_ptr<IEnergyMeterDataProvider> mEnergyMeterDataProvider;
 };
