@@ -37,6 +37,10 @@ namespace power {
 namespace stats {
 
 void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p) {
+    if (!p) {
+        return;
+    }
+
     int32_t id = mPowerEntityInfos.size();
 
     for (const auto &[entityName, states] : p->getInfo()) {
@@ -57,8 +61,12 @@ ndk::ScopedAStatus PowerStats::getPowerEntityInfo(std::vector<PowerEntityInfo> *
 
 ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_powerEntityIds,
                                                  std::vector<StateResidencyResult> *_aidl_return) {
-    // If powerEntityIds is empty then return data for all supported entities
-    if (in_powerEntityIds.empty() && !mPowerEntityInfos.empty()) {
+    if (mPowerEntityInfos.empty()) {
+        return ndk::ScopedAStatus::ok();
+    }
+
+    // If in_powerEntityIds is empty then return data for all supported entities
+    if (in_powerEntityIds.empty()) {
         std::vector<int32_t> v(mPowerEntityInfos.size());
         std::iota(std::begin(v), std::end(v), 0);
         return getStateResidency(v, _aidl_return);
@@ -90,7 +98,7 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
             };
             _aidl_return->emplace_back(res);
         } else {
-            // We failed to retrieve results for the given id.
+            // Failed to retrieve results for the given id.
 
             // Set error code to STATUS_FAILED_TRANSACTION but don't overwrite it
             // if there is already a higher priority error code
@@ -101,17 +109,57 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
     return ndk::ScopedAStatus::fromStatus(err);
 }
 
+void PowerStats::addEnergyConsumer(sp<IEnergyConsumer> p) {
+    if (!p) {
+        return;
+    }
+
+    mEnergyConsumers.emplace(p->getId(), p);
+}
+
 ndk::ScopedAStatus PowerStats::getEnergyConsumerInfo(std::vector<EnergyConsumerId> *_aidl_return) {
-    (void)_aidl_return;
+    for (const auto &[id, ignored] : mEnergyConsumers) {
+        _aidl_return->push_back(id);
+    }
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus PowerStats::getEnergyConsumed(
         const std::vector<EnergyConsumerId> &in_energyConsumerIds,
         std::vector<EnergyConsumerResult> *_aidl_return) {
-    (void)in_energyConsumerIds;
-    (void)_aidl_return;
-    return ndk::ScopedAStatus::ok();
+    if (mEnergyConsumers.empty()) {
+        return ndk::ScopedAStatus::ok();
+    }
+
+    // If in_powerEntityIds is empty then return data for all supported energy consumers
+    if (in_energyConsumerIds.empty()) {
+        std::vector<EnergyConsumerId> ids;
+        getEnergyConsumerInfo(&ids);
+        return getEnergyConsumed(ids, _aidl_return);
+    }
+
+    binder_status_t err = STATUS_OK;
+
+    for (const auto id : in_energyConsumerIds) {
+        // skip any unavailable ids
+        if (mEnergyConsumers.find(id) == mEnergyConsumers.end()) {
+            err = STATUS_BAD_VALUE;
+            continue;
+        }
+
+        auto res = mEnergyConsumers.at(id)->getEnergyConsumed();
+        if (res) {
+            _aidl_return->emplace_back(res.value());
+        } else {
+            // Failed to retrieve results for the given id.
+
+            // Set error code to STATUS_FAILED_TRANSACTION but don't overwrite it
+            // if there is already a higher priority error code
+            err = (err == STATUS_OK) ? STATUS_FAILED_TRANSACTION : err;
+        }
+    }
+
+    return ndk::ScopedAStatus::fromStatus(err);
 }
 
 void PowerStats::setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p) {
@@ -317,12 +365,31 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
     oss << "========== End of PowerStats HAL 2.0 state residencies ==========\n";
 }
 
+void PowerStats::dumpEnergyConsumer(std::ostringstream &oss, bool delta) {
+    (void)delta;
+
+    std::vector<EnergyConsumerResult> results;
+    getEnergyConsumed({}, &results);
+
+    oss << "\n============= PowerStats HAL 2.0 energy consumers ==============\n";
+
+    for (const auto &result : results) {
+        oss << ::android::base::StringPrintf("%d = %14.2f mWs\n", result.energyConsumerId,
+                                             static_cast<float>(result.energyUWs) / 1000.0);
+    }
+
+    oss << "========== End of PowerStats HAL 2.0 energy consumers ==========\n";
+}
+
 binder_status_t PowerStats::dump(int fd, const char **args, uint32_t numArgs) {
     std::ostringstream oss;
     bool delta = (numArgs == 1) && (std::string(args[0]) == "delta");
 
     // Generate debug output for state residency
     dumpStateResidency(oss, delta);
+
+    // Generate debug output for energy consumer
+    dumpEnergyConsumer(oss, delta);
 
     // Generate debug output energy meter
     dumpEnergyMeter(oss, delta);
