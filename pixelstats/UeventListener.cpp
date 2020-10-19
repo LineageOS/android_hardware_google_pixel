@@ -22,12 +22,14 @@
 #include <android-base/strings.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/UeventListener.h>
 #include <pixelstats/WlcReporter.h>
 #include <unistd.h>
 #include <utils/StrongPointer.h>
 
+#include <string>
 #include <thread>
 
 using android::sp;
@@ -40,6 +42,7 @@ using android::frameworks::stats::V1_0::VendorAtom;
 using android::hardware::google::pixel::WlcReporter;
 using android::hardware::google::pixel::PixelAtoms::ChargeStats;
 using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
+using android::hardware::google::pixel::PixelAtoms::PdVidPid;
 
 namespace android {
 namespace hardware {
@@ -47,6 +50,13 @@ namespace google {
 namespace pixel {
 
 constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
+constexpr int32_t PRODUCT_TYPE_OFFSET = 23;
+constexpr int32_t PRODUCT_TYPE_MASK = 7;
+constexpr int32_t PRODUCT_TYPE_CHARGER = 3;
+constexpr int32_t VID_MASK = 0xffff;
+constexpr int32_t VID_GOOGLE = 0x18d1;
+constexpr int32_t PID_OFFSET = 2;
+constexpr int32_t PID_LENGTH = 4;
 
 bool UeventListener::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -254,19 +264,13 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
 /* ReportWlc
  * Report wireless relate  metrics when wireless charging start
  */
-void UeventListener::ReportWlc(const char *driver) {
-    if (!driver || strncmp(driver, "POWER_SUPPLY_PRESENT=", strlen("POWER_SUPPLY_PRESENT="))) {
+void UeventListener::ReportWlc(const bool pow_wireless, const bool online, const char *ptmc) {
+    if (!pow_wireless) {
         return;
     }
-    if (wireless_charging_supported_) {
-        sp<WlcReporter> wlc_reporter = new WlcReporter();
-        if (wlc_reporter != nullptr) {
-            wireless_charging_state_ =
-                    wlc_reporter->checkAndReport(wireless_charging_state_);
-        }
-    }
-}
 
+    wlc_reporter_.checkAndReport(online, ptmc);
+}
 /**
  * Report raw battery capacity, system battery capacity and associated
  * battery capacity curves. This data is collected to verify the filter
@@ -297,13 +301,76 @@ void UeventListener::ReportBatteryCapacityFGEvent(const char *subsystem) {
     battery_capacity_reporter_.checkAndReport(kBatterySSOCPath);
 }
 
+void UeventListener::ReportTypeCPartnerId() {
+    std::string file_contents_vid, file_contents_pid;
+    uint32_t pid, vid;
+
+    if (!ReadFileToString(kTypeCPartnerVidPath.c_str(), &file_contents_vid)) {
+        ALOGE("Unable to read %s - %s", kTypeCPartnerVidPath.c_str(), strerror(errno));
+        return;
+    }
+
+    if (sscanf(file_contents_vid.c_str(), "%x", &vid) != 1) {
+        ALOGE("Unable to parse vid %s from file %s to int.",
+                file_contents_vid.c_str(), kTypeCPartnerVidPath.c_str());
+        return;
+    }
+
+    if (!ReadFileToString(kTypeCPartnerPidPath.c_str(), &file_contents_pid)) {
+        ALOGE("Unable to read %s - %s", kTypeCPartnerPidPath.c_str(), strerror(errno));
+        return;
+    }
+
+    if (sscanf(file_contents_pid.substr(PID_OFFSET, PID_LENGTH).c_str(), "%x", &pid) != 1) {
+        ALOGE("Unable to parse pid %s from file %s to int.",
+              file_contents_pid.substr(PID_OFFSET, PID_LENGTH).c_str(),
+              kTypeCPartnerPidPath.c_str());
+        return;
+    }
+
+    // Upload data only for chargers
+    if (((vid >> PRODUCT_TYPE_OFFSET) & PRODUCT_TYPE_MASK) != PRODUCT_TYPE_CHARGER) {
+        return;
+    }
+
+    // Upload data only for Google VID
+    if ((VID_MASK & vid) != VID_GOOGLE) {
+        return;
+    }
+
+    std::vector<VendorAtom::Value> values(2);
+    VendorAtom::Value tmp;
+
+    tmp.intValue(vid & VID_MASK);
+    values[PdVidPid::kVidFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.intValue(pid);
+    values[PdVidPid::kPidFieldNumber - kVendorAtomOffset] = tmp;
+    sp<IStats> stats_client = IStats::tryGetService();
+    if (!stats_client) {
+        ALOGE("PD PID/VID Couldn't connect to IStats service");
+        return;
+    }
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+             .atomId = PixelAtoms::Ids::PD_VID_PID,
+             .values = values};
+    Return<void> ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report PD VID/PID to Stats service");
+    }
+}
+
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
     const char *driver, *product, *subsystem;
     const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
-    const char *powpresent;
+    bool collect_partner_id = false;
+    bool pow_online;
+    bool pow_wireless;
+    const char *pow_ptmc;
     int n;
 
     if (uevent_fd_ < 0) {
@@ -323,7 +390,8 @@ bool UeventListener::ProcessUevent() {
     msg[n + 1] = '\0';
 
     driver = product = subsystem = NULL;
-    mic_break_status = mic_degrade_status = devpath = powpresent = NULL;
+    mic_break_status = mic_degrade_status = devpath = pow_ptmc = NULL;
+    pow_online = pow_wireless = false;
 
     /**
      * msg is a sequence of null-terminated strings.
@@ -342,13 +410,18 @@ bool UeventListener::ProcessUevent() {
             mic_degrade_status = cp;
         } else if (!strncmp(cp, "DEVPATH=", strlen("DEVPATH="))) {
             devpath = cp;
-        } else if (!strncmp(cp, "POWER_SUPPLY_PRESENT=",
-                            strlen("POWER_SUPPLY_PRESENT="))) {
-            powpresent = cp;
         } else if (!strncmp(cp, "SUBSYSTEM=", strlen("SUBSYSTEM="))) {
             subsystem = cp;
+        } else if (!strncmp(cp, "DEVTYPE=typec_partner", strlen("DEVTYPE=typec_partner"))) {
+            collect_partner_id = true;
+        } else if (!strncmp(cp, "POWER_SUPPLY_NAME=wireless",
+                            strlen("POWER_SUPPLY_NAME=wireless"))) {
+            pow_wireless = true;
+        } else if (!strncmp(cp, "POWER_SUPPLY_ONLINE=1", strlen("POWER_SUPPLY_ONLINE=1"))) {
+            pow_online = true;
+        } else if (!strncmp(cp, "POWER_SUPPLY_PTMC_ID=", strlen("POWER_SUPPLY_PTMC_ID="))) {
+            pow_ptmc = cp;
         }
-
         /* advance to after the next \0 */
         while (*cp++) {
         }
@@ -359,34 +432,33 @@ bool UeventListener::ProcessUevent() {
     ReportMicStatusUevents(devpath, mic_degrade_status);
     ReportUsbPortOverheatEvent(driver);
     ReportChargeMetricsEvent(driver);
-    ReportWlc(powpresent);
+    ReportWlc(pow_wireless, pow_online, pow_ptmc);
     ReportBatteryCapacityFGEvent(subsystem);
+    if (collect_partner_id) {
+        ReportTypeCPartnerId();
+    }
 
     return true;
 }
 
 UeventListener::UeventListener(const std::string audio_uevent, const std::string ssoc_details_path,
                                const std::string overheat_path,
-                               const std::string charge_metrics_path)
+                               const std::string charge_metrics_path,
+                               const std::string typec_partner_vid_path,
+                               const std::string typec_partner_pid_path)
     : kAudioUevent(audio_uevent),
       kBatterySSOCPath(ssoc_details_path),
       kUsbPortOverheatPath(overheat_path),
       kChargeMetricsPath(charge_metrics_path),
-      uevent_fd_(-1),
-      wireless_charging_state_(false) {}
+      kTypeCPartnerVidPath(typec_partner_vid_path),
+      kTypeCPartnerPidPath(typec_partner_pid_path),
+      uevent_fd_(-1) {}
 
 /* Thread function to continuously monitor uevents.
  * Exit after kMaxConsecutiveErrors to prevent spinning. */
 void UeventListener::ListenForever() {
     constexpr int kMaxConsecutiveErrors = 10;
     int consecutive_errors = 0;
-    sp<WlcReporter> wlc_reporter = new WlcReporter();
-    if (wlc_reporter != nullptr) {
-        wireless_charging_supported_ = wlc_reporter->isWlcSupported();
-    } else {
-        ALOGE("Fail to create WlcReporter.");
-        wireless_charging_supported_ = false;
-    }
 
     while (1) {
         if (ProcessUevent()) {
