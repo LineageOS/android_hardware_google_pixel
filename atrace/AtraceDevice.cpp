@@ -44,6 +44,11 @@ const std::map<std::string, TracingConfig> kTracingMap = {
                   {"/sys/kernel/debug/tracing/events/mali_systrace/enable", false}}},
         },
         {
+                "memory",
+                {"Memory",
+                 {{"/sys/kernel/debug/tracing/events/fastrpc/fastrpc_dma_stat/enable", false}}},
+        },
+        {
                 "ion",
                 {"ION Allocation",
                  {{"/sys/kernel/debug/tracing/events/kmem/ion_alloc_buffer_start/enable", false}}},
