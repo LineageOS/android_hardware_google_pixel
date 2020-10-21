@@ -58,6 +58,17 @@ bool ThermalFiles::readThermalFile(std::string_view thermal_name, std::string *d
     return true;
 }
 
+bool ThermalFiles::writeCdevFile(std::string_view cdev_name, std::string_view data) {
+    std::string file_path = getThermalFilePath(std::string_view(cdev_name.data()));
+
+    if (!android::base::WriteStringToFile(data.data(), file_path)) {
+        PLOG(WARNING) << "Failed to write cdev: " << cdev_name << " to " << data.data();
+        return false;
+    }
+
+    return true;
+}
+
 }  // namespace implementation
 }  // namespace V2_0
 }  // namespace thermal

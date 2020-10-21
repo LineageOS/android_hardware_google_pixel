@@ -234,16 +234,15 @@ Return<void> Thermal::unregisterThermalChangedCallback(
     return Void();
 }
 
-void Thermal::sendThermalChangedCallback(const std::vector<Temperature_2_0> &temps) {
+void Thermal::sendThermalChangedCallback(const Temperature_2_0 &t) {
     std::lock_guard<std::mutex> _lock(thermal_callback_mutex_);
-    for (auto &t : temps) {
-        LOG(INFO) << "Sending notification: "
-                  << " Type: " << android::hardware::thermal::V2_0::toString(t.type)
-                  << " Name: " << t.name << " CurrentValue: " << t.value << " ThrottlingStatus: "
-                  << android::hardware::thermal::V2_0::toString(t.throttlingStatus);
 
-        thermal_helper_.sendPowerExtHint(t);
-        callbacks_.erase(
+    LOG(VERBOSE) << "Sending notification: "
+                 << " Type: " << android::hardware::thermal::V2_0::toString(t.type)
+                 << " Name: " << t.name << " CurrentValue: " << t.value << " ThrottlingStatus: "
+                 << android::hardware::thermal::V2_0::toString(t.throttlingStatus);
+
+    callbacks_.erase(
             std::remove_if(callbacks_.begin(), callbacks_.end(),
                            [&](const CallbackSetting &c) {
                                if (!c.is_filter_type || t.type == c.type) {
@@ -255,7 +254,6 @@ void Thermal::sendThermalChangedCallback(const std::vector<Temperature_2_0> &tem
                                return false;
                            }),
             callbacks_.end());
-    }
 }
 
 Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_string> &) {
@@ -371,11 +369,11 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 }
             }
             {
-                dump_buf << "Monitor:" << std::endl;
+                dump_buf << "SendCallback:" << std::endl;
                 const auto &map = thermal_helper_.GetSensorInfoMap();
                 for (const auto &name_info_pair : map) {
                     dump_buf << " Name: " << name_info_pair.first;
-                    dump_buf << " Monitor: " << std::boolalpha << name_info_pair.second.is_monitor
+                    dump_buf << " SendCallback: " << std::boolalpha << name_info_pair.second.send_cb
                              << std::noboolalpha << std::endl;
                 }
             }
@@ -396,6 +394,92 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                          << thermal_helper_.isPowerHalConnected() << std::endl;
                 dump_buf << "AIDL Power Hal Ext connected: " << std::boolalpha
                          << thermal_helper_.isPowerHalExtConnected() << std::endl;
+            }
+            {
+                dump_buf << "Throttling Info:" << std::endl;
+                const auto &map = thermal_helper_.GetSensorInfoMap();
+                for (const auto &name_info_pair : map) {
+                    bool pid_enabled = false;
+                    bool hard_limit_enabled = false;
+                    dump_buf << " Name: " << name_info_pair.first << "[";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        if (name_info_pair.second.throttling_info->throttle_type[i] == PID) {
+                            pid_enabled = true;
+                            dump_buf << "PID ";
+                        } else if (name_info_pair.second.throttling_info->throttle_type[i] ==
+                                   LIMIT) {
+                            hard_limit_enabled = true;
+                            dump_buf << "LIMIT ";
+                        } else {
+                            dump_buf << "None ";
+                        }
+                    }
+                    dump_buf << "]" << std::endl;
+                    if (pid_enabled) {
+                        dump_buf << "  PID Info:" << std::endl;
+                        dump_buf << "   K_po: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->k_po[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   K_pu: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->k_pu[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   K_i: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->k_i[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   K_d: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->k_d[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   i_max: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->i_max[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   max_alloc_power: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->max_alloc_power[i]
+                                     << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   min_alloc_power: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->min_alloc_power[i]
+                                     << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   s_power: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->s_power[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                        dump_buf << "   i_cutoff: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            dump_buf << name_info_pair.second.throttling_info->i_cutoff[i] << " ";
+                        }
+                        dump_buf << "]" << std::endl;
+                    }
+                    if (hard_limit_enabled) {
+                        dump_buf << "  Hard Limit Info:" << std::endl;
+                        if (name_info_pair.second.throttling_info->limit_info.size()) {
+                            for (const auto &limit_info_pair :
+                                 name_info_pair.second.throttling_info->limit_info) {
+                                dump_buf << "   Cdev limit " << limit_info_pair.first << ": [";
+
+                                for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                                    dump_buf << limit_info_pair.second[i] << " ";
+                                }
+                                dump_buf << "]" << std::endl;
+                            }
+                        }
+                    }
+                }
             }
         }
         std::string buf = dump_buf.str();

@@ -65,9 +65,9 @@ class Thermal : public IThermal {
                                         getCurrentTemperatures_cb _hidl_cb) override;
     Return<void> getTemperatureThresholds(bool filterType, TemperatureType_2_0 type,
                                           getTemperatureThresholds_cb _hidl_cb) override;
-    Return<void> registerThermalChangedCallback(const sp<IThermalChangedCallback> &callback,
-                                                bool filterType, TemperatureType_2_0 type,
-                                                registerThermalChangedCallback_cb _hidl_cb) override;
+    Return<void> registerThermalChangedCallback(
+            const sp<IThermalChangedCallback> &callback, bool filterType, TemperatureType_2_0 type,
+            registerThermalChangedCallback_cb _hidl_cb) override;
     Return<void> unregisterThermalChangedCallback(
         const sp<IThermalChangedCallback> &callback,
         unregisterThermalChangedCallback_cb _hidl_cb) override;
@@ -78,7 +78,7 @@ class Thermal : public IThermal {
     Return<void> debug(const hidl_handle &fd, const hidl_vec<hidl_string> &args) override;
 
     // Helper function for calling callbacks
-    void sendThermalChangedCallback(const std::vector<Temperature_2_0> &temps);
+    void sendThermalChangedCallback(const Temperature_2_0 &t);
 
   private:
     ThermalHelper thermal_helper_;
