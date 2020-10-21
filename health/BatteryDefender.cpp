@@ -172,19 +172,19 @@ int32_t BatteryDefender::getTimeToActivate(void) {
 }
 
 void BatteryDefender::stateMachine_runAction(const state_E state,
-                                             struct android::BatteryProperties *props) {
+                                             const struct android::BatteryProperties *props) {
     switch (state) {
         case STATE_INIT:
             loadPersistentStorage();
-            mWasAcOnline = props->chargerAcOnline;
-            mWasUsbOnline = props->chargerUsbOnline;
+            if (props->chargerUsbOnline || props->chargerAcOnline) {
+                mWasAcOnline = props->chargerAcOnline;
+                mWasUsbOnline = props->chargerUsbOnline;
+            }
             break;
 
         case STATE_DISABLED:
         case STATE_DISCONNECTED:
             clearStateData();
-            mWasAcOnline = false;
-            mWasUsbOnline = false;
             break;
 
         case STATE_CONNECTED:
@@ -192,32 +192,11 @@ void BatteryDefender::stateMachine_runAction(const state_E state,
             if (props->batteryLevel == kChargeHighCapacityLevel) {
                 mHasReachedHighCapacityLevel = true;
             }
-
-            mWasAcOnline = props->chargerAcOnline;
-            mWasUsbOnline = props->chargerUsbOnline;
             break;
 
         case STATE_ACTIVE:
             addTimeToChargeTimers();
             mTimeActiveSecs += mTimeBetweenUpdateCalls;
-
-            /* Force online if active and still connected to power.
-             * Setting a charge limit below the current charge level may
-             * disable the adapter. This does not occur for wireless adapters.
-             */
-            if (mIsUsbPresent) {
-                /* If both previous fields are incorrectly false, force USB online */
-                if ((mWasAcOnline == false) && (mWasUsbOnline == false)) {
-                    props->chargerUsbOnline = true;
-                } else {
-                    if (mWasAcOnline) {
-                        props->chargerAcOnline = true;
-                    }
-                    if (mWasUsbOnline) {
-                        props->chargerUsbOnline = true;
-                    }
-                }
-            }
             break;
 
         default:
@@ -311,6 +290,38 @@ void BatteryDefender::stateMachine_firstAction(const state_E state) {
     }
 }
 
+void BatteryDefender::updateDefenderProperties(struct android::BatteryProperties *props) {
+    /**
+     * Override the OVERHEAT flag for UI updates to settings.
+     * Also, force AC/USB online if active and still connected to power.
+     */
+    if (mCurrentState == STATE_ACTIVE) {
+        props->batteryHealth = android::BATTERY_HEALTH_OVERHEAT;
+    }
+
+    /**
+     * If the kernel is forcing the input current limit to 0, then the online status may
+     * need to be overwritten. Also, setting a charge limit below the current charge level
+     * may disable the adapter. This does not occur for wireless adapters.
+     * Note; only override "online" if necessary (all "online"s are false).
+     */
+    if (props->chargerUsbOnline == false && props->chargerAcOnline == false) {
+        /* Override if the USB is connected and a battery defender is active */
+        if (mIsUsbPresent && props->batteryHealth == android::BATTERY_HEALTH_OVERHEAT) {
+            if (mWasAcOnline) {
+                props->chargerAcOnline = true;
+            }
+            if (mWasUsbOnline) {
+                props->chargerUsbOnline = true;
+            }
+        }
+    } else {
+        /* One of these booleans will always be true if updated here */
+        mWasAcOnline = props->chargerAcOnline;
+        mWasUsbOnline = props->chargerUsbOnline;
+    }
+}
+
 void BatteryDefender::update(struct android::BatteryProperties *props) {
     if (!props) {
         return;
@@ -326,12 +337,15 @@ void BatteryDefender::update(struct android::BatteryProperties *props) {
     mTimeBetweenUpdateCalls = getDeltaTimeSeconds(&mTimePreviousSecs);
 
     // Run state machine
-    stateMachine_runAction(mCurrentState, props); /* May override battery properties */
+    stateMachine_runAction(mCurrentState, props);
     const state_E nextState = stateMachine_getNextState(mCurrentState);
     if (nextState != mCurrentState) {
         stateMachine_firstAction(nextState);
     }
     mCurrentState = nextState;
+
+    // Verify/update battery defender battery properties
+    updateDefenderProperties(props); /* May override battery properties */
 
     // Store outputs
     writeTimeToFile(kPathPersistChargerPresentTime, mTimeChargerPresentSecs,
