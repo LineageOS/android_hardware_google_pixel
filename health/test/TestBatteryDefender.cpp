@@ -417,7 +417,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitActive_allOnlineFalse) {
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE")).Times(2);
     battDefender.update(&props);
     ASSERT_EQ(props.chargerAcOnline, false);
-    ASSERT_EQ(props.chargerUsbOnline, false);
+    ASSERT_EQ(props.chargerUsbOnline, true);
 
     props.chargerAcOnline = false;
     props.chargerUsbOnline = false;
@@ -517,7 +517,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_allOnlineFalse) {
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE")).Times(2);
     battDefender.update(&props);
     ASSERT_EQ(props.chargerAcOnline, false);
-    ASSERT_EQ(props.chargerUsbOnline, false);
+    ASSERT_EQ(props.chargerUsbOnline, true);
 
     props.chargerAcOnline = false;
     props.chargerUsbOnline = false;
@@ -599,6 +599,55 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_allOnline) {
     props.chargerUsbOnline = true;
     testvar_systemTimeSecs += DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1;
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE")).Times(2);
+    battDefender.update(&props);
+    ASSERT_EQ(props.chargerAcOnline, true);
+    ASSERT_EQ(props.chargerUsbOnline, true);
+
+    props.chargerAcOnline = false;
+    props.chargerUsbOnline = false;
+    battDefender.update(&props);
+    ASSERT_EQ(props.chargerAcOnline, true);
+    ASSERT_EQ(props.chargerUsbOnline, true);
+}
+
+TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_overrideHealth) {
+    BatteryDefender battDefender;
+
+    enableDefender();
+    usbPresent();
+    defaultThreshold();
+    initToConnectedCapacityReached();
+
+    InSequence s;
+
+    props.batteryHealth = android::BATTERY_HEALTH_UNKNOWN;
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
+    battDefender.update(&props);
+    ASSERT_EQ(props.batteryHealth, android::BATTERY_HEALTH_UNKNOWN);
+
+    props.batteryHealth = android::BATTERY_HEALTH_UNKNOWN;
+    testvar_systemTimeSecs += DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1;
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
+    battDefender.update(&props);
+    ASSERT_EQ(props.batteryHealth, android::BATTERY_HEALTH_OVERHEAT);
+}
+
+TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_kernelDefend) {
+    BatteryDefender battDefender;
+
+    enableDefender();
+    usbPresent();
+    defaultThreshold();
+    initToConnectedCapacityReached();
+
+    InSequence s;
+
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED")).Times(3);
+    battDefender.update(&props);
+
+    props.chargerAcOnline = true;
+    props.chargerUsbOnline = true;
+    props.batteryHealth = android::BATTERY_HEALTH_OVERHEAT;
     battDefender.update(&props);
     ASSERT_EQ(props.chargerAcOnline, true);
     ASSERT_EQ(props.chargerUsbOnline, true);
