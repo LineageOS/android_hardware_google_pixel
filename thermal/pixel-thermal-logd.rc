@@ -53,6 +53,8 @@ on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_rea
     write /dev/thermal/tz-by-name/sdm-therm/mode disabled
     write /dev/thermal/tz-by-name/charger-therm/emul_temp 25000
     write /dev/thermal/tz-by-name/charger-therm/mode disabled
+    # P21
+    write /dev/thermal/tz-by-name/disp-therm/mode disabled
 
 on property:vendor.disable.thermal.control=0 && property:vendor.thermal.link_ready=1
     # common
@@ -87,6 +89,8 @@ on property:vendor.disable.thermal.control=0 && property:vendor.thermal.link_rea
     write /dev/thermal/tz-by-name/sdm-therm/mode enabled
     write /dev/thermal/tz-by-name/charger-therm/emul_temp 0
     write /dev/thermal/tz-by-name/charger-therm/mode enabled
+    # P21
+    write /dev/thermal/tz-by-name/disp-therm/mode enabled
 
 # Switch USB port overheat protection
 on property:vendor.disable.usb.overheat.mitigation.control=1
