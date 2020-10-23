@@ -29,6 +29,8 @@ cc_library {
     ],
 }
 
+// Deprecated, do not use
+// Use pixel-power-ext for vendor extension
 cc_library_headers {
     name: "pixel_power_headers",
     vendor: true,
