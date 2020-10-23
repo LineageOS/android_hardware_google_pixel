@@ -117,10 +117,11 @@ class BatteryDefender {
     int mChargeLevelStopPrevious = DEFAULT_CHARGE_LEVEL_STOP;
     bool mHasReachedHighCapacityLevel = false;
     bool mWasAcOnline = false;
-    bool mWasUsbOnline = false;
+    bool mWasUsbOnline = true; /* Default; in case neither AC/USB online becomes 1 */
 
     // Process state actions
-    void stateMachine_runAction(const state_E state, struct android::BatteryProperties *props);
+    void stateMachine_runAction(const state_E state,
+                                const struct android::BatteryProperties *props);
 
     // Check state transitions
     state_E stateMachine_getNextState(const state_E state);
@@ -128,6 +129,7 @@ class BatteryDefender {
     // Process state entry actions
     void stateMachine_firstAction(const state_E state);
 
+    void updateDefenderProperties(struct android::BatteryProperties *props);
     void clearStateData(void);
     void loadPersistentStorage(void);
     int64_t getTime(void);
