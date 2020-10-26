@@ -338,6 +338,23 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
     }
 }
 
+bool getThermalZoneTypeById(int tz_id, std::string *type) {
+    std::string tz_type;
+    std::string path =
+            android::base::StringPrintf("%s/%s%d/%s", kThermalSensorsRoot.data(),
+                                        kSensorPrefix.data(), tz_id, kThermalNameFile.data());
+    LOG(INFO) << "TZ Path: " << path;
+    if (!::android::base::ReadFileToString(path, &tz_type)) {
+        LOG(ERROR) << "Failed to read sensor: " << tz_type;
+        return false;
+    }
+
+    // Strip the newline.
+    *type = ::android::base::Trim(tz_type);
+    LOG(INFO) << "TZ type: " << *type;
+    return true;
+}
+
 bool ThermalHelper::readCoolingDevice(std::string_view cooling_device,
                                       CoolingDevice_2_0 *out) const {
     // Read the file.  If the file can't be read temp will be empty string.

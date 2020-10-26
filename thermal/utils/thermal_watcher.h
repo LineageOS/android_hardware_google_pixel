@@ -73,6 +73,9 @@ class ThermalWatcher : public ::android::Thread {
     // Parse uevent message
     void parseUevent(std::set<std::string> *sensor_name);
 
+    // Parse thermal netlink message
+    void parseGenlink(std::set<std::string> *sensor_name);
+
     // Maps watcher filer descriptor to watched file path.
     std::unordered_map<int, std::string> watch_to_file_path_map_;
 
@@ -86,12 +89,16 @@ class ThermalWatcher : public ::android::Thread {
 
     // For uevent socket registration.
     android::base::unique_fd uevent_fd_;
+    // For thermal genl socket registration.
+    android::base::unique_fd thermal_genl_fd_;
     // Sensor list which monitor flag is enabled.
     std::set<std::string> monitored_sensors_;
     // Sleep interval voting result
     std::chrono::milliseconds sleep_ms_;
     // Timestamp for last thermal update
     boot_clock::time_point last_update_time_;
+    // For thermal genl socket object.
+    struct nl_sock *sk_thermal;
 };
 
 }  // namespace implementation
