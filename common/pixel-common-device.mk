@@ -11,9 +11,5 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.atrace@1.0-service.pixel
 
-# fastbootd
-PRODUCT_PACKAGES += \
-    fastbootd
-
 # Common ramdump file type.
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
