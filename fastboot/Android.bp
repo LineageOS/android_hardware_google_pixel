@@ -14,7 +14,7 @@
 // limitations under the License.
 
 cc_library {
-    name: "android.hardware.fastboot@1.0-impl.pixel",
+    name: "android.hardware.fastboot@1.1-impl.pixel",
     recovery: true,
     srcs: [
         "Fastboot.cpp",
@@ -28,6 +28,7 @@ cc_library {
         "libutils",
         "libcutils",
         "android.hardware.fastboot@1.0",
+        "android.hardware.fastboot@1.1",
     ],
     static_libs: [
         "libnos_for_fastboot",
