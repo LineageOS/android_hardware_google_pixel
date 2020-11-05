@@ -99,6 +99,8 @@ class Vibrator : public BnVibrator {
     class HwCal {
       public:
         virtual ~HwCal() = default;
+        // Obtain the calibration version
+        virtual bool getVersion(uint32_t *value) = 0;
         // Obtains the LRA resonant frequency to be used for PWLE playback
         // and click compensation.
         virtual bool getF0(uint32_t *value) = 0;
@@ -111,6 +113,11 @@ class Vibrator : public BnVibrator {
         // Obtains the discreet voltage levels to be applied for the various
         // waveforms, in units of 1%.
         virtual bool getVolLevels(std::array<uint32_t, 6> *value) = 0;
+        // Obtains the v0/v1(min/max) voltage levels to be applied for
+        // tick/click/long in units of 1%.
+        virtual bool getTickVolLevels(std::array<uint32_t, 2> *value) = 0;
+        virtual bool getClickVolLevels(std::array<uint32_t, 2> *value) = 0;
+        virtual bool getLongVolLevels(std::array<uint32_t, 2> *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -165,13 +172,13 @@ class Vibrator : public BnVibrator {
                                      const std::shared_ptr<IVibratorCallback> &callback);
     bool isUnderExternalControl();
     void waitForComplete(std::shared_ptr<IVibratorCallback> &&callback);
-    uint32_t intensityToVolLevel(float intensity);
+    uint32_t intensityToVolLevel(float intensity, uint32_t effectIndex);
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
-    uint32_t mEffectVolMin;
-    uint32_t mEffectVolMax;
-    uint32_t mGlobalVolMax;
+    std::array<uint32_t, 2> mTickEffectVol;
+    std::array<uint32_t, 2> mClickEffectVol;
+    std::array<uint32_t, 2> mLongEffectVol;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
 };
