@@ -44,6 +44,7 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(setGpioRiseIndex, bool(uint32_t value));
     MOCK_METHOD1(setGpioRiseScale, bool(uint32_t value));
     MOCK_METHOD1(pollVibeState, bool(bool value));
+    MOCK_METHOD1(setClabEnable, bool(bool value));
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockApi() override { destructor(); };

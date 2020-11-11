@@ -12,6 +12,7 @@ on property:vendor.all.modules.ready=1
     chown system system /sys/class/leds/vibrator/state
 
     chown system system /sys/class/leds/vibrator/device/asp_enable
+    chown system system /sys/class/leds/vibrator/device/clab_enable
     chown system system /sys/class/leds/vibrator/device/comp_enable
     chown system system /sys/class/leds/vibrator/device/cp_dig_scale
     chown system system /sys/class/leds/vibrator/device/cp_trigger_duration
@@ -50,6 +51,7 @@ service vendor.vibrator.cs40l25 /vendor/bin/hw/android.hardware.vibrator-service
     setenv HWAPI_PATH_PREFIX /sys/class/leds/vibrator/
     setenv HWAPI_DEBUG_PATHS "
         device/asp_enable
+        device/clab_enable
         device/f0_stored
         device/fw_rev
         device/gpio1_fall_dig_scale

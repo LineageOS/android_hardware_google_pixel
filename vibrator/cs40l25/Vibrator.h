@@ -89,6 +89,8 @@ class Vibrator : public BnVibrator {
         // Blocks until vibrator reaches desired state
         // (true = enabled, false = disabled).
         virtual bool pollVibeState(bool value) = 0;
+        // Enables/disables closed-loop active braking.
+        virtual bool setClabEnable(bool value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
