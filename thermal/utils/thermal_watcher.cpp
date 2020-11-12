@@ -342,6 +342,7 @@ static int handleEvent(struct nl_msg *n, void *arg) {
 }  // namespace
 
 void ThermalWatcher::registerFilesToWatch(const std::set<std::string> &sensors_to_watch) {
+    LOG(INFO) << "Uevent register file to watch...";
     monitored_sensors_.insert(sensors_to_watch.begin(), sensors_to_watch.end());
 
     uevent_fd_.reset((TEMP_FAILURE_RETRY(uevent_open_socket(64 * 1024, true))));
@@ -353,6 +354,13 @@ void ThermalWatcher::registerFilesToWatch(const std::set<std::string> &sensors_t
     fcntl(uevent_fd_, F_SETFL, O_NONBLOCK);
 
     looper_->addFd(uevent_fd_.get(), 0, Looper::EVENT_INPUT, nullptr, nullptr);
+    sleep_ms_ = std::chrono::milliseconds(0);
+    last_update_time_ = boot_clock::now();
+}
+
+void ThermalWatcher::registerFilesToWatchNl(const std::set<std::string> &sensors_to_watch) {
+    LOG(INFO) << "Thermal genl register file to watch...";
+    monitored_sensors_.insert(sensors_to_watch.begin(), sensors_to_watch.end());
 
     sk_thermal = nl_socket_alloc();
     if (!sk_thermal) {

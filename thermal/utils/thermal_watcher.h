@@ -58,7 +58,10 @@ class ThermalWatcher : public ::android::Thread {
     // Give the file watcher a list of files to start watching. This helper
     // class will by default wait for modifications to the file with a looper.
     // This should be called before starting watcher thread.
+    // For monitoring uevents.
     void registerFilesToWatch(const std::set<std::string> &sensors_to_watch);
+    // For monitoring thermal genl events.
+    void registerFilesToWatchNl(const std::set<std::string> &sensors_to_watch);
     // Wake up the looper thus the worker thread, immediately. This can be called
     // in any thread.
     void wake();

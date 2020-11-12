@@ -52,6 +52,7 @@ constexpr std::string_view kUserSpaceSuffix("user_space");
 constexpr std::string_view kCoolingDeviceCurStateSuffix("cur_state");
 constexpr std::string_view kConfigProperty("vendor.thermal.config");
 constexpr std::string_view kConfigDefaultFileName("thermal_info_config.json");
+constexpr std::string_view kThermalGenlProperty("persist.vendor.enable.thermal.genl");
 
 namespace {
 using android::base::StringPrintf;
@@ -323,7 +324,14 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
 
     std::set<std::string> monitored_sensors;
     initializeTrip(tz_map, &monitored_sensors);
-    thermal_watcher_->registerFilesToWatch(monitored_sensors);
+
+    const bool thermal_genl_enabled =
+            android::base::GetBoolProperty(kThermalGenlProperty.data(), false);
+    if (thermal_genl_enabled) {
+        thermal_watcher_->registerFilesToWatchNl(monitored_sensors);
+    } else {
+        thermal_watcher_->registerFilesToWatch(monitored_sensors);
+    }
 
     // Need start watching after status map initialized
     is_initialized_ = thermal_watcher_->startWatchingDeviceFiles();
