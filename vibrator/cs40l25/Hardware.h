@@ -95,23 +95,38 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
   private:
+    static constexpr char VERSION[] = "version";
     static constexpr char F0_CONFIG[] = "f0_measured";
     static constexpr char REDC_CONFIG[] = "redc_measured";
     static constexpr char Q_CONFIG[] = "q_measured";
     static constexpr char Q_INDEX[] = "q_index";
     static constexpr char VOLTAGES_CONFIG[] = "v_levels";
+    static constexpr char TICK_VOLTAGES_CONFIG[] = "v_tick";
+    static constexpr char CLICK_VOLTAGES_CONFIG[] = "v_click";
+    static constexpr char LONG_VOLTAGES_CONFIG[] = "v_long";
 
     static constexpr uint32_t Q_FLOAT_TO_FIXED = 1 << 16;
     static constexpr float Q_INDEX_TO_FLOAT = 1.5f;
     static constexpr uint32_t Q_INDEX_TO_FIXED = Q_INDEX_TO_FLOAT * Q_FLOAT_TO_FIXED;
     static constexpr uint32_t Q_INDEX_OFFSET = 2.0f * Q_FLOAT_TO_FIXED;
 
+    static constexpr uint32_t VERSION_DEFAULT = 1;
     static constexpr uint32_t Q_DEFAULT = 15.5 * Q_FLOAT_TO_FIXED;
     static constexpr std::array<uint32_t, 6> V_LEVELS_DEFAULT = {60, 70, 80, 90, 100, 76};
+    static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {10, 70};
+    static constexpr std::array<uint32_t, 2> V_CTICK_DEFAULT = {10, 70};
+    static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {10, 70};
 
   public:
     HwCal() {}
 
+    bool getVersion(uint32_t *value) override {
+        if (getPersist(VERSION, value)) {
+            return true;
+        }
+        *value = VERSION_DEFAULT;
+        return true;
+    }
     bool getF0(uint32_t *value) override { return getPersist(F0_CONFIG, value); }
     bool getRedc(uint32_t *value) override { return getPersist(REDC_CONFIG, value); }
     bool getQ(uint32_t *value) override {
@@ -130,6 +145,27 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
             return true;
         }
         *value = V_LEVELS_DEFAULT;
+        return true;
+    }
+    bool getTickVolLevels(std::array<uint32_t, 2> *value) override {
+        if (getPersist(TICK_VOLTAGES_CONFIG, value)) {
+            return true;
+        }
+        *value = V_TICK_DEFAULT;
+        return true;
+    }
+    bool getClickVolLevels(std::array<uint32_t, 2> *value) override {
+        if (getPersist(CLICK_VOLTAGES_CONFIG, value)) {
+            return true;
+        }
+        *value = V_CTICK_DEFAULT;
+        return true;
+    }
+    bool getLongVolLevels(std::array<uint32_t, 2> *value) override {
+        if (getPersist(LONG_VOLTAGES_CONFIG, value)) {
+            return true;
+        }
+        *value = V_LONG_DEFAULT;
         return true;
     }
     void debug(int fd) override { HwCalBase::debug(fd); }

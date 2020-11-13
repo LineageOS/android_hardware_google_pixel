@@ -86,9 +86,9 @@ enum class AlwaysOnId : uint32_t {
 
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
+    uint32_t calVer;
     uint32_t caldata;
     uint32_t effectCount;
-    std::array<uint32_t, 6> volLevels;
 
     if (!mHwApi->setState(true)) {
         ALOGE("Failed to set state (%d): %s", errno, strerror(errno));
@@ -104,18 +104,29 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         mHwApi->setQ(caldata);
     }
 
-    mHwCal->getVolLevels(&volLevels);
-    /*
-     * Given voltage levels for two intensities, assuming a linear function,
-     * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
-     */
-    mEffectVolMin = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
-                                         (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
-                                          volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
-                                                 4.0f),
-                             static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
-    mEffectVolMax = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
-    mGlobalVolMax = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
+    mHwCal->getVersion(&calVer);
+
+    if (calVer == 1) {
+        std::array<uint32_t, 6> volLevels;
+        mHwCal->getVolLevels(&volLevels);
+        /*
+         * Given voltage levels for two intensities, assuming a linear function,
+         * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
+         */
+        mClickEffectVol[0] = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
+                                             (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
+                                              volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
+                                                     4.0f),
+                                 static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
+        mClickEffectVol[1] = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
+        mTickEffectVol = mClickEffectVol;
+        mLongEffectVol[0] = 0;
+        mLongEffectVol[1] = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
+    } else {
+        mHwCal->getTickVolLevels(&mTickEffectVol);
+        mHwCal->getClickVolLevels(&mClickEffectVol);
+        mHwCal->getLongVolLevels(&mLongEffectVol);
+    }
 
     mHwApi->getEffectCount(&effectCount);
     mEffectDurations.resize(effectCount);
@@ -275,7 +286,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
                 return status;
             }
 
-            effectBuilder << effectIndex << "." << intensityToVolLevel(e.scale) << ",";
+            effectBuilder << effectIndex << "." << intensityToVolLevel(e.scale, effectIndex) << ",";
         }
     }
 
@@ -318,7 +329,7 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) 
 }
 
 ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
-    uint8_t amplitude = set ? mGlobalVolMax : VOLTAGE_SCALE_MAX;
+    uint8_t amplitude = set ? mLongEffectVol[1] : VOLTAGE_SCALE_MAX;
     int32_t scale = amplitudeToScale(amplitude, VOLTAGE_SCALE_MAX);
 
     if (!mHwApi->setGlobalScale(scale)) {
@@ -392,9 +403,12 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "AIDL:\n");
 
     dprintf(fd, "  Voltage Levels:\n");
-    dprintf(fd, "    Effect Min: %" PRIu32 "\n", mEffectVolMin);
-    dprintf(fd, "    Effect Max: %" PRIu32 "\n", mEffectVolMax);
-    dprintf(fd, "    Global Max: %" PRIu32 "\n", mGlobalVolMax);
+    dprintf(fd, "    Tick Effect Min: %" PRIu32 " Max: %" PRIu32 "\n",
+            mTickEffectVol[0], mTickEffectVol[1]);
+    dprintf(fd, "    Click Effect Min: %" PRIu32 " Max: %" PRIu32 "\n",
+            mClickEffectVol[0], mClickEffectVol[1]);
+    dprintf(fd, "    Long Effect Min: %" PRIu32 " Max: %" PRIu32 "\n",
+            mLongEffectVol[0], mLongEffectVol[1]);
 
     dprintf(fd, "  Effect Durations:");
     for (auto d : mEffectDurations) {
@@ -457,7 +471,7 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
-    volLevel = intensityToVolLevel(intensity);
+    volLevel = intensityToVolLevel(intensity, effectIndex);
     timeMs = mEffectDurations[effectIndex] + MAX_COLD_START_LATENCY_MS;
 
     *outEffectIndex = effectIndex;
@@ -629,8 +643,35 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     }
 }
 
-uint32_t Vibrator::intensityToVolLevel(float intensity) {
-    return std::lround(intensity * (mEffectVolMax - mEffectVolMin)) + mEffectVolMin;
+uint32_t Vibrator::intensityToVolLevel(float intensity, uint32_t effectIndex) {
+
+    uint32_t volLevel;
+    auto calc = [](float intst, std::array<uint32_t, 2> v) -> uint32_t {
+                return std::lround(intst * (v[1] - v[0])) + v[0]; };
+
+    switch (effectIndex) {
+        case WAVEFORM_LIGHT_TICK_INDEX:
+            volLevel = calc(intensity, mTickEffectVol);
+            break;
+        case WAVEFORM_QUICK_RISE_INDEX:
+            // fall-through
+        case WAVEFORM_QUICK_FALL_INDEX:
+            volLevel = calc(intensity, mLongEffectVol);
+            break;
+        case WAVEFORM_CLICK_INDEX:
+            // fall-through
+        case WAVEFORM_THUD_INDEX:
+            // fall-through
+        case WAVEFORM_SPIN_INDEX:
+            // fall-through
+        case WAVEFORM_SLOW_RISE_INDEX:
+            // fall-through
+        default:
+            volLevel = calc(intensity, mClickEffectVol);
+            break;
+    }
+
+    return volLevel;
 }
 
 }  // namespace vibrator
