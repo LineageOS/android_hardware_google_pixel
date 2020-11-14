@@ -22,6 +22,7 @@
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
+#include <inttypes.h>
 
 namespace aidl {
 namespace android {
@@ -29,24 +30,34 @@ namespace hardware {
 namespace power {
 namespace stats {
 
+#define MAX_RAIL_NAME_LEN 50
+#define STR(s) #s
+#define XSTR(s) STR(s)
+
 void IioEnergyMeterDataProvider::findIioEnergyMeterNodes() {
     struct dirent *ent;
+
     DIR *iioDir = opendir(kIioRootDir.c_str());
     if (!iioDir) {
         PLOG(ERROR) << "Error opening directory" << kIioRootDir;
         return;
     }
 
-    // Find any iio:devices that match the given deviceName
+    // Find any iio:devices that match the given deviceNames
     while (ent = readdir(iioDir), ent) {
         std::string devTypeDir = ent->d_name;
         if (devTypeDir.find(kDeviceType) != std::string::npos) {
             std::string devicePath = kIioRootDir + devTypeDir;
             std::string deviceName;
+
             if (!::android::base::ReadFileToString(devicePath + kNameNode, &deviceName)) {
                 LOG(WARNING) << "Failed to read device name from " << devicePath;
-            } else if (deviceName.find(kDeviceName) != std::string::npos) {
-                mDevicePaths.push_back(devicePath);
+            } else {
+                for (auto &deviceNameMatch : kDeviceNames) {
+                    if (deviceName.find(deviceNameMatch) != std::string::npos) {
+                        mDevicePaths.push_back(devicePath);
+                    }
+                }
             }
         }
     }
@@ -77,11 +88,18 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
         std::istringstream railNames(data);
         std::string line;
         while (std::getline(railNames, line)) {
-            std::vector<std::string> words = ::android::base::Split(line, ":");
-            if (words.size() == 2) {
-                mChannelInfos.push_back({.channelId = id, .channelName = words[0]});
-                mChannelIds.emplace(words[0], id);
-                id++;
+            std::vector<std::string> words = ::android::base::Split(line, ":][");
+            if (words.size() == 4) {
+                const std::string channelName = words[1];
+                if (mChannelIds.count(channelName) == 0) {
+                    mChannelInfos.push_back({.channelId = id, .channelName = channelName});
+                    mChannelIds.emplace(channelName, id);
+                    id++;
+                } else {
+                    LOG(WARNING) << "There exists rails with the same name (not supported): "
+                                 << channelName << ". Only the last occurrence of rail energy will "
+                                 << "be provided.";
+                }
             } else {
                 LOG(WARNING) << "Unexpected enabled rail format in " << path;
             }
@@ -89,11 +107,68 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
     }
 }
 
-IioEnergyMeterDataProvider::IioEnergyMeterDataProvider(const std::string &deviceName)
-    : kDeviceName(std::move(deviceName)) {
+IioEnergyMeterDataProvider::IioEnergyMeterDataProvider(
+        const std::vector<const std::string> &deviceNames)
+    : kDeviceNames(std::move(deviceNames)) {
     findIioEnergyMeterNodes();
     parseEnabledRails();
     mReading.resize(mChannelInfos.size());
+}
+
+int IioEnergyMeterDataProvider::parseEnergyContents(const std::string &contents) {
+    std::istringstream energyData(contents);
+    std::string line;
+
+    int ret = 0;
+    uint64_t timestamp = 0;
+    bool timestampRead = false;
+
+    while (std::getline(energyData, line)) {
+        bool parseLineSuccess = false;
+
+        if (timestampRead == false) {
+            /* Read timestamp from boot (ms) */
+            if (sscanf(line.c_str(), "t=%" PRIu64, &timestamp) == 1) {
+                if (timestamp == 0 || timestamp == ULLONG_MAX) {
+                    LOG(ERROR) << "Potentially wrong timestamp: " << timestamp;
+                }
+                timestampRead = true;
+                parseLineSuccess = true;
+            }
+
+        } else {
+            /* Read rail energy */
+            uint64_t energy = 0;
+            uint64_t duration = 0;
+            char railNameRaw[MAX_RAIL_NAME_LEN + 1];
+            if (sscanf(line.c_str(),
+                       "CH%*d(T=%" PRIu64 ")[%" XSTR(MAX_RAIL_NAME_LEN) "[^]]], %" PRIu64,
+                       &duration, railNameRaw, &energy) == 3) {
+                std::string railName(railNameRaw);
+
+                /* If the count == 0, the rail may not be enabled */
+                /* The count cannot be > 1; mChannelIds is a map */
+                if (mChannelIds.count(railName) == 1) {
+                    size_t index = mChannelIds[railName];
+                    mReading[index].channelId = index;
+                    mReading[index].timestampMs = timestamp;
+                    mReading[index].durationMs = duration;
+                    mReading[index].energyUWs = energy;
+                    if (mReading[index].energyUWs == ULLONG_MAX) {
+                        LOG(ERROR) << "Potentially wrong energy value on rail: " << railName;
+                    }
+                }
+                parseLineSuccess = true;
+            }
+        }
+
+        if (parseLineSuccess == false) {
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
 }
 
 int IioEnergyMeterDataProvider::parseEnergyValue(std::string path) {
@@ -104,36 +179,9 @@ int IioEnergyMeterDataProvider::parseEnergyValue(std::string path) {
         return -1;
     }
 
-    std::istringstream energyData(data);
-    std::string line;
-    uint64_t timestamp = 0;
-    bool timestampRead = false;
-    while (std::getline(energyData, line)) {
-        std::vector<std::string> words = ::android::base::Split(line, ",");
-        if (timestampRead == false) {
-            if (words.size() == 1) {
-                timestamp = std::stoull(words[0]);
-                if (timestamp == 0 || timestamp == ULLONG_MAX) {
-                    LOG(WARNING) << "Potentially wrong timestamp: " << timestamp;
-                }
-                timestampRead = true;
-            }
-        } else if (words.size() == 2) {
-            std::string railName = words[0];
-            if (mChannelIds.count(railName) != 0) {
-                size_t id = mChannelIds[railName];
-                mReading[id].channelId = id;
-                mReading[id].timestampMs = timestamp;
-                mReading[id].energyUWs = std::stoull(words[1]);
-                if (mReading[id].energyUWs == ULLONG_MAX) {
-                    LOG(WARNING) << "Potentially wrong energy value: " << mReading[id].energyUWs;
-                }
-            }
-        } else {
-            LOG(WARNING) << "Unexpected energy value format in " << path;
-            ret = -1;
-            break;
-        }
+    ret = parseEnergyContents(data);
+    if (ret != 0) {
+        LOG(ERROR) << "Unexpected format in " << path;
     }
     return ret;
 }
