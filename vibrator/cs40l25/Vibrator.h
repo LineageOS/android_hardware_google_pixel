@@ -35,6 +35,8 @@ class Vibrator : public BnVibrator {
         // Stores the LRA resonant frequency to be used for PWLE playback
         // and click compensation.
         virtual bool setF0(uint32_t value) = 0;
+        // Stores the frequency offset for long vibrations.
+        virtual bool setF0Offset(uint32_t value) = 0;
         // Stores the LRA series resistance to be used for click
         // compensation.
         virtual bool setRedc(uint32_t value) = 0;
@@ -110,6 +112,8 @@ class Vibrator : public BnVibrator {
         // Obtains the LRA Q factor to be used for Q-dependent waveform
         // selection.
         virtual bool getQ(uint32_t *value) = 0;
+        // Obtains frequency shift for long vibrations.
+        virtual bool getLongFrequencyShift(int32_t *value) = 0;
         // Obtains the discreet voltage levels to be applied for the various
         // waveforms, in units of 1%.
         virtual bool getVolLevels(std::array<uint32_t, 6> *value) = 0;
@@ -176,6 +180,7 @@ class Vibrator : public BnVibrator {
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
+    uint32_t mF0Offset;
     std::array<uint32_t, 2> mTickEffectVol;
     std::array<uint32_t, 2> mClickEffectVol;
     std::array<uint32_t, 2> mLongEffectVol;

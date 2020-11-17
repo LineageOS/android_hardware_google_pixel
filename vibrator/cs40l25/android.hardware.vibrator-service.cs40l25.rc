@@ -22,6 +22,7 @@ on property:vendor.all.modules.ready=1
     chown system system /sys/class/leds/vibrator/device/dig_scale
     chown system system /sys/class/leds/vibrator/device/exc_enable
     chown system system /sys/class/leds/vibrator/device/f0_stored
+    chown system system /sys/class/leds/vibrator/device/f0_offset
     chown system system /sys/class/leds/vibrator/device/fw_rev
     chown system system /sys/class/leds/vibrator/device/gpio1_fall_dig_scale
     chown system system /sys/class/leds/vibrator/device/gpio1_fall_index
@@ -45,7 +46,7 @@ service vendor.vibrator.cs40l25 /vendor/bin/hw/android.hardware.vibrator-service
     user system
     group system
 
-    setenv PROPERTY_PREFIX ro.vibrator.hal.
+    setenv PROPERTY_PREFIX ro.vendor.vibrator.hal.
     setenv CALIBRATION_FILEPATH /mnt/vendor/persist/haptics/cs40l25a.cal
 
     setenv HWAPI_PATH_PREFIX /sys/class/leds/vibrator/
@@ -53,6 +54,7 @@ service vendor.vibrator.cs40l25 /vendor/bin/hw/android.hardware.vibrator-service
         device/asp_enable
         device/clab_enable
         device/f0_stored
+        device/f0_offset
         device/fw_rev
         device/gpio1_fall_dig_scale
         device/gpio1_fall_index
