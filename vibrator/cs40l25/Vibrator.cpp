@@ -86,6 +86,7 @@ enum class AlwaysOnId : uint32_t {
 
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
+    int32_t longFreqencyShift;
     uint32_t calVer;
     uint32_t caldata;
     uint32_t effectCount;
@@ -104,8 +105,16 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         mHwApi->setQ(caldata);
     }
 
-    mHwCal->getVersion(&calVer);
+    mHwCal->getLongFrequencyShift(&longFreqencyShift);
+    if (longFreqencyShift > 0) {
+        mF0Offset = longFreqencyShift * std::pow(2, 14);
+    } else if (longFreqencyShift < 0) {
+        mF0Offset = std::pow(2, 24) - std::abs(longFreqencyShift) * std::pow(2, 14);
+    } else {
+        mF0Offset = 0;
+    }
 
+    mHwCal->getVersion(&calVer);
     if (calVer == 1) {
         std::array<uint32_t, 6> volLevels;
         mHwCal->getVolLevels(&volLevels);
@@ -158,6 +167,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 ndk::ScopedAStatus Vibrator::off() {
     ATRACE_NAME("Vibrator::off");
     setGlobalAmplitude(false);
+    mHwApi->setF0Offset(0);
     if (!mHwApi->setActivate(0)) {
         ALOGE("Failed to turn vibrator off (%d): %s", errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
@@ -175,6 +185,7 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
         timeoutMs += MAX_COLD_START_LATENCY_MS;
     }
     setGlobalAmplitude(true);
+    mHwApi->setF0Offset(mF0Offset);
     return on(timeoutMs, index, callback);
 }
 
@@ -401,6 +412,8 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     (void)numArgs;
 
     dprintf(fd, "AIDL:\n");
+
+    dprintf(fd, "  F0 Offset: %" PRIu32 "\n", mF0Offset);
 
     dprintf(fd, "  Voltage Levels:\n");
     dprintf(fd, "    Tick Effect Min: %" PRIu32 " Max: %" PRIu32 "\n",
