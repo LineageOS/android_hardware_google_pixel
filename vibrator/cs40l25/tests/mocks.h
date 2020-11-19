@@ -24,6 +24,7 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
   public:
     MOCK_METHOD0(destructor, void());
     MOCK_METHOD1(setF0, bool(uint32_t value));
+    MOCK_METHOD1(setF0Offset, bool(uint32_t value));
     MOCK_METHOD1(setRedc, bool(uint32_t value));
     MOCK_METHOD1(setQ, bool(uint32_t value));
     MOCK_METHOD1(setActivate, bool(bool value));
@@ -57,6 +58,7 @@ class MockCal : public ::aidl::android::hardware::vibrator::Vibrator::HwCal {
     MOCK_METHOD1(getF0, bool(uint32_t *value));
     MOCK_METHOD1(getRedc, bool(uint32_t *value));
     MOCK_METHOD1(getQ, bool(uint32_t *value));
+    MOCK_METHOD1(getLongFrequencyShift, bool(int32_t *value));
     MOCK_METHOD1(getVolLevels, bool(std::array<uint32_t, 6> *value));
     MOCK_METHOD1(getTickVolLevels, bool(std::array<uint32_t, 2> *value));
     MOCK_METHOD1(getClickVolLevels, bool(std::array<uint32_t, 2> *value));
