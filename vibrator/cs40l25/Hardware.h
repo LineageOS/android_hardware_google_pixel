@@ -27,6 +27,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
     HwApi() {
         open("device/f0_stored", &mF0);
+        open("device/f0_offset", &mF0Offset);
         open("device/redc_stored", &mRedc);
         open("device/q_stored", &mQ);
         open("activate", &mActivate);
@@ -48,6 +49,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     }
 
     bool setF0(uint32_t value) override { return set(value, &mF0); }
+    bool setF0Offset(uint32_t value) override { return set(value, &mF0Offset); }
     bool setRedc(uint32_t value) override { return set(value, &mRedc); }
     bool setQ(uint32_t value) override { return set(value, &mQ); }
     bool setActivate(bool value) override { return set(value, &mActivate); }
@@ -73,6 +75,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
 
   private:
     std::ofstream mF0;
+    std::ofstream mF0Offset;
     std::ofstream mRedc;
     std::ofstream mQ;
     std::ofstream mActivate;
@@ -111,6 +114,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     static constexpr uint32_t Q_INDEX_OFFSET = 2.0f * Q_FLOAT_TO_FIXED;
 
     static constexpr uint32_t VERSION_DEFAULT = 1;
+    static constexpr int32_t DEFAULT_FREQUENCY_SHIFT = 0;
     static constexpr uint32_t Q_DEFAULT = 15.5 * Q_FLOAT_TO_FIXED;
     static constexpr std::array<uint32_t, 6> V_LEVELS_DEFAULT = {60, 70, 80, 90, 100, 76};
     static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {10, 70};
@@ -126,6 +130,9 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         }
         *value = VERSION_DEFAULT;
         return true;
+    }
+    bool getLongFrequencyShift(int32_t *value) override {
+        return getProperty("long.frequency.shift", value, DEFAULT_FREQUENCY_SHIFT);
     }
     bool getF0(uint32_t *value) override { return getPersist(F0_CONFIG, value); }
     bool getRedc(uint32_t *value) override { return getPersist(REDC_CONFIG, value); }
