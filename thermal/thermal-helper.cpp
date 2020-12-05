@@ -364,18 +364,26 @@ bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_
 
 bool ThermalHelper::readTemperature(
         std::string_view sensor_name, Temperature_2_0 *out,
-        std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status) const {
+        std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status,
+        bool is_virtual_sensor) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string temp;
 
-    if (!thermal_sensors_.readThermalFile(sensor_name, &temp)) {
-        LOG(ERROR) << "readTemperature: sensor not found: " << sensor_name;
-        return false;
-    }
+    if (!is_virtual_sensor) {
+        if (!thermal_sensors_.readThermalFile(sensor_name, &temp)) {
+            LOG(ERROR) << "readTemperature: sensor not found: " << sensor_name;
+            return false;
+        }
 
-    if (temp.empty()) {
-        LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
-        return false;
+        if (temp.empty()) {
+            LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
+            return false;
+        }
+    } else {
+        if (!checkVirtualSensor(sensor_name.data(), &temp)) {
+            LOG(ERROR) << "readTemperature: failed to read virtual sensor: " << sensor_name;
+            return false;
+        }
     }
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
@@ -474,12 +482,18 @@ std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFrom
 bool ThermalHelper::initializeSensorMap(const std::map<std::string, std::string> &path_map) {
     for (const auto &sensor_info_pair : sensor_info_map_) {
         std::string_view sensor_name = sensor_info_pair.first;
+        if (sensor_info_pair.second.is_virtual_sensor) {
+            sensor_name = sensor_info_pair.second.trigger_sensor;
+        }
         if (!path_map.count(sensor_name.data())) {
             LOG(ERROR) << "Could not find " << sensor_name << " in sysfs";
             continue;
         }
         std::string path = android::base::StringPrintf(
                 "%s/%s", path_map.at(sensor_name.data()).c_str(), kSensorTempSuffix.data());
+        if (sensor_info_pair.second.is_virtual_sensor) {
+            sensor_name = sensor_info_pair.first;
+        }
         if (!thermal_sensors_.addThermalFile(sensor_name, path)) {
             LOG(ERROR) << "Could not add " << sensor_name << "to sensors map";
         }
@@ -516,6 +530,9 @@ bool ThermalHelper::initializeTrip(const std::map<std::string, std::string> &pat
     for (const auto &sensor_info : sensor_info_map_) {
         if (sensor_info.second.is_monitor) {
             std::string_view sensor_name = sensor_info.first;
+            if (sensor_info.second.is_virtual_sensor) {
+                continue;
+            }
             std::string_view tz_path = path_map.at(sensor_name.data());
             std::string tz_policy;
             std::string path = android::base::StringPrintf("%s/%s", (tz_path.data()),
@@ -654,6 +671,63 @@ bool ThermalHelper::fillCpuUsages(hidl_vec<CpuUsage> *cpu_usages) const {
     return true;
 }
 
+bool ThermalHelper::checkVirtualSensor(std::string_view sensor_name, std::string *temp) const {
+    double mTemp = 0;
+    for (const auto &sensor_info_pair : sensor_info_map_) {
+        int idx = 0;
+        if (sensor_info_pair.first != sensor_name.data()) {
+            continue;
+        }
+        for (int i = 0; i < static_cast<int>(kCombinationCount); i++) {
+            if (sensor_info_pair.second.linked_sensors[i].compare("NAN") == 0) {
+                continue;
+            }
+            if (sensor_info_pair.second.linked_sensors[i].size() <= 0) {
+                continue;
+            }
+            std::string data;
+            idx += 1;
+            if (!thermal_sensors_.readThermalFile(sensor_info_pair.second.linked_sensors[i],
+                                                  &data)) {
+                continue;
+            }
+            data = ::android::base::Trim(data);
+            float sensor_reading = std::stof(data);
+            if (std::isnan(sensor_info_pair.second.coefficients[i])) {
+                continue;
+            }
+            float coefficient = sensor_info_pair.second.coefficients[i];
+            switch (sensor_info_pair.second.formula) {
+                case FormulaOption::COUNT_THRESHOLD:
+                    if ((coefficient < 0 && sensor_reading < -coefficient) ||
+                        (coefficient >= 0 && sensor_reading >= coefficient))
+                        mTemp += 1;
+                    break;
+                case FormulaOption::WEIGHTED_AVG:
+                    mTemp += sensor_reading * coefficient;
+                    break;
+                case FormulaOption::MAXIMUM:
+                    if (i == 0)
+                        mTemp = std::numeric_limits<float>::lowest();
+                    if (sensor_reading * coefficient > mTemp)
+                        mTemp = sensor_reading * coefficient;
+                    break;
+                case FormulaOption::MINIMUM:
+                    if (i == 0)
+                        mTemp = std::numeric_limits<float>::max();
+                    if (sensor_reading * coefficient < mTemp)
+                        mTemp = sensor_reading * coefficient;
+                    break;
+                default:
+                    break;
+            }
+        }
+        *temp = std::to_string(mTemp);
+        return true;
+    }
+    return false;
+}
+
 // This is called in the different thread context and will update sensor_status
 // uevent_sensors is the set of sensors which trigger uevent from thermal core driver.
 bool ThermalHelper::thermalWatcherCallbackFunc(const std::set<std::string> &uevent_sensors) {
@@ -662,15 +736,24 @@ bool ThermalHelper::thermalWatcherCallbackFunc(const std::set<std::string> &ueve
     for (auto &name_status_pair : sensor_status_map_) {
         Temperature_2_0 temp;
         TemperatureThreshold threshold;
+        bool is_virtual_sensor = false;
         SensorStatus &sensor_status = name_status_pair.second;
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
         // Only send notification on whitelisted sensors
         if (!sensor_info.is_monitor) {
             continue;
         }
+
+        is_virtual_sensor = sensor_info.is_virtual_sensor;
+
+        std::string uevent_sensor_name = name_status_pair.first;
+        if (is_virtual_sensor) {
+            const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
+            uevent_sensor_name = sensor_info.trigger_sensor;
+        }
         // If callback is triggered by uevent, only check the sensors within uevent_sensors
         if (uevent_sensors.size() != 0 &&
-            uevent_sensors.find(name_status_pair.first) == uevent_sensors.end()) {
+            uevent_sensors.find(uevent_sensor_name) == uevent_sensors.end()) {
             if (sensor_status.severity != ThrottlingSeverity::NONE) {
                 thermal_triggered = true;
             }
@@ -678,7 +761,7 @@ bool ThermalHelper::thermalWatcherCallbackFunc(const std::set<std::string> &ueve
         }
 
         std::pair<ThrottlingSeverity, ThrottlingSeverity> throtting_status;
-        if (!readTemperature(name_status_pair.first, &temp, &throtting_status)) {
+        if (!readTemperature(name_status_pair.first, &temp, &throtting_status, is_virtual_sensor)) {
             LOG(ERROR) << __func__
                        << ": error reading temperature for sensor: " << name_status_pair.first;
             continue;

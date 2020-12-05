@@ -121,7 +121,8 @@ class ThermalHelper {
     bool readTemperature(std::string_view sensor_name, Temperature_1_0 *out) const;
     bool readTemperature(
             std::string_view sensor_name, Temperature_2_0 *out,
-            std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr) const;
+            std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr,
+            bool is_virtual_sensor = false) const;
     bool readTemperatureThreshold(std::string_view sensor_name, TemperatureThreshold *out) const;
     // Read the value of a single cooling device.
     bool readCoolingDevice(std::string_view cooling_device, CoolingDevice_2_0 *out) const;
@@ -147,6 +148,7 @@ class ThermalHelper {
         const ThrottlingArray &hot_hysteresis, const ThrottlingArray &cold_hysteresis,
         ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
         float value) const;
+    bool checkVirtualSensor(std::string_view sensor_name, std::string *temp) const;
 
     bool connectToPowerHal();
     void updateSupportedPowerHints();
