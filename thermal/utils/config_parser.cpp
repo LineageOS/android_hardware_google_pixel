@@ -115,7 +115,19 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
         hot_hysteresis.fill(0.0);
         std::array<float, kThrottlingSeverityCount> cold_hysteresis;
         cold_hysteresis.fill(0.0);
+        std::array<std::string, kCombinationCount> linked_sensors;
+        linked_sensors.fill("NAN");
+        std::array<float, kCombinationCount> coefficients;
+        coefficients.fill(0.0);
 
+        std::string trigger_sensor;
+        FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
+        bool is_virtual_sensor = false;
+        if (sensors[i]["VirtualSensor"].empty() || !sensors[i]["VirtualSensor"].isBool()) {
+            LOG(INFO) << "Failed to read Sensor[" << name << "]'s VirtualSensor, set to 'false'";
+        } else {
+            is_virtual_sensor = sensors[i]["VirtualSensor"].asBool();
+        }
         Json::Value values = sensors[i]["HotThreshold"];
         if (values.size() != kThrottlingSeverityCount) {
             LOG(ERROR) << "Invalid "
@@ -201,6 +213,50 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
             }
         }
 
+        if (is_virtual_sensor) {
+            values = sensors[i]["Combination"];
+            if (values.size() > kCombinationCount) {
+                LOG(ERROR) << "Invalid "
+                           << "Sensor[" << name << "]'s Combination count" << values.size();
+                sensors_parsed.clear();
+                return sensors_parsed;
+            } else {
+                for (Json::Value::ArrayIndex j = 0; j < kCombinationCount; ++j) {
+                    if (values[j].isString()) {
+                        if (values[j].asString().compare("NAN") != 0) {
+                            linked_sensors[j] = values[j].asString();
+                        }
+                    }
+                }
+            }
+            values = sensors[i]["Coefficient"];
+            if (values.size() > kCombinationCount) {
+                LOG(ERROR) << "Invalid "
+                           << "Sensor[" << name << "]'s Combination count" << values.size();
+                sensors_parsed.clear();
+                return sensors_parsed;
+            } else {
+                for (Json::Value::ArrayIndex j = 0; j < kCombinationCount; ++j) {
+                    if (values[j].isString()) {
+                        if (values[j].asString().compare("NAN") != 0) {
+                            coefficients[j] = std::stof(values[j].asString());
+                        }
+                    } else {
+                        coefficients[j] = values[j].asFloat();
+                    }
+                }
+            }
+            trigger_sensor = sensors[i]["TriggerSensor"].asString();
+            if (sensors[i]["Formula"].asString().compare("COUNT_THRESHOLD") == 0)
+                formula = FormulaOption::COUNT_THRESHOLD;
+            else if (sensors[i]["Formula"].asString().compare("WEIGHTED_AVG") == 0)
+                formula = FormulaOption::WEIGHTED_AVG;
+            else if (sensors[i]["Formula"].asString().compare("MAXIMUM") == 0)
+                formula = FormulaOption::MAXIMUM;
+            else
+                formula = FormulaOption::MINIMUM;
+        }
+
         float vr_threshold = NAN;
         vr_threshold = getFloatFromValue(sensors[i]["VrThreshold"]);
         LOG(INFO) << "Sensor[" << name << "]'s VrThreshold: " << vr_threshold;
@@ -232,6 +288,11 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
                 .cold_thresholds = cold_thresholds,
                 .hot_hysteresis = hot_hysteresis,
                 .cold_hysteresis = cold_hysteresis,
+                .is_virtual_sensor = is_virtual_sensor,
+                .linked_sensors = linked_sensors,
+                .coefficients = coefficients,
+                .trigger_sensor = trigger_sensor,
+                .formula = formula,
                 .vr_threshold = vr_threshold,
                 .multiplier = multiplier,
                 .is_monitor = is_monitor,
