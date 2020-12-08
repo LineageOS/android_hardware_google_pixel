@@ -43,7 +43,7 @@ const std::map<std::string, TracingConfig> kTracingMap = {
                   {"/sys/kernel/debug/tracing/events/sde/enable", false},
                   {"/sys/kernel/debug/tracing/events/dpu/enable", false},
                   {"/sys/kernel/debug/tracing/events/g2d/enable", false},
-                  {"/sys/kernel/debug/tracing/events/mali_systrace/enable", false}}},
+                  {"/sys/kernel/debug/tracing/events/mali/enable", false}}},
         },
         {
                 "memory",
