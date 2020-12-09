@@ -145,10 +145,18 @@ const char *kPropBatteryDefenderState = "vendor.battery.defender.state";
 const char *kPropBatteryDefenderDisable = "vendor.battery.defender.disable";
 const char *kPropBatteryDefenderThreshold = "vendor.battery.defender.threshold";
 
+const char *kPropBatteryDefenderCtrlEnable = "vendor.battery.defender.ctrl.enable";
+const char *kPropBatteryDefenderCtrlActivateTime = "vendor.battery.defender.ctrl.trigger_time";
+const char *kPropBatteryDefenderCtrlResumeTime = "vendor.battery.defender.ctrl.resume_time";
+const char *kPropBatteryDefenderCtrlStartSOC = "vendor.battery.defender.ctrl.recharge_soc_start";
+const char *kPropBatteryDefenderCtrlStopSOC = "vendor.battery.defender.ctrl.recharge_soc_stop";
+
 static void enableDefender(void) {
     ON_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStart, _, _, _)).WillByDefault(Return(0));
     ON_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStop, _, _, _)).WillByDefault(Return(100));
     ON_CALL(*mock, GetBoolProperty(kPropBatteryDefenderDisable, _)).WillByDefault(Return(false));
+
+    ON_CALL(*mock, GetBoolProperty(kPropBatteryDefenderCtrlEnable, _)).WillByDefault(Return(true));
 }
 
 static void usbPresent(void) {
@@ -161,9 +169,19 @@ static void powerAvailable(void) {
     usbPresent();
 }
 
-static void defaultThreshold(void) {
+static void defaultThresholds(void) {
     ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderThreshold, _, _, _))
             .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlActivateTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlResumeTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_CLEAR_SECONDS));
+
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStartSOC, _, _, _))
+            .WillByDefault(Return(70));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStopSOC, _, _, _))
+            .WillByDefault(Return(80));
 }
 
 static void capacityReached(void) {
@@ -219,7 +237,7 @@ TEST_F(BatteryDefenderTest, InitActive) {
 
     enableDefender();
     powerAvailable();
-    defaultThreshold();
+    defaultThresholds();
 
     EXPECT_CALL(*mock, ReadFileToString(kPathPersistChargerPresentTime, _, _))
             .WillOnce(DoAll(SetArgPointee<1>(std::to_string(DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1)),
@@ -233,7 +251,7 @@ TEST_F(BatteryDefenderTest, InitConnectedCapacityReached) {
 
     enableDefender();
     powerAvailable();
-    defaultThreshold();
+    defaultThresholds();
 
     InSequence s;
 
@@ -256,7 +274,7 @@ TEST_F(BatteryDefenderTest, InitConnected) {
 
     enableDefender();
     powerAvailable();
-    defaultThreshold();
+    defaultThresholds();
 
     InSequence s;
 
@@ -276,7 +294,7 @@ TEST_F(BatteryDefenderTest, TriggerTime) {
 
     enableDefender();
     powerAvailable();
-    defaultThreshold();
+    defaultThresholds();
 
     InSequence s;
 
@@ -309,7 +327,7 @@ TEST_F(BatteryDefenderTest, ChargeLevels) {
 
     enableDefender();
     powerAvailable();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -331,8 +349,62 @@ TEST_F(BatteryDefenderTest, ActiveTime) {
 
     enableDefender();
     powerAvailable();
-    defaultThreshold();
+    defaultThresholds();
     initToActive();
+
+    InSequence s;
+
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(70), kPathStartLevel, _));
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(80), kPathStopLevel, _));
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
+    battDefender.update(&props);
+}
+
+TEST_F(BatteryDefenderTest, ActiveTime_NonDefaultLevels) {
+    BatteryDefender battDefender;
+
+    enableDefender();
+    powerAvailable();
+    initToActive();
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderThreshold, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlActivateTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlResumeTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_CLEAR_SECONDS));
+
+    // Non-default
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStartSOC, _, _, _))
+            .WillByDefault(Return(50));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStopSOC, _, _, _))
+            .WillByDefault(Return(60));
+
+    InSequence s;
+
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(50), kPathStartLevel, _));
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(60), kPathStopLevel, _));
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
+    battDefender.update(&props);
+}
+
+TEST_F(BatteryDefenderTest, ActiveTime_NonDefaultLevels_invalid) {
+    BatteryDefender battDefender;
+
+    enableDefender();
+    powerAvailable();
+    initToActive();
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderThreshold, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlActivateTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlResumeTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_CLEAR_SECONDS));
+
+    // Non-default
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStartSOC, _, _, _))
+            .WillByDefault(Return(30));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStopSOC, _, _, _))
+            .WillByDefault(Return(10));
 
     InSequence s;
 
@@ -346,7 +418,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
     BatteryDefender battDefender;
 
     enableDefender();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -374,9 +446,10 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
 
     // Maintain kPathPersistChargerPresentTime = 1060
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
-    testvar_systemTimeSecs += 60 * 4;
+    testvar_systemTimeSecs += 60 * 4 - 1;
     battDefender.update(&props);
 
+    testvar_systemTimeSecs += 1;
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(0), kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "DISCONNECTED"));
     testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
@@ -402,12 +475,50 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
     battDefender.update(&props);
 }
 
+TEST_F(BatteryDefenderTest, ConnectDisconnectResumeTimeThreshold0) {
+    BatteryDefender battDefender;
+
+    enableDefender();
+    initToConnectedCapacityReached();
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderThreshold, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlActivateTime, _, _, _))
+            .WillByDefault(Return(DEFAULT_TIME_TO_ACTIVATE_SECONDS));
+
+    // Non-default thresholds
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlResumeTime, _, _, _))
+            .WillByDefault(Return(0));
+
+    InSequence s;
+
+    // Power ON
+    props.chargerWirelessOnline = true;
+
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(1000), kPathPersistChargerPresentTime, _));
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
+    testvar_systemTimeSecs += 60;
+    battDefender.update(&props);
+
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(1060), kPathPersistChargerPresentTime, _));
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
+    testvar_systemTimeSecs += 60;
+    battDefender.update(&props);
+
+    // Power OFF
+    props.chargerWirelessOnline = false;
+
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(0), kPathPersistChargerPresentTime, _));
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "DISCONNECTED"));
+    testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
+    battDefender.update(&props);
+}
+
 TEST_F(BatteryDefenderTest, PropsOverride_InitActive_allOnlineFalse) {
     BatteryDefender battDefender;
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToActive();
 
     InSequence s;
@@ -431,7 +542,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitActive_usbOnline) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToActive();
 
     InSequence s;
@@ -455,7 +566,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitActive_acOnline) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToActive();
 
     InSequence s;
@@ -479,7 +590,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitActive_allOnline) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToActive();
 
     InSequence s;
@@ -503,7 +614,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_allOnlineFalse) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -531,7 +642,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_usbOnline) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -559,7 +670,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_acOnline) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -587,7 +698,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_allOnline) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -615,7 +726,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_overrideHealth) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
@@ -637,7 +748,7 @@ TEST_F(BatteryDefenderTest, PropsOverride_InitConnected_kernelDefend) {
 
     enableDefender();
     usbPresent();
-    defaultThreshold();
+    defaultThresholds();
     initToConnectedCapacityReached();
 
     InSequence s;
