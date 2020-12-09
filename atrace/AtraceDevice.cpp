@@ -59,6 +59,11 @@ const std::map<std::string, TracingConfig> kTracingMap = {
                 {"CPU Frequency and System Clock",
                  {{"/sys/kernel/debug/tracing/events/msm_bus/enable", false}}},
         },
+        {
+                "lmh_dcvs",
+                {"QCT HW Lmh-dcvs Frequency",
+                 {{"/sys/kernel/debug/tracing/events/lmh/lmh_dcvs_freq/enable", false}}},
+        },
 };
 
 // Methods from ::android::hardware::atrace::V1_0::IAtraceDevice follow.
