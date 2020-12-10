@@ -300,6 +300,17 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                     .hard_limit_request_map[limit_info_pair.first] = 0;
             cdev_status_map_[limit_info_pair.first][name_status_pair.first] = 0;
         }
+
+        if (name_status_pair.second.virtual_sensor_info != nullptr) {
+            if (sensor_info_map_.count(
+                        name_status_pair.second.virtual_sensor_info->trigger_sensor)) {
+                sensor_info_map_[name_status_pair.second.virtual_sensor_info->trigger_sensor]
+                        .is_monitor = true;
+            } else {
+                LOG(FATAL) << "Could not find trigger sensor "
+                           << name_status_pair.second.virtual_sensor_info->trigger_sensor;
+            }
+        }
     }
 
     auto tz_map = parseThermalPathMap(kSensorPrefix.data());
@@ -637,26 +648,22 @@ std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFrom
 bool ThermalHelper::initializeSensorMap(const std::map<std::string, std::string> &path_map) {
     for (const auto &sensor_info_pair : sensor_info_map_) {
         std::string_view sensor_name = sensor_info_pair.first;
-        if (sensor_info_pair.second.is_virtual_sensor) {
-            sensor_name = sensor_info_pair.second.trigger_sensor;
+        if (sensor_info_pair.second.virtual_sensor_info != nullptr) {
+            continue;
         }
         if (!path_map.count(sensor_name.data())) {
             LOG(ERROR) << "Could not find " << sensor_name << " in sysfs";
-            continue;
+            return false;
         }
         std::string path = android::base::StringPrintf(
                 "%s/%s", path_map.at(sensor_name.data()).c_str(), kSensorTempSuffix.data());
-        if (sensor_info_pair.second.is_virtual_sensor) {
-            sensor_name = sensor_info_pair.first;
-        }
+
         if (!thermal_sensors_.addThermalFile(sensor_name, path)) {
             LOG(ERROR) << "Could not add " << sensor_name << "to sensors map";
+            return false;
         }
     }
-    if (sensor_info_map_.size() == thermal_sensors_.getNumThermalFiles()) {
-        return true;
-    }
-    return false;
+    return true;
 }
 
 bool ThermalHelper::initializeCoolingDevices(const std::map<std::string, std::string> &path_map) {
@@ -689,7 +696,7 @@ void ThermalHelper::setMinTimeout(SensorInfo *sensor_info) {
 void ThermalHelper::initializeTrip(const std::map<std::string, std::string> &path_map,
                                    std::set<std::string> *monitored_sensors) {
     for (auto &sensor_info : sensor_info_map_) {
-        if (!sensor_info.second.is_monitor || sensor_info.second.is_virtual_sensor) {
+        if (!sensor_info.second.is_monitor || (sensor_info.second.virtual_sensor_info != nullptr)) {
             continue;
         }
 
@@ -781,7 +788,8 @@ bool ThermalHelper::fillCurrentTemperatures(bool filterType, TemperatureType_2_0
         if (filterType && name_info_pair.second.type != type) {
             continue;
         }
-        if (readTemperature(name_info_pair.first, &temp)) {
+        if (readTemperature(name_info_pair.first, &temp, nullptr,
+                            name_info_pair.second.virtual_sensor_info != nullptr)) {
             ret.emplace_back(std::move(temp));
         } else {
             LOG(ERROR) << __func__
@@ -845,60 +853,57 @@ bool ThermalHelper::fillCpuUsages(hidl_vec<CpuUsage> *cpu_usages) const {
 }
 
 bool ThermalHelper::checkVirtualSensor(std::string_view sensor_name, std::string *temp) const {
-    double mTemp = 0;
-    for (const auto &sensor_info_pair : sensor_info_map_) {
-        int idx = 0;
-        if (sensor_info_pair.first != sensor_name.data()) {
-            continue;
+    float temp_val = 0.0;
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
+        std::string data;
+        const auto &linked_sensor_info =
+                sensor_info_map_.at(sensor_info.virtual_sensor_info->linked_sensors[i].data());
+        if (linked_sensor_info.virtual_sensor_info == nullptr) {
+            if (!thermal_sensors_.readThermalFile(
+                        sensor_info.virtual_sensor_info->linked_sensors[i], &data)) {
+                continue;
+            }
+        } else if (!checkVirtualSensor(sensor_info.virtual_sensor_info->linked_sensors[i], &data)) {
+            return false;
         }
-        for (int i = 0; i < static_cast<int>(kCombinationCount); i++) {
-            if (sensor_info_pair.second.linked_sensors[i].compare("NAN") == 0) {
-                continue;
-            }
-            if (sensor_info_pair.second.linked_sensors[i].size() <= 0) {
-                continue;
-            }
-            std::string data;
-            idx += 1;
-            if (!thermal_sensors_.readThermalFile(sensor_info_pair.second.linked_sensors[i],
-                                                  &data)) {
-                continue;
-            }
-            data = ::android::base::Trim(data);
-            float sensor_reading = std::stof(data);
-            if (std::isnan(sensor_info_pair.second.coefficients[i])) {
-                continue;
-            }
-            float coefficient = sensor_info_pair.second.coefficients[i];
-            switch (sensor_info_pair.second.formula) {
-                case FormulaOption::COUNT_THRESHOLD:
-                    if ((coefficient < 0 && sensor_reading < -coefficient) ||
-                        (coefficient >= 0 && sensor_reading >= coefficient))
-                        mTemp += 1;
-                    break;
-                case FormulaOption::WEIGHTED_AVG:
-                    mTemp += sensor_reading * coefficient;
-                    break;
-                case FormulaOption::MAXIMUM:
-                    if (i == 0)
-                        mTemp = std::numeric_limits<float>::lowest();
-                    if (sensor_reading * coefficient > mTemp)
-                        mTemp = sensor_reading * coefficient;
-                    break;
-                case FormulaOption::MINIMUM:
-                    if (i == 0)
-                        mTemp = std::numeric_limits<float>::max();
-                    if (sensor_reading * coefficient < mTemp)
-                        mTemp = sensor_reading * coefficient;
-                    break;
-                default:
-                    break;
-            }
+
+        LOG(VERBOSE) << sensor_name.data() << "'s linked sensor "
+                     << sensor_info.virtual_sensor_info->linked_sensors[i] << ": temp = " << data;
+        data = ::android::base::Trim(data);
+        float sensor_reading = std::stof(data);
+        if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
+            return false;
         }
-        *temp = std::to_string(mTemp);
-        return true;
+        float coefficient = sensor_info.virtual_sensor_info->coefficients[i];
+        switch (sensor_info.virtual_sensor_info->formula) {
+            case FormulaOption::COUNT_THRESHOLD:
+                if ((coefficient < 0 && sensor_reading < -coefficient) ||
+                    (coefficient >= 0 && sensor_reading >= coefficient))
+                    temp_val += 1;
+                break;
+            case FormulaOption::WEIGHTED_AVG:
+                temp_val += sensor_reading * coefficient;
+                break;
+            case FormulaOption::MAXIMUM:
+                if (i == 0)
+                    temp_val = std::numeric_limits<float>::lowest();
+                if (sensor_reading * coefficient > temp_val)
+                    temp_val = sensor_reading * coefficient;
+                break;
+            case FormulaOption::MINIMUM:
+                if (i == 0)
+                    temp_val = std::numeric_limits<float>::max();
+                if (sensor_reading * coefficient < temp_val)
+                    temp_val = sensor_reading * coefficient;
+                break;
+            default:
+                break;
+        }
     }
-    return false;
+    *temp = std::to_string(temp_val);
+    return true;
 }
 
 // This is called in the different thread context and will update sensor_status
@@ -911,9 +916,9 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
     auto min_sleep_ms = std::chrono::milliseconds(std::numeric_limits<int>::max());
 
     for (auto &name_status_pair : sensor_status_map_) {
+        bool force_update = false;
         Temperature_2_0 temp;
         TemperatureThreshold threshold;
-        bool is_virtual_sensor = false;
         SensorStatus &sensor_status = name_status_pair.second;
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
 
@@ -922,26 +927,33 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
             continue;
         }
 
-        is_virtual_sensor = sensor_info.is_virtual_sensor;
-
-        std::string uevent_sensor_name = name_status_pair.first;
-        if (is_virtual_sensor) {
-            const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
-            uevent_sensor_name = sensor_info.trigger_sensor;
-        }
-
         // Check if the sensor need to be updated
         auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 now - sensor_status.last_update_time);
         auto sleep_ms = (sensor_status.severity != ThrottlingSeverity::NONE)
                                 ? sensor_info.passive_delay
                                 : sensor_info.polling_delay;
+
+        if (time_elapsed_ms > sleep_ms) {
+            force_update = true;
+        } else if (uevent_sensors.size() &&
+                   uevent_sensors.find((sensor_info.virtual_sensor_info != nullptr)
+                                               ? sensor_info.virtual_sensor_info->trigger_sensor
+                                               : name_status_pair.first) != uevent_sensors.end()) {
+            force_update = true;
+        } else if (sensor_info.virtual_sensor_info != nullptr) {
+            const auto trigger_sensor_status =
+                    sensor_status_map_.at(sensor_info.virtual_sensor_info->trigger_sensor);
+            if (trigger_sensor_status.severity != ThrottlingSeverity::NONE) {
+                force_update = true;
+            }
+        }
+
         LOG(VERBOSE) << "sensor " << name_status_pair.first
                      << ": time_elpased=" << time_elapsed_ms.count()
-                     << ", sleep_ms=" << sleep_ms.count();
-        if ((time_elapsed_ms < sleep_ms) &&
-            (!uevent_sensors.size() ||
-             uevent_sensors.find(uevent_sensor_name) == uevent_sensors.end())) {
+                     << ", sleep_ms=" << sleep_ms.count() << ", force_update = " << force_update;
+
+        if (!force_update) {
             auto timeout_remaining = sleep_ms - time_elapsed_ms;
             if (min_sleep_ms > timeout_remaining) {
                 min_sleep_ms = timeout_remaining;
@@ -952,7 +964,8 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         }
 
         std::pair<ThrottlingSeverity, ThrottlingSeverity> throtting_status;
-        if (!readTemperature(name_status_pair.first, &temp, &throtting_status, is_virtual_sensor)) {
+        if (!readTemperature(name_status_pair.first, &temp, &throtting_status,
+                             (sensor_info.virtual_sensor_info != nullptr))) {
             LOG(ERROR) << __func__
                        << ": error reading temperature for sensor: " << name_status_pair.first;
             continue;
@@ -983,6 +996,8 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
 
         if (sensor_status.severity != ThrottlingSeverity::NONE) {
             LOG(INFO) << temp.name << ": " << temp.value << " degC";
+        } else {
+            LOG(VERBOSE) << temp.name << ": " << temp.value << " degC";
         }
 
         // Start PID computation
