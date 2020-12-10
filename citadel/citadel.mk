@@ -18,7 +18,9 @@ PRODUCT_PACKAGES_DEBUG += \
 PRODUCT_PACKAGES += \
     android.hardware.rebootescrow-service.citadel
 
-PRODUCT_PACKAGES += init_citadel
+# init scripts (won't be in AOSP)
+-include vendor/google_nos/init/citadel/init.mk
+
 ifneq ($(wildcard vendor/google_nos/provision),)
 PRODUCT_PACKAGES_DEBUG += CitadelProvision
 
@@ -35,4 +37,3 @@ endif
 
 # Sepolicy
 BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/citadel
-
