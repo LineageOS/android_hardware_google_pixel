@@ -1,6 +1,38 @@
+on property:vendor.thermal.link_ready=1
+    # bcl
+    write /dev/thermal/tz-by-name/smpl_gm/policy user_space
+    write /dev/thermal/tz-by-name/ocp_cpu1/policy user_space
+    write /dev/thermal/tz-by-name/ocp_cpu2/policy user_space
+    write /dev/thermal/tz-by-name/ocp_tpu/policy user_space
+    write /dev/thermal/tz-by-name/ocp_gpu/policy user_space
+    write /dev/thermal/tz-by-name/soft_ocp_cpu1/policy user_space
+    write /dev/thermal/tz-by-name/soft_ocp_cpu2/policy user_space
+    write /dev/thermal/tz-by-name/soft_ocp_tpu/policy user_space
+    write /dev/thermal/tz-by-name/soft_ocp_gpu/policy user_space
+    chown system system /dev/thermal/tz-by-name/smpl_gm/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/smpl_gm/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/ocp_cpu1/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/ocp_cpu1/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/ocp_cpu2/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/ocp_cpu2/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/ocp_tpu/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/ocp_tpu/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/ocp_gpu/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/ocp_gpu/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/soft_ocp_cpu1/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/soft_ocp_cpu1/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/soft_ocp_cpu2/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/soft_ocp_cpu2/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/soft_ocp_tpu/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/soft_ocp_tpu/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/soft_ocp_gpu/trip_point_0_temp
+    chown system system /dev/thermal/tz-by-name/soft_ocp_gpu/trip_point_0_hyst
+    start vendor.thermal-hal-2-0
+
 service vendor.thermal-hal-2-0 /vendor/bin/hw/android.hardware.thermal@2.0-service.pixel
     interface android.hardware.thermal@1.0::IThermal default
     interface android.hardware.thermal@2.0::IThermal default
     class hal
     user system
     group system
+    disabled
