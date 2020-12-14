@@ -24,6 +24,8 @@
 #include <android-base/file.h>
 #include <android-base/properties.h>
 
+#define MIN_TIME_BETWEEN_FILE_UPDATES (30 + 1)
+
 class HealthInterface {
   public:
     virtual ~HealthInterface() {}
@@ -243,16 +245,17 @@ TEST_F(BatteryDefenderTest, InitConnectedCapacityReached) {
 
     InSequence s;
 
+    int time_expected = DEFAULT_TIME_TO_ACTIVATE_SECONDS - 1;
     EXPECT_CALL(*mock, ReadFileToString(kPathPersistChargerPresentTime, _, _))
-            .WillOnce(DoAll(SetArgPointee<1>(std::to_string(DEFAULT_TIME_TO_ACTIVATE_SECONDS - 1)),
-                            Return(true)));
+            .WillOnce(DoAll(SetArgPointee<1>(std::to_string(time_expected)), Return(true)));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
     battDefender.update();
 
-    testvar_systemTimeSecs++;
-    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(DEFAULT_TIME_TO_ACTIVATE_SECONDS),
+    testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
+    time_expected = DEFAULT_TIME_TO_ACTIVATE_SECONDS - 1 + MIN_TIME_BETWEEN_FILE_UPDATES;
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(time_expected),
                                          kPathPersistChargerPresentTime, _));
-    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
     battDefender.update();
 }
 
@@ -286,14 +289,14 @@ TEST_F(BatteryDefenderTest, TriggerTime) {
     InSequence s;
 
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
-    testvar_systemTimeSecs += 1;
+    testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
     battDefender.update();
 
     // Reached 100% capacity at least once
     EXPECT_CALL(*mock, ReadFileToString(kPathBatteryCapacity, _, _))
             .WillOnce(DoAll(SetArgPointee<1>(std::to_string(100)), Return(true)));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
-    testvar_systemTimeSecs += 1;
+    testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
     battDefender.update();
 
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(DEFAULT_TIME_TO_ACTIVATE_SECONDS),
@@ -302,10 +305,11 @@ TEST_F(BatteryDefenderTest, TriggerTime) {
     testvar_systemTimeSecs += DEFAULT_TIME_TO_ACTIVATE_SECONDS;
     battDefender.update();
 
-    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1),
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(DEFAULT_TIME_TO_ACTIVATE_SECONDS +
+                                                        MIN_TIME_BETWEEN_FILE_UPDATES),
                                          kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
-    testvar_systemTimeSecs += 1;
+    testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
     battDefender.update();
 }
 
@@ -386,7 +390,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
 
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(0), kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "DISCONNECTED"));
-    testvar_systemTimeSecs += 1;
+    testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
     battDefender.update();
 
     // Power ON
