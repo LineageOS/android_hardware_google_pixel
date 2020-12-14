@@ -151,9 +151,8 @@ bool BatteryDefender::isBatteryDefenderDisabled(const int vendorStart, const int
     const bool isDefaultVendorChargeLevel = isDefaultChargeLevel(vendorStart, vendorStop);
     const bool isExplicitlyDisabled =
             android::base::GetBoolProperty(kPropBatteryDefenderDisable, false);
-    const bool isDebuggable = android::base::GetBoolProperty(kPropDebuggable, false);
 
-    return isExplicitlyDisabled || (isDefaultVendorChargeLevel == false) || (isDebuggable == false);
+    return isExplicitlyDisabled || (isDefaultVendorChargeLevel == false);
 }
 
 void BatteryDefender::addTimeToChargeTimers(void) {
