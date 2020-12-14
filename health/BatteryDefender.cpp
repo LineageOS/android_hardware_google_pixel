@@ -236,13 +236,16 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
             case STATE_CONNECTED:
                 if (mTimeChargerPresentSecs > mTimeToActivateSecsModified) {
                     nextState = STATE_ACTIVE;
-                } else if (mTimeChargerNotPresentSecs > kTimeToClearTimerSecs) {
-                    nextState = STATE_DISCONNECTED;
                 }
-                break;
+                FALLTHROUGH_INTENDED;
 
             case STATE_ACTIVE:
-                // Latch unless disabled or unless the health module has restarted (ie. reboot)
+                if (mTimeChargerNotPresentSecs > kTimeToClearTimerSecs) {
+                    nextState = STATE_DISCONNECTED;
+                }
+
+                break;
+
             default:
                 break;
         }
