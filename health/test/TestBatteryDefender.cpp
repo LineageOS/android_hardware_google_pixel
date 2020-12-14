@@ -319,8 +319,8 @@ TEST_F(BatteryDefenderTest, ChargeLevels) {
     testvar_systemTimeSecs += 0;
     battDefender.update(&props);
 
-    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(60), kPathStartLevel, _));
-    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(70), kPathStopLevel, _));
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(70), kPathStartLevel, _));
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(80), kPathStopLevel, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
     testvar_systemTimeSecs += DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1;
     battDefender.update(&props);
@@ -336,8 +336,8 @@ TEST_F(BatteryDefenderTest, ActiveTime) {
 
     InSequence s;
 
-    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(60), kPathStartLevel, _));
-    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(70), kPathStopLevel, _));
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(70), kPathStartLevel, _));
+    EXPECT_CALL(*mock, WriteStringToFile(std::to_string(80), kPathStopLevel, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
     battDefender.update(&props);
 }
