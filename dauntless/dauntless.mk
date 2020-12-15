@@ -1,7 +1,10 @@
 # Dauntless
 PRODUCT_PACKAGES += \
     citadeld \
-    citadel_updater
+    citadel_updater \
+    android.hardware.weaver@1.0-service.citadel \
+    android.hardware.keymaster@4.1-service.citadel \
+    wait_for_strongbox
 
 # init scripts (won't be in AOSP)
 -include vendor/google_nos/init/dauntless/init.mk
