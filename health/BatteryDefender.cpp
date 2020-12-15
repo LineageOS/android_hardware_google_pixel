@@ -133,14 +133,12 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
     }
 }
 
-bool BatteryDefender::isChargePowerAvailable(void) {
-    // USB presence is an indicator of connectivity
-    const bool chargerPresentWired = readFileToInt(kPathWiredChargerPresent) != 0;
+bool BatteryDefender::isChargePowerAvailable(const bool chargerWirelessOnline) {
+    // USB presence is an indicator of power availability
+    const bool chargerPresentWired = readFileToInt(kPathUSBChargerPresent) != 0;
+    mIsUsbPresent = chargerPresentWired;
 
-    // Wireless online is an indicator of a device having charge power
-    const bool chargerOnlineWireless = readFileToInt(kPathWirelessChargerOnline) != 0;
-
-    return chargerPresentWired || chargerOnlineWireless;
+    return chargerPresentWired || chargerWirelessOnline;
 }
 
 bool BatteryDefender::isDefaultChargeLevel(const int start, const int stop) {
@@ -151,9 +149,8 @@ bool BatteryDefender::isBatteryDefenderDisabled(const int vendorStart, const int
     const bool isDefaultVendorChargeLevel = isDefaultChargeLevel(vendorStart, vendorStop);
     const bool isExplicitlyDisabled =
             android::base::GetBoolProperty(kPropBatteryDefenderDisable, false);
-    const bool isDebuggable = android::base::GetBoolProperty(kPropDebuggable, false);
 
-    return isExplicitlyDisabled || (isDefaultVendorChargeLevel == false) || (isDebuggable == false);
+    return isExplicitlyDisabled || (isDefaultVendorChargeLevel == false);
 }
 
 void BatteryDefender::addTimeToChargeTimers(void) {
@@ -174,10 +171,15 @@ int32_t BatteryDefender::getTimeToActivate(void) {
                                          (int32_t)ONE_MIN_IN_SECONDS, INT32_MAX);
 }
 
-void BatteryDefender::stateMachine_runAction(const state_E state) {
+void BatteryDefender::stateMachine_runAction(const state_E state,
+                                             const struct android::BatteryProperties *props) {
     switch (state) {
         case STATE_INIT:
             loadPersistentStorage();
+            if (props->chargerUsbOnline || props->chargerAcOnline) {
+                mWasAcOnline = props->chargerAcOnline;
+                mWasUsbOnline = props->chargerUsbOnline;
+            }
             break;
 
         case STATE_DISABLED:
@@ -187,7 +189,7 @@ void BatteryDefender::stateMachine_runAction(const state_E state) {
 
         case STATE_CONNECTED:
             addTimeToChargeTimers();
-            if (readFileToInt(kPathBatteryCapacity) == kChargeHighCapacityLevel) {
+            if (props->batteryLevel == kChargeHighCapacityLevel) {
                 mHasReachedHighCapacityLevel = true;
             }
             break;
@@ -237,13 +239,16 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
             case STATE_CONNECTED:
                 if (mTimeChargerPresentSecs > mTimeToActivateSecsModified) {
                     nextState = STATE_ACTIVE;
-                } else if (mTimeChargerNotPresentSecs > kTimeToClearTimerSecs) {
-                    nextState = STATE_DISCONNECTED;
                 }
-                break;
+                FALLTHROUGH_INTENDED;
 
             case STATE_ACTIVE:
-                // Latch unless disabled or unless the health module has restarted (ie. reboot)
+                if (mTimeChargerNotPresentSecs > kTimeToClearTimerSecs) {
+                    nextState = STATE_DISCONNECTED;
+                }
+
+                break;
+
             default:
                 break;
         }
@@ -257,9 +262,8 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
 void BatteryDefender::stateMachine_firstAction(const state_E state) {
     switch (state) {
         case STATE_DISABLED:
-            clearStateData();
             LOG(INFO) << "Disabled!";
-            break;
+            FALLTHROUGH_INTENDED;
 
         case STATE_DISCONNECTED:
             clearStateData();
@@ -286,23 +290,62 @@ void BatteryDefender::stateMachine_firstAction(const state_E state) {
     }
 }
 
-void BatteryDefender::update(void) {
+void BatteryDefender::updateDefenderProperties(struct android::BatteryProperties *props) {
+    /**
+     * Override the OVERHEAT flag for UI updates to settings.
+     * Also, force AC/USB online if active and still connected to power.
+     */
+    if (mCurrentState == STATE_ACTIVE) {
+        props->batteryHealth = android::BATTERY_HEALTH_OVERHEAT;
+    }
+
+    /**
+     * If the kernel is forcing the input current limit to 0, then the online status may
+     * need to be overwritten. Also, setting a charge limit below the current charge level
+     * may disable the adapter. This does not occur for wireless adapters.
+     * Note; only override "online" if necessary (all "online"s are false).
+     */
+    if (props->chargerUsbOnline == false && props->chargerAcOnline == false) {
+        /* Override if the USB is connected and a battery defender is active */
+        if (mIsUsbPresent && props->batteryHealth == android::BATTERY_HEALTH_OVERHEAT) {
+            if (mWasAcOnline) {
+                props->chargerAcOnline = true;
+            }
+            if (mWasUsbOnline) {
+                props->chargerUsbOnline = true;
+            }
+        }
+    } else {
+        /* One of these booleans will always be true if updated here */
+        mWasAcOnline = props->chargerAcOnline;
+        mWasUsbOnline = props->chargerUsbOnline;
+    }
+}
+
+void BatteryDefender::update(struct android::BatteryProperties *props) {
+    if (!props) {
+        return;
+    }
+
     // Update module inputs
     const int chargeLevelVendorStart =
             android::base::GetIntProperty(kPropChargeLevelVendorStart, kChargeLevelDefaultStart);
     const int chargeLevelVendorStop =
             android::base::GetIntProperty(kPropChargeLevelVendorStop, kChargeLevelDefaultStop);
     mIsDefenderDisabled = isBatteryDefenderDisabled(chargeLevelVendorStart, chargeLevelVendorStop);
-    mIsPowerAvailable = isChargePowerAvailable();
+    mIsPowerAvailable = isChargePowerAvailable(props->chargerWirelessOnline);
     mTimeBetweenUpdateCalls = getDeltaTimeSeconds(&mTimePreviousSecs);
 
     // Run state machine
-    stateMachine_runAction(mCurrentState);
+    stateMachine_runAction(mCurrentState, props);
     const state_E nextState = stateMachine_getNextState(mCurrentState);
     if (nextState != mCurrentState) {
         stateMachine_firstAction(nextState);
     }
     mCurrentState = nextState;
+
+    // Verify/update battery defender battery properties
+    updateDefenderProperties(props); /* May override battery properties */
 
     // Store outputs
     writeTimeToFile(kPathPersistChargerPresentTime, mTimeChargerPresentSecs,
