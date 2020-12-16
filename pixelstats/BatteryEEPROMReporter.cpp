@@ -76,10 +76,10 @@ void BatteryEEPROMReporter::checkAndReport(const std::string &path) {
                    "%2" SCNx8 "%2" SCNx8 " %4" SCNx16 "%4" SCNx16
                    "%4" SCNx16 "%4" SCNx16 "%4" SCNx16,
                    &hist.cycle_cnt, &hist.full_cap, &hist.esr,
-                   &hist.rslow, &hist.soh, &hist.batt_temp,
-                   &hist.cutoff_soc, &hist.cc_soc, &hist.sys_soc,
-                   &hist.msoc, &hist.batt_soc, &hist.reserve,
-                   &hist.max_temp, &hist.min_temp, &hist.max_vbatt,
+                   &hist.rslow, &hist.batt_temp, &hist.soh,
+                   &hist.cc_soc, &hist.cutoff_soc, &hist.msoc,
+                   &hist.sys_soc, &hist.reserve, &hist.batt_soc,
+                   &hist.min_temp, &hist.max_temp,  &hist.max_vbatt,
                    &hist.min_vbatt, &hist.max_ibatt, &hist.min_ibatt,
                    &hist.checksum);
 
@@ -187,7 +187,7 @@ void BatteryEEPROMReporter::reportEvent(struct BatteryHistory hist) {
        val.intValue(hist.max_vbatt);
        values[BatteryEEPROM::kMaxVbattFieldNumber - kVendorAtomOffset] = val;
        val.intValue(hist.min_vbatt);
-       values[BatteryEEPROM::kMinTempFieldNumber - kVendorAtomOffset] = val;
+       values[BatteryEEPROM::kMinVbattFieldNumber - kVendorAtomOffset] = val;
        val.intValue(hist.max_ibatt);
        values[BatteryEEPROM::kMaxIbattFieldNumber - kVendorAtomOffset] = val;
        val.intValue(hist.min_ibatt);
