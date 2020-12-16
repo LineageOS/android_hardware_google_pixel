@@ -90,8 +90,18 @@ class BatteryDefender {
     const char *const kPropBatteryDefenderDisable = "vendor.battery.defender.disable";
     const char *const kPropBatteryDefenderThreshold = "vendor.battery.defender.threshold";
     const char *const kPropBootmode = "ro.bootmode";
+    const char *const kPropBatteryDefenderCtrlEnable = "vendor.battery.defender.ctrl.enable";
+    const char *const kPropBatteryDefenderCtrlActivateTime =
+            "vendor.battery.defender.ctrl.trigger_time";
+    const char *const kPropBatteryDefenderCtrlResumeTime =
+            "vendor.battery.defender.ctrl.resume_time";
+    const char *const kPropBatteryDefenderCtrlStartSOC =
+            "vendor.battery.defender.ctrl.recharge_soc_start";
+    const char *const kPropBatteryDefenderCtrlStopSOC =
+            "vendor.battery.defender.ctrl.recharge_soc_stop";
 
     // Default thresholds
+    const bool kDefaultEnable = true;
     const int kChargeLevelDefaultStart = DEFAULT_CHARGE_LEVEL_START;
     const int kChargeLevelDefaultStop = DEFAULT_CHARGE_LEVEL_STOP;
     const int kChargeLevelDefenderStart = DEFAULT_CHARGE_LEVEL_DEFENDER_START;
