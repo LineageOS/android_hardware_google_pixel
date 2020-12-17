@@ -150,6 +150,7 @@ const char *kPropBatteryDefenderCtrlActivateTime = "vendor.battery.defender.ctrl
 const char *kPropBatteryDefenderCtrlResumeTime = "vendor.battery.defender.ctrl.resume_time";
 const char *kPropBatteryDefenderCtrlStartSOC = "vendor.battery.defender.ctrl.recharge_soc_start";
 const char *kPropBatteryDefenderCtrlStopSOC = "vendor.battery.defender.ctrl.recharge_soc_stop";
+const char *kPropBatteryDefenderCtrlTriggerSOC = "vendor.battery.defender.ctrl.trigger_soc";
 
 static void enableDefender(void) {
     ON_CALL(*mock, GetIntProperty(kPropChargeLevelVendorStart, _, _, _)).WillByDefault(Return(0));
@@ -182,6 +183,9 @@ static void defaultThresholds(void) {
             .WillByDefault(Return(70));
     ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlStopSOC, _, _, _))
             .WillByDefault(Return(80));
+
+    ON_CALL(*mock, GetIntProperty(kPropBatteryDefenderCtrlTriggerSOC, _, _, _))
+            .WillByDefault(Return(100));
 }
 
 static void capacityReached(void) {
@@ -262,7 +266,7 @@ TEST_F(BatteryDefenderTest, InitConnectedCapacityReached) {
     battDefender.update(&props);
 
     testvar_systemTimeSecs += MIN_TIME_BETWEEN_FILE_UPDATES;
-    time_expected = DEFAULT_TIME_TO_ACTIVATE_SECONDS - 1 + MIN_TIME_BETWEEN_FILE_UPDATES;
+    time_expected += MIN_TIME_BETWEEN_FILE_UPDATES;
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(time_expected),
                                          kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "ACTIVE"));
@@ -284,6 +288,11 @@ TEST_F(BatteryDefenderTest, InitConnected) {
     battDefender.update(&props);
 
     // mHasReachedHighCapacityLevel shall be false
+    testvar_systemTimeSecs += DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1;
+    EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
+    battDefender.update(&props);
+
+    // Would be active if mHasReachedHighCapacityLevel was true
     testvar_systemTimeSecs += DEFAULT_TIME_TO_ACTIVATE_SECONDS + 1;
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
     battDefender.update(&props);
