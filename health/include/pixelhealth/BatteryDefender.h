@@ -99,6 +99,8 @@ class BatteryDefender {
             "vendor.battery.defender.ctrl.recharge_soc_start";
     const char *const kPropBatteryDefenderCtrlStopSOC =
             "vendor.battery.defender.ctrl.recharge_soc_stop";
+    const char *const kPropBatteryDefenderCtrlTriggerSOC =
+            "vendor.battery.defender.ctrl.trigger_soc";
 
     // Default thresholds
     const bool kDefaultEnable = true;
