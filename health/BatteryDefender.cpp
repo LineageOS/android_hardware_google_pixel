@@ -113,8 +113,20 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
     int chargeLevelStart = vendorStart;
     int chargeLevelStop = vendorStop;
     if (mCurrentState == STATE_ACTIVE) {
-        chargeLevelStart = kChargeLevelDefenderStart;
-        chargeLevelStop = kChargeLevelDefenderStop;
+        const int newDefenderLevelStart = android::base::GetIntProperty(
+                kPropBatteryDefenderCtrlStartSOC, kChargeLevelDefenderStart, 0, 100);
+        const int newDefenderLevelStop = android::base::GetIntProperty(
+                kPropBatteryDefenderCtrlStopSOC, kChargeLevelDefenderStop, 0, 100);
+        const bool overrideLevelsValid =
+                (newDefenderLevelStart <= newDefenderLevelStop) && (newDefenderLevelStop != 0);
+
+        if (overrideLevelsValid) {
+            chargeLevelStart = newDefenderLevelStart;
+            chargeLevelStop = newDefenderLevelStop;
+        } else {
+            chargeLevelStart = kChargeLevelDefenderStart;
+            chargeLevelStop = kChargeLevelDefenderStop;
+        }
     }
 
     // Disable battery defender effects in charger mode until
@@ -147,10 +159,12 @@ bool BatteryDefender::isDefaultChargeLevel(const int start, const int stop) {
 
 bool BatteryDefender::isBatteryDefenderDisabled(const int vendorStart, const int vendorStop) {
     const bool isDefaultVendorChargeLevel = isDefaultChargeLevel(vendorStart, vendorStop);
-    const bool isExplicitlyDisabled =
+    const bool isOverrideDisabled =
             android::base::GetBoolProperty(kPropBatteryDefenderDisable, false);
+    const bool isCtrlEnabled =
+            android::base::GetBoolProperty(kPropBatteryDefenderCtrlEnable, kDefaultEnable);
 
-    return isExplicitlyDisabled || (isDefaultVendorChargeLevel == false);
+    return isOverrideDisabled || (isDefaultVendorChargeLevel == false) || (isCtrlEnabled == false);
 }
 
 void BatteryDefender::addTimeToChargeTimers(void) {
@@ -167,8 +181,20 @@ void BatteryDefender::addTimeToChargeTimers(void) {
 int32_t BatteryDefender::getTimeToActivate(void) {
     // Use the default constructor value if the modified property is not between 60 and INT_MAX
     // (seconds)
-    return android::base::GetIntProperty(kPropBatteryDefenderThreshold, kTimeToActivateSecs,
-                                         (int32_t)ONE_MIN_IN_SECONDS, INT32_MAX);
+    const int32_t timeToActivateOverride =
+            android::base::GetIntProperty(kPropBatteryDefenderThreshold, kTimeToActivateSecs,
+                                          (int32_t)ONE_MIN_IN_SECONDS, INT32_MAX);
+
+    const bool overrideActive = timeToActivateOverride != kTimeToActivateSecs;
+    if (overrideActive) {
+        return timeToActivateOverride;
+    } else {
+        // No overrides taken; apply ctrl time to activate...
+        // Note; do not allow less than 1 day trigger time
+        return android::base::GetIntProperty(kPropBatteryDefenderCtrlActivateTime,
+                                             kTimeToActivateSecs, (int32_t)ONE_DAY_IN_SECONDS,
+                                             INT32_MAX);
+    }
 }
 
 void BatteryDefender::stateMachine_runAction(const state_E state,
@@ -242,12 +268,15 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
                 }
                 FALLTHROUGH_INTENDED;
 
-            case STATE_ACTIVE:
-                if (mTimeChargerNotPresentSecs > kTimeToClearTimerSecs) {
+            case STATE_ACTIVE: {
+                const int timeToClear = android::base::GetIntProperty(
+                        kPropBatteryDefenderCtrlResumeTime, kTimeToClearTimerSecs, 0, INT32_MAX);
+
+                /* Check for mIsPowerAvailable in case timeToClear is 0 */
+                if ((mTimeChargerNotPresentSecs >= timeToClear) && (mIsPowerAvailable == false)) {
                     nextState = STATE_DISCONNECTED;
                 }
-
-                break;
+            } break;
 
             default:
                 break;
