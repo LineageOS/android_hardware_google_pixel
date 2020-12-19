@@ -213,12 +213,15 @@ void BatteryDefender::stateMachine_runAction(const state_E state,
             clearStateData();
             break;
 
-        case STATE_CONNECTED:
+        case STATE_CONNECTED: {
             addTimeToChargeTimers();
-            if (props->batteryLevel == kChargeHighCapacityLevel) {
+
+            const int triggerLevel = android::base::GetIntProperty(
+                    kPropBatteryDefenderCtrlTriggerSOC, kChargeHighCapacityLevel, 0, 100);
+            if (props->batteryLevel >= triggerLevel) {
                 mHasReachedHighCapacityLevel = true;
             }
-            break;
+        } break;
 
         case STATE_ACTIVE:
             addTimeToChargeTimers();
