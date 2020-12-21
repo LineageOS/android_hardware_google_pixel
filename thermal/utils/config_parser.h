@@ -28,13 +28,6 @@ namespace thermal {
 namespace V2_0 {
 namespace implementation {
 
-enum FormulaOption : uint32_t {
-    COUNT_THRESHOLD = 0,
-    WEIGHTED_AVG,
-    MAXIMUM,
-    MINIMUM,
-};
-
 using ::android::hardware::hidl_enum_range;
 using CoolingType_2_0 = ::android::hardware::thermal::V2_0::CoolingType;
 using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
@@ -42,11 +35,22 @@ using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 constexpr size_t kThrottlingSeverityCount = std::distance(
     hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
 using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
-constexpr size_t kCombinationCount = 10;
-using LinkedSensorArray = std::array<std::string, static_cast<size_t>(kCombinationCount)>;
-using CoefficientArray = std::array<float, static_cast<size_t>(kCombinationCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
 constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
+
+enum FormulaOption : uint32_t {
+    COUNT_THRESHOLD = 0,
+    WEIGHTED_AVG,
+    MAXIMUM,
+    MINIMUM,
+};
+
+struct VirtualSensorInfo {
+    std::vector<std::string> linked_sensors;
+    std::vector<float> coefficients;
+    std::string trigger_sensor;
+    FormulaOption formula;
+};
 
 enum ThrottleType : uint32_t {
     PID = 0,  // Enabled PID power allocator
@@ -82,15 +86,10 @@ struct SensorInfo {
     float multiplier;
     std::chrono::milliseconds polling_delay;
     std::chrono::milliseconds passive_delay;
-
-    LinkedSensorArray linked_sensors;
-    CoefficientArray coefficients;
-    std::string trigger_sensor;
-    FormulaOption formula;
-    bool is_virtual_sensor;
     bool send_cb;
     bool send_powerhint;
     bool is_monitor;
+    std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::unique_ptr<ThrottlingInfo> throttling_info;
 };
 

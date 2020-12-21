@@ -45,6 +45,7 @@ bool ThermalFiles::readThermalFile(std::string_view thermal_name, std::string *d
     std::string file_path = getThermalFilePath(std::string_view(thermal_name));
     *data = "";
     if (file_path.empty()) {
+        PLOG(WARNING) << "Failed to find " << thermal_name << "'s path";
         return false;
     }
 
