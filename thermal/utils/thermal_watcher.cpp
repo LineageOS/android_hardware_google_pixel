@@ -35,25 +35,19 @@ namespace implementation {
 
 using std::chrono_literals::operator""ms;
 
-void ThermalWatcher::registerFilesToWatch(const std::set<std::string> &sensors_to_watch,
-                                          bool uevent_monitor) {
+void ThermalWatcher::registerFilesToWatch(const std::set<std::string> &sensors_to_watch) {
     monitored_sensors_.insert(sensors_to_watch.begin(), sensors_to_watch.end());
-    if (!uevent_monitor) {
-        is_polling_ = true;
-        return;
-    }
+
     uevent_fd_.reset((TEMP_FAILURE_RETRY(uevent_open_socket(64 * 1024, true))));
     if (uevent_fd_.get() < 0) {
         LOG(ERROR) << "failed to open uevent socket";
-        is_polling_ = true;
         return;
     }
 
     fcntl(uevent_fd_, F_SETFL, O_NONBLOCK);
 
     looper_->addFd(uevent_fd_.get(), 0, Looper::EVENT_INPUT, nullptr, nullptr);
-    is_polling_ = false;
-    thermal_triggered_ = true;
+    sleep_ms_ = std::chrono::milliseconds(0);
     last_update_time_ = boot_clock::now();
 }
 
@@ -128,18 +122,15 @@ void ThermalWatcher::wake() {
 
 bool ThermalWatcher::threadLoop() {
     LOG(VERBOSE) << "ThermalWatcher polling...";
-    // Polling interval 2s
-    static constexpr int kMinPollIntervalMs = 2000;
-    // Max uevent timeout 5mins
-    static constexpr int kUeventPollTimeoutMs = 300000;
+
     int fd;
     std::set<std::string> sensors;
 
     auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(boot_clock::now() -
-                                                                                 last_update_time_)
-                                   .count();
-    int timeout = (thermal_triggered_ || is_polling_) ? kMinPollIntervalMs : kUeventPollTimeoutMs;
-    if (time_elapsed_ms < timeout && looper_->pollOnce(timeout, &fd, nullptr, nullptr) >= 0) {
+                                                                                 last_update_time_);
+
+    if (time_elapsed_ms < sleep_ms_ &&
+        looper_->pollOnce(sleep_ms_.count(), &fd, nullptr, nullptr) >= 0) {
         if (fd != uevent_fd_.get()) {
             return true;
         }
@@ -149,7 +140,8 @@ bool ThermalWatcher::threadLoop() {
             return true;
         }
     }
-    thermal_triggered_ = cb_(sensors);
+
+    sleep_ms_ = cb_(sensors);
     last_update_time_ = boot_clock::now();
     return true;
 }

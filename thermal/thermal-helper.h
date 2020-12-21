@@ -69,14 +69,20 @@ using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
 using ::android::hardware::thermal::V2_0::TemperatureThreshold;
 using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 
-using NotificationCallback = std::function<void(const std::vector<Temperature_2_0> &temps)>;
+using NotificationCallback = std::function<void(const Temperature_2_0 &t)>;
 using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
+using CdevRequestStatus = std::map<std::string, int>;
 
 struct SensorStatus {
     ThrottlingSeverity severity;
     ThrottlingSeverity prev_hot_severity;
     ThrottlingSeverity prev_cold_severity;
     ThrottlingSeverity prev_hint_severity;
+    boot_clock::time_point last_update_time;
+    std::map<std::string, int> pid_request_map;
+    std::map<std::string, int> hard_limit_request_map;
+    float err_integral;
+    float prev_err;
 };
 
 class PowerHalService {
@@ -138,10 +144,13 @@ class ThermalHelper {
   private:
     bool initializeSensorMap(const std::map<std::string, std::string> &path_map);
     bool initializeCoolingDevices(const std::map<std::string, std::string> &path_map);
-    bool initializeTrip(const std::map<std::string, std::string> &path_map);
+    void setMinTimeout(SensorInfo *sensor_info);
+    void initializeTrip(const std::map<std::string, std::string> &path_map,
+                        std::set<std::string> *monitored_sensors);
 
-    // For thermal_watcher_'s polling thread
-    bool thermalWatcherCallbackFunc(const std::set<std::string> &uevent_sensors);
+    // For thermal_watcher_'s polling thread, return the sleep interval
+    std::chrono::milliseconds thermalWatcherCallbackFunc(
+            const std::set<std::string> &uevent_sensors);
     // Return hot and cold severity status as std::pair
     std::pair<ThrottlingSeverity, ThrottlingSeverity> getSeverityFromThresholds(
         const ThrottlingArray &hot_thresholds, const ThrottlingArray &cold_thresholds,
@@ -149,23 +158,31 @@ class ThermalHelper {
         ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
         float value) const;
     bool checkVirtualSensor(std::string_view sensor_name, std::string *temp) const;
-
+    // Return the power budget which is computed by PID algorithm
+    float pidPowerCalculator(const Temperature_2_0 &temp, const SensorInfo &sensor_info,
+                             SensorStatus *sensor_status,
+                             const std::chrono::milliseconds time_elapsed_ms);
     bool connectToPowerHal();
     void updateSupportedPowerHints();
-
+    bool requestCdevByPower(std::string_view sensor_name, SensorStatus *sensor_status,
+                            const SensorInfo &sensor_info, float total_power_budget);
+    void requestCdevBySeverity(std::string_view sensor_name, SensorStatus *sensor_status,
+                               const SensorInfo &sensor_info);
+    void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
     sp<ThermalWatcher> thermal_watcher_;
     ThermalFiles thermal_sensors_;
     ThermalFiles cooling_devices_;
     bool is_initialized_;
     const NotificationCallback cb_;
-    const std::map<std::string, CoolingType> cooling_device_info_map_;
-    const std::map<std::string, SensorInfo> sensor_info_map_;
+    std::map<std::string, CdevInfo> cooling_device_info_map_;
+    std::map<std::string, SensorInfo> sensor_info_map_;
     std::map<std::string, std::map<ThrottlingSeverity, ThrottlingSeverity>>
             supported_powerhint_map_;
     PowerHalService power_hal_service_;
 
     mutable std::shared_mutex sensor_status_map_mutex_;
     std::map<std::string, SensorStatus> sensor_status_map_;
+    std::map<std::string, CdevRequestStatus> cdev_status_map_;
 };
 
 }  // namespace implementation
