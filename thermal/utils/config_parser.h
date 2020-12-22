@@ -28,6 +28,16 @@ namespace thermal {
 namespace V2_0 {
 namespace implementation {
 
+using ::android::hardware::hidl_enum_range;
+using CoolingType_2_0 = ::android::hardware::thermal::V2_0::CoolingType;
+using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
+using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
+constexpr size_t kThrottlingSeverityCount = std::distance(
+    hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
+using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
+constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
+constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
+
 enum FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
     WEIGHTED_AVG,
@@ -35,16 +45,36 @@ enum FormulaOption : uint32_t {
     MINIMUM,
 };
 
-using ::android::hardware::hidl_enum_range;
-using ::android::hardware::thermal::V2_0::CoolingType;
-using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
-using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
-constexpr size_t kThrottlingSeverityCount = std::distance(
-    hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
-using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
-constexpr size_t kCombinationCount = 10;
-using LinkedSensorArray = std::array<std::string, static_cast<size_t>(kCombinationCount)>;
-using CoefficientArray = std::array<float, static_cast<size_t>(kCombinationCount)>;
+struct VirtualSensorInfo {
+    std::vector<std::string> linked_sensors;
+    std::vector<float> coefficients;
+    std::string trigger_sensor;
+    FormulaOption formula;
+};
+
+enum ThrottleType : uint32_t {
+    PID = 0,  // Enabled PID power allocator
+    LIMIT,    // Enable hard limit throttling
+    NONE,
+};
+
+using ThrottlingTypeArray = std::array<ThrottleType, static_cast<size_t>(kThrottlingSeverityCount)>;
+
+struct ThrottlingInfo {
+    ThrottlingArray k_po;
+    ThrottlingArray k_pu;
+    ThrottlingArray k_i;
+    ThrottlingArray k_d;
+    ThrottlingArray i_max;
+    ThrottlingArray max_alloc_power;
+    ThrottlingArray min_alloc_power;
+    ThrottlingArray s_power;
+    ThrottlingArray i_cutoff;
+    ThrottlingTypeArray throttle_type;
+    std::vector<std::string> cdev_request;
+    std::vector<float> cdev_weight;
+    std::map<std::string, ThrottlingArray> limit_info;
+};
 
 struct SensorInfo {
     TemperatureType_2_0 type;
@@ -52,21 +82,24 @@ struct SensorInfo {
     ThrottlingArray cold_thresholds;
     ThrottlingArray hot_hysteresis;
     ThrottlingArray cold_hysteresis;
-
-    LinkedSensorArray linked_sensors;
-    CoefficientArray coefficients;
-    std::string trigger_sensor;
-    FormulaOption formula;
-    bool is_virtual_sensor;
-
     float vr_threshold;
     float multiplier;
-    bool is_monitor;
+    std::chrono::milliseconds polling_delay;
+    std::chrono::milliseconds passive_delay;
+    bool send_cb;
     bool send_powerhint;
+    bool is_monitor;
+    std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
+    std::unique_ptr<ThrottlingInfo> throttling_info;
+};
+
+struct CdevInfo {
+    CoolingType_2_0 type;
+    std::vector<float> power2state;
 };
 
 std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
-std::map<std::string, CoolingType> ParseCoolingDevice(std::string_view config_path);
+std::map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path);
 
 }  // namespace implementation
 }  // namespace V2_0

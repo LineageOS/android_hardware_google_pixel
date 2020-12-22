@@ -40,7 +40,7 @@ namespace implementation {
 
 using android::base::boot_clock;
 using android::base::unique_fd;
-using WatcherCallback = std::function<bool(const std::set<std::string> &name)>;
+using WatcherCallback = std::function<std::chrono::milliseconds(const std::set<std::string> &name)>;
 
 // A helper class for monitoring thermal files changes.
 class ThermalWatcher : public ::android::Thread {
@@ -58,7 +58,7 @@ class ThermalWatcher : public ::android::Thread {
     // Give the file watcher a list of files to start watching. This helper
     // class will by default wait for modifications to the file with a looper.
     // This should be called before starting watcher thread.
-    void registerFilesToWatch(const std::set<std::string> &sensors_to_watch, bool uevent_monitor);
+    void registerFilesToWatch(const std::set<std::string> &sensors_to_watch);
     // Wake up the looper thus the worker thread, immediately. This can be called
     // in any thread.
     void wake();
@@ -88,10 +88,8 @@ class ThermalWatcher : public ::android::Thread {
     android::base::unique_fd uevent_fd_;
     // Sensor list which monitor flag is enabled.
     std::set<std::string> monitored_sensors_;
-    // Flag to point out if any sensor across the first threshold.
-    bool thermal_triggered_;
-    // Flag to point out if device can support uevent notify.
-    bool is_polling_;
+    // Sleep interval voting result
+    std::chrono::milliseconds sleep_ms_;
     // Timestamp for last thermal update
     boot_clock::time_point last_update_time_;
 };
