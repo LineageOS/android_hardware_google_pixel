@@ -134,6 +134,7 @@ class BatteryDefenderTest : public ::testing::Test {
 };
 
 const char *kPathWiredChargerPresent = "/sys/class/power_supply/usb/present";
+const char *kPathWirelessChargerPresent = "/sys/class/power_supply/wireless/present";
 const char *kPathPersistChargerPresentTime = "/mnt/vendor/persist/battery/defender_charger_time";
 const char *kPathPersistDefenderActiveTime = "/mnt/vendor/persist/battery/defender_active_time";
 const char *kPathStartLevel = "/sys/devices/platform/soc/soc:google,charger/charge_start_level";
@@ -165,8 +166,18 @@ static void usbPresent(void) {
             .WillByDefault(DoAll(SetArgPointee<1>(std::string("1")), Return(true)));
 }
 
+static void wirelessPresent(void) {
+    ON_CALL(*mock, ReadFileToString(kPathWirelessChargerPresent, _, _))
+            .WillByDefault(DoAll(SetArgPointee<1>(std::string("1")), Return(true)));
+}
+
+static void wirelessNotPresent(void) {
+    ON_CALL(*mock, ReadFileToString(kPathWirelessChargerPresent, _, _))
+            .WillByDefault(DoAll(SetArgPointee<1>(std::string("0")), Return(true)));
+}
+
 static void powerAvailable(void) {
-    props.chargerWirelessOnline = 1;
+    wirelessPresent();
     usbPresent();
 }
 
@@ -433,7 +444,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
     InSequence s;
 
     // Power ON
-    props.chargerWirelessOnline = true;
+    wirelessPresent();
 
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(1000), kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
@@ -446,7 +457,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
     battDefender.update(&props);
 
     // Power OFF
-    props.chargerWirelessOnline = false;
+    wirelessNotPresent();
 
     // Maintain kPathPersistChargerPresentTime = 1060
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
@@ -465,7 +476,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectCycle) {
     battDefender.update(&props);
 
     // Power ON
-    props.chargerWirelessOnline = true;
+    wirelessPresent();
 
     // Maintain kPathPersistChargerPresentTime = 0
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
@@ -501,7 +512,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectResumeTimeThreshold0) {
     InSequence s;
 
     // Power ON
-    props.chargerWirelessOnline = true;
+    wirelessPresent();
 
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(1000), kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "CONNECTED"));
@@ -514,7 +525,7 @@ TEST_F(BatteryDefenderTest, ConnectDisconnectResumeTimeThreshold0) {
     battDefender.update(&props);
 
     // Power OFF
-    props.chargerWirelessOnline = false;
+    wirelessNotPresent();
 
     EXPECT_CALL(*mock, WriteStringToFile(std::to_string(0), kPathPersistChargerPresentTime, _));
     EXPECT_CALL(*mock, SetProperty(kPropBatteryDefenderState, "DISCONNECTED"));
