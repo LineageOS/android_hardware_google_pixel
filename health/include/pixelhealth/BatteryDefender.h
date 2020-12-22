@@ -133,6 +133,7 @@ class BatteryDefender {
     bool mHasReachedHighCapacityLevel = false;
     bool mWasAcOnline = false;
     bool mWasUsbOnline = true; /* Default; in case neither AC/USB online becomes 1 */
+    bool mIgnoreWirelessFileError = false;
 
     // Process state actions
     void stateMachine_runAction(const state_E state,
@@ -151,7 +152,7 @@ class BatteryDefender {
     int64_t getDeltaTimeSeconds(int64_t *timeStartSecs);
     int32_t getTimeToActivate(void);
     void removeLineEndings(std::string *str);
-    int readFileToInt(const char *path);
+    int readFileToInt(const char *path, const bool optionalFile = false);
     bool writeIntToFile(const char *path, const int value);
     void writeTimeToFile(const char *path, const int value, int64_t *previous);
     void writeChargeLevelsToFile(const int vendorStart, const int vendorStop);
