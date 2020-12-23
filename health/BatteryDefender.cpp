@@ -77,11 +77,13 @@ void BatteryDefender::removeLineEndings(std::string *str) {
     str->erase(std::remove(str->begin(), str->end(), '\r'), str->end());
 }
 
-int BatteryDefender::readFileToInt(const char *path) {
+int BatteryDefender::readFileToInt(const char *path, const bool optionalFile) {
     std::string buffer;
     int value = 0;  // default
     if (!android::base::ReadFileToString(path, &buffer)) {
-        LOG(ERROR) << "Failed to read " << path;
+        if (optionalFile == false) {
+            LOG(ERROR) << "Failed to read " << path;
+        }
     } else {
         removeLineEndings(&buffer);
         if (!android::base::ParseInt(buffer.c_str(), &value)) {
@@ -150,9 +152,13 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
 bool BatteryDefender::isChargePowerAvailable(void) {
     // USB presence is an indicator of power availability
     const bool chargerPresentWired = readFileToInt(kPathUSBChargerPresent) != 0;
-    const bool chargerPresentWireless = readFileToInt(kPathWirelessPresent) != 0;
+    const bool chargerPresentWireless =
+            readFileToInt(kPathWirelessPresent, mIgnoreWirelessFileError) != 0;
     mIsUsbPresent = chargerPresentWired;
     mIsWirelessPresent = chargerPresentWireless;
+
+    // Report wireless read error only once; some devices may not have a wireless adapter
+    mIgnoreWirelessFileError = true;
 
     return chargerPresentWired || chargerPresentWireless;
 }
