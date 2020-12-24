@@ -34,10 +34,12 @@ namespace google {
 namespace pixel {
 namespace health {
 
-BatteryDefender::BatteryDefender(const char *pathChargeLevelStart, const char *pathChargeLevelStop,
-                                 const int32_t timeToActivateSecs,
+BatteryDefender::BatteryDefender(const char *pathWirelessPresent, const char *pathChargeLevelStart,
+                                 const char *pathChargeLevelStop, const int32_t timeToActivateSecs,
                                  const int32_t timeToClearTimerSecs)
-    : kPathChargeLevelStart(pathChargeLevelStart),
+
+    : kPathWirelessPresent(pathWirelessPresent),
+      kPathChargeLevelStart(pathChargeLevelStart),
       kPathChargeLevelStop(pathChargeLevelStop),
       kTimeToActivateSecs(timeToActivateSecs),
       kTimeToClearTimerSecs(timeToClearTimerSecs) {
@@ -75,11 +77,13 @@ void BatteryDefender::removeLineEndings(std::string *str) {
     str->erase(std::remove(str->begin(), str->end(), '\r'), str->end());
 }
 
-int BatteryDefender::readFileToInt(const char *path) {
+int BatteryDefender::readFileToInt(const char *path, const bool optionalFile) {
     std::string buffer;
     int value = 0;  // default
     if (!android::base::ReadFileToString(path, &buffer)) {
-        LOG(ERROR) << "Failed to read " << path;
+        if (optionalFile == false) {
+            LOG(ERROR) << "Failed to read " << path;
+        }
     } else {
         removeLineEndings(&buffer);
         if (!android::base::ParseInt(buffer.c_str(), &value)) {
@@ -145,12 +149,18 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
     }
 }
 
-bool BatteryDefender::isChargePowerAvailable(const bool chargerWirelessOnline) {
+bool BatteryDefender::isChargePowerAvailable(void) {
     // USB presence is an indicator of power availability
     const bool chargerPresentWired = readFileToInt(kPathUSBChargerPresent) != 0;
+    const bool chargerPresentWireless =
+            readFileToInt(kPathWirelessPresent, mIgnoreWirelessFileError) != 0;
     mIsUsbPresent = chargerPresentWired;
+    mIsWirelessPresent = chargerPresentWireless;
 
-    return chargerPresentWired || chargerWirelessOnline;
+    // Report wireless read error only once; some devices may not have a wireless adapter
+    mIgnoreWirelessFileError = true;
+
+    return chargerPresentWired || chargerPresentWireless;
 }
 
 bool BatteryDefender::isDefaultChargeLevel(const int start, const int stop) {
@@ -334,7 +344,7 @@ void BatteryDefender::updateDefenderProperties(struct android::BatteryProperties
     /**
      * If the kernel is forcing the input current limit to 0, then the online status may
      * need to be overwritten. Also, setting a charge limit below the current charge level
-     * may disable the adapter. This does not occur for wireless adapters.
+     * may disable the adapter.
      * Note; only override "online" if necessary (all "online"s are false).
      */
     if (props->chargerUsbOnline == false && props->chargerAcOnline == false) {
@@ -352,6 +362,13 @@ void BatteryDefender::updateDefenderProperties(struct android::BatteryProperties
         mWasAcOnline = props->chargerAcOnline;
         mWasUsbOnline = props->chargerUsbOnline;
     }
+
+    /* Do the same as above for wireless adapters */
+    if (props->chargerWirelessOnline == false) {
+        if (mIsWirelessPresent && props->batteryHealth == android::BATTERY_HEALTH_OVERHEAT) {
+            props->chargerWirelessOnline = true;
+        }
+    }
 }
 
 void BatteryDefender::update(struct android::BatteryProperties *props) {
@@ -365,7 +382,7 @@ void BatteryDefender::update(struct android::BatteryProperties *props) {
     const int chargeLevelVendorStop =
             android::base::GetIntProperty(kPropChargeLevelVendorStop, kChargeLevelDefaultStop);
     mIsDefenderDisabled = isBatteryDefenderDisabled(chargeLevelVendorStart, chargeLevelVendorStop);
-    mIsPowerAvailable = isChargePowerAvailable(props->chargerWirelessOnline);
+    mIsPowerAvailable = isChargePowerAvailable();
     mTimeBetweenUpdateCalls = getDeltaTimeSeconds(&mTimePreviousSecs);
 
     // Run state machine

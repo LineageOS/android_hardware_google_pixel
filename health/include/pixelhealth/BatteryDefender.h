@@ -44,7 +44,8 @@ const int DEFAULT_CAPACITY_LEVEL = 100;
 class BatteryDefender {
   public:
     // Set default google charger paths - can be overridden for other devices
-    BatteryDefender(const char *pathChargeLevelStart =
+    BatteryDefender(const char *pathWirelessPresent = "/sys/class/power_supply/wireless/present",
+                    const char *pathChargeLevelStart =
                             "/sys/devices/platform/soc/soc:google,charger/charge_start_level",
                     const char *pathChargeLevelStop =
                             "/sys/devices/platform/soc/soc:google,charger/charge_stop_level",
@@ -71,6 +72,7 @@ class BatteryDefender {
             [STATE_ACTIVE] = "ACTIVE",
     };
 
+    const char *const kPathWirelessPresent;
     const char *const kPathChargeLevelStart;
     const char *const kPathChargeLevelStop;
     const int32_t kTimeToActivateSecs;
@@ -114,6 +116,7 @@ class BatteryDefender {
     int64_t mTimeBetweenUpdateCalls = 0;
     int64_t mTimePreviousSecs;
     bool mIsUsbPresent = false;
+    bool mIsWirelessPresent = false;
     bool mIsPowerAvailable = false;
     bool mIsDefenderDisabled = false;
     int32_t mTimeToActivateSecsModified;
@@ -130,6 +133,7 @@ class BatteryDefender {
     bool mHasReachedHighCapacityLevel = false;
     bool mWasAcOnline = false;
     bool mWasUsbOnline = true; /* Default; in case neither AC/USB online becomes 1 */
+    bool mIgnoreWirelessFileError = false;
 
     // Process state actions
     void stateMachine_runAction(const state_E state,
@@ -148,11 +152,11 @@ class BatteryDefender {
     int64_t getDeltaTimeSeconds(int64_t *timeStartSecs);
     int32_t getTimeToActivate(void);
     void removeLineEndings(std::string *str);
-    int readFileToInt(const char *path);
+    int readFileToInt(const char *path, const bool optionalFile = false);
     bool writeIntToFile(const char *path, const int value);
     void writeTimeToFile(const char *path, const int value, int64_t *previous);
     void writeChargeLevelsToFile(const int vendorStart, const int vendorStop);
-    bool isChargePowerAvailable(const bool chargerWirelessOnline);
+    bool isChargePowerAvailable(void);
     bool isDefaultChargeLevel(const int start, const int stop);
     bool isBatteryDefenderDisabled(const int vendorStart, const int vendorStop);
     void addTimeToChargeTimers(void);
