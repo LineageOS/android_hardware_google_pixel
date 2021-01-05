@@ -302,13 +302,14 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
             cdev_status_map_[limit_info_pair.first][name_status_pair.first] = 0;
         }
 
-        if (name_status_pair.second.virtual_sensor_info != nullptr) {
+        if (name_status_pair.second.virtual_sensor_info != nullptr &&
+            name_status_pair.second.is_monitor) {
             if (sensor_info_map_.count(
                         name_status_pair.second.virtual_sensor_info->trigger_sensor)) {
                 sensor_info_map_[name_status_pair.second.virtual_sensor_info->trigger_sensor]
                         .is_monitor = true;
             } else {
-                LOG(FATAL) << "Could not find trigger sensor "
+                LOG(FATAL) << name_status_pair.first << " does not have trigger sensor: "
                            << name_status_pair.second.virtual_sensor_info->trigger_sensor;
             }
         }
@@ -383,18 +384,26 @@ bool ThermalHelper::readCoolingDevice(std::string_view cooling_device,
     return true;
 }
 
-bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_0 *out) const {
+bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_0 *out,
+                                    bool is_virtual_sensor) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string temp;
 
-    if (!thermal_sensors_.readThermalFile(sensor_name, &temp)) {
-        LOG(ERROR) << "readTemperature: sensor not found: " << sensor_name;
-        return false;
-    }
+    if (!is_virtual_sensor) {
+        if (!thermal_sensors_.readThermalFile(sensor_name, &temp)) {
+            LOG(ERROR) << "readTemperature: sensor not found: " << sensor_name;
+            return false;
+        }
 
-    if (temp.empty()) {
-        LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
-        return false;
+        if (temp.empty()) {
+            LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
+            return false;
+        }
+    } else {
+        if (!checkVirtualSensor(sensor_name.data(), &temp)) {
+            LOG(ERROR) << "readTemperature: failed to read virtual sensor: " << sensor_name;
+            return false;
+        }
     }
 
     const SensorInfo &sensor_info = sensor_info_map_.at(sensor_name.data());
@@ -793,7 +802,8 @@ bool ThermalHelper::fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) co
     for (const auto &name_info_pair : sensor_info_map_) {
         Temperature_1_0 temp;
 
-        if (readTemperature(name_info_pair.first, &temp)) {
+        if (readTemperature(name_info_pair.first, &temp,
+                            name_info_pair.second.virtual_sensor_info != nullptr)) {
             (*temperatures)[current_index] = temp;
         } else {
             LOG(ERROR) << __func__
