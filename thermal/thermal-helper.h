@@ -73,6 +73,9 @@ using NotificationCallback = std::function<void(const Temperature_2_0 &t)>;
 using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
 using CdevRequestStatus = std::map<std::string, int>;
 
+// Get thermal_zone type
+bool getThermalZoneTypeById(int tz_id, std::string *);
+
 struct SensorStatus {
     ThrottlingSeverity severity;
     ThrottlingSeverity prev_hot_severity;
