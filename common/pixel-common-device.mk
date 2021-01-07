@@ -7,9 +7,11 @@ BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common
 PRODUCT_PACKAGES += \
     misc_writer
 
-# Enable atrace hal for pixel devices
+# Enable atrace hal and tools for pixel devices
 PRODUCT_PACKAGES += \
-    android.hardware.atrace@1.0-service.pixel
+    android.hardware.atrace@1.0-service.pixel \
+    dmabuf_dump
+
 
 # fastbootd
 PRODUCT_PACKAGES += \
