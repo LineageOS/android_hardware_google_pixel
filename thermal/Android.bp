@@ -23,6 +23,7 @@ cc_binary {
     "libhidlbase",
     "libjsoncpp",
     "libutils",
+    "libnl",
     "libbinder_ndk",
     "android.hardware.thermal@1.0",
     "android.hardware.thermal@2.0",
