@@ -27,6 +27,7 @@ on property:vendor.thermal.link_ready=1
     chown system system /dev/thermal/tz-by-name/soft_ocp_tpu/trip_point_0_hyst
     chown system system /dev/thermal/tz-by-name/soft_ocp_gpu/trip_point_0_temp
     chown system system /dev/thermal/tz-by-name/soft_ocp_gpu/trip_point_0_hyst
+    chown system system /dev/thermal/tz-by-name/soc/mode
     start vendor.thermal-hal-2-0
 
 service vendor.thermal-hal-2-0 /vendor/bin/hw/android.hardware.thermal@2.0-service.pixel
