@@ -603,8 +603,8 @@ std::map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path)
                           << "]: " << power2state[j];
             }
         } else {
-            cooling_devices_parsed.clear();
-            return cooling_devices_parsed;
+            LOG(INFO) << "CoolingDevice[" << i << "]'s Name: " << name
+                      << " does not support Power2State";
         }
 
         cooling_devices_parsed[name] = {
