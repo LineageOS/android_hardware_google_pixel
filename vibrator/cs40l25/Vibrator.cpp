@@ -56,6 +56,7 @@ static constexpr uint32_t WAVEFORM_QUICK_RISE_INDEX = 6;
 static constexpr uint32_t WAVEFORM_SLOW_RISE_INDEX = 7;
 static constexpr uint32_t WAVEFORM_QUICK_FALL_INDEX = 8;
 static constexpr uint32_t WAVEFORM_LIGHT_TICK_INDEX = 9;
+static constexpr uint32_t WAVEFORM_LOW_TICK_INDEX = 10;
 
 static constexpr uint32_t WAVEFORM_TRIGGER_QUEUE_INDEX = 65534;
 
@@ -244,6 +245,7 @@ ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimiti
             CompositePrimitive::THUD,       CompositePrimitive::SPIN,
             CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
             CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
+            CompositePrimitive::LOW_TICK,
     };
     return ndk::ScopedAStatus::ok();
 }
@@ -569,6 +571,9 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
             break;
         case CompositePrimitive::LIGHT_TICK:
             effectIndex = WAVEFORM_LIGHT_TICK_INDEX;
+            break;
+        case CompositePrimitive::LOW_TICK:
+            effectIndex = WAVEFORM_LOW_TICK_INDEX;
             break;
         default:
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
