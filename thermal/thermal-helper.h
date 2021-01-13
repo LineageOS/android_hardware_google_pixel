@@ -127,7 +127,8 @@ class ThermalHelper {
     bool isInitializedOk() const { return is_initialized_; }
 
     // Read the temperature of a single sensor.
-    bool readTemperature(std::string_view sensor_name, Temperature_1_0 *out) const;
+    bool readTemperature(std::string_view sensor_name, Temperature_1_0 *out,
+                         bool is_virtual_sensor = false) const;
     bool readTemperature(
             std::string_view sensor_name, Temperature_2_0 *out,
             std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr,
