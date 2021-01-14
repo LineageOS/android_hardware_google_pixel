@@ -17,6 +17,7 @@
 #define LOG_TAG "android.hardware.power.stats-service.pixel"
 
 #include <dataproviders/IioEnergyMeterDataProvider.h>
+#include <dataproviders/IioEnergyMeterDataSelector.h>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
@@ -29,6 +30,8 @@ namespace android {
 namespace hardware {
 namespace power {
 namespace stats {
+
+using aidl::android::hardware::power::stats::IioEnergyMeterDataSelector;
 
 #define MAX_RAIL_NAME_LEN 50
 #define STR(s) #s
@@ -43,19 +46,19 @@ void IioEnergyMeterDataProvider::findIioEnergyMeterNodes() {
         return;
     }
 
-    // Find any iio:devices that match the given deviceNames
+    // Find any iio:devices that match the given kDeviceNames
     while (ent = readdir(iioDir), ent) {
         std::string devTypeDir = ent->d_name;
         if (devTypeDir.find(kDeviceType) != std::string::npos) {
             std::string devicePath = kIioRootDir + devTypeDir;
-            std::string deviceName;
+            std::string deviceNameContents;
 
-            if (!::android::base::ReadFileToString(devicePath + kNameNode, &deviceName)) {
+            if (!::android::base::ReadFileToString(devicePath + kNameNode, &deviceNameContents)) {
                 LOG(WARNING) << "Failed to read device name from " << devicePath;
             } else {
-                for (auto &deviceNameMatch : kDeviceNames) {
-                    if (deviceName.find(deviceNameMatch) != std::string::npos) {
-                        mDevicePaths.push_back(devicePath);
+                for (const auto &deviceName : kDeviceNames) {
+                    if (deviceNameContents.find(deviceName) != std::string::npos) {
+                        mDevicePaths.emplace(devicePath, deviceName);
                     }
                 }
             }
@@ -72,15 +75,15 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
     for (const auto &path : mDevicePaths) {
         // Get sampling rate
         unsigned long samplingRate;
-        if (!::android::base::ReadFileToString(path + kSamplingRateNode, &data) ||
+        if (!::android::base::ReadFileToString(path.first + kSamplingRateNode, &data) ||
             (samplingRate = std::stoul(data)) == 0) {
-            LOG(ERROR) << "Error reading sampling rate from " << path;
+            LOG(ERROR) << "Error reading sampling rate from " << path.first;
             continue;
         }
 
         // Get list of enabled rails
-        if (!::android::base::ReadFileToString(path + kEnabledRailsNode, &data)) {
-            LOG(ERROR) << "Error reading enabled rails from " << path;
+        if (!::android::base::ReadFileToString(path.first + kEnabledRailsNode, &data)) {
+            LOG(ERROR) << "Error reading enabled rails from " << path.first;
             continue;
         }
 
@@ -88,6 +91,7 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
         std::istringstream railNames(data);
         std::string line;
         while (std::getline(railNames, line)) {
+            /* Format example: CH2[VSYS_PWR_RFFE]:Cellular */
             std::vector<std::string> words = ::android::base::Split(line, ":][");
             if (words.size() == 4) {
                 const std::string channelName = words[1];
@@ -101,16 +105,20 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
                                  << "be provided.";
                 }
             } else {
-                LOG(WARNING) << "Unexpected enabled rail format in " << path;
+                LOG(WARNING) << "Unexpected enabled rail format in " << path.first;
             }
         }
     }
 }
 
 IioEnergyMeterDataProvider::IioEnergyMeterDataProvider(
-        const std::vector<const std::string> &deviceNames)
+        const std::vector<const std::string> &deviceNames, const bool useSelector)
     : kDeviceNames(std::move(deviceNames)) {
     findIioEnergyMeterNodes();
+    if (useSelector) {
+        /* Run meter selection in constructor; object can be discarded afterwards */
+        IioEnergyMeterDataSelector selector(mDevicePaths);
+    }
     parseEnabledRails();
     mReading.resize(mChannelInfos.size());
 }
@@ -141,6 +149,8 @@ int IioEnergyMeterDataProvider::parseEnergyContents(const std::string &contents)
             uint64_t energy = 0;
             uint64_t duration = 0;
             char railNameRaw[MAX_RAIL_NAME_LEN + 1];
+
+            /* Format example: CH3(T=358356)[S2M_VDD_CPUCL2], 761330 */
             if (sscanf(line.c_str(),
                        "CH%*d(T=%" PRIu64 ")[%" XSTR(MAX_RAIL_NAME_LEN) "[^]]], %" PRIu64,
                        &duration, railNameRaw, &energy) == 3) {
@@ -191,8 +201,8 @@ ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeters(
     std::scoped_lock lock(mLock);
     binder_status_t ret = STATUS_OK;
     for (const auto &devicePath : mDevicePaths) {
-        if (parseEnergyValue(devicePath) < 0) {
-            LOG(ERROR) << "Error in parsing " << devicePath;
+        if (parseEnergyValue(devicePath.first) < 0) {
+            LOG(ERROR) << "Error in parsing " << devicePath.first;
             return ndk::ScopedAStatus::fromStatus(STATUS_FAILED_TRANSACTION);
         }
     }
