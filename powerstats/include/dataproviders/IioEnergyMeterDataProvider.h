@@ -28,7 +28,8 @@ namespace stats {
 
 class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
   public:
-    IioEnergyMeterDataProvider(const std::vector<const std::string> &deviceNames);
+    IioEnergyMeterDataProvider(const std::vector<const std::string> &deviceNames,
+                               const bool useSelector = false);
 
     // Methods from PowerStats::IRailEnergyDataProvider
     ndk::ScopedAStatus readEnergyMeters(const std::vector<int32_t> &in_channelIds,
@@ -42,7 +43,7 @@ class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
     int parseEnergyContents(const std::string &contents);
 
     std::mutex mLock;
-    std::vector<std::string> mDevicePaths;
+    std::unordered_map<std::string, std::string> mDevicePaths;  // key: path, value: device name
     std::unordered_map<std::string, int32_t> mChannelIds;  // key: name, value: id
     std::vector<ChannelInfo> mChannelInfos;
     std::vector<EnergyMeasurement> mReading;
