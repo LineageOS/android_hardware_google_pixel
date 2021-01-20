@@ -33,7 +33,7 @@ class WlanStateResidencyDataProvider : public PowerStats::IStateResidencyDataPro
     // Methods from PowerStats::IStateResidencyDataProvider
     bool getStateResidencies(
             std::unordered_map<std::string, std::vector<StateResidency>> *residencies) override;
-    std::unordered_map<std::string, std::vector<StateInfo>> getInfo() override;
+    std::unordered_map<std::string, std::vector<State>> getInfo() override;
 
   private:
     const std::string mName;
