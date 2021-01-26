@@ -38,13 +38,13 @@ class PowerStats : public BnPowerStats {
         virtual ~IStateResidencyDataProvider() = default;
         virtual bool getStateResidencies(
                 std::unordered_map<std::string, std::vector<StateResidency>> *residencies) = 0;
-        virtual std::unordered_map<std::string, std::vector<StateInfo>> getInfo() = 0;
+        virtual std::unordered_map<std::string, std::vector<State>> getInfo() = 0;
     };
 
     class IEnergyConsumer : public virtual ::android::RefBase {
       public:
         virtual ~IEnergyConsumer() = default;
-        virtual EnergyConsumerId getId() = 0;
+        virtual std::pair<EnergyConsumerType, std::string> getInfo() = 0;
         virtual std::optional<EnergyConsumerResult> getEnergyConsumed() = 0;
     };
 
@@ -54,7 +54,7 @@ class PowerStats : public BnPowerStats {
         virtual ndk::ScopedAStatus readEnergyMeters(
                 const std::vector<int32_t> &in_channelIds,
                 std::vector<EnergyMeasurement> *_aidl_return) = 0;
-        virtual ndk::ScopedAStatus getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) = 0;
+        virtual ndk::ScopedAStatus getEnergyMeterInfo(std::vector<Channel> *_aidl_return) = 0;
     };
 
     PowerStats() = default;
@@ -63,13 +63,13 @@ class PowerStats : public BnPowerStats {
     void setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p);
 
     // Methods from aidl::android::hardware::power::stats::IPowerStats
-    ndk::ScopedAStatus getPowerEntityInfo(std::vector<PowerEntityInfo> *_aidl_return) override;
+    ndk::ScopedAStatus getPowerEntityInfo(std::vector<PowerEntity> *_aidl_return) override;
     ndk::ScopedAStatus getStateResidency(const std::vector<int32_t> &in_powerEntityIds,
                                          std::vector<StateResidencyResult> *_aidl_return) override;
-    ndk::ScopedAStatus getEnergyConsumerInfo(std::vector<EnergyConsumerId> *_aidl_return) override;
-    ndk::ScopedAStatus getEnergyConsumed(const std::vector<EnergyConsumerId> &in_energyConsumerIds,
+    ndk::ScopedAStatus getEnergyConsumerInfo(std::vector<EnergyConsumer> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyConsumed(const std::vector<int32_t> &in_energyConsumerIds,
                                          std::vector<EnergyConsumerResult> *_aidl_return) override;
-    ndk::ScopedAStatus getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyMeterInfo(std::vector<Channel> *_aidl_return) override;
     ndk::ScopedAStatus readEnergyMeters(const std::vector<int32_t> &in_channelIds,
                                         std::vector<EnergyMeasurement> *_aidl_return) override;
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
@@ -88,9 +88,10 @@ class PowerStats : public BnPowerStats {
     void dumpEnergyMeter(std::ostringstream &oss, bool delta);
 
     std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
-    std::vector<PowerEntityInfo> mPowerEntityInfos;
+    std::vector<PowerEntity> mPowerEntityInfos;
 
-    std::unordered_map<EnergyConsumerId, sp<IEnergyConsumer>> mEnergyConsumers;
+    std::vector<sp<IEnergyConsumer>> mEnergyConsumers;
+    std::vector<EnergyConsumer> mEnergyConsumerInfos;
 
     std::unique_ptr<IEnergyMeterDataProvider> mEnergyMeterDataProvider;
 };

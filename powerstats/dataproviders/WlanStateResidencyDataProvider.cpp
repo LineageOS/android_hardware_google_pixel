@@ -46,7 +46,7 @@ static bool extractStat(const char *line, const std::string &prefix, uint64_t *s
 
 bool WlanStateResidencyDataProvider::getStateResidencies(
         std::unordered_map<std::string, std::vector<StateResidency>> *residencies) {
-    std::vector<StateResidency> result = {{.stateId = ACTIVE_ID}, {.stateId = DEEPSLEEP_ID}};
+    std::vector<StateResidency> result = {{.id = ACTIVE_ID}, {.id = DEEPSLEEP_ID}};
 
     std::string wlanDriverStatus = ::android::base::GetProperty("wlan.driver.status", "unloaded");
     if (wlanDriverStatus != "ok") {
@@ -99,11 +99,10 @@ bool WlanStateResidencyDataProvider::getStateResidencies(
     return true;
 }
 
-std::unordered_map<std::string, std::vector<StateInfo>> WlanStateResidencyDataProvider::getInfo() {
-    std::unordered_map<std::string, std::vector<StateInfo>> ret = {
+std::unordered_map<std::string, std::vector<State>> WlanStateResidencyDataProvider::getInfo() {
+    std::unordered_map<std::string, std::vector<State>> ret = {
             {mName,
-             {{.stateId = ACTIVE_ID, .stateName = "Active"},
-              {.stateId = DEEPSLEEP_ID, .stateName = "Deep-Sleep"}}},
+             {{.id = ACTIVE_ID, .name = "Active"}, {.id = DEEPSLEEP_ID, .name = "Deep-Sleep"}}},
     };
     return ret;
 }
