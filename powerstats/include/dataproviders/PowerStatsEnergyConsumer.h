@@ -45,25 +45,29 @@ using ::android::sp;
 class PowerStatsEnergyConsumer : public PowerStats::IEnergyConsumer {
   public:
     static sp<PowerStatsEnergyConsumer> createMeterConsumer(std::shared_ptr<PowerStats> p,
-                                                            EnergyConsumerId id,
+                                                            EnergyConsumerType type,
+                                                            std::string name,
                                                             std::set<std::string> channelNames);
     static sp<PowerStatsEnergyConsumer> createEntityConsumer(
-            std::shared_ptr<PowerStats> p, EnergyConsumerId id, std::string powerEntityName,
-            std::map<std::string, int32_t> stateCoeffs);
-    static sp<PowerStatsEnergyConsumer> createMeterAndEntityConsumer(
-            std::shared_ptr<PowerStats> p, EnergyConsumerId id, std::set<std::string> channelNames,
+            std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
             std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs);
+    static sp<PowerStatsEnergyConsumer> createMeterAndEntityConsumer(
+            std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
+            std::set<std::string> channelNames, std::string powerEntityName,
+            std::map<std::string, int32_t> stateCoeffs);
 
-    EnergyConsumerId getId() override { return kId; }
+    std::pair<EnergyConsumerType, std::string> getInfo() override { return {kType, kName}; }
 
     std::optional<EnergyConsumerResult> getEnergyConsumed() override;
 
   private:
-    PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p, EnergyConsumerId id);
+    PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p, EnergyConsumerType type,
+                             std::string name);
     bool addEnergyMeter(std::set<std::string> channelNames);
     bool addPowerEntity(std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs);
 
-    const EnergyConsumerId kId;
+    const EnergyConsumerType kType;
+    const std::string kName;
     std::shared_ptr<PowerStats> mPowerStats;
     std::vector<int32_t> mChannelIds;
     int32_t mPowerEntityId;
