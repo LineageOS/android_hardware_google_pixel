@@ -43,7 +43,7 @@ DisplayStateResidencyDataProvider::DisplayStateResidencyDataProvider(
     // Construct mResidencies
     mResidencies.reserve(mStates.size());
     for (int32_t i = 0; i < mStates.size(); ++i) {
-        StateResidency p = {.stateId = i};
+        StateResidency p = {.id = i};
         mResidencies.emplace_back(p);
     }
 
@@ -87,12 +87,11 @@ bool DisplayStateResidencyDataProvider::getStateResidencies(
     return true;
 }
 
-std::unordered_map<std::string, std::vector<StateInfo>>
-DisplayStateResidencyDataProvider::getInfo() {
-    std::vector<StateInfo> stateInfos;
+std::unordered_map<std::string, std::vector<State>> DisplayStateResidencyDataProvider::getInfo() {
+    std::vector<State> stateInfos;
     stateInfos.reserve(mStates.size());
     for (int32_t i = 0; i < mStates.size(); ++i) {
-        stateInfos.push_back({.stateId = i, .stateName = mStates[i]});
+        stateInfos.push_back({.id = i, .name = mStates[i]});
     }
 
     return {{mName, stateInfos}};

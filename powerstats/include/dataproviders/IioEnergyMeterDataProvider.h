@@ -34,7 +34,7 @@ class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
     // Methods from PowerStats::IRailEnergyDataProvider
     ndk::ScopedAStatus readEnergyMeters(const std::vector<int32_t> &in_channelIds,
                                         std::vector<EnergyMeasurement> *_aidl_return) override;
-    ndk::ScopedAStatus getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) override;
+    ndk::ScopedAStatus getEnergyMeterInfo(std::vector<Channel> *_aidl_return) override;
 
   private:
     void findIioEnergyMeterNodes();
@@ -45,7 +45,7 @@ class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
     std::mutex mLock;
     std::unordered_map<std::string, std::string> mDevicePaths;  // key: path, value: device name
     std::unordered_map<std::string, int32_t> mChannelIds;  // key: name, value: id
-    std::vector<ChannelInfo> mChannelInfos;
+    std::vector<Channel> mChannelInfos;
     std::vector<EnergyMeasurement> mReading;
 
     const std::vector<const std::string> kDeviceNames;

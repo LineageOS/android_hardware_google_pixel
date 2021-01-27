@@ -46,7 +46,7 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     // Methods from PowerStats::IStateResidencyDataProvider
     bool getStateResidencies(
             std::unordered_map<std::string, std::vector<StateResidency>> *residencies) override;
-    std::unordered_map<std::string, std::vector<StateInfo>> getInfo() override;
+    std::unordered_map<std::string, std::vector<State>> getInfo() override;
 
   private:
     // Method associated with ::android::Thread. Poll for display state changes
