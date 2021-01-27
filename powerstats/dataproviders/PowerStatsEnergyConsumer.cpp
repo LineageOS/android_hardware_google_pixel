@@ -27,29 +27,31 @@ namespace power {
 namespace stats {
 
 PowerStatsEnergyConsumer::PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p,
-                                                   EnergyConsumerId id)
-    : kId(id), mPowerStats(p) {}
+                                                   EnergyConsumerType type, std::string name)
+    : kType(type), kName(name), mPowerStats(p) {}
 
 sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterConsumer(
-        std::shared_ptr<PowerStats> p, EnergyConsumerId id, std::set<std::string> channelNames) {
-    return createMeterAndEntityConsumer(p, id, channelNames, "", {});
+        std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
+        std::set<std::string> channelNames) {
+    return createMeterAndEntityConsumer(p, type, name, channelNames, "", {});
 }
 
 sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createEntityConsumer(
-        std::shared_ptr<PowerStats> p, EnergyConsumerId id, std::string powerEntityName,
-        std::map<std::string, int32_t> stateCoeffs) {
-    return createMeterAndEntityConsumer(p, id, {}, powerEntityName, stateCoeffs);
+        std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
+        std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs) {
+    return createMeterAndEntityConsumer(p, type, name, {}, powerEntityName, stateCoeffs);
 }
 
 sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndEntityConsumer(
-        std::shared_ptr<PowerStats> p, EnergyConsumerId id, std::set<std::string> channelNames,
-        std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs) {
-    sp<PowerStatsEnergyConsumer> ret = new PowerStatsEnergyConsumer(p, id);
+        std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
+        std::set<std::string> channelNames, std::string powerEntityName,
+        std::map<std::string, int32_t> stateCoeffs) {
+    sp<PowerStatsEnergyConsumer> ret = new PowerStatsEnergyConsumer(p, type, name);
     if (ret->addEnergyMeter(channelNames) && ret->addPowerEntity(powerEntityName, stateCoeffs)) {
         return ret;
     }
 
-    LOG(ERROR) << "Failed to create PowerStatsEnergyConsumer for id=" << static_cast<int>(id);
+    LOG(ERROR) << "Failed to create PowerStatsEnergyConsumer for " << name;
     return nullptr;
 }
 
@@ -58,12 +60,12 @@ bool PowerStatsEnergyConsumer::addEnergyMeter(std::set<std::string> channelNames
         return true;
     }
 
-    std::vector<ChannelInfo> channels;
+    std::vector<Channel> channels;
     mPowerStats->getEnergyMeterInfo(&channels);
 
     for (const auto &c : channels) {
-        if (channelNames.count(c.channelName)) {
-            mChannelIds.push_back(c.channelId);
+        if (channelNames.count(c.name)) {
+            mChannelIds.push_back(c.id);
         }
     }
 
@@ -76,15 +78,15 @@ bool PowerStatsEnergyConsumer::addPowerEntity(std::string powerEntityName,
         return true;
     }
 
-    std::vector<PowerEntityInfo> powerEntities;
+    std::vector<PowerEntity> powerEntities;
     mPowerStats->getPowerEntityInfo(&powerEntities);
 
     for (const auto &p : powerEntities) {
-        if (powerEntityName == p.powerEntityName) {
-            mPowerEntityId = p.powerEntityId;
+        if (powerEntityName == p.name) {
+            mPowerEntityId = p.id;
             for (const auto &s : p.states) {
-                if (stateCoeffs.count(s.stateName)) {
-                    mCoefficients.emplace(s.stateId, stateCoeffs.at(s.stateName));
+                if (stateCoeffs.count(s.name)) {
+                    mCoefficients.emplace(s.id, stateCoeffs.at(s.name));
                 }
             }
             break;
@@ -113,8 +115,8 @@ std::optional<EnergyConsumerResult> PowerStatsEnergyConsumer::getEnergyConsumed(
         std::vector<StateResidencyResult> results;
         if (mPowerStats->getStateResidency({mPowerEntityId}, &results).isOk()) {
             for (const auto &s : results[0].stateResidencyData) {
-                if (mCoefficients.count(s.stateId)) {
-                    totalEnergyUWs += mCoefficients.at(s.stateId) * s.totalTimeInStateMs;
+                if (mCoefficients.count(s.id)) {
+                    totalEnergyUWs += mCoefficients.at(s.id) * s.totalTimeInStateMs;
                 }
             }
         } else {
@@ -123,8 +125,7 @@ std::optional<EnergyConsumerResult> PowerStatsEnergyConsumer::getEnergyConsumed(
         }
     }
 
-    return EnergyConsumerResult{.energyConsumerId = kId,
-                                .timestampMs = 0,  // What should this timestamp be?
+    return EnergyConsumerResult{.timestampMs = 0,  // What should this timestamp be?
                                 .energyUWs = totalEnergyUWs};
 }
 

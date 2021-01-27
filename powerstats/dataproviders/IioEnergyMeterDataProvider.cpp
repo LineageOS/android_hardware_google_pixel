@@ -96,7 +96,7 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
             if (words.size() == 4) {
                 const std::string channelName = words[1];
                 if (mChannelIds.count(channelName) == 0) {
-                    mChannelInfos.push_back({.channelId = id, .channelName = channelName});
+                    mChannelInfos.push_back({.id = id, .name = channelName});
                     mChannelIds.emplace(channelName, id);
                     id++;
                 } else {
@@ -160,7 +160,7 @@ int IioEnergyMeterDataProvider::parseEnergyContents(const std::string &contents)
                 /* The count cannot be > 1; mChannelIds is a map */
                 if (mChannelIds.count(railName) == 1) {
                     size_t index = mChannelIds[railName];
-                    mReading[index].channelId = index;
+                    mReading[index].id = index;
                     mReading[index].timestampMs = timestamp;
                     mReading[index].durationMs = duration;
                     mReading[index].energyUWs = energy;
@@ -223,7 +223,7 @@ ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeters(
 }
 
 ndk::ScopedAStatus IioEnergyMeterDataProvider::getEnergyMeterInfo(
-        std::vector<ChannelInfo> *_aidl_return) {
+        std::vector<Channel> *_aidl_return) {
     std::scoped_lock lk(mLock);
     *_aidl_return = mChannelInfos;
     return ndk::ScopedAStatus::ok();

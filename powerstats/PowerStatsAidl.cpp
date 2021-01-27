@@ -44,9 +44,9 @@ void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p
     int32_t id = mPowerEntityInfos.size();
 
     for (const auto &[entityName, states] : p->getInfo()) {
-        PowerEntityInfo i = {
-                .powerEntityId = id++,
-                .powerEntityName = entityName,
+        PowerEntity i = {
+                .id = id++,
+                .name = entityName,
                 .states = states,
         };
         mPowerEntityInfos.emplace_back(i);
@@ -54,7 +54,7 @@ void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p
     }
 }
 
-ndk::ScopedAStatus PowerStats::getPowerEntityInfo(std::vector<PowerEntityInfo> *_aidl_return) {
+ndk::ScopedAStatus PowerStats::getPowerEntityInfo(std::vector<PowerEntity> *_aidl_return) {
     *_aidl_return = mPowerEntityInfos;
     return ndk::ScopedAStatus::ok();
 }
@@ -84,7 +84,7 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
         }
 
         // Check to see if we already have data for the given id
-        std::string powerEntityName = mPowerEntityInfos[id].powerEntityName;
+        std::string powerEntityName = mPowerEntityInfos[id].name;
         if (stateResidencies.find(powerEntityName) == stateResidencies.end()) {
             mStateResidencyDataProviders[id]->getStateResidencies(&stateResidencies);
         }
@@ -93,7 +93,7 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
         auto stateResidency = stateResidencies.find(powerEntityName);
         if (stateResidency != stateResidencies.end()) {
             StateResidencyResult res = {
-                    .powerEntityId = id,
+                    .id = id,
                     .stateResidencyData = stateResidency->second,
             };
             _aidl_return->emplace_back(res);
@@ -113,43 +113,48 @@ void PowerStats::addEnergyConsumer(sp<IEnergyConsumer> p) {
     if (!p) {
         return;
     }
-
-    mEnergyConsumers.emplace(p->getId(), p);
+    std::pair<EnergyConsumerType, std::string> info = p->getInfo();
+    int32_t count =
+            count_if(mEnergyConsumers.begin(), mEnergyConsumers.end(),
+                     [info](sp<IEnergyConsumer> c) { return info.first == c->getInfo().first; });
+    int32_t id = mEnergyConsumers.size();
+    mEnergyConsumerInfos.emplace_back(
+            EnergyConsumer{.id = id, .ordinal = count, .type = info.first, .name = info.second});
+    mEnergyConsumers.emplace_back(p);
 }
 
-ndk::ScopedAStatus PowerStats::getEnergyConsumerInfo(std::vector<EnergyConsumerId> *_aidl_return) {
-    for (const auto &[id, ignored] : mEnergyConsumers) {
-        _aidl_return->push_back(id);
-    }
+ndk::ScopedAStatus PowerStats::getEnergyConsumerInfo(std::vector<EnergyConsumer> *_aidl_return) {
+    *_aidl_return = mEnergyConsumerInfos;
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus PowerStats::getEnergyConsumed(
-        const std::vector<EnergyConsumerId> &in_energyConsumerIds,
-        std::vector<EnergyConsumerResult> *_aidl_return) {
+ndk::ScopedAStatus PowerStats::getEnergyConsumed(const std::vector<int32_t> &in_energyConsumerIds,
+                                                 std::vector<EnergyConsumerResult> *_aidl_return) {
     if (mEnergyConsumers.empty()) {
         return ndk::ScopedAStatus::ok();
     }
 
     // If in_powerEntityIds is empty then return data for all supported energy consumers
     if (in_energyConsumerIds.empty()) {
-        std::vector<EnergyConsumerId> ids;
-        getEnergyConsumerInfo(&ids);
-        return getEnergyConsumed(ids, _aidl_return);
+        std::vector<int32_t> v(mEnergyConsumerInfos.size());
+        std::iota(std::begin(v), std::end(v), 0);
+        return getEnergyConsumed(v, _aidl_return);
     }
 
     binder_status_t err = STATUS_OK;
 
     for (const auto id : in_energyConsumerIds) {
-        // skip any unavailable ids
-        if (mEnergyConsumers.find(id) == mEnergyConsumers.end()) {
+        // skip any invalid ids
+        if (id < 0 || id >= mEnergyConsumers.size()) {
             err = STATUS_BAD_VALUE;
             continue;
         }
 
-        auto res = mEnergyConsumers.at(id)->getEnergyConsumed();
-        if (res) {
-            _aidl_return->emplace_back(res.value());
+        auto resopt = mEnergyConsumers[id]->getEnergyConsumed();
+        if (resopt) {
+            EnergyConsumerResult res = resopt.value();
+            res.id = id;
+            _aidl_return->emplace_back(res);
         } else {
             // Failed to retrieve results for the given id.
 
@@ -166,7 +171,7 @@ void PowerStats::setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProv
     mEnergyMeterDataProvider = std::move(p);
 }
 
-ndk::ScopedAStatus PowerStats::getEnergyMeterInfo(std::vector<ChannelInfo> *_aidl_return) {
+ndk::ScopedAStatus PowerStats::getEnergyMeterInfo(std::vector<Channel> *_aidl_return) {
     if (!mEnergyMeterDataProvider) {
         return ndk::ScopedAStatus::ok();
     }
@@ -184,25 +189,25 @@ ndk::ScopedAStatus PowerStats::readEnergyMeters(const std::vector<int32_t> &in_c
 void PowerStats::getEntityStateNames(
         std::unordered_map<int32_t, std::string> *entityNames,
         std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames) {
-    std::vector<PowerEntityInfo> infos;
+    std::vector<PowerEntity> infos;
     getPowerEntityInfo(&infos);
 
     for (const auto &info : infos) {
-        entityNames->emplace(info.powerEntityId, info.powerEntityName);
-        stateNames->emplace(info.powerEntityId, std::unordered_map<int32_t, std::string>());
-        auto &entityStateNames = stateNames->at(info.powerEntityId);
+        entityNames->emplace(info.id, info.name);
+        stateNames->emplace(info.id, std::unordered_map<int32_t, std::string>());
+        auto &entityStateNames = stateNames->at(info.id);
         for (const auto &state : info.states) {
-            entityStateNames.emplace(state.stateId, state.stateName);
+            entityStateNames.emplace(state.id, state.name);
         }
     }
 }
 
 void PowerStats::getChannelNames(std::unordered_map<int32_t, std::string> *channelNames) {
-    std::vector<ChannelInfo> infos;
+    std::vector<Channel> infos;
     getEnergyMeterInfo(&infos);
 
     for (const auto &info : infos) {
-        channelNames->emplace(info.channelId, info.channelName);
+        channelNames->emplace(info.id, info.name);
     }
 }
 
@@ -234,18 +239,17 @@ void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
 
         std::unordered_map<int32_t, int64_t> prevEnergyDataMap;
         for (const auto &data : prevEnergyData) {
-            prevEnergyDataMap.emplace(data.channelId, data.energyUWs);
+            prevEnergyDataMap.emplace(data.id, data.energyUWs);
         }
 
         for (const auto &data : energyData) {
-            auto prevEnergyDataIt = prevEnergyDataMap.find(data.channelId);
+            auto prevEnergyDataIt = prevEnergyDataMap.find(data.id);
             int64_t deltaEnergy = 0;
             if (prevEnergyDataIt != prevEnergyDataMap.end()) {
                 deltaEnergy = data.energyUWs - prevEnergyDataIt->second;
             }
 
-            oss << ::android::base::StringPrintf(dataFormatDelta,
-                                                 channelNames.at(data.channelId).c_str(),
+            oss << ::android::base::StringPrintf(dataFormatDelta, channelNames.at(data.id).c_str(),
                                                  static_cast<float>(data.energyUWs) / 1000.0,
                                                  static_cast<float>(deltaEnergy) / 1000.0);
         }
@@ -256,8 +260,7 @@ void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
         oss << ::android::base::StringPrintf(headerFormat, "Channel", "Cumulative Energy");
 
         for (const auto &data : energyData) {
-            oss << ::android::base::StringPrintf(dataFormat,
-                                                 channelNames.at(data.channelId).c_str(),
+            oss << ::android::base::StringPrintf(dataFormat, channelNames.at(data.id).c_str(),
                                                  static_cast<float>(data.energyUWs) / 1000.0);
         }
     }
@@ -299,25 +302,22 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
         // Process prevResults into a 2-tier lookup table for easy reference
         std::unordered_map<int32_t, std::unordered_map<int32_t, StateResidency>> prevResultsMap;
         for (const auto &prevResult : prevResults) {
-            prevResultsMap.emplace(prevResult.powerEntityId,
-                                   std::unordered_map<int32_t, StateResidency>());
+            prevResultsMap.emplace(prevResult.id, std::unordered_map<int32_t, StateResidency>());
             for (auto stateResidency : prevResult.stateResidencyData) {
-                prevResultsMap.at(prevResult.powerEntityId)
-                        .emplace(stateResidency.stateId, stateResidency);
+                prevResultsMap.at(prevResult.id).emplace(stateResidency.id, stateResidency);
             }
         }
 
         // Iterate over the new result data (one "result" per entity)
         for (const auto &result : results) {
-            const char *entityName = entityNames.at(result.powerEntityId).c_str();
+            const char *entityName = entityNames.at(result.id).c_str();
 
             // Look up previous result data for the same entity
-            auto prevEntityResultIt = prevResultsMap.find(result.powerEntityId);
+            auto prevEntityResultIt = prevResultsMap.find(result.id);
 
             // Iterate over individual states within the current entity's new result
             for (const auto &stateResidency : result.stateResidencyData) {
-                const char *stateName =
-                        stateNames.at(result.powerEntityId).at(stateResidency.stateId).c_str();
+                const char *stateName = stateNames.at(result.id).at(stateResidency.id).c_str();
 
                 // If a previous result was found for the same entity, see if that
                 // result also contains data for the current state
@@ -325,8 +325,7 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
                 int64_t deltaTotalCount = 0;
                 int64_t deltaTimestamp = 0;
                 if (prevEntityResultIt != prevResultsMap.end()) {
-                    auto prevStateResidencyIt =
-                            prevEntityResultIt->second.find(stateResidency.stateId);
+                    auto prevStateResidencyIt = prevEntityResultIt->second.find(stateResidency.id);
                     // If a previous result was found for the current entity and state, calculate
                     // the deltas and display them along with new result
                     if (prevStateResidencyIt != prevEntityResultIt->second.end()) {
@@ -354,8 +353,8 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
         for (const auto &result : results) {
             for (const auto &stateResidency : result.stateResidencyData) {
                 oss << ::android::base::StringPrintf(
-                        dataFormat, entityNames.at(result.powerEntityId).c_str(),
-                        stateNames.at(result.powerEntityId).at(stateResidency.stateId).c_str(),
+                        dataFormat, entityNames.at(result.id).c_str(),
+                        stateNames.at(result.id).at(stateResidency.id).c_str(),
                         stateResidency.totalTimeInStateMs, stateResidency.totalStateEntryCount,
                         stateResidency.lastEntryTimestampMs);
             }
@@ -374,7 +373,7 @@ void PowerStats::dumpEnergyConsumer(std::ostringstream &oss, bool delta) {
     oss << "\n============= PowerStats HAL 2.0 energy consumers ==============\n";
 
     for (const auto &result : results) {
-        oss << ::android::base::StringPrintf("%d = %14.2f mWs\n", result.energyConsumerId,
+        oss << ::android::base::StringPrintf("%d = %14.2f mWs\n", result.id,
                                              static_cast<float>(result.energyUWs) / 1000.0);
     }
 
