@@ -207,15 +207,15 @@ void PowerStats::getChannelNames(std::unordered_map<int32_t, std::string> *chann
     getEnergyMeterInfo(&infos);
 
     for (const auto &info : infos) {
-        channelNames->emplace(info.id, info.name);
+        channelNames->emplace(info.id, "[" + info.name + "]:" + info.subsystem);
     }
 }
 
 void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
-    const char *headerFormat = "  %18s   %18s\n";
-    const char *dataFormat = "  %18s   %14.2f mWs\n";
-    const char *headerFormatDelta = "  %18s   %18s (%14s)\n";
-    const char *dataFormatDelta = "  %18s   %14.2f mWs (%14.2f)\n";
+    const char *headerFormat = "  %32s   %18s\n";
+    const char *dataFormat = "  %32s   %14.2f mWs\n";
+    const char *headerFormatDelta = "  %32s   %18s (%14s)\n";
+    const char *dataFormatDelta = "  %32s   %14.2f mWs (%14.2f)\n";
 
     std::unordered_map<int32_t, std::string> channelNames;
     getChannelNames(&channelNames);

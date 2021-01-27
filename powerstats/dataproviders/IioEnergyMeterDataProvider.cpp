@@ -95,8 +95,10 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
             std::vector<std::string> words = ::android::base::Split(line, ":][");
             if (words.size() == 4) {
                 const std::string channelName = words[1];
+                const std::string subsystemName = words[3];
                 if (mChannelIds.count(channelName) == 0) {
-                    mChannelInfos.push_back({.id = id, .name = channelName});
+                    mChannelInfos.push_back(
+                            {.id = id, .name = channelName, .subsystem = subsystemName});
                     mChannelIds.emplace(channelName, id);
                     id++;
                 } else {
