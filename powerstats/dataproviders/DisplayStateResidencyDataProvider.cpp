@@ -82,7 +82,11 @@ bool DisplayStateResidencyDataProvider::getStateResidencies(
 
     // Construct residency result based on current residency data
     auto result = mResidencies;
-    result[mCurState].totalTimeInStateMs += now - result[mCurState].lastEntryTimestampMs;
+
+    if (mCurState > -1) {
+        result[mCurState].totalTimeInStateMs += now - result[mCurState].lastEntryTimestampMs;
+    }
+
     residencies->emplace(mName, result);
     return true;
 }
