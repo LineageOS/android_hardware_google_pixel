@@ -17,20 +17,31 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 
-#include <aidl/android/frameworks/stats/IStats.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <utils/StrongPointer.h>
 
 #include "BatteryEEPROMReporter.h"
 
-using android::sp;
-using android::frameworks::stats::V1_0::IStats;
-using android::frameworks::stats::V1_0::SlowIo;
+namespace aidl {
+namespace android {
+namespace frameworks {
+namespace stats {
+
+class IStats;
+
+}  // namespace stats
+}  // namespace frameworks
+}  // namespace android
+}  // namespace aidl
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+
+using aidl::android::frameworks::stats::IStats;
+using android::sp;
+using android::frameworks::stats::V1_0::SlowIo;
 
 class SysfsCollector {
   public:
@@ -68,18 +79,18 @@ class SysfsCollector {
     void logCodecFailed();
     void logCodec1Failed();
     void logSlowIO();
-    void logSpeakerImpedance();
+    void logSpeakerImpedance(const std::shared_ptr<IStats> &stats_client);
     void logSpeechDspStat();
-    void logBatteryCapacity();
-    void logUFSLifetime();
-    void logF2fsStats();
-    void logZramStats();
-    void logBootStats();
+    void logBatteryCapacity(const std::shared_ptr<IStats> &stats_client);
+    void logUFSLifetime(const std::shared_ptr<IStats> &stats_client);
+    void logF2fsStats(const std::shared_ptr<IStats> &stats_client);
+    void logZramStats(const std::shared_ptr<IStats> &stats_client);
+    void logBootStats(const std::shared_ptr<IStats> &stats_client);
     void logBatteryEEPROM();
 
     void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
-    void reportZramMmStat();
-    void reportZramBdStat();
+    void reportZramMmStat(const std::shared_ptr<IStats> &stats_client);
+    void reportZramBdStat(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -99,8 +110,7 @@ class SysfsCollector {
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
-    sp<IStats> stats_;
-    std::shared_ptr<aidl::android::frameworks::stats::IStats> stats_client_;
+    sp<android::frameworks::stats::V1_0::IStats> stats_;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
 

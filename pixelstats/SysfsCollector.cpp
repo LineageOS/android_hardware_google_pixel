@@ -18,12 +18,12 @@
 
 #define LOG_TAG "pixelstats-vendor"
 
+#include <aidl/android/frameworks/stats/IStats.h>
 #include <android-base/file.h>
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <utils/Log.h>
 #include <utils/StrongPointer.h>
@@ -40,7 +40,34 @@ using aidl::android::frameworks::stats::IStats;
 
 std::shared_ptr<IStats> getStatsService() {
     const std::string instance = std::string() + IStats::descriptor + "/default";
+    if (!AServiceManager_isDeclared(instance.c_str())) {
+        ALOGE("IStats service is not registered.");
+        return nullptr;
+    }
     return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
+}
+
+using aidl::android::frameworks::stats::VendorAtom;
+using aidl::android::frameworks::stats::VendorAtomValue;
+namespace PixelAtoms = android::hardware::google::pixel::PixelAtoms;
+
+void reportSpeakerImpedance(const std::shared_ptr<IStats> &stats_client,
+                            const PixelAtoms::VendorSpeakerImpedance &speakerImpedance) {
+    // Load values array
+    std::vector<VendorAtomValue> values(2);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(speakerImpedance.speaker_location());
+    values[0] = tmp;
+    tmp.set<VendorAtomValue::intValue>(speakerImpedance.impedance());
+    values[1] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::VENDOR_SPEAKER_IMPEDANCE,
+                        .values = values};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorSpeakerImpedance to Stats service");
 }
 
 }  // namespace
@@ -56,14 +83,13 @@ using android::base::ReadFileToString;
 using android::base::StartsWith;
 using android::frameworks::stats::V1_0::ChargeCycles;
 using android::frameworks::stats::V1_0::HardwareFailed;
-using android::frameworks::stats::V1_0::IStats;
 using android::frameworks::stats::V1_0::SlowIo;
-using android::frameworks::stats::V1_0::SpeakerImpedance;
 using android::frameworks::stats::V1_0::SpeechDspStat;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
+using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 
@@ -235,7 +261,7 @@ void SysfsCollector::logSlowIO() {
 /**
  * Report the last-detected impedance of left & right speakers.
  */
-void SysfsCollector::logSpeakerImpedance() {
+void SysfsCollector::logSpeakerImpedance(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (kImpedancePath == nullptr || strlen(kImpedancePath) == 0) {
         ALOGV("Audio impedance path not specified");
@@ -251,12 +277,16 @@ void SysfsCollector::logSpeakerImpedance() {
         ALOGE("Unable to parse speaker impedance %s", file_contents.c_str());
         return;
     }
-    SpeakerImpedance left_obj = {.speakerLocation = 0,
-                                 .milliOhms = static_cast<int32_t>(left * 1000)};
-    SpeakerImpedance right_obj = {.speakerLocation = 1,
-                                  .milliOhms = static_cast<int32_t>(right * 1000)};
-    stats_->reportSpeakerImpedance(left_obj);
-    stats_->reportSpeakerImpedance(right_obj);
+    VendorSpeakerImpedance left_obj;
+    left_obj.set_speaker_location(0);
+    left_obj.set_impedance(static_cast<int32_t>(left * 1000));
+
+    VendorSpeakerImpedance right_obj;
+    right_obj.set_speaker_location(1);
+    right_obj.set_impedance(static_cast<int32_t>(right * 1000));
+
+    reportSpeakerImpedance(stats_client, left_obj);
+    reportSpeakerImpedance(stats_client, right_obj);
 }
 
 /**
@@ -290,7 +320,7 @@ void SysfsCollector::logSpeechDspStat() {
     stats_->reportSpeechDspStat(dspstat);
 }
 
-void SysfsCollector::logBatteryCapacity() {
+void SysfsCollector::logBatteryCapacity(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (kBatteryCapacityCC == nullptr || strlen(kBatteryCapacityCC) == 0) {
         ALOGV("Battery Capacity CC path not specified");
@@ -317,12 +347,12 @@ void SysfsCollector::logBatteryCapacity() {
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::BATTERY_CAPACITY,
                         .values = values};
-    const ndk::ScopedAStatus ret = stats_client_->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report ChargeStats to Stats service");
 }
 
-void SysfsCollector::logUFSLifetime() {
+void SysfsCollector::logUFSLifetime(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (kUFSLifetimeA == nullptr || strlen(kUFSLifetimeA) == 0) {
         ALOGV("UFS lifetimeA path not specified");
@@ -359,7 +389,7 @@ void SysfsCollector::logUFSLifetime() {
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::STORAGE_UFS_HEALTH,
                         .values = values};
-    const ndk::ScopedAStatus ret = stats_client_->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report UfsHealthStat to Stats service");
     }
@@ -381,7 +411,7 @@ static std::string getUserDataBlock() {
     return "";
 }
 
-void SysfsCollector::logF2fsStats() {
+void SysfsCollector::logF2fsStats(const std::shared_ptr<IStats> &stats_client) {
     int dirty, free, cp_calls_fg, gc_calls_fg, moved_block_fg, vblocks;
     int cp_calls_bg, gc_calls_bg, moved_block_bg;
 
@@ -455,13 +485,13 @@ void SysfsCollector::logF2fsStats() {
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::F2FS_STATS,
                         .values = values};
-    const ndk::ScopedAStatus ret = stats_client_->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report F2fs stats to Stats service");
     }
 }
 
-void SysfsCollector::reportZramMmStat() {
+void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
         ALOGV("ZramMmStat path not specified");
@@ -509,13 +539,13 @@ void SysfsCollector::reportZramMmStat() {
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
             .atomId = PixelAtoms::Ids::ZRAM_MM_STAT,
             .values = values};
-        const ndk::ScopedAStatus ret = stats_client_->reportVendorAtom(event);
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Zram Unable to report ZramMmStat to Stats service");
     }
 }
 
-void SysfsCollector::reportZramBdStat() {
+void SysfsCollector::reportZramBdStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramBdStatPath) {
         ALOGV("ZramBdStat path not specified");
@@ -550,18 +580,18 @@ void SysfsCollector::reportZramBdStat() {
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
             .atomId = PixelAtoms::Ids::ZRAM_BD_STAT,
             .values = values};
-        const ndk::ScopedAStatus ret = stats_client_->reportVendorAtom(event);
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Zram Unable to report ZramBdStat to Stats service");
     }
 }
 
-void SysfsCollector::logZramStats() {
-    reportZramMmStat();
-    reportZramBdStat();
+void SysfsCollector::logZramStats(const std::shared_ptr<IStats> &stats_client) {
+    reportZramMmStat(stats_client);
+    reportZramBdStat(stats_client);
 }
 
-void SysfsCollector::logBootStats() {
+void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
     int mounted_time_sec = 0;
 
     if (kF2fsStatsPath == nullptr) {
@@ -598,7 +628,7 @@ void SysfsCollector::logBootStats() {
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::BOOT_STATS,
                         .values = values};
-    const ndk::ScopedAStatus ret = stats_client_->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report Boot stats to Stats service");
     } else {
@@ -607,7 +637,7 @@ void SysfsCollector::logBootStats() {
 }
 
 void SysfsCollector::logAll() {
-    stats_ = IStats::tryGetService();
+    stats_ = android::frameworks::stats::V1_0::IStats::tryGetService();
     if (!stats_) {
         ALOGE("Unable to connect to Stats service");
     } else {
@@ -615,27 +645,25 @@ void SysfsCollector::logAll() {
         logCodec1Failed();
         logCodecFailed();
         logSlowIO();
-        logSpeakerImpedance();
         logSpeechDspStat();
         stats_.clear();
     }
 
-    stats_client_ = getStatsService();
-    if (!stats_client_) {
+    const std::shared_ptr<IStats> stats_client = getStatsService();
+    if (!stats_client) {
         ALOGE("Unable to get AIDL Stats service");
         return;
     }
     // Collect once per service init; can be multiple due to service reinit
     if (!log_once_reported) {
-        logBootStats();
+        logBootStats(stats_client);
     }
-    logBatteryCapacity();
+    logBatteryCapacity(stats_client);
     logBatteryEEPROM();
-    logF2fsStats();
-    logUFSLifetime();
-    logZramStats();
-
-    stats_client_.reset();
+    logF2fsStats(stats_client);
+    logSpeakerImpedance(stats_client);
+    logUFSLifetime(stats_client);
+    logZramStats(stats_client);
 }
 
 /**
