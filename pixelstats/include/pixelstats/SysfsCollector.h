@@ -17,6 +17,7 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_SYSFSCOLLECTOR_H
 
+#include <aidl/android/frameworks/stats/IStats.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <utils/StrongPointer.h>
 
@@ -80,8 +81,6 @@ class SysfsCollector {
     void reportZramMmStat();
     void reportZramBdStat();
 
-    unsigned int getValueFromStatus(std::string &f2fsStatus, const char * key);
-
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
     const char *const kSlowioUnmapCntPath;
@@ -97,11 +96,11 @@ class SysfsCollector {
     const char *const kUFSLifetimeB;
     const char *const kUFSLifetimeC;
     const char *const kF2fsStatsPath;
-    const char *const kUserdataBlockProp;
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
     sp<IStats> stats_;
+    std::shared_ptr<aidl::android::frameworks::stats::IStats> stats_client_;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
 
