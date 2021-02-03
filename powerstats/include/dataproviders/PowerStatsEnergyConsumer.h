@@ -17,6 +17,7 @@
 #pragma once
 
 #include <PowerStatsAidl.h>
+#include "PowerStatsEnergyAttribution.h"
 
 #include <utils/RefBase.h>
 
@@ -51,26 +52,45 @@ class PowerStatsEnergyConsumer : public PowerStats::IEnergyConsumer {
     static sp<PowerStatsEnergyConsumer> createEntityConsumer(
             std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
             std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs);
+
     static sp<PowerStatsEnergyConsumer> createMeterAndEntityConsumer(
             std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
             std::set<std::string> channelNames, std::string powerEntityName,
+            std::map<std::string, int32_t> stateCoeffs);
+
+    static sp<PowerStatsEnergyConsumer> createMeterAndAttrConsumer(
+            std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
+            std::set<std::string> channelNames, std::unordered_map<int32_t, std::string> paths,
             std::map<std::string, int32_t> stateCoeffs);
 
     std::pair<EnergyConsumerType, std::string> getInfo() override { return {kType, kName}; }
 
     std::optional<EnergyConsumerResult> getEnergyConsumed() override;
 
+    std::string getConsumerName() override;
   private:
     PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p, EnergyConsumerType type,
-                             std::string name);
+                             std::string name, bool attr = false);
     bool addEnergyMeter(std::set<std::string> channelNames);
     bool addPowerEntity(std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs);
+    bool addAttribution(std::unordered_map<int32_t, std::string> paths,
+                        std::map<std::string, int32_t> stateCoeffs);
 
     const EnergyConsumerType kType;
     const std::string kName;
     std::shared_ptr<PowerStats> mPowerStats;
     std::vector<int32_t> mChannelIds;
     int32_t mPowerEntityId;
+    bool mWithAttribution;
+    std::unordered_map<int32_t, std::string> mAttrInfoPath;
+    PowerStatsEnergyAttribution mEnergyAttribution;
+    // Snapshot of each uid's energy, uid_time_in_state and total energy from power meter
+    // mUidTimeInStateSS: key = uid, val = {uid_time_in_state}
+    // mUidEnergySS:      key = uid, val = {uid's energy(UWs)}
+    // mTotalEnergySS:    total energy from power meter
+    std::unordered_map<int32_t, std::vector<long>> mUidTimeInStateSS;
+    std::unordered_map<int32_t, int64_t> mUidEnergySS;
+    int64_t mTotalEnergySS = 0;
     std::map<int32_t, int32_t> mCoefficients;  // key = stateId, val = coefficients (mW)
 };
 
