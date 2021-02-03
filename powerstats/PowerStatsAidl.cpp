@@ -373,8 +373,12 @@ void PowerStats::dumpEnergyConsumer(std::ostringstream &oss, bool delta) {
     oss << "\n============= PowerStats HAL 2.0 energy consumers ==============\n";
 
     for (const auto &result : results) {
-        oss << ::android::base::StringPrintf("%d = %14.2f mWs\n", result.id,
+        oss << ::android::base::StringPrintf("%-12s : %14.2f mWs\n", mEnergyConsumers[result.id]->getConsumerName().c_str(),
                                              static_cast<float>(result.energyUWs) / 1000.0);
+        for (auto &attr : result.attribution) {
+            oss << ::android::base::StringPrintf("  %10d - %14.2f mWs\n", attr.uid,
+                                                 static_cast<float>(attr.energyUWs) / 1000.0);
+        }
     }
 
     oss << "========== End of PowerStats HAL 2.0 energy consumers ==========\n";

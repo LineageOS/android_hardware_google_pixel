@@ -27,8 +27,9 @@ namespace power {
 namespace stats {
 
 PowerStatsEnergyConsumer::PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p,
-                                                   EnergyConsumerType type, std::string name)
-    : kType(type), kName(name), mPowerStats(p) {}
+                                                   EnergyConsumerType type, std::string name,
+                                                   bool attr)
+    : kType(type), kName(name), mPowerStats(p), mWithAttribution(attr) {}
 
 sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterConsumer(
         std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
@@ -48,6 +49,19 @@ sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndEntityConsu
         std::map<std::string, int32_t> stateCoeffs) {
     sp<PowerStatsEnergyConsumer> ret = new PowerStatsEnergyConsumer(p, type, name);
     if (ret->addEnergyMeter(channelNames) && ret->addPowerEntity(powerEntityName, stateCoeffs)) {
+        return ret;
+    }
+
+    LOG(ERROR) << "Failed to create PowerStatsEnergyConsumer for " << name;
+    return nullptr;
+}
+
+sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndAttrConsumer(
+        std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
+        std::set<std::string> channelNames, std::unordered_map<int32_t, std::string> paths,
+        std::map<std::string, int32_t> stateCoeffs) {
+    sp<PowerStatsEnergyConsumer> ret = new PowerStatsEnergyConsumer(p, type, name, true);
+    if (ret->addEnergyMeter(channelNames) && ret->addAttribution(paths, stateCoeffs)) {
         return ret;
     }
 
@@ -96,14 +110,48 @@ bool PowerStatsEnergyConsumer::addPowerEntity(std::string powerEntityName,
     return (mCoefficients.size() == stateCoeffs.size());
 }
 
+bool PowerStatsEnergyConsumer::addAttribution(std::unordered_map<int32_t, std::string> paths,
+                                              std::map<std::string, int32_t> stateCoeffs) {
+    mAttrInfoPath = paths;
+
+    if (paths.count(UID_TIME_IN_STATE)) {
+        mEnergyAttribution = PowerStatsEnergyAttribution();
+        AttributionStats attrStats = mEnergyAttribution.getAttributionStats(paths);
+        if (attrStats.uidTimeInStats.empty() || attrStats.uidTimeInStateNames.empty()) {
+            LOG(ERROR) << "Missing uid_time_in_state";
+            return false;
+        }
+
+        // stateCoeffs should not blocking energy consumer to return power meter
+        // so just handle this in getEnergyConsumed()
+        if (stateCoeffs.empty()) {
+            return true;
+        }
+
+        int32_t stateId = 0;
+        for (const auto &stateName : attrStats.uidTimeInStateNames) {
+            if (stateCoeffs.count(stateName)) {
+                // TODO: When uid_time_in_state is not the only type of attribution,
+                //       should condider to separate the coefficients just for attribution.
+                mCoefficients.emplace(stateId, stateCoeffs.at(stateName));
+            }
+            stateId++;
+        }
+    }
+
+    return (mCoefficients.size() == stateCoeffs.size());
+}
+
 std::optional<EnergyConsumerResult> PowerStatsEnergyConsumer::getEnergyConsumed() {
     int64_t totalEnergyUWs = 0;
+    int64_t timestampMs = 0;
 
     if (!mChannelIds.empty()) {
         std::vector<EnergyMeasurement> measurements;
         if (mPowerStats->readEnergyMeters(mChannelIds, &measurements).isOk()) {
             for (const auto &m : measurements) {
                 totalEnergyUWs += m.energyUWs;
+                timestampMs = m.timestampMs;
             }
         } else {
             LOG(ERROR) << "Failed to read energy meter";
@@ -111,22 +159,71 @@ std::optional<EnergyConsumerResult> PowerStatsEnergyConsumer::getEnergyConsumed(
         }
     }
 
+    std::vector<EnergyConsumerAttribution> attribution;
     if (!mCoefficients.empty()) {
-        std::vector<StateResidencyResult> results;
-        if (mPowerStats->getStateResidency({mPowerEntityId}, &results).isOk()) {
-            for (const auto &s : results[0].stateResidencyData) {
-                if (mCoefficients.count(s.id)) {
-                    totalEnergyUWs += mCoefficients.at(s.id) * s.totalTimeInStateMs;
-                }
+        if (mWithAttribution) {
+            AttributionStats attrStats = mEnergyAttribution.getAttributionStats(mAttrInfoPath);
+            if (attrStats.uidTimeInStats.empty() || attrStats.uidTimeInStateNames.empty()) {
+                LOG(ERROR) << "Missing uid_time_in_state";
+                return {};
             }
+
+            int64_t totalRelativeEnergyUWs = 0;
+            for (const auto &uidTimeInStat : attrStats.uidTimeInStats) {
+                int64_t uidEnergyUWs = 0;
+                for (int id = 0; id < uidTimeInStat.second.size(); id++) {
+                    if (mCoefficients.count(id)) {
+                        int64_t d_time_in_state = uidTimeInStat.second.at(id);
+                        if (mUidTimeInStateSS.count(uidTimeInStat.first)) {
+                            d_time_in_state -= mUidTimeInStateSS.at(uidTimeInStat.first).at(id);
+                        }
+                        uidEnergyUWs += mCoefficients.at(id) * d_time_in_state;
+                    }
+                }
+                totalRelativeEnergyUWs += uidEnergyUWs;
+
+                EnergyConsumerAttribution attr = {
+                    .uid = uidTimeInStat.first,
+                    .energyUWs = uidEnergyUWs,
+                };
+                attribution.emplace_back(attr);
+            }
+
+            int64_t d_totalEnergyUWs = totalEnergyUWs - mTotalEnergySS;
+            float powerScale = 0;
+            if (totalRelativeEnergyUWs != 0) {
+                powerScale = (float)d_totalEnergyUWs / totalRelativeEnergyUWs;
+            }
+            for (auto &attr : attribution) {
+                attr.energyUWs = (int64_t)(attr.energyUWs * powerScale) +
+                    (mUidEnergySS.count(attr.uid) ? mUidEnergySS.at(attr.uid) : 0);
+                mUidEnergySS[attr.uid] = attr.energyUWs;
+            }
+
+            mUidTimeInStateSS = attrStats.uidTimeInStats;
+            mTotalEnergySS = totalEnergyUWs;
         } else {
-            LOG(ERROR) << "Failed to get state residency";
-            return {};
+            std::vector<StateResidencyResult> results;
+            if (mPowerStats->getStateResidency({mPowerEntityId}, &results).isOk()) {
+                for (const auto &s : results[0].stateResidencyData) {
+                    if (mCoefficients.count(s.id)) {
+                        totalEnergyUWs += mCoefficients.at(s.id) * s.totalTimeInStateMs;
+                    }
+                }
+            } else {
+                LOG(ERROR) << "Failed to get state residency";
+                return {};
+            }
         }
     }
 
-    return EnergyConsumerResult{.timestampMs = 0,  // What should this timestamp be?
-                                .energyUWs = totalEnergyUWs};
+    return EnergyConsumerResult{.timestampMs = timestampMs,
+                                .energyUWs = totalEnergyUWs,
+                                .attribution = attribution};
+}
+
+std::string PowerStatsEnergyConsumer::getConsumerName() {
+    return kName;
 }
 
 }  // namespace stats
