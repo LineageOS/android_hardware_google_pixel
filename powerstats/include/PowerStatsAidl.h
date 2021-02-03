@@ -46,6 +46,7 @@ class PowerStats : public BnPowerStats {
         virtual ~IEnergyConsumer() = default;
         virtual std::pair<EnergyConsumerType, std::string> getInfo() = 0;
         virtual std::optional<EnergyConsumerResult> getEnergyConsumed() = 0;
+        virtual std::string getConsumerName() = 0;
     };
 
     class IEnergyMeterDataProvider {
