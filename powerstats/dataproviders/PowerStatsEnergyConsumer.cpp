@@ -131,8 +131,8 @@ bool PowerStatsEnergyConsumer::addAttribution(std::unordered_map<int32_t, std::s
         int32_t stateId = 0;
         for (const auto &stateName : attrStats.uidTimeInStateNames) {
             if (stateCoeffs.count(stateName)) {
-                // TODO: When uid_time_in_state is not the only type of attribution,
-                //       should condider to separate the coefficients just for attribution.
+                // When uid_time_in_state is not the only type of attribution,
+                // should condider to separate the coefficients just for attribution.
                 mCoefficients.emplace(stateId, stateCoeffs.at(stateName));
             }
             stateId++;
@@ -148,7 +148,7 @@ std::optional<EnergyConsumerResult> PowerStatsEnergyConsumer::getEnergyConsumed(
 
     if (!mChannelIds.empty()) {
         std::vector<EnergyMeasurement> measurements;
-        if (mPowerStats->readEnergyMeters(mChannelIds, &measurements).isOk()) {
+        if (mPowerStats->readEnergyMeter(mChannelIds, &measurements).isOk()) {
             for (const auto &m : measurements) {
                 totalEnergyUWs += m.energyUWs;
                 timestampMs = m.timestampMs;
@@ -192,7 +192,7 @@ std::optional<EnergyConsumerResult> PowerStatsEnergyConsumer::getEnergyConsumed(
             int64_t d_totalEnergyUWs = totalEnergyUWs - mTotalEnergySS;
             float powerScale = 0;
             if (totalRelativeEnergyUWs != 0) {
-                powerScale = (float)d_totalEnergyUWs / totalRelativeEnergyUWs;
+                powerScale = static_cast<float>(d_totalEnergyUWs) / totalRelativeEnergyUWs;
             }
             for (auto &attr : attribution) {
                 attr.energyUWs = (int64_t)(attr.energyUWs * powerScale) +
