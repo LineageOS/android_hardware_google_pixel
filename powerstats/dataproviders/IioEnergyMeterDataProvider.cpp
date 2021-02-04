@@ -198,7 +198,7 @@ int IioEnergyMeterDataProvider::parseEnergyValue(std::string path) {
     return ret;
 }
 
-ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeters(
+ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeter(
         const std::vector<int32_t> &in_channelIds, std::vector<EnergyMeasurement> *_aidl_return) {
     std::scoped_lock lock(mLock);
     binder_status_t ret = STATUS_OK;
