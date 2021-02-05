@@ -178,12 +178,12 @@ ndk::ScopedAStatus PowerStats::getEnergyMeterInfo(std::vector<Channel> *_aidl_re
     return mEnergyMeterDataProvider->getEnergyMeterInfo(_aidl_return);
 }
 
-ndk::ScopedAStatus PowerStats::readEnergyMeters(const std::vector<int32_t> &in_channelIds,
-                                                std::vector<EnergyMeasurement> *_aidl_return) {
+ndk::ScopedAStatus PowerStats::readEnergyMeter(const std::vector<int32_t> &in_channelIds,
+                                               std::vector<EnergyMeasurement> *_aidl_return) {
     if (!mEnergyMeterDataProvider) {
         return ndk::ScopedAStatus::ok();
     }
-    return mEnergyMeterDataProvider->readEnergyMeters(in_channelIds, _aidl_return);
+    return mEnergyMeterDataProvider->readEnergyMeter(in_channelIds, _aidl_return);
 }
 
 void PowerStats::getEntityStateNames(
@@ -223,7 +223,7 @@ void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
     oss << "\n============= PowerStats HAL 2.0 energy meter ==============\n";
 
     std::vector<EnergyMeasurement> energyData;
-    readEnergyMeters({}, &energyData);
+    readEnergyMeter({}, &energyData);
 
     if (delta) {
         static std::vector<EnergyMeasurement> prevEnergyData;
@@ -373,7 +373,8 @@ void PowerStats::dumpEnergyConsumer(std::ostringstream &oss, bool delta) {
     oss << "\n============= PowerStats HAL 2.0 energy consumers ==============\n";
 
     for (const auto &result : results) {
-        oss << ::android::base::StringPrintf("%-12s : %14.2f mWs\n", mEnergyConsumers[result.id]->getConsumerName().c_str(),
+        oss << ::android::base::StringPrintf("%-12s : %14.2f mWs\n",
+                                             mEnergyConsumers[result.id]->getConsumerName().c_str(),
                                              static_cast<float>(result.energyUWs) / 1000.0);
         for (auto &attr : result.attribution) {
             oss << ::android::base::StringPrintf("  %10d - %14.2f mWs\n", attr.uid,

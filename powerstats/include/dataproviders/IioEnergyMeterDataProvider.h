@@ -32,8 +32,8 @@ class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
                                const bool useSelector = false);
 
     // Methods from PowerStats::IRailEnergyDataProvider
-    ndk::ScopedAStatus readEnergyMeters(const std::vector<int32_t> &in_channelIds,
-                                        std::vector<EnergyMeasurement> *_aidl_return) override;
+    ndk::ScopedAStatus readEnergyMeter(const std::vector<int32_t> &in_channelIds,
+                                       std::vector<EnergyMeasurement> *_aidl_return) override;
     ndk::ScopedAStatus getEnergyMeterInfo(std::vector<Channel> *_aidl_return) override;
 
   private:
