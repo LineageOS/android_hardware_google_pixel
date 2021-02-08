@@ -150,7 +150,7 @@ class ThermalHelper {
     bool initializeCoolingDevices(const std::map<std::string, std::string> &path_map);
     void setMinTimeout(SensorInfo *sensor_info);
     void initializeTrip(const std::map<std::string, std::string> &path_map,
-                        std::set<std::string> *monitored_sensors);
+                        std::set<std::string> *monitored_sensors, bool thermal_genl_enabled);
 
     // For thermal_watcher_'s polling thread, return the sleep interval
     std::chrono::milliseconds thermalWatcherCallbackFunc(

@@ -73,6 +73,7 @@ struct ThrottlingInfo {
     ThrottlingTypeArray throttle_type;
     std::vector<std::string> cdev_request;
     std::vector<float> cdev_weight;
+    std::vector<int> cdev_ceiling;
     std::map<std::string, ThrottlingArray> limit_info;
 };
 
@@ -95,7 +96,9 @@ struct SensorInfo {
 
 struct CdevInfo {
     CoolingType_2_0 type;
-    std::vector<float> power2state;
+    std::string read_path;
+    std::string write_path;
+    std::vector<float> state2power;
 };
 
 std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);

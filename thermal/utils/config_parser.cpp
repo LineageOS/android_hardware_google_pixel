@@ -389,6 +389,7 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
         i_cutoff.fill(NAN);
         std::vector<std::string> cdev_request;
         std::vector<float> cdev_weight;
+        std::vector<int> cdev_ceiling;
 
         if (support_pid) {
             LOG(INFO) << "Start to parse K_Po";
@@ -468,7 +469,7 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
             }
 
             values = sensors[i]["CdevWeight"];
-            if (values.size()) {
+            if (values.size() == cdev_request.size()) {
                 cdev_weight.reserve(values.size());
                 for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
                     cdev_weight.emplace_back(getFloatFromValue(values[j]));
@@ -476,8 +477,25 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
                               << "]: " << cdev_weight[j];
                 }
             } else {
-                sensors_parsed.clear();
-                return sensors_parsed;
+                cdev_weight.reserve(cdev_request.size());
+                for (size_t j = 0; j < cdev_request.size(); ++j) {
+                    cdev_weight.emplace_back(1);
+                }
+            }
+
+            values = sensors[i]["CdevCeiling"];
+            if (values.size() == cdev_request.size()) {
+                cdev_ceiling.reserve(values.size());
+                for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
+                    cdev_ceiling.emplace_back(getIntFromValue(values[j]));
+                    LOG(INFO) << "Sensor[" << name << "]'s cdev_ceiling[" << j
+                              << "]: " << cdev_ceiling[j];
+                }
+            } else {
+                cdev_ceiling.reserve(cdev_request.size());
+                for (size_t j = 0; j < cdev_request.size(); ++j) {
+                    cdev_ceiling.emplace_back(0);
+                }
             }
 
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
@@ -519,7 +537,7 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
 
         std::unique_ptr<ThrottlingInfo> throttling_info(new ThrottlingInfo{
                 k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power, s_power, i_cutoff,
-                throttle_type, cdev_request, cdev_weight, limit_info});
+                throttle_type, cdev_request, cdev_weight, cdev_ceiling, limit_info});
 
         sensors_parsed[name] = {
                 .type = sensor_type,
@@ -593,14 +611,20 @@ std::map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path)
             return cooling_devices_parsed;
         }
 
-        std::vector<float> power2state;
-        Json::Value values = cooling_devices[i]["Power2State"];
+        const std::string &read_path = cooling_devices[i]["ReadPath"].asString();
+        LOG(INFO) << "Cdev Read Path: " << (read_path.empty() ? "default" : read_path);
+
+        const std::string &write_path = cooling_devices[i]["WritePath"].asString();
+        LOG(INFO) << "Cdev Write Path: " << (write_path.empty() ? "default" : write_path);
+
+        std::vector<float> state2power;
+        Json::Value values = cooling_devices[i]["State2Power"];
         if (values.size()) {
-            power2state.reserve(values.size());
+            state2power.reserve(values.size());
             for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
-                power2state.emplace_back(getFloatFromValue(values[j]));
+                state2power.emplace_back(getFloatFromValue(values[j]));
                 LOG(INFO) << "Cooling device[" << name << "]'s Power2State[" << j
-                          << "]: " << power2state[j];
+                          << "]: " << state2power[j];
             }
         } else {
             LOG(INFO) << "CoolingDevice[" << i << "]'s Name: " << name
@@ -609,7 +633,9 @@ std::map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path)
 
         cooling_devices_parsed[name] = {
                 .type = cooling_device_type,
-                .power2state = power2state,
+                .read_path = read_path,
+                .write_path = write_path,
+                .state2power = state2power,
         };
         ++total_parsed;
     }

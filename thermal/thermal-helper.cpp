@@ -323,11 +323,12 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         LOG(FATAL) << "ThermalHAL could not be initialized properly.";
     }
 
-    std::set<std::string> monitored_sensors;
-    initializeTrip(tz_map, &monitored_sensors);
-
     const bool thermal_genl_enabled =
             android::base::GetBoolProperty(kThermalGenlProperty.data(), false);
+
+    std::set<std::string> monitored_sensors;
+    initializeTrip(tz_map, &monitored_sensors, thermal_genl_enabled);
+
     if (thermal_genl_enabled) {
         thermal_watcher_->registerFilesToWatchNl(monitored_sensors);
     } else {
@@ -583,10 +584,12 @@ bool ThermalHelper::requestCdevByPower(std::string_view sensor_name, SensorStatu
             cdev_power_budget = total_power_budget *
                                 ((sensor_info.throttling_info->cdev_weight[i]) / total_weight);
 
+            int cdev_ceiling = sensor_info.throttling_info->cdev_ceiling[i];
             const CdevInfo &cdev_info_pair =
                     cooling_device_info_map_.at(sensor_info.throttling_info->cdev_request[i]);
-            for (j = 0; j < cdev_info_pair.power2state.size() - 1; ++j) {
-                if (cdev_power_budget > cdev_info_pair.power2state[j]) {
+            for (j = 0; j < cdev_info_pair.state2power.size() - 1; ++j) {
+                if (cdev_power_budget > cdev_info_pair.state2power[j] ||
+                    (cdev_ceiling && static_cast<int>(j) >= cdev_ceiling)) {
                     break;
                 }
             }
@@ -702,21 +705,45 @@ bool ThermalHelper::initializeSensorMap(const std::map<std::string, std::string>
 
 bool ThermalHelper::initializeCoolingDevices(const std::map<std::string, std::string> &path_map) {
     for (const auto &cooling_device_info_pair : cooling_device_info_map_) {
-        std::string_view cooling_device_name = cooling_device_info_pair.first;
-        if (!path_map.count(cooling_device_name.data())) {
+        std::string cooling_device_name = cooling_device_info_pair.first;
+        if (!path_map.count(cooling_device_name)) {
             LOG(ERROR) << "Could not find " << cooling_device_name << " in sysfs";
             continue;
         }
-        std::string path = android::base::StringPrintf(
-                "%s/%s", path_map.at(cooling_device_name.data()).c_str(),
-                kCoolingDeviceCurStateSuffix.data());
-        if (!cooling_devices_.addThermalFile(cooling_device_name, path)) {
-            LOG(ERROR) << "Could not add " << cooling_device_name << "to cooling device map";
+        // Add cooling device path for thermalHAL to get current state
+        std::string_view path = path_map.at(cooling_device_name);
+        std::string read_path;
+        if (!cooling_device_info_pair.second.read_path.empty()) {
+            read_path = cooling_device_info_pair.second.read_path.data();
+        } else {
+            read_path = android::base::StringPrintf("%s/%s", path.data(),
+                                                    kCoolingDeviceCurStateSuffix.data());
+        }
+        if (!cooling_devices_.addThermalFile(cooling_device_name, read_path)) {
+            LOG(ERROR) << "Could not add " << cooling_device_name
+                       << " read path to cooling device map";
+            continue;
+        }
+
+        // Add cooling device path for thermalHAL to request state
+        cooling_device_name =
+                android::base::StringPrintf("%s_%s", cooling_device_name.c_str(), "w");
+        std::string write_path;
+        if (!cooling_device_info_pair.second.write_path.empty()) {
+            write_path = cooling_device_info_pair.second.write_path.data();
+        } else {
+            write_path = android::base::StringPrintf("%s/%s", path.data(),
+                                                     kCoolingDeviceCurStateSuffix.data());
+        }
+
+        if (!cooling_devices_.addThermalFile(cooling_device_name, write_path)) {
+            LOG(ERROR) << "Could not add " << cooling_device_name
+                       << " write path to cooling device map";
             continue;
         }
     }
 
-    if (cooling_device_info_map_.size() == cooling_devices_.getNumThermalFiles()) {
+    if (cooling_device_info_map_.size() * 2 == cooling_devices_.getNumThermalFiles()) {
         return true;
     }
     return false;
@@ -728,7 +755,8 @@ void ThermalHelper::setMinTimeout(SensorInfo *sensor_info) {
 }
 
 void ThermalHelper::initializeTrip(const std::map<std::string, std::string> &path_map,
-                                   std::set<std::string> *monitored_sensors) {
+                                   std::set<std::string> *monitored_sensors,
+                                   bool thermal_genl_enabled) {
     for (auto &sensor_info : sensor_info_map_) {
         if (!sensor_info.second.is_monitor || (sensor_info.second.virtual_sensor_info != nullptr)) {
             continue;
@@ -787,7 +815,8 @@ void ThermalHelper::initializeTrip(const std::map<std::string, std::string> &pat
                 }
             }
         }
-        if (support_uevent) {
+
+        if (support_uevent || thermal_genl_enabled) {
             monitored_sensors->insert(sensor_info.first);
         } else {
             LOG(INFO) << "config Sensor: " << sensor_info.first
