@@ -36,7 +36,6 @@ namespace {
 using ::android::hardware::interfacesEqual;
 using ::android::hardware::thermal::V1_0::ThermalStatus;
 using ::android::hardware::thermal::V1_0::ThermalStatusCode;
-using ::android::hidl::base::V1_0::IBase;
 
 template <typename T, typename U>
 Return<void> setFailureAndCallback(T _hidl_cb, hidl_vec<U> data, std::string_view debug_msg) {
