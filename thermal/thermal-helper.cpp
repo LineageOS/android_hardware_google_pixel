@@ -762,25 +762,29 @@ void ThermalHelper::initializeTrip(const std::map<std::string, std::string> &pat
             continue;
         }
 
-        bool support_uevent = false;
+        bool trip_update = false;
         std::string_view sensor_name = sensor_info.first;
         std::string_view tz_path = path_map.at(sensor_name.data());
         std::string tz_policy;
         std::string path =
                 android::base::StringPrintf("%s/%s", (tz_path.data()), kSensorPolicyFile.data());
-        // Check if thermal zone support uevent notify
-        if (!android::base::ReadFileToString(path, &tz_policy)) {
-            LOG(ERROR) << sensor_name << " could not open tz policy file:" << path;
+
+        if (thermal_genl_enabled) {
+            trip_update = true;
         } else {
-            tz_policy = android::base::Trim(tz_policy);
-            if (tz_policy != kUserSpaceSuffix) {
-                LOG(ERROR) << sensor_name << " does not support uevent notify";
+            // Check if thermal zone support uevent notify
+            if (!android::base::ReadFileToString(path, &tz_policy)) {
+                LOG(ERROR) << sensor_name << " could not open tz policy file:" << path;
             } else {
-                support_uevent = true;
+                tz_policy = android::base::Trim(tz_policy);
+                if (tz_policy != kUserSpaceSuffix) {
+                    LOG(ERROR) << sensor_name << " does not support uevent notify";
+                } else {
+                    trip_update = true;
+                }
             }
         }
-
-        if (support_uevent) {
+        if (trip_update) {
             // Update thermal zone trip point
             for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                 if (!std::isnan(sensor_info.second.hot_thresholds[i]) &&
@@ -793,7 +797,7 @@ void ThermalHelper::initializeTrip(const std::map<std::string, std::string> &pat
                     if (!android::base::WriteStringToFile(threshold, path)) {
                         LOG(ERROR) << "fail to update " << sensor_name << " trip point: " << path
                                    << " to " << threshold;
-                        support_uevent = false;
+                        trip_update = false;
                         break;
                     }
                     // Update trip_point_0_hyst threshold
@@ -804,27 +808,27 @@ void ThermalHelper::initializeTrip(const std::map<std::string, std::string> &pat
                     if (!android::base::WriteStringToFile(threshold, path)) {
                         LOG(ERROR) << "fail to update " << sensor_name << "trip hyst" << threshold
                                    << path;
-                        support_uevent = false;
+                        trip_update = false;
                         break;
                     }
                     break;
                 } else if (i == kThrottlingSeverityCount - 1) {
                     LOG(ERROR) << sensor_name << ":all thresholds are NAN";
-                    support_uevent = false;
+                    trip_update = false;
                     break;
                 }
             }
+            monitored_sensors->insert(sensor_info.first);
         }
 
-        if (support_uevent || thermal_genl_enabled) {
-            monitored_sensors->insert(sensor_info.first);
-        } else {
+        if (!trip_update) {
             LOG(INFO) << "config Sensor: " << sensor_info.first
                       << " to default polling interval: " << kMinPollIntervalMs.count();
             setMinTimeout(&sensor_info.second);
         }
     }
 }
+
 bool ThermalHelper::fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) const {
     temperatures->resize(sensor_info_map_.size());
     int current_index = 0;
