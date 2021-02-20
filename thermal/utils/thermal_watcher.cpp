@@ -40,8 +40,6 @@ namespace thermal {
 namespace V2_0 {
 namespace implementation {
 
-using std::chrono_literals::operator""ms;
-
 namespace {
 
 static int nlErrorHandle(struct sockaddr_nl *nla, struct nlmsgerr *err, void *arg) {
@@ -438,9 +436,10 @@ void ThermalWatcher::parseUevent(std::set<std::string> *sensors_set) {
         cp = msg;
         while (*cp) {
             std::string uevent = cp;
+            auto findSubSystemThermal = uevent.find("SUBSYSTEM=thermal");
             if (!thermal_event) {
-                if (uevent.find("SUBSYSTEM=") == 0) {
-                    if (uevent.find("SUBSYSTEM=thermal") != std::string::npos) {
+                if (!uevent.find("SUBSYSTEM=")) {
+                    if (findSubSystemThermal != std::string::npos) {
                         thermal_event = true;
                     } else {
                         break;
