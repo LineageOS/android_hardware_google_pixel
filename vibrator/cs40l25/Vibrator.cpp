@@ -75,6 +75,19 @@ static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 static constexpr int32_t COMPOSE_SIZE_MAX = 127;
 
+
+// Measured resonant frequency, f0_measured, is represented by Q10.14 fixed
+// point format on cs40l2x devices. The expression to calculate f0 is:
+//   f0 = f0_measured / 2^Q14_BIT_SHIFT
+// See the LRA Calibration Support documentation for more details.
+static constexpr int32_t Q14_BIT_SHIFT = 14;
+
+// Measured Q factor, q_measured, is represented by Q8.16 fixed
+// point format on cs40l2x devices. The expression to calculate q is:
+//   q = q_measured / 2^Q16_BIT_SHIFT
+// See the LRA Calibration Support documentation for more details.
+static constexpr int32_t Q16_BIT_SHIFT = 16;
+
 static uint8_t amplitudeToScale(float amplitude, float maximum) {
     return std::round((-20 * std::log10(amplitude / static_cast<float>(maximum))) /
                       (AMP_ATTENUATE_STEP_SIZE));
@@ -154,7 +167,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     ATRACE_NAME("Vibrator::getCapabilities");
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
-                  IVibrator::CAP_COMPOSE_EFFECTS | IVibrator::CAP_ALWAYS_ON_CONTROL;
+                  IVibrator::CAP_COMPOSE_EFFECTS | IVibrator::CAP_ALWAYS_ON_CONTROL |
+                  IVibrator::CAP_GET_RESONANT_FREQUENCY | IVibrator::CAP_GET_Q_FACTOR;
     if (mHwApi->hasEffectScale()) {
         ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
     }
@@ -396,6 +410,28 @@ ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t id) {
     }
 
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ndk::ScopedAStatus Vibrator::getResonantFrequency(float *resonantFreqHz) {
+    uint32_t caldata;
+    if (!mHwCal->getF0(&caldata)) {
+        ALOGE("Failed to get resonant frequency (%d): %s", errno, strerror(errno));
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+    *resonantFreqHz = static_cast<float>(caldata) / (1 << Q14_BIT_SHIFT);
+
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Vibrator::getQFactor(float *qFactor) {
+    uint32_t caldata;
+    if (!mHwCal->getQ(&caldata)) {
+        ALOGE("Failed to get q factor (%d): %s", errno, strerror(errno));
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+    *qFactor = static_cast<float>(caldata) / (1 << Q16_BIT_SHIFT);
+
+    return ndk::ScopedAStatus::ok();
 }
 
 bool Vibrator::isUnderExternalControl() {
