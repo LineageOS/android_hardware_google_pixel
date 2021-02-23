@@ -20,7 +20,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -56,15 +55,32 @@ struct HintStatus {
     } stats;
 };
 
+enum class HintActionType { Node, DoHint, EndHint, MaskHint };
+
+struct HintAction {
+    HintAction(HintActionType t, std::string v) : type(t), value(v) {}
+    HintActionType type;
+    std::string value;
+};
+
+struct Hint {
+    Hint() : enabled(true) {}
+    std::vector<NodeAction> node_actions;
+    std::vector<HintAction> hint_actions;
+    // No locking for `enabled' flag
+    // There should not be multiple writers
+    bool enabled;
+    std::shared_ptr<HintStatus> status;
+};
+
 // HintManager is the external interface of the library to be used by PowerHAL
 // to do power hints with sysfs nodes. HintManager maintains a representation of
 // the actions that are parsed from the configuration file as a mapping from a
 // PowerHint to the set of actions that are performed for that PowerHint.
 class HintManager {
   public:
-    HintManager(sp<NodeLooperThread> nm,
-                const std::map<std::string, std::vector<NodeAction>>& actions)
-        : nm_(std::move(nm)), actions_(actions) {}
+    HintManager(sp<NodeLooperThread> nm, const std::unordered_map<std::string, Hint> &actions)
+        : nm_(std::move(nm)), actions_(std::move(actions)) {}
     ~HintManager() {
         if (nm_.get() != nullptr) nm_->Stop();
     }
@@ -90,6 +106,9 @@ class HintManager {
     // Query if given hint supported.
     bool IsHintSupported(const std::string& hint_type) const;
 
+    // Query if given hint enabled.
+    bool IsHintEnabled(const std::string &hint_type) const;
+
     // Static method to construct HintManager from the JSON config file.
     static std::unique_ptr<HintManager> GetFromJSON(
         const std::string& config_path, bool start = true);
@@ -109,10 +128,8 @@ class HintManager {
   protected:
     static std::vector<std::unique_ptr<Node>> ParseNodes(
         const std::string& json_doc);
-    static std::map<std::string, std::vector<NodeAction>> ParseActions(
-        const std::string& json_doc,
-        const std::vector<std::unique_ptr<Node>>& nodes);
-    // Initialize hint_status_map_
+    static std::unordered_map<std::string, Hint> ParseActions(
+            const std::string &json_doc, const std::vector<std::unique_ptr<Node>> &nodes);
     static bool InitHintStatus(const std::unique_ptr<HintManager> &hm);
 
   private:
@@ -123,10 +140,12 @@ class HintManager {
     void DoHintStatus(const std::string &hint_type, std::chrono::milliseconds timeout_ms);
     // Helper function to update the HintStatus when EndHint
     void EndHintStatus(const std::string &hint_type);
-
+    // Helper function to take hint actions when DoHint
+    void DoHintAction(const std::string &hint_type);
+    // Helper function to take hint actions when EndHint
+    void EndHintAction(const std::string &hint_type);
     sp<NodeLooperThread> nm_;
-    const std::map<std::string, std::vector<NodeAction>> actions_;
-    std::unordered_map<std::string, std::unique_ptr<HintStatus>> hint_status_map_;
+    std::unordered_map<std::string, Hint> actions_;
 };
 
 }  // namespace perfmgr
