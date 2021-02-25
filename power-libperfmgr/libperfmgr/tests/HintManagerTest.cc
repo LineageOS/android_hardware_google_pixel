@@ -30,101 +30,98 @@
 namespace android {
 namespace perfmgr {
 
-using namespace std::chrono_literals;
+using std::literals::chrono_literals::operator""ms;
 
 constexpr auto kSLEEP_TOLERANCE_MS = 50ms;
 
-// JSON_CONFIG
-// {
-//     "Nodes": [
-//         {
-//             "Name": "CPUCluster0MinFreq",
-//             "Path": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq",
-//             "Values": [
-//                 "1512000",
-//                 "1134000",
-//                 "384000"
-//             ],
-//             "DefaultIndex": 2,
-//             "ResetOnInit": true
-//         },
-//         {
-//             "Name": "CPUCluster1MinFreq",
-//             "Path": "/sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq",
-//             "Values": [
-//                 "1512000",
-//                 "1134000",
-//                 "384000"
-//             ],
-//             "HoldFd": true
-//         },
-//         {
-//             "Name": "ModeProperty",
-//             "Path": "vendor.pwhal.mode",
-//             "Values": [
-//                 "HIGH",
-//                 "LOW",
-//                 "NONE"
-//             ],
-//             "Type": "Property"
-//         }
-//     ],
-//     "Actions": [
-//         {
-//             "PowerHint": "INTERACTION",
-//             "Node": "CPUCluster1MinFreq",
-//             "Value": "1134000",
-//             "Duration": 800
-//         },
-//         {
-//             "PowerHint": "INTERACTION",
-//             "Node": "ModeProperty",
-//             "Value": "LOW",
-//             "Duration": 800
-//         },
-//         {
-//             "PowerHint": "LAUNCH",
-//             "Node": "CPUCluster0MinFreq",
-//             "Value": "1134000",
-//             "Duration": 500
-//         },
-//         {
-//             "PowerHint": "LAUNCH",
-//             "Node": "ModeProperty",
-//             "Value": "HIGH",
-//             "Duration": 500
-//         },
-//         {
-//             "PowerHint": "LAUNCH",
-//             "Node": "CPUCluster1MinFreq",
-//             "Value": "1512000",
-//             "Duration": 2000
-//         }
-//     ]
-// }
-constexpr char kJSON_RAW[] =
-    "{\"Nodes\":[{\"Name\":\"CPUCluster0MinFreq\",\"Path\":\"/sys/devices/"
-    "system/cpu/cpu0/cpufreq/"
-    "scaling_min_freq\",\"Values\":[\"1512000\",\"1134000\",\"384000\"],"
-    "\"DefaultIndex\":2,\"ResetOnInit\":true},{\"Name\":\"CPUCluster1MinFreq\","
-    "\"Path\":\"/sys/devices/system/cpu/cpu4/cpufreq/"
-    "scaling_min_freq\",\"Values\":[\"1512000\",\"1134000\",\"384000\"],"
-    "\"HoldFd\":true},{\"Name\":\"ModeProperty\",\"Path\":\"vendor.pwhal."
-    "mode\",\"Values\":[\"HIGH\",\"LOW\",\"NONE\"],\"Type\":\"Property\"}],"
-    "\"Actions\":[{\"PowerHint\":\"INTERACTION\",\"Node\":"
-    "\"CPUCluster1MinFreq\",\"Value\":\"1134000\",\"Duration\":800},{"
-    "\"PowerHint\":\"INTERACTION\",\"Node\":\"ModeProperty\",\"Value\":\"LOW\","
-    "\"Duration\":800},{\"PowerHint\":\"LAUNCH\",\"Node\":"
-    "\"CPUCluster0MinFreq\",\"Value\":\"1134000\",\"Duration\":500},{"
-    "\"PowerHint\":\"LAUNCH\",\"Node\":\"ModeProperty\",\"Value\":\"HIGH\","
-    "\"Duration\":500},{\"PowerHint\":\"LAUNCH\",\"Node\":"
-    "\"CPUCluster1MinFreq\",\"Value\":\"1512000\",\"Duration\":2000}]}";
+constexpr char kJSON_RAW[] = R"(
+{
+    "Nodes": [
+        {
+            "Name": "CPUCluster0MinFreq",
+            "Path": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq",
+            "Values": [
+                "1512000",
+                "1134000",
+                "384000"
+            ],
+            "DefaultIndex": 2,
+            "ResetOnInit": true
+        },
+        {
+            "Name": "CPUCluster1MinFreq",
+            "Path": "/sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq",
+            "Values": [
+                "1512000",
+                "1134000",
+                "384000"
+            ],
+            "HoldFd": true
+        },
+        {
+            "Name": "ModeProperty",
+            "Path": "vendor.pwhal.mode",
+            "Values": [
+                "HIGH",
+                "LOW",
+                "NONE"
+            ],
+            "Type": "Property"
+        }
+    ],
+    "Actions": [
+        {
+            "PowerHint": "INTERACTION",
+            "Node": "CPUCluster1MinFreq",
+            "Value": "1134000",
+            "Duration": 800
+        },
+        {
+            "PowerHint": "INTERACTION",
+            "Node": "ModeProperty",
+            "Value": "LOW",
+            "Duration": 800
+        },
+        {
+            "PowerHint": "LAUNCH",
+            "Node": "CPUCluster0MinFreq",
+            "Value": "1134000",
+            "Duration": 500
+        },
+        {
+            "PowerHint": "LAUNCH",
+            "Node": "ModeProperty",
+            "Value": "HIGH",
+            "Duration": 500
+        },
+        {
+            "PowerHint": "LAUNCH",
+            "Node": "CPUCluster1MinFreq",
+            "Value": "1512000",
+            "Duration": 2000
+        },
+        {
+            "PowerHint": "MASK_LAUNCH_MODE",
+            "Type": "MaskHint",
+            "Value": "LAUNCH"
+        },
+        {
+            "PowerHint": "END_LAUNCH_MODE",
+            "Type": "EndHint",
+            "Value": "LAUNCH"
+        },
+        {
+            "PowerHint": "DO_LAUNCH_MODE",
+            "Type": "DoHint",
+            "Value": "LAUNCH"
+        }
+    ]
+}
+)";
 
 class HintManagerTest : public ::testing::Test, public HintManager {
   protected:
-    HintManagerTest()
-        : HintManager(nullptr,
-                      std::map<std::string, std::vector<NodeAction>>{}) {
+    HintManagerTest() : HintManager(nullptr, std::unordered_map<std::string, Hint>{}) {
         android::base::SetMinimumLogSeverity(android::base::VERBOSE);
         prop_ = "vendor.pwhal.mode";
     }
@@ -154,9 +151,10 @@ class HintManagerTest : public ::testing::Test, public HintManager {
         // Node0, value0, forever
         // Node1, value0, 400ms
         // Node2, value0, 400ms
-        actions_ = std::map<std::string, std::vector<NodeAction>>{
-            {"INTERACTION", {{0, 1, 800ms}, {1, 1, 0ms}, {2, 1, 800ms}}},
-            {"LAUNCH", {{0, 0, 0ms}, {1, 0, 400ms}, {2, 0, 400ms}}}};
+        actions_["INTERACTION"].node_actions =
+                std::vector<NodeAction>{{0, 1, 800ms}, {1, 1, 0ms}, {2, 1, 800ms}};
+        actions_["LAUNCH"].node_actions =
+                std::vector<NodeAction>{{0, 0, 0ms}, {1, 0, 400ms}, {2, 0, 400ms}};
 
         // Prepare dummy files to replace the nodes' path in example json_doc
         files_.emplace_back(std::make_unique<TemporaryFile>());
@@ -181,7 +179,7 @@ class HintManagerTest : public ::testing::Test, public HintManager {
         nm_ = nullptr;
     }
     sp<NodeLooperThread> nm_;
-    std::map<std::string, std::vector<NodeAction>> actions_;
+    std::unordered_map<std::string, Hint> actions_;
     std::vector<std::unique_ptr<Node>> nodes_;
     std::vector<std::unique_ptr<TemporaryFile>> files_;
     std::string json_doc_;
@@ -515,63 +513,70 @@ TEST_F(HintManagerTest, ParseBadFileNodesTest) {
 TEST_F(HintManagerTest, ParseActionsTest) {
     std::vector<std::unique_ptr<Node>> nodes =
         HintManager::ParseNodes(json_doc_);
-    std::map<std::string, std::vector<NodeAction>> actions =
-        HintManager::ParseActions(json_doc_, nodes);
-    EXPECT_EQ(2u, actions.size());
+    std::unordered_map<std::string, Hint> actions = HintManager::ParseActions(json_doc_, nodes);
+    EXPECT_EQ(5u, actions.size());
 
-    EXPECT_EQ(2u, actions["INTERACTION"].size());
-    EXPECT_EQ(1u, actions["INTERACTION"][0].node_index);
-    EXPECT_EQ(1u, actions["INTERACTION"][0].value_index);
+    EXPECT_EQ(2u, actions["INTERACTION"].node_actions.size());
+    EXPECT_EQ(1u, actions["INTERACTION"].node_actions[0].node_index);
+    EXPECT_EQ(1u, actions["INTERACTION"].node_actions[0].value_index);
     EXPECT_EQ(std::chrono::milliseconds(800).count(),
-              actions["INTERACTION"][0].timeout_ms.count());
+              actions["INTERACTION"].node_actions[0].timeout_ms.count());
 
-    EXPECT_EQ(2u, actions["INTERACTION"][1].node_index);
-    EXPECT_EQ(1u, actions["INTERACTION"][1].value_index);
+    EXPECT_EQ(2u, actions["INTERACTION"].node_actions[1].node_index);
+    EXPECT_EQ(1u, actions["INTERACTION"].node_actions[1].value_index);
     EXPECT_EQ(std::chrono::milliseconds(800).count(),
-              actions["INTERACTION"][1].timeout_ms.count());
+              actions["INTERACTION"].node_actions[1].timeout_ms.count());
 
-    EXPECT_EQ(3u, actions["LAUNCH"].size());
+    EXPECT_EQ(3u, actions["LAUNCH"].node_actions.size());
 
-    EXPECT_EQ(0u, actions["LAUNCH"][0].node_index);
-    EXPECT_EQ(1u, actions["LAUNCH"][0].value_index);
+    EXPECT_EQ(0u, actions["LAUNCH"].node_actions[0].node_index);
+    EXPECT_EQ(1u, actions["LAUNCH"].node_actions[0].value_index);
     EXPECT_EQ(std::chrono::milliseconds(500).count(),
-              actions["LAUNCH"][0].timeout_ms.count());
+              actions["LAUNCH"].node_actions[0].timeout_ms.count());
 
-    EXPECT_EQ(2u, actions["LAUNCH"][1].node_index);
-    EXPECT_EQ(0u, actions["LAUNCH"][1].value_index);
+    EXPECT_EQ(2u, actions["LAUNCH"].node_actions[1].node_index);
+    EXPECT_EQ(0u, actions["LAUNCH"].node_actions[1].value_index);
     EXPECT_EQ(std::chrono::milliseconds(500).count(),
-              actions["LAUNCH"][1].timeout_ms.count());
+              actions["LAUNCH"].node_actions[1].timeout_ms.count());
 
-    EXPECT_EQ(1u, actions["LAUNCH"][2].node_index);
-    EXPECT_EQ(0u, actions["LAUNCH"][2].value_index);
+    EXPECT_EQ(1u, actions["LAUNCH"].node_actions[2].node_index);
+    EXPECT_EQ(0u, actions["LAUNCH"].node_actions[2].value_index);
     EXPECT_EQ(std::chrono::milliseconds(2000).count(),
-              actions["LAUNCH"][2].timeout_ms.count());
+              actions["LAUNCH"].node_actions[2].timeout_ms.count());
+
+    EXPECT_EQ(1u, actions["MASK_LAUNCH_MODE"].hint_actions.size());
+    EXPECT_EQ(HintActionType::MaskHint, actions["MASK_LAUNCH_MODE"].hint_actions[0].type);
+    EXPECT_TRUE("LAUNCH" == actions["MASK_LAUNCH_MODE"].hint_actions[0].value);
+
+    EXPECT_EQ(1u, actions["DO_LAUNCH_MODE"].hint_actions.size());
+    EXPECT_EQ(HintActionType::DoHint, actions["DO_LAUNCH_MODE"].hint_actions[0].type);
+    EXPECT_TRUE("LAUNCH" == actions["DO_LAUNCH_MODE"].hint_actions[0].value);
+
+    EXPECT_EQ(1u, actions["END_LAUNCH_MODE"].hint_actions.size());
+    EXPECT_EQ(HintActionType::EndHint, actions["END_LAUNCH_MODE"].hint_actions[0].type);
+    EXPECT_TRUE("LAUNCH" == actions["END_LAUNCH_MODE"].hint_actions[0].value);
 }
 
 // Test parsing actions with duplicate File node
 TEST_F(HintManagerTest, ParseActionDuplicateFileNodeTest) {
-    std::string from = "\"Node\":\"CPUCluster0MinFreq\"";
+    std::string from = R"("Node": "CPUCluster0MinFreq")";
     size_t start_pos = json_doc_.find(from);
-    json_doc_.replace(start_pos, from.length(),
-                      "\"Node\":\"CPUCluster1MinFreq\"");
+    json_doc_.replace(start_pos, from.length(), R"("Node": "CPUCluster1MinFreq")");
     std::vector<std::unique_ptr<Node>> nodes =
         HintManager::ParseNodes(json_doc_);
     EXPECT_EQ(3u, nodes.size());
-    std::map<std::string, std::vector<NodeAction>> actions =
-        HintManager::ParseActions(json_doc_, nodes);
+    auto actions = HintManager::ParseActions(json_doc_, nodes);
     EXPECT_EQ(0u, actions.size());
 }
 
 // Test parsing actions with duplicate Property node
 TEST_F(HintManagerTest, ParseActionDuplicatePropertyNodeTest) {
-    std::string from = "\"Node\":\"CPUCluster0MinFreq\"";
+    std::string from = R"("Node": "CPUCluster0MinFreq")";
     size_t start_pos = json_doc_.find(from);
-    json_doc_.replace(start_pos, from.length(), "\"Node\":\"ModeProperty\"");
-    std::vector<std::unique_ptr<Node>> nodes =
-        HintManager::ParseNodes(json_doc_);
+    json_doc_.replace(start_pos, from.length(), R"("Node": "ModeProperty")");
+    auto nodes = HintManager::ParseNodes(json_doc_);
     EXPECT_EQ(3u, nodes.size());
-    std::map<std::string, std::vector<NodeAction>> actions =
-        HintManager::ParseActions(json_doc_, nodes);
+    auto actions = HintManager::ParseActions(json_doc_, nodes);
     EXPECT_EQ(0u, actions.size());
 }
 
@@ -579,8 +584,7 @@ TEST_F(HintManagerTest, ParseActionDuplicatePropertyNodeTest) {
 TEST_F(HintManagerTest, ParseBadActionsTest) {
     std::vector<std::unique_ptr<Node>> nodes =
         HintManager::ParseNodes(json_doc_);
-    std::map<std::string, std::vector<NodeAction>> actions =
-        HintManager::ParseActions("invalid json", nodes);
+    auto actions = HintManager::ParseActions("invalid json", nodes);
     EXPECT_EQ(0u, actions.size());
     actions = HintManager::ParseActions(
         "{\"devices\":{\"15\":[\"armeabi-v7a\"],\"16\":[\"armeabi-v7a\"],"
@@ -637,6 +641,36 @@ TEST_F(HintManagerTest, GetFromJSONTest) {
     _VerifyPathValue(files_[0 + 2]->path, "384000");
     _VerifyPathValue(files_[1 + 2]->path, "384000");
     _VerifyPropertyValue(prop_, "NONE");
+
+    // Mask LAUNCH and do LAUNCH
+    EXPECT_TRUE(hm->DoHint("MASK_LAUNCH_MODE"));
+    EXPECT_FALSE(hm->DoHint("LAUNCH"));  // should fail
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0 + 2]->path, "384000");
+    _VerifyPathValue(files_[1 + 2]->path, "384000");
+    _VerifyPropertyValue(prop_, "NONE");
+
+    // UnMask LAUNCH and do LAUNCH
+    EXPECT_TRUE(hm->EndHint("MASK_LAUNCH_MODE"));
+    EXPECT_TRUE(hm->DoHint("LAUNCH"));
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0 + 2]->path, "1134000");
+    _VerifyPathValue(files_[1 + 2]->path, "1512000");
+    _VerifyPropertyValue(prop_, "HIGH");
+    // END_LAUNCH_MODE should deactivate LAUNCH
+    EXPECT_TRUE(hm->DoHint("END_LAUNCH_MODE"));
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0 + 2]->path, "384000");
+    _VerifyPathValue(files_[1 + 2]->path, "384000");
+    _VerifyPropertyValue(prop_, "NONE");
+    EXPECT_TRUE(hm->EndHint("END_LAUNCH_MODE"));
+
+    // DO_LAUNCH_MODE should activate LAUNCH
+    EXPECT_TRUE(hm->DoHint("DO_LAUNCH_MODE"));
+    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
+    _VerifyPathValue(files_[0 + 2]->path, "1134000");
+    _VerifyPathValue(files_[1 + 2]->path, "1512000");
+    _VerifyPropertyValue(prop_, "HIGH");
 }
 
 }  // namespace perfmgr
