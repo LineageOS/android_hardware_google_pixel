@@ -19,6 +19,9 @@ cc_defaults {
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
         "-DLOG_TAG=\"android.hardware.vibrator-cs40l25\"",
     ],
+    shared_libs: [
+        "libbinder",
+    ],
 }
 
 cc_defaults {
@@ -54,5 +57,16 @@ cc_binary {
     vintf_fragments: ["android.hardware.vibrator-service.cs40l25.xml"],
     srcs: ["service.cpp"],
     static_libs: ["android.hardware.vibrator-impl.cs40l25"],
+    proprietary: true,
+}
+
+cc_binary {
+    name: "android.hardware.vibrator-service.cs40l25-dual",
+    defaults: ["VibratorHalCs40l25BinaryDefaults"],
+    init_rc: ["android.hardware.vibrator-service.cs40l25-dual.rc"],
+    vintf_fragments: ["android.hardware.vibrator-service.cs40l25-dual.xml"],
+    srcs: ["service.cpp"],
+    static_libs: ["android.hardware.vibrator-impl.cs40l25"],
+    cflags: ["-DVIBRATOR_NAME=\"dual\""],
     proprietary: true,
 }
