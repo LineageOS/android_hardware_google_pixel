@@ -135,8 +135,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         return getProperty("tick.duration", value, WAVEFORM_TICK_EFFECT_MS);
     }
     bool getDoubleClickDuration(uint32_t *value) override {
-        *value = WAVEFORM_DOUBLE_CLICK_EFFECT_MS;
-        return true;
+        return getProperty("double_click.duration", value, WAVEFORM_DOUBLE_CLICK_EFFECT_MS);
     }
     bool getHeavyClickDuration(uint32_t *value) override {
         return getProperty("heavyclick.duration", value, WAVEFORM_HEAVY_CLICK_EFFECT_MS);
