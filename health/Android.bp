@@ -58,6 +58,7 @@ cc_test {
     static_libs: [
         "libgmock",
         "libpixelhealth",
+        "libbatterymonitor",
     ],
 
     shared_libs: [
