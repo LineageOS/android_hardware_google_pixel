@@ -72,7 +72,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
       kUserdataBlockProp(sysfs_paths.UserdataBlockProp),
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
-      kZramBdStatPath("/sys/block/zram0/bd_stat") {}
+      kZramBdStatPath("/sys/block/zram0/bd_stat"),
+      kEEPROMPath(sysfs_paths.EEPROMPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -123,6 +124,18 @@ void SysfsCollector::logBatteryChargeCycles() {
 
     std::replace(file_contents.begin(), file_contents.end(), ' ', ',');
     stats_->reportChargeCycles(cycles);
+}
+
+/**
+ * Read the contents of kEEPROMPath and report them.
+ */
+void SysfsCollector::logBatteryEEPROM() {
+    if (kEEPROMPath == nullptr || strlen(kEEPROMPath) == 0) {
+        ALOGV("Battery EEPROM path not specified");
+        return;
+    }
+
+    battery_EEPROM_reporter_.checkAndReport(kEEPROMPath);
 }
 
 /**
@@ -599,6 +612,7 @@ void SysfsCollector::logAll() {
     logUFSLifetime();
     logF2fsStats();
     logZramStats();
+    logBatteryEEPROM();
 
     stats_.clear();
 }
