@@ -41,6 +41,7 @@
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
+#include <android/binder_manager.h>
 #include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
@@ -57,22 +58,33 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-using android::sp;
-using android::base::ReadFileToString;
-using android::base::WriteStringToFile;
-using android::frameworks::stats::V1_0::HardwareFailed;
-using android::frameworks::stats::V1_0::IStats;
-using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
-using android::frameworks::stats::V1_0::VendorAtom;
-using android::hardware::google::pixel::WlcReporter;
-using android::hardware::google::pixel::PixelAtoms::ChargeStats;
-using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
-using android::hardware::google::pixel::PixelAtoms::PdVidPid;
+namespace {
+
+using aidl::android::frameworks::stats::IStats;
+
+std::shared_ptr<IStats> GetStatsService() {
+    const std::string instance = std::string() + IStats::descriptor + "/default";
+    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
+}
+
+}  // namespace
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+
+using aidl::android::frameworks::stats::VendorAtom;
+using aidl::android::frameworks::stats::VendorAtomValue;
+using android::sp;
+using android::base::ReadFileToString;
+using android::base::WriteStringToFile;
+using android::frameworks::stats::V1_0::HardwareFailed;
+using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
+using android::hardware::google::pixel::WlcReporter;
+using android::hardware::google::pixel::PixelAtoms::ChargeStats;
+using android::hardware::google::pixel::PixelAtoms::PdVidPid;
+using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
 constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
 constexpr int32_t PRODUCT_TYPE_OFFSET = 23;
@@ -101,6 +113,8 @@ bool UeventListener::ReadFileToInt(const char *const path, int *val) {
 }
 
 void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroken) {
+    using android::frameworks::stats::V1_0::IStats;
+
     sp<IStats> stats_client = IStats::tryGetService();
 
     if (stats_client) {
@@ -155,6 +169,8 @@ void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic
 }
 
 void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
+    using android::frameworks::stats::V1_0::IStats;
+
     UsbPortOverheatEvent event = {};
     std::string file_contents;
 
@@ -175,14 +191,15 @@ void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
     }
 }
 
-void UeventListener::ReportChargeStats(const sp<IStats> &stats_client, const char *line) {
+void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_client,
+                                       const char *line) {
     std::vector<int> charge_stats_fields = {
             ChargeStats::kAdapterTypeFieldNumber,     ChargeStats::kAdapterVoltageFieldNumber,
             ChargeStats::kAdapterAmperageFieldNumber, ChargeStats::kSsocInFieldNumber,
             ChargeStats::kVoltageInFieldNumber,       ChargeStats::kSsocOutFieldNumber,
             ChargeStats::kVoltageOutFieldNumber};
-    std::vector<VendorAtom::Value> values(charge_stats_fields.size());
-    VendorAtom::Value val;
+    std::vector<VendorAtomValue> values(charge_stats_fields.size());
+    VendorAtomValue val;
     int32_t i = 0, tmp[7] = {0};
 
     ALOGD("ChargeStats: processing %s", line);
@@ -192,19 +209,20 @@ void UeventListener::ReportChargeStats(const sp<IStats> &stats_client, const cha
         return;
     }
     for (i = 0; i < charge_stats_fields.size(); i++) {
-        val.intValue(tmp[i]);
+        val.set<VendorAtomValue::intValue>(tmp[i]);
         values[charge_stats_fields[i] - kVendorAtomOffset] = val;
     }
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::CHARGE_STATS,
                         .values = values};
-    Return<void> ret = stats_client->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report ChargeStats to Stats service");
 }
 
-void UeventListener::ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line) {
+void UeventListener::ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client,
+                                            const char *line) {
     std::vector<int> voltage_tier_stats_fields = {VoltageTierStats::kVoltageTierFieldNumber,
                                                   VoltageTierStats::kSocInFieldNumber,
                                                   VoltageTierStats::kCcInFieldNumber,
@@ -221,8 +239,8 @@ void UeventListener::ReportVoltageTierStats(const sp<IStats> &stats_client, cons
                                                   VoltageTierStats::kIclMinFieldNumber,
                                                   VoltageTierStats::kIclAvgFieldNumber,
                                                   VoltageTierStats::kIclMaxFieldNumber};
-    std::vector<VendorAtom::Value> values(voltage_tier_stats_fields.size());
-    VendorAtom::Value val;
+    std::vector<VendorAtomValue> values(voltage_tier_stats_fields.size());
+    VendorAtomValue val;
     float ssoc_tmp;
     int32_t i = 0, tmp[15] = {0};
 
@@ -233,19 +251,19 @@ void UeventListener::ReportVoltageTierStats(const sp<IStats> &stats_client, cons
         return;
     }
     ALOGD("VoltageTierStats: processed %s", line);
-    val.intValue(tmp[0]);
+    val.set<VendorAtomValue::intValue>(tmp[0]);
     values[voltage_tier_stats_fields[0] - kVendorAtomOffset] = val;
-    val.floatValue(ssoc_tmp);
+    val.set<VendorAtomValue::floatValue>(ssoc_tmp);
     values[voltage_tier_stats_fields[1] - kVendorAtomOffset] = val;
     for (i = 2; i < voltage_tier_stats_fields.size(); i++) {
-        val.intValue(tmp[i - 1]);
+        val.set<VendorAtomValue::intValue>(tmp[i - 1]);
         values[voltage_tier_stats_fields[i] - kVendorAtomOffset] = val;
     }
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::VOLTAGE_TIER_STATS,
                         .values = values};
-    Return<void> ret = stats_client->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report VoltageTierStats to Stats service");
 }
@@ -274,7 +292,7 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
         ALOGE("Couldn't clear %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
     }
 
-    sp<IStats> stats_client = IStats::tryGetService();
+    std::shared_ptr<IStats> stats_client = GetStatsService();
     if (!stats_client) {
         ALOGE("Couldn't connect to IStats service");
         return;
@@ -364,24 +382,25 @@ void UeventListener::ReportTypeCPartnerId() {
         return;
     }
 
-    std::vector<VendorAtom::Value> values(2);
-    VendorAtom::Value tmp;
-
-    tmp.intValue(vid & VID_MASK);
-    values[PdVidPid::kVidFieldNumber - kVendorAtomOffset] = tmp;
-    tmp.intValue(pid);
-    values[PdVidPid::kPidFieldNumber - kVendorAtomOffset] = tmp;
-    sp<IStats> stats_client = IStats::tryGetService();
+    std::shared_ptr<IStats> stats_client = GetStatsService();
     if (!stats_client) {
         ALOGE("PD PID/VID Couldn't connect to IStats service");
         return;
     }
 
+    std::vector<VendorAtomValue> values(2);
+    VendorAtomValue tmp;
+
+    tmp.set<VendorAtomValue::intValue>(vid & VID_MASK);
+    values[PdVidPid::kVidFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(pid);
+    values[PdVidPid::kPidFieldNumber - kVendorAtomOffset] = tmp;
+
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
              .atomId = PixelAtoms::Ids::PD_VID_PID,
              .values = values};
-    Return<void> ret = stats_client->reportVendorAtom(event);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report PD VID/PID to Stats service");
     }
