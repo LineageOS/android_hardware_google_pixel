@@ -47,6 +47,7 @@ enum Ids {
     FG_CAPACITY = 105010;
     PD_VID_PID = 105011;
     BATTERY_EEPROM = 105012;
+    VENDOR_SPEAKER_IMPEDANCE = 105013; // Moved from atoms.proto
 
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
@@ -352,4 +353,10 @@ message CitadelEvent {
 /* A message containing the citadel firmware version. */
 message CitadelVersion {
     optional string version = 2;
+}
+
+/* A message containing the speaker impedance. */
+ message VendorSpeakerImpedance {
+    optional int32 speaker_location = 2;
+    optional int32 impedance = 3;
 }
