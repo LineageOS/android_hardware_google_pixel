@@ -17,10 +17,6 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_WLCREPORTER_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_WLCREPORTER_H
 
-#include <android/frameworks/stats/1.0/IStats.h>
-
-using android::frameworks::stats::V1_0::IStats;
-
 namespace android {
 namespace hardware {
 namespace google {
