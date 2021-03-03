@@ -318,6 +318,7 @@ message CitadelEvent {
     ALERT = 1;
     REBOOTED = 2;
     UPGRADED = 3;
+    ALERT_V2 = 4;
   };
   optional Event event = 2;
   optional int32 reset_count = 3;
@@ -348,6 +349,18 @@ message CitadelEvent {
   // UPGRADED-specific field. This field corresponds to the result of FW
   // upgrade for citadel.
   optional int32 upgrade_state = 13;
+
+  // ALERT_V2-specific field. This field corresponds to the GLOBALSEC Log
+  // which contains normal globalsec, camo, temp and buserr.
+  optional int32 alert_grp_0 = 14;
+  optional int32 alert_grp_1 = 15;
+  optional int32 alert_grp_2 = 16;
+  optional int32 alert_grp_3 = 17;
+  optional int32 camo_breaches_0 = 18;
+  optional int32 camo_breaches_1 = 19;
+  optional int32 temp_min = 20;
+  optional int32 temp_max = 21;
+  optional int32 bus_err = 22;
 }
 
 /* A message containing the citadel firmware version. */
