@@ -304,7 +304,7 @@ std::vector<std::unique_ptr<Node>> HintManager::ParseNodes(
     std::string errorMessage;
 
     if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config";
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
         return nodes_parsed;
     }
 
