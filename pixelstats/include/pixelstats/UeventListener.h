@@ -17,18 +17,17 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_UEVENTLISTENER_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_UEVENTLISTENER_H
 
+#include <aidl/android/frameworks/stats/IStats.h>
 #include <android-base/chrono_utils.h>
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <pixelstats/BatteryCapacityReporter.h>
 #include <pixelstats/WlcReporter.h>
-
-using android::frameworks::stats::V1_0::IStats;
-using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+
+using aidl::android::frameworks::stats::IStats;
 
 /**
  * A class to listen for uevents and report reliability events to
@@ -57,8 +56,8 @@ class UeventListener {
     void ReportMicStatusUevents(const char *devpath, const char *mic_status);
     void ReportMicBrokenOrDegraded(const int mic, const bool isBroken);
     void ReportUsbPortOverheatEvent(const char *driver);
-    void ReportChargeStats(const sp<IStats> &stats_client, const char *line);
-    void ReportVoltageTierStats(const sp<IStats> &stats_client, const char *line);
+    void ReportChargeStats(const std::shared_ptr<IStats> &stats_client, const char *line);
+    void ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client, const char *line);
     void ReportChargeMetricsEvent(const char *driver);
     void ReportWlc(const bool pow_wireless, const bool online, const char *ptmc);
     void ReportBatteryCapacityFGEvent(const char *subsystem);
