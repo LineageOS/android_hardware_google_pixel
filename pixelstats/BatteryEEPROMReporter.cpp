@@ -19,24 +19,37 @@
 #include <log/log.h>
 #include <time.h>
 #include <utils/Timers.h>
+#include <cinttypes>
 #include <cmath>
-#include <inttypes.h>
 
 #include <android-base/file.h>
 
-#include <android/frameworks/stats/1.0/IStats.h>
+#include <aidl/android/frameworks/stats/IStats.h>
+#include <android/binder_manager.h>
 #include <pixelstats/BatteryEEPROMReporter.h>
 
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
+
+namespace {
+
+using aidl::android::frameworks::stats::IStats;
+
+std::shared_ptr<IStats> getStatsService() {
+    const std::string instance = std::string() + IStats::descriptor + "/default";
+    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
+}
+
+}  // namespace
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
 
+using aidl::android::frameworks::stats::IStats;
+using aidl::android::frameworks::stats::VendorAtom;
+using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
-using android::frameworks::stats::V1_0::IStats;
-using android::frameworks::stats::V1_0::VendorAtom;
 using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
 
 #define LINESIZE 71
@@ -51,7 +64,7 @@ void BatteryEEPROMReporter::checkAndReport(const std::string &path) {
     int64_t now = getTimeSecs();
 
     if ((report_time_ != 0) && (now - report_time_ < kSecondsPerMonth)) {
-        ALOGD("Not upload time. now:%ld, pre:%ld", now, report_time_);
+        ALOGD("Not upload time. now: %" PRId64 ", pre: %" PRId64, now, report_time_);
         return;
     }
 
@@ -122,87 +135,77 @@ bool BatteryEEPROMReporter::checkLogEvent(struct BatteryHistory hist) {
 }
 
 void BatteryEEPROMReporter::reportEvent(struct BatteryHistory hist) {
-       sp<IStats> stats_client = IStats::tryGetService();
-       // upload atom
-       std::vector<int> eeprom_history_fields = {BatteryEEPROM::kCycleCntFieldNumber,
-                                                 BatteryEEPROM::kFullCapFieldNumber,
-                                                 BatteryEEPROM::kEsrFieldNumber,
-                                                 BatteryEEPROM::kRslowFieldNumber,
-                                                 BatteryEEPROM::kSohFieldNumber,
-                                                 BatteryEEPROM::kBattTempFieldNumber,
-                                                 BatteryEEPROM::kCutoffSocFieldNumber,
-                                                 BatteryEEPROM::kCcSocFieldNumber,
-                                                 BatteryEEPROM::kSysSocFieldNumber,
-                                                 BatteryEEPROM::kMsocFieldNumber,
-                                                 BatteryEEPROM::kBattSocFieldNumber,
-                                                 BatteryEEPROM::kReserveFieldNumber,
-                                                 BatteryEEPROM::kMaxTempFieldNumber,
-                                                 BatteryEEPROM::kMinTempFieldNumber,
-                                                 BatteryEEPROM::kMaxVbattFieldNumber,
-                                                 BatteryEEPROM::kMinVbattFieldNumber,
-                                                 BatteryEEPROM::kMaxIbattFieldNumber,
-                                                 BatteryEEPROM::kMinIbattFieldNumber,
-                                                 BatteryEEPROM::kChecksumFieldNumber};
-       std::vector<VendorAtom::Value> values(eeprom_history_fields.size());
-       VendorAtom::Value val;
+    std::shared_ptr<IStats> stats_client = getStatsService();
+    // upload atom
+    std::vector<int> eeprom_history_fields = {
+            BatteryEEPROM::kCycleCntFieldNumber,  BatteryEEPROM::kFullCapFieldNumber,
+            BatteryEEPROM::kEsrFieldNumber,       BatteryEEPROM::kRslowFieldNumber,
+            BatteryEEPROM::kSohFieldNumber,       BatteryEEPROM::kBattTempFieldNumber,
+            BatteryEEPROM::kCutoffSocFieldNumber, BatteryEEPROM::kCcSocFieldNumber,
+            BatteryEEPROM::kSysSocFieldNumber,    BatteryEEPROM::kMsocFieldNumber,
+            BatteryEEPROM::kBattSocFieldNumber,   BatteryEEPROM::kReserveFieldNumber,
+            BatteryEEPROM::kMaxTempFieldNumber,   BatteryEEPROM::kMinTempFieldNumber,
+            BatteryEEPROM::kMaxVbattFieldNumber,  BatteryEEPROM::kMinVbattFieldNumber,
+            BatteryEEPROM::kMaxIbattFieldNumber,  BatteryEEPROM::kMinIbattFieldNumber,
+            BatteryEEPROM::kChecksumFieldNumber};
+    std::vector<VendorAtomValue> values(eeprom_history_fields.size());
+    VendorAtomValue val;
 
-       ALOGD("reportEvent: cycle_cnt:%d, full_cap:%d, esr:%d, rslow:%d, soh:%d, "
-             "batt_temp:%d, cutoff_soc:%d, cc_soc:%d, sys_soc:%d, msoc:%d, "
-             "batt_soc:%d, reserve:%d, max_temp:%d, min_temp:%d, max_vbatt:%d, "
-             "min_vbatt:%d, max_ibatt:%d, min_ibatt:%d, checksum:%d",
-             hist.cycle_cnt, hist.full_cap, hist.esr, hist.rslow, hist.soh,
-             hist.batt_temp, hist.cutoff_soc, hist.cc_soc, hist.sys_soc,
-             hist.msoc, hist.batt_soc, hist.reserve, hist.max_temp,
-             hist.min_temp, hist.max_vbatt, hist.min_vbatt, hist.max_ibatt,
-             hist.min_ibatt, hist.checksum);
+    ALOGD("reportEvent: cycle_cnt:%d, full_cap:%d, esr:%d, rslow:%d, soh:%d, "
+          "batt_temp:%d, cutoff_soc:%d, cc_soc:%d, sys_soc:%d, msoc:%d, "
+          "batt_soc:%d, reserve:%d, max_temp:%d, min_temp:%d, max_vbatt:%d, "
+          "min_vbatt:%d, max_ibatt:%d, min_ibatt:%d, checksum:%d",
+          hist.cycle_cnt, hist.full_cap, hist.esr, hist.rslow, hist.soh, hist.batt_temp,
+          hist.cutoff_soc, hist.cc_soc, hist.sys_soc, hist.msoc, hist.batt_soc, hist.reserve,
+          hist.max_temp, hist.min_temp, hist.max_vbatt, hist.min_vbatt, hist.max_ibatt,
+          hist.min_ibatt, hist.checksum);
 
-       val.intValue(hist.cycle_cnt);
-       values[BatteryEEPROM::kCycleCntFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.full_cap);
-       values[BatteryEEPROM::kFullCapFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.esr);
-       values[BatteryEEPROM::kEsrFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.rslow);
-       values[BatteryEEPROM::kRslowFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.soh);
-       values[BatteryEEPROM::kSohFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.batt_temp);
-       values[BatteryEEPROM::kBattTempFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.cutoff_soc);
-       values[BatteryEEPROM::kCutoffSocFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.cc_soc);
-       values[BatteryEEPROM::kCcSocFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.sys_soc);
-       values[BatteryEEPROM::kSysSocFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.msoc);
-       values[BatteryEEPROM::kMsocFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.batt_soc);
-       values[BatteryEEPROM::kBattSocFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.reserve);
-       values[BatteryEEPROM::kReserveFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.max_temp);
-       values[BatteryEEPROM::kMaxTempFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.min_temp);
-       values[BatteryEEPROM::kMinTempFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.max_vbatt);
-       values[BatteryEEPROM::kMaxVbattFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.min_vbatt);
-       values[BatteryEEPROM::kMinVbattFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.max_ibatt);
-       values[BatteryEEPROM::kMaxIbattFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.min_ibatt);
-       values[BatteryEEPROM::kMinIbattFieldNumber - kVendorAtomOffset] = val;
-       val.intValue(hist.checksum);
-       values[BatteryEEPROM::kChecksumFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.cycle_cnt);
+    values[BatteryEEPROM::kCycleCntFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.full_cap);
+    values[BatteryEEPROM::kFullCapFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.esr);
+    values[BatteryEEPROM::kEsrFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.rslow);
+    values[BatteryEEPROM::kRslowFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.soh);
+    values[BatteryEEPROM::kSohFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.batt_temp);
+    values[BatteryEEPROM::kBattTempFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.cutoff_soc);
+    values[BatteryEEPROM::kCutoffSocFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.cc_soc);
+    values[BatteryEEPROM::kCcSocFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.sys_soc);
+    values[BatteryEEPROM::kSysSocFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.msoc);
+    values[BatteryEEPROM::kMsocFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.batt_soc);
+    values[BatteryEEPROM::kBattSocFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.reserve);
+    values[BatteryEEPROM::kReserveFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.max_temp);
+    values[BatteryEEPROM::kMaxTempFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.min_temp);
+    values[BatteryEEPROM::kMinTempFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.max_vbatt);
+    values[BatteryEEPROM::kMaxVbattFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.min_vbatt);
+    values[BatteryEEPROM::kMinVbattFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.max_ibatt);
+    values[BatteryEEPROM::kMaxIbattFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.min_ibatt);
+    values[BatteryEEPROM::kMinIbattFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.checksum);
+    values[BatteryEEPROM::kChecksumFieldNumber - kVendorAtomOffset] = val;
 
-       VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::BATTERY_EEPROM,
                         .values = values};
-       Return<void> ret = stats_client->reportVendorAtom(event);
-       if (!ret.isOk())
-           ALOGE("Unable to report BatteryEEPROM to Stats service");
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report BatteryEEPROM to Stats service");
 }
-
 
 }  // namespace pixel
 }  // namespace google
