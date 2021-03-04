@@ -114,7 +114,7 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
     std::string errorMessage;
 
     if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config";
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
         return sensors_parsed;
     }
 
