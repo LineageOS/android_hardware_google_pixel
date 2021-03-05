@@ -26,6 +26,7 @@ on property:persist.vendor.disable.thermal.tj.control=*
 on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_ready=1
     # common
     stop vendor.thermal-engine
+    restart vendor.thermal-hal-2-0
     # sdm845
     write /dev/thermal/tz-by-name/quiet-therm-adc/mode disabled
     write /dev/thermal/tz-by-name/quiet-therm-monitor/mode disabled
@@ -61,6 +62,7 @@ on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_rea
 on property:vendor.disable.thermal.control=0 && property:vendor.thermal.link_ready=1
     # common
     start vendor.thermal-engine
+    restart vendor.thermal-hal-2-0
     # sdm845
     write /dev/thermal/tz-by-name/quiet-therm-adc/mode enabled
     write /dev/thermal/tz-by-name/quiet-therm-monitor/mode enabled
@@ -102,6 +104,7 @@ on property:vendor.disable.thermal.tj.control=1
     write /dev/thermal/tz-by-name/G3D/mode disabled
     write /dev/thermal/tz-by-name/ISP/mode disabled
     write /dev/thermal/tz-by-name/TPU/mode disabled
+    write /sys/kernel/debug/gs101-thermal/emul_call 1
 
 on property:vendor.disable.thermal.tj.control=0
     # P21
@@ -111,6 +114,7 @@ on property:vendor.disable.thermal.tj.control=0
     write /dev/thermal/tz-by-name/G3D/mode enabled
     write /dev/thermal/tz-by-name/ISP/mode enabled
     write /dev/thermal/tz-by-name/TPU/mode enabled
+    write /sys/kernel/debug/gs101-thermal/emul_call 0
 
 # Switch USB port overheat protection
 on property:vendor.disable.usb.overheat.mitigation.control=1
