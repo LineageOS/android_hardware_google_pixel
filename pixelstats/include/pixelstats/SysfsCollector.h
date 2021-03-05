@@ -60,6 +60,7 @@ class SysfsCollector {
         const char *const UFSLifetimeA;
         const char *const UFSLifetimeB;
         const char *const UFSLifetimeC;
+        const char *const UFSHostResetPath;
         const char *const F2fsStatsPath;
         const char *const UserdataBlockProp;
         const char *const ZramMmStatPath;
@@ -83,6 +84,7 @@ class SysfsCollector {
     void logSpeechDspStat();
     void logBatteryCapacity(const std::shared_ptr<IStats> &stats_client);
     void logUFSLifetime(const std::shared_ptr<IStats> &stats_client);
+    void logUFSErrorStats(const std::shared_ptr<IStats> &stats_client);
     void logF2fsStats(const std::shared_ptr<IStats> &stats_client);
     void logZramStats(const std::shared_ptr<IStats> &stats_client);
     void logBootStats(const std::shared_ptr<IStats> &stats_client);
@@ -106,6 +108,7 @@ class SysfsCollector {
     const char *const kUFSLifetimeA;
     const char *const kUFSLifetimeB;
     const char *const kUFSLifetimeC;
+    const char *const kUFSHostResetPath;
     const char *const kF2fsStatsPath;
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
