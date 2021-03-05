@@ -51,6 +51,7 @@ enum Ids {
     UFS_RESET_COUNT = 105014;
     PIXEL_MM_METRICS_PER_HOUR = 105015;
     PIXEL_MM_METRICS_PER_DAY = 105016;
+    F2FS_COMPRESSION_INFO = 105017;
 
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
@@ -414,4 +415,13 @@ message PixelMmMetricsPerDay {
     optional uint64 pgscan_kswapd = 15;
     optional uint64 pgscan_direct = 16;
     optional uint64 oom_kill = 17;
+}
+
+message F2fsCompressionInfo {
+    /* Show the block count written after compression since mount */
+    optional int32 compr_written_blocks = 2;
+    /* Show the saved block count with compression since mount */
+    optional int32 compr_saved_blocks = 3;
+    /* Show the count of inode newly enabled for compression since mount */
+    optional int32 compr_new_inodes = 4;
 }

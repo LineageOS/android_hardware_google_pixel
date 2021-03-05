@@ -99,6 +99,7 @@ class SysfsCollector {
     void logUFSLifetime(const std::shared_ptr<IStats> &stats_client);
     void logUFSErrorStats(const std::shared_ptr<IStats> &stats_client);
     void logF2fsStats(const std::shared_ptr<IStats> &stats_client);
+    void logF2fsCompressionInfo(const std::shared_ptr<IStats> &stats_client);
     void logZramStats(const std::shared_ptr<IStats> &stats_client);
     void logBootStats(const std::shared_ptr<IStats> &stats_client);
     void logBatteryEEPROM();
