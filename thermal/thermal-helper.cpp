@@ -53,6 +53,7 @@ constexpr std::string_view kCoolingDeviceCurStateSuffix("cur_state");
 constexpr std::string_view kConfigProperty("vendor.thermal.config");
 constexpr std::string_view kConfigDefaultFileName("thermal_info_config.json");
 constexpr std::string_view kThermalGenlProperty("persist.vendor.enable.thermal.genl");
+constexpr std::string_view kThermalDisabledProperty("vendor.disable.thermal.control");
 
 namespace {
 using android::base::StringPrintf;
@@ -321,6 +322,19 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
     is_initialized_ = initializeSensorMap(tz_map) && initializeCoolingDevices(cdev_map);
     if (!is_initialized_) {
         LOG(FATAL) << "ThermalHAL could not be initialized properly.";
+    }
+
+    const bool thermal_throttling_disabled =
+            android::base::GetBoolProperty(kThermalDisabledProperty.data(), false);
+
+    if (thermal_throttling_disabled) {
+        LOG(INFO) << kThermalDisabledProperty.data() << " is true";
+        for (const auto &cdev_pair : cooling_device_info_map_) {
+            if (cooling_devices_.writeCdevFile(cdev_pair.first, std::to_string(0))) {
+                LOG(INFO) << "Successfully clear cdev " << cdev_pair.first << " to 0";
+            }
+        }
+        return;
     }
 
     const bool thermal_genl_enabled =
