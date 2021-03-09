@@ -36,7 +36,7 @@ namespace hardware {
 namespace power {
 namespace stats {
 
-void PowerStats::addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p) {
+void PowerStats::addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p) {
     if (!p) {
         return;
     }
@@ -109,14 +109,14 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
     return ndk::ScopedAStatus::fromStatus(err);
 }
 
-void PowerStats::addEnergyConsumer(sp<IEnergyConsumer> p) {
+void PowerStats::addEnergyConsumer(std::shared_ptr<IEnergyConsumer> p) {
     if (!p) {
         return;
     }
     std::pair<EnergyConsumerType, std::string> info = p->getInfo();
-    int32_t count =
-            count_if(mEnergyConsumers.begin(), mEnergyConsumers.end(),
-                     [info](sp<IEnergyConsumer> c) { return info.first == c->getInfo().first; });
+
+    int32_t count = count_if(mEnergyConsumerInfos.begin(), mEnergyConsumerInfos.end(),
+                             [&info](const EnergyConsumer &c) { return info.first == c.type; });
     int32_t id = mEnergyConsumers.size();
     mEnergyConsumerInfos.emplace_back(
             EnergyConsumer{.id = id, .ordinal = count, .type = info.first, .name = info.second});

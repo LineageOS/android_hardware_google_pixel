@@ -33,8 +33,7 @@ namespace hardware {
 namespace power {
 namespace stats {
 
-class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider,
-                                          public ::android::Thread {
+class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider {
   public:
     // name = powerEntityName to be associated with this data provider
     // path = path to the display state file descriptor
@@ -49,8 +48,8 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     std::unordered_map<std::string, std::vector<State>> getInfo() override;
 
   private:
-    // Method associated with ::android::Thread. Poll for display state changes
-    bool threadLoop() override;
+    // Poll for display state changes
+    void pollLoop();
     // Main function to update the stats when display state change is detected
     void updateStats();
 
@@ -69,7 +68,9 @@ class DisplayStateResidencyDataProvider : public PowerStats::IStateResidencyData
     // Index of current state
     int mCurState;
     // Looper to facilitate polling of display state file desciptor
-    sp<::android::Looper> mLooper;
+    ::android::sp<::android::Looper> mLooper;
+
+    std::thread mThread;
 };
 
 }  // namespace stats
