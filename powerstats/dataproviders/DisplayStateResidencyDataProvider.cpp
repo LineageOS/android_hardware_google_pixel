@@ -34,7 +34,8 @@ namespace stats {
 
 DisplayStateResidencyDataProvider::DisplayStateResidencyDataProvider(
         std::string name, std::string path, std::vector<std::string> states)
-    : mPath(std::move(path)),
+    : Thread(false),
+      mPath(std::move(path)),
       mName(std::move(name)),
       mStates(states),
       mCurState(-1),
@@ -59,7 +60,9 @@ DisplayStateResidencyDataProvider::DisplayStateResidencyDataProvider(
 
     // Run the thread that will poll for changes to display state
     LOG(VERBOSE) << "Starting DisplayStateWatcherThread";
-    mThread = std::thread(&DisplayStateResidencyDataProvider::pollLoop, this);
+    if (run("DisplayStateWatcherThread", ::android::PRIORITY_HIGHEST) != ::android::NO_ERROR) {
+        LOG(ERROR) << "DisplayStateWatcherThread start fail";
+    }
 }
 
 DisplayStateResidencyDataProvider::~DisplayStateResidencyDataProvider() {
@@ -138,14 +141,15 @@ void DisplayStateResidencyDataProvider::updateStats() {
     }  // release lock
 }
 
-void DisplayStateResidencyDataProvider::pollLoop() {
+bool DisplayStateResidencyDataProvider::threadLoop() {
     LOG(VERBOSE) << "DisplayStateResidencyDataProvider polling...";
-    while (true) {
-        // Poll for display state changes. Timeout set to poll indefinitely
-        if (mLooper->pollOnce(-1) >= 0) {
-            updateStats();
-        }
+
+    // Poll for display state changes. Timeout set to poll indefinitely
+    if (mLooper->pollOnce(-1) >= 0) {
+        updateStats();
     }
+
+    return true;
 }
 
 }  // namespace stats

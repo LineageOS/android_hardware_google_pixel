@@ -23,25 +23,12 @@ aidl_interface {
         "android/vendor/powerstats/StateResidencyData.aidl",
     ],
 
-    vendor_available: true,
-}
-
-aidl_interface {
-    name: "pixel_stateresidency_provider_aidl_interface",
-    unstable: true,
-    imports: ["android.hardware.power.stats"],
-    srcs: [
-        "android/vendor/powerstats/IPixelStateResidencyProvider.aidl",
-        "android/vendor/powerstats/IPixelStateResidencyCallback.aidl",
-    ],
+// TODO(b/124131159): I get an error when I remove this
     backend: {
-        java: {
-            platform_apis: true,
-        },
-        cpp: {
+        ndk: {
             enabled: false,
         },
     },
-
     vendor_available: true,
 }
+
