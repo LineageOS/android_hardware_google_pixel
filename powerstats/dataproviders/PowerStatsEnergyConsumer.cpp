@@ -31,23 +31,24 @@ PowerStatsEnergyConsumer::PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p
                                                    bool attr)
     : kType(type), kName(name), mPowerStats(p), mWithAttribution(attr) {}
 
-sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterConsumer(
+std::shared_ptr<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterConsumer(
         std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
         std::set<std::string> channelNames) {
     return createMeterAndEntityConsumer(p, type, name, channelNames, "", {});
 }
 
-sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createEntityConsumer(
+std::shared_ptr<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createEntityConsumer(
         std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
         std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs) {
     return createMeterAndEntityConsumer(p, type, name, {}, powerEntityName, stateCoeffs);
 }
 
-sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndEntityConsumer(
+std::shared_ptr<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndEntityConsumer(
         std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
         std::set<std::string> channelNames, std::string powerEntityName,
         std::map<std::string, int32_t> stateCoeffs) {
-    sp<PowerStatsEnergyConsumer> ret = new PowerStatsEnergyConsumer(p, type, name);
+    auto ret =
+            std::shared_ptr<PowerStatsEnergyConsumer>(new PowerStatsEnergyConsumer(p, type, name));
     if (ret->addEnergyMeter(channelNames) && ret->addPowerEntity(powerEntityName, stateCoeffs)) {
         return ret;
     }
@@ -56,11 +57,12 @@ sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndEntityConsu
     return nullptr;
 }
 
-sp<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndAttrConsumer(
+std::shared_ptr<PowerStatsEnergyConsumer> PowerStatsEnergyConsumer::createMeterAndAttrConsumer(
         std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
         std::set<std::string> channelNames, std::unordered_map<int32_t, std::string> paths,
         std::map<std::string, int32_t> stateCoeffs) {
-    sp<PowerStatsEnergyConsumer> ret = new PowerStatsEnergyConsumer(p, type, name, true);
+    auto ret = std::shared_ptr<PowerStatsEnergyConsumer>(
+            new PowerStatsEnergyConsumer(p, type, name, true));
     if (ret->addEnergyMeter(channelNames) && ret->addAttribution(paths, stateCoeffs)) {
         return ret;
     }
