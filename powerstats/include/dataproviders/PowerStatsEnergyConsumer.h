@@ -45,19 +45,20 @@ using ::android::sp;
  */
 class PowerStatsEnergyConsumer : public PowerStats::IEnergyConsumer {
   public:
-    static std::shared_ptr<PowerStatsEnergyConsumer> createMeterConsumer(
-            std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
-            std::set<std::string> channelNames);
-    static std::shared_ptr<PowerStatsEnergyConsumer> createEntityConsumer(
+    static sp<PowerStatsEnergyConsumer> createMeterConsumer(std::shared_ptr<PowerStats> p,
+                                                            EnergyConsumerType type,
+                                                            std::string name,
+                                                            std::set<std::string> channelNames);
+    static sp<PowerStatsEnergyConsumer> createEntityConsumer(
             std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
             std::string powerEntityName, std::map<std::string, int32_t> stateCoeffs);
 
-    static std::shared_ptr<PowerStatsEnergyConsumer> createMeterAndEntityConsumer(
+    static sp<PowerStatsEnergyConsumer> createMeterAndEntityConsumer(
             std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
             std::set<std::string> channelNames, std::string powerEntityName,
             std::map<std::string, int32_t> stateCoeffs);
 
-    static std::shared_ptr<PowerStatsEnergyConsumer> createMeterAndAttrConsumer(
+    static sp<PowerStatsEnergyConsumer> createMeterAndAttrConsumer(
             std::shared_ptr<PowerStats> p, EnergyConsumerType type, std::string name,
             std::set<std::string> channelNames, std::unordered_map<int32_t, std::string> paths,
             std::map<std::string, int32_t> stateCoeffs);
@@ -67,7 +68,6 @@ class PowerStatsEnergyConsumer : public PowerStats::IEnergyConsumer {
     std::optional<EnergyConsumerResult> getEnergyConsumed() override;
 
     std::string getConsumerName() override;
-
   private:
     PowerStatsEnergyConsumer(std::shared_ptr<PowerStats> p, EnergyConsumerType type,
                              std::string name, bool attr = false);
