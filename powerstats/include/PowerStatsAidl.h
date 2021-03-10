@@ -18,8 +18,6 @@
 
 #include <aidl/android/hardware/power/stats/BnPowerStats.h>
 
-#include <utils/RefBase.h>
-
 #include <optional>
 #include <unordered_map>
 
@@ -29,11 +27,9 @@ namespace hardware {
 namespace power {
 namespace stats {
 
-using ::android::sp;
-
 class PowerStats : public BnPowerStats {
   public:
-    class IStateResidencyDataProvider : public virtual ::android::RefBase {
+    class IStateResidencyDataProvider {
       public:
         virtual ~IStateResidencyDataProvider() = default;
         virtual bool getStateResidencies(
@@ -41,7 +37,7 @@ class PowerStats : public BnPowerStats {
         virtual std::unordered_map<std::string, std::vector<State>> getInfo() = 0;
     };
 
-    class IEnergyConsumer : public virtual ::android::RefBase {
+    class IEnergyConsumer {
       public:
         virtual ~IEnergyConsumer() = default;
         virtual std::pair<EnergyConsumerType, std::string> getInfo() = 0;
@@ -59,8 +55,8 @@ class PowerStats : public BnPowerStats {
     };
 
     PowerStats() = default;
-    void addStateResidencyDataProvider(sp<IStateResidencyDataProvider> p);
-    void addEnergyConsumer(sp<IEnergyConsumer> p);
+    void addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p);
+    void addEnergyConsumer(std::shared_ptr<IEnergyConsumer> p);
     void setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p);
 
     // Methods from aidl::android::hardware::power::stats::IPowerStats
@@ -88,10 +84,10 @@ class PowerStats : public BnPowerStats {
     void dumpEnergyConsumer(std::ostringstream &oss, bool delta);
     void dumpEnergyMeter(std::ostringstream &oss, bool delta);
 
-    std::vector<sp<IStateResidencyDataProvider>> mStateResidencyDataProviders;
+    std::vector<std::shared_ptr<IStateResidencyDataProvider>> mStateResidencyDataProviders;
     std::vector<PowerEntity> mPowerEntityInfos;
 
-    std::vector<sp<IEnergyConsumer>> mEnergyConsumers;
+    std::vector<std::shared_ptr<IEnergyConsumer>> mEnergyConsumers;
     std::vector<EnergyConsumer> mEnergyConsumerInfos;
 
     std::unique_ptr<IEnergyMeterDataProvider> mEnergyMeterDataProvider;
