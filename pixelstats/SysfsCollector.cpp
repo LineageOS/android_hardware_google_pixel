@@ -89,6 +89,7 @@ using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
+using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
@@ -108,6 +109,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kUFSLifetimeA(sysfs_paths.UFSLifetimeA),
       kUFSLifetimeB(sysfs_paths.UFSLifetimeB),
       kUFSLifetimeC(sysfs_paths.UFSLifetimeC),
+      kUFSHostResetPath(sysfs_paths.UFSHostResetPath),
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
@@ -395,6 +397,35 @@ void SysfsCollector::logUFSLifetime(const std::shared_ptr<IStats> &stats_client)
     }
 }
 
+void SysfsCollector::logUFSErrorStats(const std::shared_ptr<IStats> &stats_client) {
+    int host_reset_count;
+
+    if (kUFSHostResetPath == nullptr || strlen(kUFSHostResetPath) == 0) {
+        ALOGV("UFS host reset count specified");
+        return;
+    }
+
+    if (!ReadFileToInt(kUFSHostResetPath, &host_reset_count)) {
+        ALOGE("Unable to read host reset count");
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(1);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(host_reset_count);
+    values[StorageUfsResetCount::kHostResetCountFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::UFS_RESET_COUNT,
+                        .values = values};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report UFS host reset count to Stats service");
+    }
+}
+
 static std::string getUserDataBlock() {
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> fp(setmntent("/proc/mounts", "re"), endmntent);
     if (fp == nullptr) {
@@ -663,6 +694,7 @@ void SysfsCollector::logAll() {
     logF2fsStats(stats_client);
     logSpeakerImpedance(stats_client);
     logUFSLifetime(stats_client);
+    logUFSErrorStats(stats_client);
     logZramStats(stats_client);
 }
 
