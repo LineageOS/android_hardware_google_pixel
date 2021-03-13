@@ -72,15 +72,12 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
         return getStateResidency(v, _aidl_return);
     }
 
-    binder_status_t err = STATUS_OK;
-
     std::unordered_map<std::string, std::vector<StateResidency>> stateResidencies;
 
     for (const int32_t id : in_powerEntityIds) {
-        // skip any invalid ids
+        // check for invalid ids
         if (id < 0 || id >= mPowerEntityInfos.size()) {
-            err = STATUS_BAD_VALUE;
-            continue;
+            return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
         }
 
         // Check to see if we already have data for the given id
@@ -98,15 +95,12 @@ ndk::ScopedAStatus PowerStats::getStateResidency(const std::vector<int32_t> &in_
             };
             _aidl_return->emplace_back(res);
         } else {
-            // Failed to retrieve results for the given id.
-
-            // Set error code to STATUS_FAILED_TRANSACTION but don't overwrite it
-            // if there is already a higher priority error code
-            err = (err == STATUS_OK) ? STATUS_FAILED_TRANSACTION : err;
+            // Failed to get results for the given id.
+            LOG(ERROR) << "Failed to get results for " << powerEntityName;
         }
     }
 
-    return ndk::ScopedAStatus::fromStatus(err);
+    return ndk::ScopedAStatus::ok();
 }
 
 void PowerStats::addEnergyConsumer(std::shared_ptr<IEnergyConsumer> p) {
@@ -141,13 +135,10 @@ ndk::ScopedAStatus PowerStats::getEnergyConsumed(const std::vector<int32_t> &in_
         return getEnergyConsumed(v, _aidl_return);
     }
 
-    binder_status_t err = STATUS_OK;
-
     for (const auto id : in_energyConsumerIds) {
-        // skip any invalid ids
+        // check for invalid ids
         if (id < 0 || id >= mEnergyConsumers.size()) {
-            err = STATUS_BAD_VALUE;
-            continue;
+            return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
         }
 
         auto resopt = mEnergyConsumers[id]->getEnergyConsumed();
@@ -156,15 +147,12 @@ ndk::ScopedAStatus PowerStats::getEnergyConsumed(const std::vector<int32_t> &in_
             res.id = id;
             _aidl_return->emplace_back(res);
         } else {
-            // Failed to retrieve results for the given id.
-
-            // Set error code to STATUS_FAILED_TRANSACTION but don't overwrite it
-            // if there is already a higher priority error code
-            err = (err == STATUS_OK) ? STATUS_FAILED_TRANSACTION : err;
+            // Failed to get results for the given id.
+            LOG(ERROR) << "Failed to get results for " << mEnergyConsumerInfos[id].name;
         }
     }
 
-    return ndk::ScopedAStatus::fromStatus(err);
+    return ndk::ScopedAStatus::ok();
 }
 
 void PowerStats::setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p) {
