@@ -201,11 +201,11 @@ int IioEnergyMeterDataProvider::parseEnergyValue(std::string path) {
 ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeter(
         const std::vector<int32_t> &in_channelIds, std::vector<EnergyMeasurement> *_aidl_return) {
     std::scoped_lock lock(mLock);
-    binder_status_t ret = STATUS_OK;
+
     for (const auto &devicePath : mDevicePaths) {
         if (parseEnergyValue(devicePath.first) < 0) {
             LOG(ERROR) << "Error in parsing " << devicePath.first;
-            return ndk::ScopedAStatus::fromStatus(STATUS_FAILED_TRANSACTION);
+            return ndk::ScopedAStatus::ok();
         }
     }
 
@@ -213,21 +213,24 @@ ndk::ScopedAStatus IioEnergyMeterDataProvider::readEnergyMeter(
         *_aidl_return = mReading;
     } else {
         _aidl_return->reserve(in_channelIds.size());
-        for (const auto &channelId : in_channelIds) {
-            if (channelId < mChannelInfos.size()) {
-                _aidl_return->emplace_back(mReading[channelId]);
-            } else {
-                ret = STATUS_BAD_VALUE;
+        for (const auto &id : in_channelIds) {
+            // check for invalid ids
+            if (id < 0 || id >= mChannelInfos.size()) {
+                return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_ILLEGAL_ARGUMENT));
             }
+
+            _aidl_return->emplace_back(mReading[id]);
         }
     }
-    return ndk::ScopedAStatus::fromStatus(ret);
+
+    return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus IioEnergyMeterDataProvider::getEnergyMeterInfo(
         std::vector<Channel> *_aidl_return) {
     std::scoped_lock lk(mLock);
     *_aidl_return = mChannelInfos;
+
     return ndk::ScopedAStatus::ok();
 }
 
