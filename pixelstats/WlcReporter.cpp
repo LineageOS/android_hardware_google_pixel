@@ -16,10 +16,8 @@
 
 #define LOG_TAG "pixelstats-wlc"
 
-#include <aidl/android/frameworks/stats/IStats.h>
 #include <android-base/file.h>
 #include <android-base/strings.h>
-#include <android/binder_manager.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/OrientationCollector.h>
@@ -27,17 +25,6 @@
 
 #define GOOGLE_PTMC_ID 0x72
 #define ID_UNKNOWN 0
-
-namespace {
-
-using aidl::android::frameworks::stats::IStats;
-
-std::shared_ptr<IStats> getStatsService() {
-    const std::string instance = std::string() + IStats::descriptor + "/default";
-    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
-}
-
-}  // namespace
 
 namespace android {
 namespace hardware {
@@ -52,13 +39,14 @@ using android::base::ReadFileToString;
 WlcReporter::WlcStatus::WlcStatus()
     : is_charging(false), check_charger_vendor_id(false), check_vendor_id_attempts(0) {}
 
-void WlcReporter::checkAndReport(bool online, const char *ptmc_uevent) {
+void WlcReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client, bool online,
+                                 const char *ptmc_uevent) {
     bool wireless_charging = online;
     bool started_wireless_charging = wireless_charging && !wlc_status_.is_charging;
     wlc_status_.is_charging = wireless_charging;
 
     if (started_wireless_charging) {
-        reportOrientation();
+        reportOrientation(stats_client);
         wlc_status_.check_vendor_id_attempts = 0;
         wlc_status_.check_charger_vendor_id = true;
     }
@@ -66,31 +54,27 @@ void WlcReporter::checkAndReport(bool online, const char *ptmc_uevent) {
         wlc_status_.check_charger_vendor_id = false;
     }
     if (wireless_charging) {
-        checkVendorId(ptmc_uevent);
+        checkVendorId(stats_client, ptmc_uevent);
     }
 }
 
-void WlcReporter::checkVendorId(const char *ptmc_uevent) {
+void WlcReporter::checkVendorId(const std::shared_ptr<IStats> &stats_client,
+                                const char *ptmc_uevent) {
     if (!ptmc_uevent || !wlc_status_.check_charger_vendor_id) {
         return;
     }
-    if (reportVendor(ptmc_uevent)) {
+    if (reportVendor(stats_client, ptmc_uevent)) {
         wlc_status_.check_charger_vendor_id = false;
     }
 }
 
-bool WlcReporter::reportVendor(const char *ptmc_uevent) {
+bool WlcReporter::reportVendor(const std::shared_ptr<IStats> &stats_client,
+                               const char *ptmc_uevent) {
     int ptmcId = readPtmcId(ptmc_uevent);
     if (ptmcId == ID_UNKNOWN) {
         if (++(wlc_status_.check_vendor_id_attempts) < kMaxVendorIdAttempts) {
             return false;
         } /* else if ptmc not ready after retry assume ptmc not supported by charger */
-    }
-
-    std::shared_ptr<IStats> stats_client = getStatsService();
-    if (stats_client == nullptr) {
-        ALOGE("logWlc get IStats fail.");
-        return true;
     }
 
     int vendorCharger = (ptmcId == GOOGLE_PTMC_ID)
@@ -105,7 +89,7 @@ bool WlcReporter::reportVendor(const char *ptmc_uevent) {
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::WIRELESS_CHARGING_STATS,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus retStat = stats_client->reportVendorAtom(event);
     if (!retStat.isOk()) {
         ALOGE("Unable to report WLC_STATS to Stats service");
@@ -140,17 +124,11 @@ int WlcReporter::translateDeviceOrientationToAtomValue(int orientation) {
     }
 }
 
-void WlcReporter::reportOrientation() {
-    std::shared_ptr<IStats> stats_client = getStatsService();
-    if (stats_client == nullptr) {
-        ALOGE("logWlc get IStats fail.");
-        return;
-    }
-
-    int orientationFromSensor;
-    sp<OrientationCollector> orientationCollector;
-    orientationCollector = OrientationCollector::createOrientationCollector();
+void WlcReporter::reportOrientation(const std::shared_ptr<IStats> &stats_client) {
+    sp<OrientationCollector> orientationCollector =
+            OrientationCollector::createOrientationCollector();
     if (orientationCollector != nullptr) {
+        int orientationFromSensor = -1;
         orientationCollector->pollOrientation(&orientationFromSensor);
         VendorAtomValue tmp;
         tmp.set<VendorAtomValue::intValue>(
@@ -161,7 +139,7 @@ void WlcReporter::reportOrientation() {
 
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                             .atomId = PixelAtoms::Ids::DEVICE_ORIENTATION,
-                            .values = values};
+                            .values = std::move(values)};
         const ndk::ScopedAStatus retStat = stats_client->reportVendorAtom(event);
         if (!retStat.isOk()) {
             ALOGE("Unable to report Orientation to Stats service");
