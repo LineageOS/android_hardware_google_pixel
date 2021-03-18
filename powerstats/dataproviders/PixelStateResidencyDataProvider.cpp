@@ -27,7 +27,8 @@ namespace hardware {
 namespace power {
 namespace stats {
 
-PixelStateResidencyDataProvider::PixelStateResidencyDataProvider() {}
+PixelStateResidencyDataProvider::PixelStateResidencyDataProvider()
+    : mProviderService(ndk::SharedRefBase::make<ProviderService>(this)) {}
 
 void PixelStateResidencyDataProvider::addEntity(std::string name, std::vector<State> states) {
     std::lock_guard<std::mutex> lock(mLock);
@@ -36,7 +37,8 @@ void PixelStateResidencyDataProvider::addEntity(std::string name, std::vector<St
 }
 
 void PixelStateResidencyDataProvider::start() {
-    binder_status_t status = AServiceManager_addService(this->asBinder().get(), kInstance.c_str());
+    binder_status_t status =
+            AServiceManager_addService(mProviderService->asBinder().get(), kInstance.c_str());
     if (status != STATUS_OK) {
         LOG(ERROR) << "Failed to start " << kInstance;
     }
