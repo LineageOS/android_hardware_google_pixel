@@ -49,6 +49,8 @@ enum Ids {
     BATTERY_EEPROM = 105012;
     VENDOR_SPEAKER_IMPEDANCE = 105013; // Moved from atoms.proto
     UFS_RESET_COUNT = 105014;
+    PIXEL_MM_METRICS_PER_HOUR = 105015;
+    PIXEL_MM_METRICS_PER_DAY = 105016;
 
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
@@ -379,4 +381,35 @@ message CitadelVersion {
 message StorageUfsResetCount {
     /* How many UFS error reset are triggered */
     optional int32 host_reset_count = 2;
+}
+
+/* A message containing Pixel memory metrics collected hourly. */
+message PixelMmMetricsPerHour {
+    optional uint64 free_pages = 2;
+    optional uint64 anon_pages = 3;
+    optional uint64 file_pages = 4;
+    optional uint64 slab_reclaimable = 5;
+    optional uint64 zspages = 6;
+    optional uint64 unevictable = 7;
+    optional uint64 ion_total_pools = 8;
+}
+
+/* A message containing Pixel memory metrics collected daily. */
+message PixelMmMetricsPerDay {
+    optional uint64 workingset_refault = 2;
+    optional uint64 pswpin = 3;
+    optional uint64 pswpout = 4;
+    optional uint64 allocstall_dma = 5;
+    optional uint64 allocstall_dma32 = 6;
+    optional uint64 allocstall_normal = 7;
+    optional uint64 allocstall_movable = 8;
+    optional uint64 pgalloc_dma = 9;
+    optional uint64 pgalloc_dma32 = 10;
+    optional uint64 pgalloc_normal = 11;
+    optional uint64 pgalloc_movable = 12;
+    optional uint64 pgsteal_kswapd = 13;
+    optional uint64 pgsteal_direct = 14;
+    optional uint64 pgscan_kswapd = 15;
+    optional uint64 pgscan_direct = 16;
+    optional uint64 oom_kill = 17;
 }
