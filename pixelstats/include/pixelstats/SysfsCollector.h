@@ -28,6 +28,7 @@ namespace frameworks {
 namespace stats {
 
 class IStats;
+class VendorAtomValue;
 
 }  // namespace stats
 }  // namespace frameworks
@@ -40,6 +41,7 @@ namespace google {
 namespace pixel {
 
 using aidl::android::frameworks::stats::IStats;
+using aidl::android::frameworks::stats::VendorAtomValue;
 using android::sp;
 using android::frameworks::stats::V1_0::SlowIo;
 
@@ -72,9 +74,20 @@ class SysfsCollector {
     void collect();
 
   private:
+    struct MmMetricsInfo {
+        std::string name;
+        int atom_key;
+        bool update_diff;
+    };
+
+    static const std::vector<MmMetricsInfo> kMmMetricsPerHourInfo;
+    static const std::vector<MmMetricsInfo> kMmMetricsPerDayInfo;
+
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
-    void logAll();
+    bool ReadFileToUint(const char *const path, uint64_t *val);
+    void logPerDay();
+    void logPerHour();
 
     void logBatteryChargeCycles();
     void logCodecFailed();
@@ -93,6 +106,15 @@ class SysfsCollector {
     void reportSlowIoFromFile(const char *path, const SlowIo::IoOperation &operation_s);
     void reportZramMmStat(const std::shared_ptr<IStats> &stats_client);
     void reportZramBdStat(const std::shared_ptr<IStats> &stats_client);
+
+    std::map<std::string, uint64_t> readVmStat(const char *path);
+    uint64_t getIonTotalPools();
+    void fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
+                        const std::map<std::string, uint64_t> &mm_metrics,
+                        std::map<std::string, uint64_t> *prev_mm_metrics,
+                        std::vector<VendorAtomValue> *atom_values);
+    void logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &stats_client);
+    void logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -113,9 +135,15 @@ class SysfsCollector {
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
+    const char *const kVmstatPath;
+    const char *const kIonTotalPoolsPath;
+    const char *const kIonTotalPoolsPathForLegacy;
     sp<android::frameworks::stats::V1_0::IStats> stats_;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
+
+    std::map<std::string, uint64_t> prev_hour_vmstat_;
+    std::map<std::string, uint64_t> prev_day_vmstat_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
