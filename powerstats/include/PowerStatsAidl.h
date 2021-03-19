@@ -55,8 +55,8 @@ class PowerStats : public BnPowerStats {
     };
 
     PowerStats() = default;
-    void addStateResidencyDataProvider(std::shared_ptr<IStateResidencyDataProvider> p);
-    void addEnergyConsumer(std::shared_ptr<IEnergyConsumer> p);
+    void addStateResidencyDataProvider(std::unique_ptr<IStateResidencyDataProvider> p);
+    void addEnergyConsumer(std::unique_ptr<IEnergyConsumer> p);
     void setEnergyMeterDataProvider(std::unique_ptr<IEnergyMeterDataProvider> p);
 
     // Methods from aidl::android::hardware::power::stats::IPowerStats
@@ -84,10 +84,10 @@ class PowerStats : public BnPowerStats {
     void dumpEnergyConsumer(std::ostringstream &oss, bool delta);
     void dumpEnergyMeter(std::ostringstream &oss, bool delta);
 
-    std::vector<std::shared_ptr<IStateResidencyDataProvider>> mStateResidencyDataProviders;
+    std::vector<std::unique_ptr<IStateResidencyDataProvider>> mStateResidencyDataProviders;
     std::vector<PowerEntity> mPowerEntityInfos;
 
-    std::vector<std::shared_ptr<IEnergyConsumer>> mEnergyConsumers;
+    std::vector<std::unique_ptr<IEnergyConsumer>> mEnergyConsumers;
     std::vector<EnergyConsumer> mEnergyConsumerInfos;
 
     std::unique_ptr<IEnergyMeterDataProvider> mEnergyMeterDataProvider;
