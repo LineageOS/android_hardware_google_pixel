@@ -592,19 +592,22 @@ void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_clien
         int64_t same_pages = 0;
         int64_t pages_compacted = 0;
         int64_t huge_pages = 0;
+        int64_t huge_pages_since_boot = 0;
 
+        // huge_pages_since_boot may not exist according to kernel version.
+        // only check if the number of collected data is equal or larger then 8
         if (sscanf(file_contents.c_str(),
-                "%" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64 \
-                " %" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64,
-                &orig_data_size, &compr_data_size, &mem_used_total,
-                &mem_limit, &max_used_total, &same_pages,
-                &pages_compacted, &huge_pages) != 8) {
+                   "%" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64 " %" SCNd64
+                   " %" SCNd64 " %" SCNd64 " %" SCNd64,
+                   &orig_data_size, &compr_data_size, &mem_used_total, &mem_limit, &max_used_total,
+                   &same_pages, &pages_compacted, &huge_pages, &huge_pages_since_boot) < 8) {
             ALOGE("Unable to parse ZramMmStat %s from file %s to int.",
                     file_contents.c_str(), kZramMmStatPath);
         }
 
-        // Load values array
-        std::vector<VendorAtomValue> values(5);
+        // Load values array.
+        // The size should be the same as the number of fields in ZramMmStat
+        std::vector<VendorAtomValue> values(6);
         VendorAtomValue tmp;
         tmp.set<VendorAtomValue::intValue>(orig_data_size);
         values[ZramMmStat::kOrigDataSizeFieldNumber - kVendorAtomOffset] = tmp;
@@ -616,6 +619,15 @@ void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_clien
         values[ZramMmStat::kSamePagesFieldNumber - kVendorAtomOffset] = tmp;
         tmp.set<VendorAtomValue::intValue>(huge_pages);
         values[ZramMmStat::kHugePagesFieldNumber - kVendorAtomOffset] = tmp;
+
+        // Skip the first data to avoid a big spike in this accumulated value.
+        if (prev_huge_pages_since_boot_ == -1)
+            tmp.set<VendorAtomValue::intValue>(0);
+        else
+            tmp.set<VendorAtomValue::intValue>(huge_pages_since_boot - prev_huge_pages_since_boot_);
+
+        values[ZramMmStat::kHugePagesSinceBootFieldNumber - kVendorAtomOffset] = tmp;
+        prev_huge_pages_since_boot_ = huge_pages_since_boot;
 
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
