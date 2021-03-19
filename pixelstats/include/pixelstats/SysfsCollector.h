@@ -151,6 +151,7 @@ class SysfsCollector {
     const int kVendorAtomOffset = 2;
 
     bool log_once_reported = false;
+    int64_t prev_huge_pages_since_boot_ = -1;
 };
 
 }  // namespace pixel

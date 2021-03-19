@@ -190,6 +190,8 @@ message ZramMmStat {
     optional int64 same_pages = 5;
     /* The value of number of incompressible page */
     optional int64 huge_pages = 6;
+    /* The value of number of incompressible pages since boot */
+    optional int64 huge_pages_since_boot = 7;
 }
 
 message ZramBdStat {
