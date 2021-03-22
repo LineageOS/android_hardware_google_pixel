@@ -17,10 +17,14 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_BATTERYCAPACITYREPORTER_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_BATTERYCAPACITYREPORTER_H
 
+#include <aidl/android/frameworks/stats/IStats.h>
+
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+
+using aidl::android::frameworks::stats::IStats;
 
 #define MAX_LOG_EVENTS_PER_HOUR 4
 
@@ -30,7 +34,7 @@ namespace pixel {
 class BatteryCapacityReporter {
   public:
     BatteryCapacityReporter();
-    void checkAndReport(const std::string &path);
+    void checkAndReport(const std::shared_ptr<IStats> &stats_client, const std::string &path);
 
   private:
     int64_t getTimeSecs();
@@ -38,7 +42,7 @@ class BatteryCapacityReporter {
     bool parse(const std::string &path);
     bool checkLogEvent(void);
     bool shouldReportEvent(void);
-    void reportEvent(void);
+    void reportEvent(const std::shared_ptr<IStats> &stats_client);
 
     /**
      * SOC status translation from sysfs node

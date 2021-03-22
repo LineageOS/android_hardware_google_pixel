@@ -47,23 +47,22 @@ cc_library {
   export_include_dirs: ["include"],
 
   srcs: [
+    "BatteryCapacityReporter.cpp",
+    "BatteryEEPROMReporter.cpp",
     "DropDetect.cpp",
     "OrientationCollector.cpp",
+    "StatsHelper.cpp",
     "SysfsCollector.cpp",
     "UeventListener.cpp",
     "WlcReporter.cpp",
-    "BatteryCapacityReporter.cpp",
-    "BatteryEEPROMReporter.cpp",
   ],
   cflags: [
     "-Wall",
     "-Werror",
   ],
   shared_libs: [
-    "android.frameworks.stats@1.0",
     "android.frameworks.stats-V1-ndk_platform",
     "libbase",
-    "libbinder",
     "libbinder_ndk",
     "libcutils",
     "libhidlbase",
@@ -73,8 +72,8 @@ cc_library {
     "pixelatoms-cpp",
   ],
   export_shared_lib_headers: [
-    "android.frameworks.stats@1.0",
     "android.frameworks.stats-V1-ndk_platform",
+    "pixelatoms-cpp",
   ],
   static_libs: [
     "chre_client",
