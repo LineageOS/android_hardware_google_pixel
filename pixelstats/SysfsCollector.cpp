@@ -14,19 +14,17 @@
  * limitations under the License.
  */
 
+#include <pixelstats/StatsHelper.h>
 #include <pixelstats/SysfsCollector.h>
 
 #define LOG_TAG "pixelstats-vendor"
 
-#include <aidl/android/frameworks/stats/IStats.h>
 #include <android-base/file.h>
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
-#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <utils/Log.h>
-#include <utils/StrongPointer.h>
 #include <utils/Timers.h>
 
 #include <mntent.h>
@@ -34,44 +32,6 @@
 #include <cctype>
 #include <cinttypes>
 #include <string>
-
-namespace {
-
-using aidl::android::frameworks::stats::IStats;
-
-std::shared_ptr<IStats> getStatsService() {
-    const std::string instance = std::string() + IStats::descriptor + "/default";
-    if (!AServiceManager_isDeclared(instance.c_str())) {
-        ALOGE("IStats service is not registered.");
-        return nullptr;
-    }
-    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
-}
-
-using aidl::android::frameworks::stats::VendorAtom;
-using aidl::android::frameworks::stats::VendorAtomValue;
-namespace PixelAtoms = android::hardware::google::pixel::PixelAtoms;
-
-void reportSpeakerImpedance(const std::shared_ptr<IStats> &stats_client,
-                            const PixelAtoms::VendorSpeakerImpedance &speakerImpedance) {
-    // Load values array
-    std::vector<VendorAtomValue> values(2);
-    VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::intValue>(speakerImpedance.speaker_location());
-    values[0] = tmp;
-    tmp.set<VendorAtomValue::intValue>(speakerImpedance.impedance());
-    values[1] = tmp;
-
-    // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_SPEAKER_IMPEDANCE,
-                        .values = values};
-    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-    if (!ret.isOk())
-        ALOGE("Unable to report VendorSpeakerImpedance to Stats service");
-}
-
-}  // namespace
 
 namespace android {
 namespace hardware {
@@ -81,21 +41,21 @@ namespace pixel {
 using aidl::android::frameworks::stats::VendorAtom;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
-using android::base::WriteStringToFile;
 using android::base::StartsWith;
-using android::frameworks::stats::V1_0::ChargeCycles;
-using android::frameworks::stats::V1_0::HardwareFailed;
-using android::frameworks::stats::V1_0::SlowIo;
-using android::frameworks::stats::V1_0::SpeechDspStat;
+using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
-using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::PixelMmMetricsPerDay;
 using android::hardware::google::pixel::PixelAtoms::PixelMmMetricsPerHour;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
+using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
+using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
+using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
+using android::hardware::google::pixel::PixelAtoms::VendorSpeechDspStat;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 
@@ -195,10 +155,9 @@ bool SysfsCollector::ReadFileToUint(const char *const path, uint64_t *val) {
  * The contents are expected to be N buckets total, the nth of which indicates the
  * number of times battery %-full has been increased with the n/N% full bucket.
  */
-void SysfsCollector::logBatteryChargeCycles() {
+void SysfsCollector::logBatteryChargeCycles(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     int val;
-    std::vector<int> charge_cycles;
     if (kCycleCountBinsPath == nullptr || strlen(kCycleCountBinsPath) == 0) {
         ALOGV("Battery charge cycle path not specified");
         return;
@@ -208,33 +167,44 @@ void SysfsCollector::logBatteryChargeCycles() {
         return;
     }
 
+    const int32_t kChargeCyclesBucketsCount =
+            VendorChargeCycles::kCycleBucket10FieldNumber - kVendorAtomOffset + 1;
+    std::vector<int32_t> charge_cycles;
     std::stringstream stream(file_contents);
     while (stream >> val) {
         charge_cycles.push_back(val);
     }
-    ChargeCycles cycles;
-    cycles.cycleBucket = charge_cycles;
+    if (charge_cycles.size() > kChargeCyclesBucketsCount) {
+        ALOGW("Got excessive battery charge cycles count %" PRIu64,
+              static_cast<uint64_t>(charge_cycles.size()));
+    } else {
+        // Push 0 for buckets that do not exist.
+        for (int bucketIdx = charge_cycles.size(); bucketIdx < kChargeCyclesBucketsCount;
+             ++bucketIdx) {
+            charge_cycles.push_back(0);
+        }
+    }
 
     std::replace(file_contents.begin(), file_contents.end(), ' ', ',');
-    stats_->reportChargeCycles(cycles);
+    reportChargeCycles(stats_client, charge_cycles);
 }
 
 /**
  * Read the contents of kEEPROMPath and report them.
  */
-void SysfsCollector::logBatteryEEPROM() {
+void SysfsCollector::logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client) {
     if (kEEPROMPath == nullptr || strlen(kEEPROMPath) == 0) {
         ALOGV("Battery EEPROM path not specified");
         return;
     }
 
-    battery_EEPROM_reporter_.checkAndReport(kEEPROMPath);
+    battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
 }
 
 /**
  * Check the codec for failures over the past 24hr.
  */
-void SysfsCollector::logCodecFailed() {
+void SysfsCollector::logCodecFailed(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (kCodecPath == nullptr || strlen(kCodecPath) == 0) {
         ALOGV("Audio codec path not specified");
@@ -247,17 +217,18 @@ void SysfsCollector::logCodecFailed() {
     if (file_contents == "0") {
         return;
     } else {
-        HardwareFailed failed = {.hardwareType = HardwareFailed::HardwareType::CODEC,
-                                 .hardwareLocation = 0,
-                                 .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
-        stats_->reportHardwareFailed(failed);
+        VendorHardwareFailed failure;
+        failure.set_hardware_type(VendorHardwareFailed::HARDWARE_FAILED_CODEC);
+        failure.set_hardware_location(0);
+        failure.set_failure_code(VendorHardwareFailed::COMPLETE);
+        reportHardwareFailed(stats_client, failure);
     }
 }
 
 /**
  * Check the codec1 for failures over the past 24hr.
  */
-void SysfsCollector::logCodec1Failed() {
+void SysfsCollector::logCodec1Failed(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (kCodec1Path == nullptr || strlen(kCodec1Path) == 0) {
         ALOGV("Audio codec1 path not specified");
@@ -271,15 +242,17 @@ void SysfsCollector::logCodec1Failed() {
         return;
     } else {
         ALOGE("%s report hardware fail", kCodec1Path);
-        HardwareFailed failed = {.hardwareType = HardwareFailed::HardwareType::CODEC,
-                                 .hardwareLocation = 1,
-                                 .errorCode = HardwareFailed::HardwareErrorCode::COMPLETE};
-        stats_->reportHardwareFailed(failed);
+        VendorHardwareFailed failure;
+        failure.set_hardware_type(VendorHardwareFailed::HARDWARE_FAILED_CODEC);
+        failure.set_hardware_location(1);
+        failure.set_failure_code(VendorHardwareFailed::COMPLETE);
+        reportHardwareFailed(stats_client, failure);
     }
 }
 
-void SysfsCollector::reportSlowIoFromFile(const char *path,
-                                          const SlowIo::IoOperation &operation_s) {
+void SysfsCollector::reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client,
+                                          const char *path,
+                                          const VendorSlowIo::IoOperation &operation_s) {
     std::string file_contents;
     if (path == nullptr || strlen(path) == 0) {
         ALOGV("slow_io path not specified");
@@ -293,8 +266,10 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
         if (sscanf(file_contents.c_str(), "%d", &slow_io_count) != 1) {
             ALOGE("Unable to parse %s from file %s to int.", file_contents.c_str(), path);
         } else if (slow_io_count > 0) {
-            SlowIo slowio = {.operation = operation_s, .count = slow_io_count};
-            stats_->reportSlowIo(slowio);
+            VendorSlowIo slow_io;
+            slow_io.set_operation(operation_s);
+            slow_io.set_count(slow_io_count);
+            reportSlowIo(stats_client, slow_io);
         }
         // Clear the stats
         if (!android::base::WriteStringToFile("0", path, true)) {
@@ -306,11 +281,11 @@ void SysfsCollector::reportSlowIoFromFile(const char *path,
 /**
  * Check for slow IO operations.
  */
-void SysfsCollector::logSlowIO() {
-    reportSlowIoFromFile(kSlowioReadCntPath, SlowIo::IoOperation::READ);
-    reportSlowIoFromFile(kSlowioWriteCntPath, SlowIo::IoOperation::WRITE);
-    reportSlowIoFromFile(kSlowioUnmapCntPath, SlowIo::IoOperation::UNMAP);
-    reportSlowIoFromFile(kSlowioSyncCntPath, SlowIo::IoOperation::SYNC);
+void SysfsCollector::logSlowIO(const std::shared_ptr<IStats> &stats_client) {
+    reportSlowIoFromFile(stats_client, kSlowioReadCntPath, VendorSlowIo::READ);
+    reportSlowIoFromFile(stats_client, kSlowioWriteCntPath, VendorSlowIo::WRITE);
+    reportSlowIoFromFile(stats_client, kSlowioUnmapCntPath, VendorSlowIo::UNMAP);
+    reportSlowIoFromFile(stats_client, kSlowioSyncCntPath, VendorSlowIo::SYNC);
 }
 
 /**
@@ -347,7 +322,7 @@ void SysfsCollector::logSpeakerImpedance(const std::shared_ptr<IStats> &stats_cl
 /**
  * Report the Speech DSP state.
  */
-void SysfsCollector::logSpeechDspStat() {
+void SysfsCollector::logSpeechDspStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (kSpeechDspPath == nullptr || strlen(kSpeechDspPath) == 0) {
         ALOGV("Speech DSP path not specified");
@@ -358,21 +333,22 @@ void SysfsCollector::logSpeechDspStat() {
         return;
     }
 
-    int32_t uptime = 0, downtime = 0, crashcount = 0, recovercount = 0;
-    if (sscanf(file_contents.c_str(), "%d,%d,%d,%d", &uptime, &downtime, &crashcount,
-               &recovercount) != 4) {
+    int32_t up_time = 0, down_time = 0, crash_count = 0, recover_count = 0;
+    if (sscanf(file_contents.c_str(), "%d,%d,%d,%d", &up_time, &down_time, &crash_count,
+               &recover_count) != 4) {
         ALOGE("Unable to parse speech dsp stat %s", file_contents.c_str());
         return;
     }
 
-    ALOGD("SpeechDSP uptime %d downtime %d crashcount %d recovercount %d", uptime, downtime,
-          crashcount, recovercount);
-    SpeechDspStat dspstat = {.totalUptimeMillis = uptime,
-                             .totalDowntimeMillis = downtime,
-                             .totalCrashCount = crashcount,
-                             .totalRecoverCount = recovercount};
+    ALOGD("SpeechDSP uptime %d downtime %d crashcount %d recovercount %d", up_time, down_time,
+          crash_count, recover_count);
+    VendorSpeechDspStat dsp_stat;
+    dsp_stat.set_total_uptime_millis(up_time);
+    dsp_stat.set_total_downtime_millis(down_time);
+    dsp_stat.set_total_crash_count(crash_count);
+    dsp_stat.set_total_recover_count(recover_count);
 
-    stats_->reportSpeechDspStat(dspstat);
+    reportSpeechDspStat(stats_client, dsp_stat);
 }
 
 void SysfsCollector::logBatteryCapacity(const std::shared_ptr<IStats> &stats_client) {
@@ -401,7 +377,7 @@ void SysfsCollector::logBatteryCapacity(const std::shared_ptr<IStats> &stats_cli
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::BATTERY_CAPACITY,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report ChargeStats to Stats service");
@@ -443,7 +419,7 @@ void SysfsCollector::logUFSLifetime(const std::shared_ptr<IStats> &stats_client)
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::STORAGE_UFS_HEALTH,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report UfsHealthStat to Stats service");
@@ -472,7 +448,7 @@ void SysfsCollector::logUFSErrorStats(const std::shared_ptr<IStats> &stats_clien
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::UFS_RESET_COUNT,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report UFS host reset count to Stats service");
@@ -568,7 +544,7 @@ void SysfsCollector::logF2fsStats(const std::shared_ptr<IStats> &stats_client) {
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::F2FS_STATS,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report F2fs stats to Stats service");
@@ -691,8 +667,8 @@ void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_clien
 
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-            .atomId = PixelAtoms::Ids::ZRAM_MM_STAT,
-            .values = values};
+                            .atomId = PixelAtoms::Ids::ZRAM_MM_STAT,
+                            .values = std::move(values)};
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Zram Unable to report ZramMmStat to Stats service");
@@ -732,8 +708,8 @@ void SysfsCollector::reportZramBdStat(const std::shared_ptr<IStats> &stats_clien
 
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-            .atomId = PixelAtoms::Ids::ZRAM_BD_STAT,
-            .values = values};
+                            .atomId = PixelAtoms::Ids::ZRAM_BD_STAT,
+                            .values = std::move(values)};
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Zram Unable to report ZramBdStat to Stats service");
@@ -781,7 +757,7 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::BOOT_STATS,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report Boot stats to Stats service");
@@ -925,7 +901,7 @@ void SysfsCollector::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &sta
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                             .atomId = PixelAtoms::Ids::PIXEL_MM_METRICS_PER_HOUR,
-                            .values = values};
+                            .values = std::move(values)};
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report PixelMmMetricsPerHour to Stats service");
@@ -946,7 +922,7 @@ void SysfsCollector::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stat
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                             .atomId = PixelAtoms::Ids::PIXEL_MM_METRICS_PER_DAY,
-                            .values = values};
+                            .values = std::move(values)};
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report MEMORY_MANAGEMENT_INFO to Stats service");
@@ -954,18 +930,6 @@ void SysfsCollector::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stat
 }
 
 void SysfsCollector::logPerDay() {
-    stats_ = android::frameworks::stats::V1_0::IStats::tryGetService();
-    if (!stats_) {
-        ALOGE("Unable to connect to Stats service");
-    } else {
-        logBatteryChargeCycles();
-        logCodec1Failed();
-        logCodecFailed();
-        logSlowIO();
-        logSpeechDspStat();
-        stats_.clear();
-    }
-
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
         ALOGE("Unable to get AIDL Stats service");
@@ -976,11 +940,16 @@ void SysfsCollector::logPerDay() {
         logBootStats(stats_client);
     }
     logBatteryCapacity(stats_client);
-    logBatteryEEPROM();
+    logBatteryChargeCycles(stats_client);
+    logBatteryEEPROM(stats_client);
+    logCodec1Failed(stats_client);
+    logCodecFailed(stats_client);
     logF2fsStats(stats_client);
     logF2fsCompressionInfo(stats_client);
     logPixelMmMetricsPerDay(stats_client);
+    logSlowIO(stats_client);
     logSpeakerImpedance(stats_client);
+    logSpeechDspStat(stats_client);
     logUFSLifetime(stats_client);
     logUFSErrorStats(stats_client);
     logZramStats(stats_client);

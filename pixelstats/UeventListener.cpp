@@ -42,10 +42,10 @@
 #include <android-base/parseint.h>
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <cutils/uevent.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
+#include <pixelstats/StatsHelper.h>
 #include <pixelstats/UeventListener.h>
 #include <pixelstats/WlcReporter.h>
 #include <unistd.h>
@@ -58,17 +58,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-namespace {
-
-using aidl::android::frameworks::stats::IStats;
-
-std::shared_ptr<IStats> GetStatsService() {
-    const std::string instance = std::string() + IStats::descriptor + "/default";
-    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
-}
-
-}  // namespace
-
 namespace android {
 namespace hardware {
 namespace google {
@@ -79,11 +68,11 @@ using aidl::android::frameworks::stats::VendorAtomValue;
 using android::sp;
 using android::base::ReadFileToString;
 using android::base::WriteStringToFile;
-using android::frameworks::stats::V1_0::HardwareFailed;
-using android::frameworks::stats::V1_0::UsbPortOverheatEvent;
 using android::hardware::google::pixel::WlcReporter;
 using android::hardware::google::pixel::PixelAtoms::ChargeStats;
 using android::hardware::google::pixel::PixelAtoms::PdVidPid;
+using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
+using android::hardware::google::pixel::PixelAtoms::VendorUsbPortOverheat;
 using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
 constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
@@ -112,26 +101,18 @@ bool UeventListener::ReadFileToInt(const char *const path, int *val) {
     return true;
 }
 
-void UeventListener::ReportMicBrokenOrDegraded(const int mic, const bool isbroken) {
-    using android::frameworks::stats::V1_0::IStats;
-
-    sp<IStats> stats_client = IStats::tryGetService();
-
-    if (stats_client) {
-        HardwareFailed failure = {
-                .hardwareType = HardwareFailed::HardwareType::MICROPHONE,
-                .hardwareLocation = mic,
-                .errorCode = isbroken ? HardwareFailed::HardwareErrorCode::COMPLETE
-                                      : HardwareFailed::HardwareErrorCode::DEGRADE};
-        Return<void> ret = stats_client->reportHardwareFailed(failure);
-        if (!ret.isOk())
-            ALOGE("Unable to report physical drop to Stats service");
-    } else {
-        ALOGE("Unable to connect to Stats service");
-    }
+void UeventListener::ReportMicBrokenOrDegraded(const std::shared_ptr<IStats> &stats_client,
+                                               const int mic, const bool isbroken) {
+    VendorHardwareFailed failure;
+    failure.set_hardware_type(VendorHardwareFailed::HARDWARE_FAILED_MICROPHONE);
+    failure.set_hardware_location(mic);
+    failure.set_failure_code(isbroken ? VendorHardwareFailed::COMPLETE
+                                      : VendorHardwareFailed::DEGRADE);
+    reportHardwareFailed(stats_client, failure);
 }
 
-void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic_status) {
+void UeventListener::ReportMicStatusUevents(const std::shared_ptr<IStats> &stats_client,
+                                            const char *devpath, const char *mic_status) {
     if (!devpath || !mic_status)
         return;
     if (!strcmp(devpath, ("DEVPATH=" + kAudioUevent).c_str())) {
@@ -147,14 +128,14 @@ void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic
                 return;
 
             if (!value[1].compare("true")) {
-                ReportMicBrokenOrDegraded(0, isbroken);
+                ReportMicBrokenOrDegraded(stats_client, 0, isbroken);
             } else {
                 int mic_status = atoi(value[1].c_str());
 
                 if (mic_status > 0 && mic_status <= 7) {
                     for (int mic_bit = 0; mic_bit < 3; mic_bit++)
                         if (mic_status & (0x1 << mic_bit))
-                            ReportMicBrokenOrDegraded(mic_bit, isbroken);
+                            ReportMicBrokenOrDegraded(stats_client, mic_bit, isbroken);
                 } else if (mic_status == 0) {
                     // mic is ok
                     return;
@@ -168,27 +149,33 @@ void UeventListener::ReportMicStatusUevents(const char *devpath, const char *mic
     }
 }
 
-void UeventListener::ReportUsbPortOverheatEvent(const char *driver) {
-    using android::frameworks::stats::V1_0::IStats;
-
-    UsbPortOverheatEvent event = {};
-    std::string file_contents;
-
+void UeventListener::ReportUsbPortOverheatEvent(const std::shared_ptr<IStats> &stats_client,
+                                                const char *driver) {
     if (!driver || strcmp(driver, "DRIVER=google,overheat_mitigation")) {
         return;
     }
 
-    ReadFileToInt((kUsbPortOverheatPath + "/plug_temp"), &event.plugTemperatureDeciC);
-    ReadFileToInt((kUsbPortOverheatPath + "/max_temp"), &event.maxTemperatureDeciC);
-    ReadFileToInt((kUsbPortOverheatPath + "/trip_time"), &event.timeToOverheat);
-    ReadFileToInt((kUsbPortOverheatPath + "/hysteresis_time"), &event.timeToHysteresis);
-    ReadFileToInt((kUsbPortOverheatPath + "/cleared_time"), &event.timeToInactive);
+    int32_t plug_temperature_deci_c = 0;
+    int32_t max_temperature_deci_c = 0;
+    int32_t time_to_overheat_secs = 0;
+    int32_t time_to_hysteresis_secs = 0;
+    int32_t time_to_inactive_secs = 0;
 
-    sp<IStats> stats_client = IStats::tryGetService();
+    // TODO(achant b/182941868): test return value and skip reporting in case of an error
+    ReadFileToInt((kUsbPortOverheatPath + "/plug_temp"), &plug_temperature_deci_c);
+    ReadFileToInt((kUsbPortOverheatPath + "/max_temp"), &max_temperature_deci_c);
+    ReadFileToInt((kUsbPortOverheatPath + "/trip_time"), &time_to_overheat_secs);
+    ReadFileToInt((kUsbPortOverheatPath + "/hysteresis_time"), &time_to_hysteresis_secs);
+    ReadFileToInt((kUsbPortOverheatPath + "/cleared_time"), &time_to_inactive_secs);
 
-    if (stats_client) {
-        stats_client->reportUsbPortOverheatEvent(event);
-    }
+    VendorUsbPortOverheat overheat_info;
+    overheat_info.set_plug_temperature_deci_c(plug_temperature_deci_c);
+    overheat_info.set_max_temperature_deci_c(max_temperature_deci_c);
+    overheat_info.set_time_to_overheat_secs(time_to_overheat_secs);
+    overheat_info.set_time_to_hysteresis_secs(time_to_hysteresis_secs);
+    overheat_info.set_time_to_inactive_secs(time_to_inactive_secs);
+
+    reportUsbPortOverheat(stats_client, overheat_info);
 }
 
 void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_client,
@@ -215,7 +202,7 @@ void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_clie
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::CHARGE_STATS,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report ChargeStats to Stats service");
@@ -262,13 +249,14 @@ void UeventListener::ReportVoltageTierStats(const std::shared_ptr<IStats> &stats
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::VOLTAGE_TIER_STATS,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report VoltageTierStats to Stats service");
 }
 
-void UeventListener::ReportChargeMetricsEvent(const char *driver) {
+void UeventListener::ReportChargeMetricsEvent(const std::shared_ptr<IStats> &stats_client,
+                                              const char *driver) {
     if (!driver || strcmp(driver, "DRIVER=google,battery")) {
         return;
     }
@@ -292,12 +280,6 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
         ALOGE("Couldn't clear %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
     }
 
-    std::shared_ptr<IStats> stats_client = GetStatsService();
-    if (!stats_client) {
-        ALOGE("Couldn't connect to IStats service");
-        return;
-    }
-
     ReportChargeStats(stats_client, line.c_str());
 
     while (std::getline(ss, line)) {
@@ -308,12 +290,13 @@ void UeventListener::ReportChargeMetricsEvent(const char *driver) {
 /* ReportWlc
  * Report wireless relate  metrics when wireless charging start
  */
-void UeventListener::ReportWlc(const bool pow_wireless, const bool online, const char *ptmc) {
+void UeventListener::ReportWlc(const std::shared_ptr<IStats> &stats_client, const bool pow_wireless,
+                               const bool online, const char *ptmc) {
     if (!pow_wireless) {
         return;
     }
 
-    wlc_reporter_.checkAndReport(online, ptmc);
+    wlc_reporter_.checkAndReport(stats_client, online, ptmc);
 }
 /**
  * Report raw battery capacity, system battery capacity and associated
@@ -332,7 +315,8 @@ void UeventListener::ReportWlc(const bool pow_wireless, const bool online, const
  *      5. When there is a difference of >= 4 percent between the raw hardware
  *          battery capacity and the system reported battery capacity.
  */
-void UeventListener::ReportBatteryCapacityFGEvent(const char *subsystem) {
+void UeventListener::ReportBatteryCapacityFGEvent(const std::shared_ptr<IStats> &stats_client,
+                                                  const char *subsystem) {
     if (!subsystem || strcmp(subsystem, "SUBSYSTEM=power_supply")) {
         return;
     }
@@ -342,10 +326,10 @@ void UeventListener::ReportBatteryCapacityFGEvent(const char *subsystem) {
         return;
     }
 
-    battery_capacity_reporter_.checkAndReport(kBatterySSOCPath);
+    battery_capacity_reporter_.checkAndReport(stats_client, kBatterySSOCPath);
 }
 
-void UeventListener::ReportTypeCPartnerId() {
+void UeventListener::ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents_vid, file_contents_pid;
     uint32_t pid, vid;
 
@@ -382,12 +366,6 @@ void UeventListener::ReportTypeCPartnerId() {
         return;
     }
 
-    std::shared_ptr<IStats> stats_client = GetStatsService();
-    if (!stats_client) {
-        ALOGE("PD PID/VID Couldn't connect to IStats service");
-        return;
-    }
-
     std::vector<VendorAtomValue> values(2);
     VendorAtomValue tmp;
 
@@ -398,8 +376,8 @@ void UeventListener::ReportTypeCPartnerId() {
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-             .atomId = PixelAtoms::Ids::PD_VID_PID,
-             .values = values};
+                        .atomId = PixelAtoms::Ids::PD_VID_PID,
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report PD VID/PID to Stats service");
@@ -485,15 +463,20 @@ bool UeventListener::ProcessUevent() {
         }
     }
 
-    /* Process the strings recorded. */
-    ReportMicStatusUevents(devpath, mic_break_status);
-    ReportMicStatusUevents(devpath, mic_degrade_status);
-    ReportUsbPortOverheatEvent(driver);
-    ReportChargeMetricsEvent(driver);
-    ReportWlc(pow_wireless, pow_online, pow_ptmc);
-    ReportBatteryCapacityFGEvent(subsystem);
-    if (collect_partner_id) {
-        ReportTypeCPartnerId();
+    std::shared_ptr<IStats> stats_client = getStatsService();
+    if (!stats_client) {
+        ALOGE("Unable to get Stats service instance.");
+    } else {
+        /* Process the strings recorded. */
+        ReportMicStatusUevents(stats_client, devpath, mic_break_status);
+        ReportMicStatusUevents(stats_client, devpath, mic_degrade_status);
+        ReportUsbPortOverheatEvent(stats_client, driver);
+        ReportChargeMetricsEvent(stats_client, driver);
+        ReportWlc(stats_client, pow_wireless, pow_online, pow_ptmc);
+        ReportBatteryCapacityFGEvent(stats_client, subsystem);
+        if (collect_partner_id) {
+            ReportTypeCPartnerId(stats_client);
+        }
     }
 
     if (log_fd_ > 0) {
