@@ -52,6 +52,12 @@ enum Ids {
     PIXEL_MM_METRICS_PER_HOUR = 105015;
     PIXEL_MM_METRICS_PER_DAY = 105016;
     F2FS_COMPRESSION_INFO = 105017;
+    VENDOR_CHARGE_CYCLES = 105018; // Moved from atoms.proto
+    VENDOR_HARDWARE_FAILED = 105019; // Moved from atoms.proto
+    VENDOR_SLOW_IO = 105020; // Moved from atoms.proto
+    VENDOR_SPEECH_DSP_STAT = 105021; // Moved from atoms.proto
+    VENDOR_PHYSICAL_DROP_DETECTED = 105022; // Moved from atoms.proto
+    VENDOR_USB_PORT_OVERHEAT = 105023; // Moved from atoms.proto
 
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
@@ -424,4 +430,131 @@ message F2fsCompressionInfo {
     optional int32 compr_saved_blocks = 3;
     /* Show the count of inode newly enabled for compression since mount */
     optional int32 compr_new_inodes = 4;
+}
+
+/**
+ * Log bucketed battery charge cycles.
+ *
+ * Each bucket represents cycles of the battery past
+ * a given charge point.  For example, bucket 1 is the
+ * lowest 1/8th of the battery, and bucket 8 is 100%.
+ *
+ * Logged from:
+ * /sys/class/power_supply/bms/cycle_count, via Vendor.
+ */
+message VendorChargeCycles {
+    optional int32 cycle_bucket_1 = 2;
+    optional int32 cycle_bucket_2 = 3;
+    optional int32 cycle_bucket_3 = 4;
+    optional int32 cycle_bucket_4 = 5;
+    optional int32 cycle_bucket_5 = 6;
+    optional int32 cycle_bucket_6 = 7;
+    optional int32 cycle_bucket_7 = 8;
+    optional int32 cycle_bucket_8 = 9;
+    optional int32 cycle_bucket_9 = 10;
+    optional int32 cycle_bucket_10 = 11;
+}
+
+/**
+ * Logs the report of a failed hardware.
+ *
+ * Logged from:
+ *  Vendor HALs.
+ *
+ */
+message VendorHardwareFailed {
+    enum HardwareType {
+      HARDWARE_FAILED_UNKNOWN = 0;
+      HARDWARE_FAILED_MICROPHONE = 1;
+      HARDWARE_FAILED_CODEC = 2;
+      HARDWARE_FAILED_SPEAKER = 3;
+      HARDWARE_FAILED_FINGERPRINT = 4;
+    }
+    optional HardwareType hardware_type = 2;
+
+    /**
+     * hardware_location allows vendors to differentiate between multiple
+     * instances of the same hardware_type.  The specific locations are vendor
+     * defined integers, referring to board-specific numbering schemes.
+     */
+    optional int32 hardware_location = 3;
+    /**
+     * failure_code is specific to the HardwareType of the failed hardware.
+     * It should use one of the enum values defined below.
+     */
+    enum HardwareErrorCode {
+      UNKNOWN = 0;
+      COMPLETE = 1;
+      SPEAKER_HIGH_Z = 2;
+      SPEAKER_SHORT = 3;
+      FINGERPRINT_SENSOR_BROKEN = 4;
+      FINGERPRINT_TOO_MANY_DEAD_PIXELS = 5;
+      DEGRADE = 6;
+    }
+    optional int32 failure_code = 4;
+}
+
+/**
+ * Log slow I/O operations on the primary storage.
+ */
+message VendorSlowIo {
+    // Classifications of IO Operations.
+    enum IoOperation {
+      UNKNOWN = 0;
+      READ = 1;
+      WRITE = 2;
+      UNMAP = 3;
+      SYNC = 4;
+    }
+    optional IoOperation operation = 2;
+
+    // The number of slow IO operations of this type over 24 hours.
+    optional int32 count = 3;
+}
+
+/*
+ * Logs the reported speech DSP status.
+ *
+ * Logged from:
+ *  Vendor audio implementation.
+ */
+message VendorSpeechDspStat {
+    // The total Speech DSP uptime in milliseconds.
+    optional int32 total_uptime_millis = 2;
+    // The total Speech DSP downtime in milliseconds.
+    optional int32 total_downtime_millis = 3;
+    optional int32 total_crash_count = 4;
+    optional int32 total_recover_count = 5;
+}
+
+/**
+ * Log an event when the device has been physically dropped.
+ * Reported from the /vendor partition.
+ */
+message VendorPhysicalDropDetected {
+    // Confidence that the event was actually a drop, 0 -> 100
+    optional int32 confidence_pctg = 2;
+    // Peak acceleration of the drop, in 1/1000s of a g.
+    optional int32 accel_peak_thousandths_g = 3;
+    // Duration of freefall in ms
+    optional int32 freefall_time_millis = 4;
+}
+
+/** Represents USB port overheat event. */
+message VendorUsbPortOverheat {
+    /* Temperature of USB port at USB plug event, in 1/10ths of degree C. */
+    optional int32 plug_temperature_deci_c = 2;
+
+    /* Maximum temperature of USB port during overheat event, in 1/10ths of degree
+     * C. */
+    optional int32 max_temperature_deci_c = 3;
+
+    /* Time between USB plug event and overheat threshold trip, in seconds. */
+    optional int32 time_to_overheat_secs = 4;
+
+    /* Time between overheat threshold trip and hysteresis, in seconds. */
+    optional int32 time_to_hysteresis_secs = 5;
+
+    /* Time between hysteresis and active mitigation ending, in seconds. */
+    optional int32 time_to_inactive_secs = 6;
 }
