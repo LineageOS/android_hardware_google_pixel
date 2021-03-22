@@ -81,6 +81,7 @@ namespace pixel {
 using aidl::android::frameworks::stats::VendorAtom;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
+using android::base::WriteStringToFile;
 using android::base::StartsWith;
 using android::frameworks::stats::V1_0::ChargeCycles;
 using android::frameworks::stats::V1_0::HardwareFailed;
@@ -89,6 +90,7 @@ using android::frameworks::stats::V1_0::SpeechDspStat;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::PixelMmMetricsPerDay;
 using android::hardware::google::pixel::PixelAtoms::PixelMmMetricsPerHour;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
@@ -573,6 +575,64 @@ void SysfsCollector::logF2fsStats(const std::shared_ptr<IStats> &stats_client) {
     }
 }
 
+void SysfsCollector::logF2fsCompressionInfo(const std::shared_ptr<IStats> &stats_client) {
+    int compr_written_blocks, compr_saved_blocks, compr_new_inodes;
+
+    if (kF2fsStatsPath == nullptr) {
+        ALOGV("F2fs stats path not specified");
+        return;
+    }
+
+    std::string userdataBlock = getUserDataBlock();
+
+    std::string path = kF2fsStatsPath + (userdataBlock + "/compr_written_block");
+    if (!ReadFileToInt(path, &compr_written_blocks)) {
+        ALOGE("Unable to read compression written blocks");
+        return;
+    }
+
+    path = kF2fsStatsPath + (userdataBlock + "/compr_saved_block");
+    if (!ReadFileToInt(path, &compr_saved_blocks)) {
+        ALOGE("Unable to read compression saved blocks");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    path = kF2fsStatsPath + (userdataBlock + "/compr_new_inode");
+    if (!ReadFileToInt(path, &compr_new_inodes)) {
+        ALOGE("Unable to read compression new inodes");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(3);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(compr_written_blocks);
+    values[F2fsCompressionInfo::kComprWrittenBlocksFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(compr_saved_blocks);
+    values[F2fsCompressionInfo::kComprSavedBlocksFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(compr_new_inodes);
+    values[F2fsCompressionInfo::kComprNewInodesFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Ids::F2FS_COMPRESSION_INFO,
+                        .values = values};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report F2fs compression info to Stats service");
+    }
+}
+
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
@@ -918,6 +978,7 @@ void SysfsCollector::logPerDay() {
     logBatteryCapacity(stats_client);
     logBatteryEEPROM();
     logF2fsStats(stats_client);
+    logF2fsCompressionInfo(stats_client);
     logPixelMmMetricsPerDay(stats_client);
     logSpeakerImpedance(stats_client);
     logUFSLifetime(stats_client);
