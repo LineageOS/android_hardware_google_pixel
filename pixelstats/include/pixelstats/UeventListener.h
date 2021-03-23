@@ -53,15 +53,20 @@ class UeventListener {
   private:
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
-    void ReportMicStatusUevents(const char *devpath, const char *mic_status);
-    void ReportMicBrokenOrDegraded(const int mic, const bool isBroken);
-    void ReportUsbPortOverheatEvent(const char *driver);
+    void ReportMicStatusUevents(const std::shared_ptr<IStats> &stats_client, const char *devpath,
+                                const char *mic_status);
+    void ReportMicBrokenOrDegraded(const std::shared_ptr<IStats> &stats_client, const int mic,
+                                   const bool isBroken);
+    void ReportUsbPortOverheatEvent(const std::shared_ptr<IStats> &stats_client,
+                                    const char *driver);
     void ReportChargeStats(const std::shared_ptr<IStats> &stats_client, const char *line);
     void ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client, const char *line);
-    void ReportChargeMetricsEvent(const char *driver);
-    void ReportWlc(const bool pow_wireless, const bool online, const char *ptmc);
-    void ReportBatteryCapacityFGEvent(const char *subsystem);
-    void ReportTypeCPartnerId();
+    void ReportChargeMetricsEvent(const std::shared_ptr<IStats> &stats_client, const char *driver);
+    void ReportWlc(const std::shared_ptr<IStats> &stats_client, const bool pow_wireless,
+                   const bool online, const char *ptmc);
+    void ReportBatteryCapacityFGEvent(const std::shared_ptr<IStats> &stats_client,
+                                      const char *subsystem);
+    void ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_client);
 
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
