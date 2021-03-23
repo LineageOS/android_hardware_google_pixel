@@ -17,15 +17,22 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_BATTERYEEPROMREPORTER_H
 #define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_BATTERYEEPROMREPORTER_H
 
+#include <cstdint>
+#include <string>
+
+#include <aidl/android/frameworks/stats/IStats.h>
+
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
 
+using aidl::android::frameworks::stats::IStats;
+
 // The storage for save whole history is 928 byte
 // each history contains 19 items with total size 28 byte
 // hence the history number is 928/28~33
-#define BATT_HIST_NUM_MAX	33
+#define BATT_HIST_NUM_MAX 33
 
 /**
  * A class to upload battery EEPROM metrics
@@ -33,7 +40,7 @@ namespace pixel {
 class BatteryEEPROMReporter {
   public:
     BatteryEEPROMReporter();
-    void checkAndReport(const std::string &path);
+    void checkAndReport(const std::shared_ptr<IStats> &stats_client, const std::string &path);
 
   private:
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
@@ -54,12 +61,13 @@ class BatteryEEPROMReporter {
         uint8_t soh;
         /* The battery temperature */
         int8_t batt_temp;
-
         /* Battery state of charge (SOC) shutdown point */
         uint8_t cutoff_soc;
         /* Raw battery state of charge (SOC), based on battery current (CC = Coulomb Counter) */
         uint8_t cc_soc;
-        /* Estimated battery state of charge (SOC) from batt_soc with endpoint limiting (0% and 100%) */
+        /* Estimated battery state of charge (SOC) from batt_soc with endpoint limiting
+         * (0% and 100%)
+         */
         uint8_t sys_soc;
         /* Filtered monotonic SOC, handles situations where the cutoff_soc is increased and
          * then decreased from the battery physical properties
@@ -95,7 +103,8 @@ class BatteryEEPROMReporter {
     int64_t getTimeSecs();
 
     bool checkLogEvent(struct BatteryHistory hist);
-    void reportEvent(struct BatteryHistory hist);
+    void reportEvent(const std::shared_ptr<IStats> &stats_client,
+                     const struct BatteryHistory &hist);
 };
 
 }  // namespace pixel
