@@ -23,30 +23,14 @@
 #include <cmath>
 
 #include <android-base/file.h>
-
-#include <aidl/android/frameworks/stats/IStats.h>
-#include <android/binder_manager.h>
 #include <pixelstats/BatteryEEPROMReporter.h>
-
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
-
-namespace {
-
-using aidl::android::frameworks::stats::IStats;
-
-std::shared_ptr<IStats> getStatsService() {
-    const std::string instance = std::string() + IStats::descriptor + "/default";
-    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
-}
-
-}  // namespace
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
 
-using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtom;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
@@ -56,7 +40,8 @@ using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
 
 BatteryEEPROMReporter::BatteryEEPROMReporter() {}
 
-void BatteryEEPROMReporter::checkAndReport(const std::string &path) {
+void BatteryEEPROMReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
+                                           const std::string &path) {
     std::string file_contents;
     std::string history_each;
 
@@ -102,7 +87,7 @@ void BatteryEEPROMReporter::checkAndReport(const std::string &path) {
         }
 
         if (checkLogEvent(hist)) {
-            reportEvent(hist);
+            reportEvent(stats_client, hist);
             report_time_ = getTimeSecs();
         }
     }
@@ -134,10 +119,10 @@ bool BatteryEEPROMReporter::checkLogEvent(struct BatteryHistory hist) {
     }
 }
 
-void BatteryEEPROMReporter::reportEvent(struct BatteryHistory hist) {
-    std::shared_ptr<IStats> stats_client = getStatsService();
+void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_client,
+                                        const struct BatteryHistory &hist) {
     // upload atom
-    std::vector<int> eeprom_history_fields = {
+    const std::vector<int> eeprom_history_fields = {
             BatteryEEPROM::kCycleCntFieldNumber,  BatteryEEPROM::kFullCapFieldNumber,
             BatteryEEPROM::kEsrFieldNumber,       BatteryEEPROM::kRslowFieldNumber,
             BatteryEEPROM::kSohFieldNumber,       BatteryEEPROM::kBattTempFieldNumber,
@@ -148,8 +133,6 @@ void BatteryEEPROMReporter::reportEvent(struct BatteryHistory hist) {
             BatteryEEPROM::kMaxVbattFieldNumber,  BatteryEEPROM::kMinVbattFieldNumber,
             BatteryEEPROM::kMaxIbattFieldNumber,  BatteryEEPROM::kMinIbattFieldNumber,
             BatteryEEPROM::kChecksumFieldNumber};
-    std::vector<VendorAtomValue> values(eeprom_history_fields.size());
-    VendorAtomValue val;
 
     ALOGD("reportEvent: cycle_cnt:%d, full_cap:%d, esr:%d, rslow:%d, soh:%d, "
           "batt_temp:%d, cutoff_soc:%d, cc_soc:%d, sys_soc:%d, msoc:%d, "
@@ -159,6 +142,9 @@ void BatteryEEPROMReporter::reportEvent(struct BatteryHistory hist) {
           hist.cutoff_soc, hist.cc_soc, hist.sys_soc, hist.msoc, hist.batt_soc, hist.reserve,
           hist.max_temp, hist.min_temp, hist.max_vbatt, hist.min_vbatt, hist.max_ibatt,
           hist.min_ibatt, hist.checksum);
+
+    std::vector<VendorAtomValue> values(eeprom_history_fields.size());
+    VendorAtomValue val;
 
     val.set<VendorAtomValue::intValue>(hist.cycle_cnt);
     values[BatteryEEPROM::kCycleCntFieldNumber - kVendorAtomOffset] = val;
@@ -201,7 +187,7 @@ void BatteryEEPROMReporter::reportEvent(struct BatteryHistory hist) {
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::BATTERY_EEPROM,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report BatteryEEPROM to Stats service");
