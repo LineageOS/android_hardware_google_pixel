@@ -23,22 +23,10 @@
 
 #include <android-base/file.h>
 
-#include <aidl/android/frameworks/stats/IStats.h>
-#include <android/binder_manager.h>
 #include <pixelstats/BatteryCapacityReporter.h>
+#include <pixelstats/StatsHelper.h>
 
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
-
-namespace {
-
-using aidl::android::frameworks::stats::IStats;
-
-std::shared_ptr<IStats> getStatsService() {
-    const std::string instance = std::string() + IStats::descriptor + "/default";
-    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
-}
-
-}  // namespace
 
 namespace android {
 namespace hardware {
@@ -70,10 +58,11 @@ BatteryCapacityReporter::BatteryCapacityReporter() {
                   static_cast<int>(BatteryCapacityFG::LOG_REASON_DIVERGING_FG));
 }
 
-void BatteryCapacityReporter::checkAndReport(const std::string &path) {
+void BatteryCapacityReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
+                                             const std::string &path) {
     if (parse(path)) {
         if (checkLogEvent()) {
-            reportEvent();
+            reportEvent(stats_client);
         }
     }
 }
@@ -186,13 +175,7 @@ bool BatteryCapacityReporter::checkLogEvent(void) {
     return false;
 }
 
-void BatteryCapacityReporter::reportEvent(void) {
-    std::shared_ptr<IStats> stats_client = getStatsService();
-    if (!stats_client) {
-        ALOGD("Couldn't connect to IStats service");
-        return;
-    }
-
+void BatteryCapacityReporter::reportEvent(const std::shared_ptr<IStats> &stats_client) {
     // Load values array
     std::vector<VendorAtomValue> values(5);
     VendorAtomValue tmp;
@@ -210,7 +193,7 @@ void BatteryCapacityReporter::reportEvent(void) {
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
                         .atomId = PixelAtoms::Ids::FG_CAPACITY,
-                        .values = values};
+                        .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report to IStats service");
