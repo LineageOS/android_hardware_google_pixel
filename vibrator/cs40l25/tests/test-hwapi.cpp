@@ -53,6 +53,8 @@ class HwApiTest : public Test {
             "device/gpio1_rise_index",
             "device/gpio1_rise_dig_scale",
             "device/num_waves",
+            "device/available_pwle_segments",
+            "device/pwle",
     };
 
   public:
@@ -232,6 +234,8 @@ INSTANTIATE_TEST_CASE_P(HwApiTests, GetUint32Test,
                                                          &Vibrator::HwApi::getEffectCount),
                                 GetUint32Test::MakeParam("device/cp_trigger_duration",
                                                          &Vibrator::HwApi::getEffectDuration),
+                                GetUint32Test::MakeParam("device/available_pwle_segments",
+                                                         &Vibrator::HwApi::getAvailablePwleSegments),
                         }),
                         GetUint32Test::PrintParam);
 
@@ -342,6 +346,8 @@ INSTANTIATE_TEST_CASE_P(HwApiTests, SetStringTest,
                         ValuesIn({
                                 SetStringTest::MakeParam("device/cp_trigger_queue",
                                                          &Vibrator::HwApi::setEffectQueue),
+                                SetStringTest::MakeParam("device/pwle",
+                                                         &Vibrator::HwApi::setPwle),
                         }),
                         SetStringTest::PrintParam);
 
