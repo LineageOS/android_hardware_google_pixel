@@ -29,7 +29,6 @@
 
 #include <mntent.h>
 #include <sys/timerfd.h>
-#include <cctype>
 #include <cinttypes>
 #include <string>
 
@@ -47,8 +46,6 @@ using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
-using android::hardware::google::pixel::PixelAtoms::PixelMmMetricsPerDay;
-using android::hardware::google::pixel::PixelAtoms::PixelMmMetricsPerHour;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
@@ -58,35 +55,6 @@ using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeechDspStat;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
-
-const std::vector<SysfsCollector::MmMetricsInfo> SysfsCollector::kMmMetricsPerHourInfo = {
-        {"nr_free_pages", PixelMmMetricsPerHour::kFreePagesFieldNumber, false},
-        {"nr_anon_pages", PixelMmMetricsPerHour::kAnonPagesFieldNumber, false},
-        {"nr_file_pages", PixelMmMetricsPerHour::kFilePagesFieldNumber, false},
-        {"nr_slab_reclaimable", PixelMmMetricsPerHour::kSlabReclaimableFieldNumber, false},
-        {"nr_zspages", PixelMmMetricsPerHour::kZspagesFieldNumber, false},
-        {"nr_unevictable", PixelMmMetricsPerHour::kUnevictableFieldNumber, false},
-};
-
-const std::vector<SysfsCollector::MmMetricsInfo> SysfsCollector::kMmMetricsPerDayInfo = {
-        {"workingset_refault", PixelMmMetricsPerDay::kWorkingsetRefaultFieldNumber, true},
-        {"workingset_refault_file", PixelMmMetricsPerDay::kWorkingsetRefaultFieldNumber, true},
-        {"pswpin", PixelMmMetricsPerDay::kPswpinFieldNumber, true},
-        {"pswpout", PixelMmMetricsPerDay::kPswpoutFieldNumber, true},
-        {"allocstall_dma", PixelMmMetricsPerDay::kAllocstallDmaFieldNumber, true},
-        {"allocstall_dma32", PixelMmMetricsPerDay::kAllocstallDma32FieldNumber, true},
-        {"allocstall_normal", PixelMmMetricsPerDay::kAllocstallNormalFieldNumber, true},
-        {"allocstall_movable", PixelMmMetricsPerDay::kAllocstallMovableFieldNumber, true},
-        {"pgalloc_dma", PixelMmMetricsPerDay::kPgallocDmaFieldNumber, true},
-        {"pgalloc_dma32", PixelMmMetricsPerDay::kPgallocDma32FieldNumber, true},
-        {"pgalloc_normal", PixelMmMetricsPerDay::kPgallocNormalFieldNumber, true},
-        {"pgalloc_movable", PixelMmMetricsPerDay::kPgallocMovableFieldNumber, true},
-        {"pgsteal_kswapd", PixelMmMetricsPerDay::kPgstealKswapdFieldNumber, true},
-        {"pgsteal_direct", PixelMmMetricsPerDay::kPgstealDirectFieldNumber, true},
-        {"pgscan_kswapd", PixelMmMetricsPerDay::kPgscanKswapdFieldNumber, true},
-        {"pgscan_direct", PixelMmMetricsPerDay::kPgscanDirectFieldNumber, true},
-        {"oom_kill", PixelMmMetricsPerDay::kOomKillFieldNumber, true},
-};
 
 SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
     : kSlowioReadCntPath(sysfs_paths.SlowioReadCntPath),
@@ -107,10 +75,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
-      kEEPROMPath(sysfs_paths.EEPROMPath),
-      kVmstatPath("/proc/vmstat"),
-      kIonTotalPoolsPath("/sys/kernel/dma_heap/total_pools_kb"),
-      kIonTotalPoolsPathForLegacy("/sys/kernel/ion/total_pools_kb") {}
+      kEEPROMPath(sysfs_paths.EEPROMPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -130,22 +95,6 @@ bool SysfsCollector::ReadFileToInt(const char *const path, int *val) {
     } else if (sscanf(file_contents.c_str(), "%d", val) != 1) {
         ALOGE("Unable to convert %s to int - %s", path, strerror(errno));
         return false;
-    }
-    return true;
-}
-
-bool SysfsCollector::ReadFileToUint(const char *const path, uint64_t *val) {
-    std::string file_contents;
-
-    if (!ReadFileToString(path, &file_contents)) {
-        ALOGI("Unable to read %s - %s", path, strerror(errno));
-        return false;
-    } else {
-        file_contents = android::base::Trim(file_contents);
-        if (!android::base::ParseUint(file_contents, val)) {
-            ALOGI("Unable to convert %s to uint - %s", path, strerror(errno));
-            return false;
-        }
     }
     return true;
 }
@@ -766,169 +715,6 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
     }
 }
 
-/**
- * Parse the output of /proc/vmstat or the sysfs having the same output format.
- * The map containing pairs of {field_string, data} will be returned.
- */
-std::map<std::string, uint64_t> SysfsCollector::readVmStat(const char *path) {
-    std::string file_contents;
-    std::map<std::string, uint64_t> vmstat_data;
-
-    if (path == nullptr) {
-        ALOGI("vmstat path is not specified");
-        return vmstat_data;
-    }
-
-    if (!android::base::ReadFileToString(path, &file_contents)) {
-        ALOGE("Unable to read vmstat from %s, err: %s", path, strerror(errno));
-        return vmstat_data;
-    }
-
-    std::istringstream data(file_contents);
-    std::string line;
-    while (std::getline(data, line)) {
-        std::vector<std::string> words = android::base::Split(line, " ");
-        if (words.size() != 2)
-            continue;
-
-        uint64_t i;
-        if (!android::base::ParseUint(words[1], &i))
-            continue;
-
-        vmstat_data[words[0]] = i;
-    }
-    return vmstat_data;
-}
-
-uint64_t SysfsCollector::getIonTotalPools() {
-    uint64_t res;
-
-    if (kIonTotalPoolsPath == nullptr && kIonTotalPoolsPathForLegacy == nullptr) {
-        ALOGI("ion_total_pools path is not specified");
-        return 0;
-    }
-
-    if (!ReadFileToUint(kIonTotalPoolsPathForLegacy, &res) || (res == 0)) {
-        if (!ReadFileToUint(kIonTotalPoolsPath, &res)) {
-            return 0;
-        }
-    }
-
-    return res;
-}
-
-/**
- * fillAtomValues() is used to copy Mm metrics to values
- * metrics_info: This is a vector of MmMetricsInfo {field_string, atom_key, update_diff}
- *               field_string is used to get the data from mm_metrics.
- *               atom_key is the position where the data should be put into values.
- *               update_diff will be true if this is an accumulated data.
- *               metrics_info may have multiple entries with the same atom_key,
- *               e.g. workingset_refault and workingset_refault_file.
- * mm_metrics: This map contains pairs of {field_string, cur_value} collected
- *             from /proc/vmstat or the sysfs for the pixel specific metrics.
- *             e.g. {"nr_free_pages", 200000}
- *             Some data in mm_metrics are accumulated, e.g. pswpin.
- *             We upload the difference instead of the accumulated value
- *             when update_diff of the field is true.
- * prev_mm_metrics: The pointer to the metrics we collected last time.
- * atom_values: The atom values that will be reported later.
- */
-void SysfsCollector::fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
-                                    const std::map<std::string, uint64_t> &mm_metrics,
-                                    std::map<std::string, uint64_t> *prev_mm_metrics,
-                                    std::vector<VendorAtomValue> *atom_values) {
-    VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::longValue>(0);
-    // resize atom_values to add all fields defined in metrics_info
-    int max_idx = 0;
-    for (auto &entry : metrics_info) {
-        if (max_idx < entry.atom_key)
-            max_idx = entry.atom_key;
-    }
-    int size = max_idx - kVendorAtomOffset + 1;
-    if (atom_values->size() < size)
-        atom_values->resize(size, tmp);
-
-    for (auto &entry : metrics_info) {
-        int atom_idx = entry.atom_key - kVendorAtomOffset;
-
-        auto data = mm_metrics.find(entry.name);
-        if (data == mm_metrics.end())
-            continue;
-
-        uint64_t cur_value = data->second;
-        uint64_t prev_value = 0;
-        if (prev_mm_metrics->size() != 0) {
-            auto prev_data = prev_mm_metrics->find(entry.name);
-            if (prev_data != prev_mm_metrics->end())
-                prev_value = prev_data->second;
-        }
-
-        if (entry.update_diff) {
-            tmp.set<VendorAtomValue::longValue>(cur_value - prev_value);
-        } else {
-            tmp.set<VendorAtomValue::longValue>(cur_value);
-        }
-        (*atom_values)[atom_idx] = tmp;
-    }
-    (*prev_mm_metrics) = mm_metrics;
-}
-
-void SysfsCollector::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &stats_client) {
-    std::map<std::string, uint64_t> vmstat = readVmStat(kVmstatPath);
-    if (vmstat.size() == 0)
-        return;
-
-    uint64_t ion_total_pools = getIonTotalPools();
-
-    std::vector<VendorAtomValue> values;
-    bool is_first_atom = (prev_hour_vmstat_.size() == 0) ? true : false;
-    fillAtomValues(kMmMetricsPerHourInfo, vmstat, &prev_hour_vmstat_, &values);
-
-    // resize values to add the following fields
-    VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::longValue>(0);
-    int size = PixelMmMetricsPerHour::kIonTotalPoolsFieldNumber - kVendorAtomOffset + 1;
-    if (values.size() < size) {
-        values.resize(size, tmp);
-    }
-    tmp.set<VendorAtomValue::longValue>(ion_total_pools);
-    values[PixelMmMetricsPerHour::kIonTotalPoolsFieldNumber - kVendorAtomOffset] = tmp;
-
-    // Don't report the first atom to avoid big spike in accumulated values.
-    if (!is_first_atom) {
-        // Send vendor atom to IStats HAL
-        VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                            .atomId = PixelAtoms::Ids::PIXEL_MM_METRICS_PER_HOUR,
-                            .values = std::move(values)};
-        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-        if (!ret.isOk())
-            ALOGE("Unable to report PixelMmMetricsPerHour to Stats service");
-    }
-}
-
-void SysfsCollector::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stats_client) {
-    std::map<std::string, uint64_t> vmstat = readVmStat(kVmstatPath);
-    if (vmstat.size() == 0)
-        return;
-
-    std::vector<VendorAtomValue> values;
-    bool is_first_atom = (prev_day_vmstat_.size() == 0) ? true : false;
-    fillAtomValues(kMmMetricsPerDayInfo, vmstat, &prev_day_vmstat_, &values);
-
-    // Don't report the first atom to avoid big spike in accumulated values.
-    if (!is_first_atom) {
-        // Send vendor atom to IStats HAL
-        VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                            .atomId = PixelAtoms::Ids::PIXEL_MM_METRICS_PER_DAY,
-                            .values = std::move(values)};
-        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-        if (!ret.isOk())
-            ALOGE("Unable to report MEMORY_MANAGEMENT_INFO to Stats service");
-    }
-}
-
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -946,13 +732,13 @@ void SysfsCollector::logPerDay() {
     logCodecFailed(stats_client);
     logF2fsStats(stats_client);
     logF2fsCompressionInfo(stats_client);
-    logPixelMmMetricsPerDay(stats_client);
     logSlowIO(stats_client);
     logSpeakerImpedance(stats_client);
     logSpeechDspStat(stats_client);
     logUFSLifetime(stats_client);
     logUFSErrorStats(stats_client);
     logZramStats(stats_client);
+    mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
 }
 
 void SysfsCollector::logPerHour() {
@@ -961,8 +747,7 @@ void SysfsCollector::logPerHour() {
         ALOGE("Unable to get AIDL Stats service");
         return;
     }
-
-    logPixelMmMetricsPerHour(stats_client);
+    mm_metrics_reporter_.logPixelMmMetricsPerHour(stats_client);
 }
 
 /**
