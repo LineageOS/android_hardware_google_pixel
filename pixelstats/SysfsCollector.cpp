@@ -738,6 +738,7 @@ void SysfsCollector::logPerDay() {
     logUFSLifetime(stats_client);
     logUFSErrorStats(stats_client);
     logZramStats(stats_client);
+    mm_metrics_reporter_.logCmaStatus(stats_client);
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
 }
 
