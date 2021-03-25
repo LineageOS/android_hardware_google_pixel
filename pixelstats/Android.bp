@@ -50,6 +50,7 @@ cc_library {
     "BatteryCapacityReporter.cpp",
     "BatteryEEPROMReporter.cpp",
     "DropDetect.cpp",
+    "MmMetricsReporter.cpp",
     "OrientationCollector.cpp",
     "StatsHelper.cpp",
     "SysfsCollector.cpp",
