@@ -46,6 +46,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         open("device/vibe_state", &mVibeState);
         open("device/num_waves", &mEffectCount);
         open("device/clab_enable", &mClabEnable);
+        open("device/available_pwle_segments", &mAvailablePwleSegments);
+        open("device/pwle", &mPwle);
     }
 
     bool setF0(uint32_t value) override { return set(value, &mF0); }
@@ -71,6 +73,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setGpioRiseScale(uint32_t value) override { return set(value, &mGpioRiseScale); }
     bool pollVibeState(bool value) override { return poll(value, &mVibeState); }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
+    bool getAvailablePwleSegments(uint32_t *value) override { return get(value, &mAvailablePwleSegments); }
+    bool setPwle(std::string value) override { return set(value, &mPwle); }
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
@@ -94,6 +98,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mGpioRiseScale;
     std::ifstream mVibeState;
     std::ofstream mClabEnable;
+    std::ifstream mAvailablePwleSegments;
+    std::ofstream mPwle;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {

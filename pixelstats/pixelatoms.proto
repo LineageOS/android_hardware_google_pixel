@@ -58,6 +58,8 @@ enum Ids {
     VENDOR_SPEECH_DSP_STAT = 105021; // Moved from atoms.proto
     VENDOR_PHYSICAL_DROP_DETECTED = 105022; // Moved from atoms.proto
     VENDOR_USB_PORT_OVERHEAT = 105023; // Moved from atoms.proto
+    CMA_STATUS = 105024;
+    CMA_STATUS_EXT = 105025;
 
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
@@ -91,6 +93,15 @@ message ChargeStats {
         ADAPTER_TYPE_WLC  = 14;
         ADAPTER_TYPE_WLC_EPP = 15;
         ADAPTER_TYPE_WLC_SPP = 16;
+        ADAPTER_TYPE_GPP = 17;
+        ADAPTER_TYPE_10W = 18;
+        ADAPTER_TYPE_L7 = 19;
+        ADAPTER_TYPE_DL = 20;
+        ADAPTER_TYPE_WPC_EPP = 21;
+        ADAPTER_TYPE_WPC_GPP = 22;
+        ADAPTER_TYPE_WPC_10W = 23;
+        ADAPTER_TYPE_WPC_BPP = 24;
+        ADAPTER_TYPE_WPC_L7 = 25;
     }
     /* Type of charge adapter, enumerated above. */
     optional AdapterType adapter_type = 2;
@@ -110,6 +121,29 @@ message ChargeStats {
     optional int32 ssoc_out = 7;
     /* Voltage in mV. */
     optional int32 voltage_out = 8;
+
+    /**
+     * These values are  meant to represent status of the charging device, used
+     * to validate the charging algorithm and explain charging performances.
+     * Examples of the content of the register:
+     * - APDO, PDO (power capabilities of the device, eg. 5V3A, 9V2A, 20V2A) for wired charging
+     * - Wireless charging MFG code. This is the value of a register of the WLC integrated
+     *   circuit to identify the vendor and type of WLC pad
+     * - Receiver operating frequency
+     * - Register status
+     */
+    optional int32 adapter_capabilities0 = 9;
+    optional int32 adapter_capabilities1 = 10;
+    optional int32 adapter_capabilities2 = 11;
+    optional int32 adapter_capabilities3 = 12;
+    optional int32 adapter_capabilities4 = 13;
+
+    /**
+     * These are values which reports the state of the wireless receiver, which will help in
+     * debugging charging issues and alternate configurations.
+     */
+    optional int32 receiver_state0 = 14;
+    optional int32 receiver_state1 = 15;
 }
 
 /* A message containing stats from each charge voltage tier. */
@@ -144,6 +178,18 @@ message VoltageTierStats {
     optional int32 icl_min = 15;
     optional int32 icl_avg = 16;
     optional int32 icl_max = 17;
+
+    /**
+     * Efficiency number, receiver operating frequency in kHz for wireless charging
+     * (alignment)
+     */
+    optional int32 charging_operating_point = 18;
+    /* The minimum power out of the adapter at the given charging tier */
+    optional int32 min_adapter_power_out = 19;
+    /* The time-averaged power out of the adapter at the given charging tier */
+    optional int32 time_avg_adapter_power_out = 20;
+    /* The maximum power out of the adapter at the given charging tier */
+    optional int32 max_adapter_power_out = 21;
 }
 
 /* A message containing an alternate proprietary full battery capacity estimate. */
@@ -401,6 +447,7 @@ message PixelMmMetricsPerHour {
     optional uint64 zspages = 6;
     optional uint64 unevictable = 7;
     optional uint64 ion_total_pools = 8;
+    optional uint64 gpu_memory = 9;
 }
 
 /* A message containing Pixel memory metrics collected daily. */
@@ -421,6 +468,29 @@ message PixelMmMetricsPerDay {
     optional uint64 pgscan_kswapd = 15;
     optional uint64 pgscan_direct = 16;
     optional uint64 oom_kill = 17;
+    optional uint64 pgalloc_high = 18;
+    optional uint64 pgcache_hit = 19;
+    optional uint64 pgcache_miss = 20;
+    optional uint64 kswapd_time = 21;
+    optional uint64 kcompactd_time = 22;
+}
+
+/* A message containing CMA metrics collected from dogfooding only. */
+message CmaStatus {
+  optional uint32 type = 2;
+  optional uint64 cma_alloc_pages_attempts = 3;
+  optional uint64 cma_alloc_pages_soft_attempts = 4;
+  optional uint64 cma_fail_pages = 5;
+  optional uint64 cma_fail_soft_pages = 6;
+  optional uint64 migrated_pages = 7;
+}
+
+/* A message containing CMA metrics (External). */
+message CmaStatusExt {
+  optional uint32 type = 2;
+  optional uint64 cma_alloc_latency_low = 3;
+  optional uint64 cma_alloc_latency_mid = 4;
+  optional uint64 cma_alloc_latency_high = 5;
 }
 
 message F2fsCompressionInfo {
