@@ -93,6 +93,11 @@ class Vibrator : public BnVibrator {
         virtual bool pollVibeState(bool value) = 0;
         // Enables/disables closed-loop active braking.
         virtual bool setClabEnable(bool value) = 0;
+        // Reports the number of available PWLE segments.
+        virtual bool getAvailablePwleSegments(uint32_t *value) = 0;
+        // Specifies piecewise-linear specifications to generate complex
+        // waveforms.
+        virtual bool setPwle(std::string value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -151,6 +156,14 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus alwaysOnDisable(int32_t id) override;
     ndk::ScopedAStatus getResonantFrequency(float *resonantFreqHz) override;
     ndk::ScopedAStatus getQFactor(float *qFactor) override;
+    ndk::ScopedAStatus getFrequencyResolution(float *freqResolutionHz) override;
+    ndk::ScopedAStatus getFrequencyMinimum(float *freqMinimumHz) override;
+    ndk::ScopedAStatus getBandwidthAmplitudeMap(std::vector<float> *_aidl_return) override;
+    ndk::ScopedAStatus getPwlePrimitiveDurationMax(int32_t *durationMs) override;
+    ndk::ScopedAStatus getPwleCompositionSizeMax(int32_t *maxSize) override;
+    ndk::ScopedAStatus getSupportedBraking(std::vector<Braking> *supported) override;
+    ndk::ScopedAStatus composePwle(const std::vector<PrimitivePwle> &composite,
+                                   const std::shared_ptr<IVibratorCallback> &callback) override;
 
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
@@ -176,6 +189,7 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus performEffect(uint32_t effectIndex, uint32_t volLevel,
                                      const std::string *effectQueue,
                                      const std::shared_ptr<IVibratorCallback> &callback);
+    ndk::ScopedAStatus setPwle(const std::string &pwleQueue);
     bool isUnderExternalControl();
     void waitForComplete(std::shared_ptr<IVibratorCallback> &&callback);
     uint32_t intensityToVolLevel(float intensity, uint32_t effectIndex);
@@ -188,6 +202,7 @@ class Vibrator : public BnVibrator {
     std::array<uint32_t, 2> mLongEffectVol;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
+    int32_t compositionSizeMax;
 };
 
 }  // namespace vibrator
