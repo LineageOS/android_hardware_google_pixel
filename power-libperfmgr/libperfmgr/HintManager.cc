@@ -346,8 +346,8 @@ std::vector<std::unique_ptr<Node>> HintManager::ParseNodes(
         std::string node_type = nodes[i]["Type"].asString();
         LOG(VERBOSE) << "Node[" << i << "]'s Type: " << node_type;
         if (node_type.empty()) {
-            LOG(ERROR) << "Failed to read "
-                       << "Node[" << i << "]'s Type, set to 'File' as default";
+            LOG(VERBOSE) << "Failed to read "
+                         << "Node[" << i << "]'s Type, set to 'File' as default";
         } else if (node_type == "File") {
             is_file = true;
         } else if (node_type == "Property") {
@@ -476,8 +476,8 @@ std::unordered_map<std::string, Hint> HintManager::ParseActions(
         std::string type_string = actions[i]["Type"].asString();
         LOG(VERBOSE) << "Action[" << i << "]'s Type: " << type_string;
         if (type_string.empty()) {
-            LOG(ERROR) << "Failed to read "
-                       << "Action[" << i << "]'s Type, set to 'Node' as default";
+            LOG(VERBOSE) << "Failed to read "
+                         << "Action[" << i << "]'s Type, set to 'Node' as default";
         } else if (type_string == "DoHint") {
             action_type = HintActionType::DoHint;
         } else if (type_string == "EndHint") {
