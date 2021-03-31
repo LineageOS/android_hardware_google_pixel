@@ -48,4 +48,5 @@ aidl_interface {
     },
 
     vendor_available: true,
+    host_supported: true,
 }
