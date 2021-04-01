@@ -60,6 +60,8 @@ enum Ids {
     VENDOR_USB_PORT_OVERHEAT = 105023; // Moved from atoms.proto
     CMA_STATUS = 105024;
     CMA_STATUS_EXT = 105025;
+    VENDOR_BATTERY_HEALTH_SNAPSHOT = 105026; // Moved from atoms.proto
+    VENDOR_BATTERY_CAUSED_SHUTDOWN = 105027; // Moved from atoms.proto
 
     CITADEL_VERSION = 100018; // Moved from vendor proprietary
     CITADEL_EVENT = 100019;  // Moved from vendor proprietary
@@ -584,9 +586,7 @@ message VendorSlowIo {
 
 /*
  * Logs the reported speech DSP status.
- *
- * Logged from:
- *  Vendor audio implementation.
+ * Logged from: Vendor audio implementation.
  */
 message VendorSpeechDspStat {
     // The total Speech DSP uptime in milliseconds.
@@ -602,29 +602,69 @@ message VendorSpeechDspStat {
  * Reported from the /vendor partition.
  */
 message VendorPhysicalDropDetected {
-    // Confidence that the event was actually a drop, 0 -> 100
-    optional int32 confidence_pctg = 2;
-    // Peak acceleration of the drop, in 1/1000s of a g.
-    optional int32 accel_peak_thousandths_g = 3;
-    // Duration of freefall in ms
-    optional int32 freefall_time_millis = 4;
+  // Confidence that the event was actually a drop, 0 -> 100
+  optional int32 confidence_pctg = 2;
+  // Peak acceleration of the drop, in 1/1000s of a g.
+  optional int32 accel_peak_thousandths_g = 3;
+  // Duration of freefall in ms
+  optional int32 freefall_time_millis = 4;
 }
 
 /** Represents USB port overheat event. */
 message VendorUsbPortOverheat {
-    /* Temperature of USB port at USB plug event, in 1/10ths of degree C. */
-    optional int32 plug_temperature_deci_c = 2;
+  /* Temperature of USB port at USB plug event, in 1/10ths of degree C. */
+  optional int32 plug_temperature_deci_c = 2;
+  /* Maximum temperature of USB port during overheat event, in 1/10ths of degree
+   * C. */
+  optional int32 max_temperature_deci_c = 3;
+  /* Time between USB plug event and overheat threshold trip, in seconds. */
+  optional int32 time_to_overheat_secs = 4;
+  /* Time between overheat threshold trip and hysteresis, in seconds. */
+  optional int32 time_to_hysteresis_secs = 5;
+  /* Time between hysteresis and active mitigation ending, in seconds. */
+  optional int32 time_to_inactive_secs = 6;
+}
 
-    /* Maximum temperature of USB port during overheat event, in 1/10ths of degree
-     * C. */
-    optional int32 max_temperature_deci_c = 3;
+/**
+ * Log battery health snapshot.
+ *
+ * Resistance, Voltage, Open Circuit Voltage, Temperature, and Charge Level
+ * are snapshotted periodically over 24hrs.
+ */
+message VendorBatteryHealthSnapshot {
+  enum BatterySnapshotType {
+    BATTERY_SNAPSHOT_TYPE_UNKNOWN = 0;
+    BATTERY_SNAPSHOT_TYPE_MIN_TEMP = 1;         // Snapshot at min batt temp over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MAX_TEMP = 2;         // Snapshot at max batt temp over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MIN_RESISTANCE = 3;   // Snapshot at min batt resistance over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MAX_RESISTANCE = 4;   // Snapshot at max batt resistance over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MIN_VOLTAGE = 5;      // Snapshot at min batt voltage over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MAX_VOLTAGE = 6;      // Snapshot at max batt voltage over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MIN_CURRENT = 7;      // Snapshot at min batt current over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MAX_CURRENT = 8;      // Snapshot at max batt current over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MIN_BATT_LEVEL = 9;   // Snapshot at min battery level (SoC) over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_MAX_BATT_LEVEL = 10;  // Snapshot at max battery level (SoC) over 24hrs.
+    BATTERY_SNAPSHOT_TYPE_AVG_RESISTANCE = 11;  // Snapshot at average battery resistance over 24hrs.
+  }
+  optional BatterySnapshotType type = 2;
+  // Temperature, in 1/10ths of degree C.
+  optional int32 temperature_deci_celsius = 3;
+  // Voltage Battery Voltage, in microVolts.
+  optional int32 voltage_micro_volt = 4;
+  // Current Battery current, in microAmps.
+  optional int32 current_micro_amps = 5;
+  // OpenCircuitVoltage Battery Open Circuit Voltage, in microVolts.
+  optional int32 open_circuit_micro_volt = 6;
+  // Resistance Battery Resistance, in microOhms.
+  optional int32 resistance_micro_ohm = 7;
+  // Level Battery Level, as % of full.
+  optional int32 level_percent = 8;
+}
 
-    /* Time between USB plug event and overheat threshold trip, in seconds. */
-    optional int32 time_to_overheat_secs = 4;
-
-    /* Time between overheat threshold trip and hysteresis, in seconds. */
-    optional int32 time_to_hysteresis_secs = 5;
-
-    /* Time between hysteresis and active mitigation ending, in seconds. */
-    optional int32 time_to_inactive_secs = 6;
+/**
+ * Log battery caused shutdown with the last recorded voltage.
+ */
+message VendorBatteryCausedShutdown {
+  // The last recorded battery voltage prior to shutdown.
+  optional int32 last_recorded_micro_volt = 2;
 }
