@@ -45,7 +45,7 @@ bool WlanStateResidencyDataProvider::getResults(
 
     std::string wlanDriverStatus = android::base::GetProperty("wlan.driver.status", "unloaded");
     if (wlanDriverStatus != "ok") {
-        LOG(ERROR) << __func__ << ": wlan is " << wlanDriverStatus;
+        LOG(DEBUG) << __func__ << ": wlan is " << wlanDriverStatus;
         // Return 0s for Wlan stats, because the driver is unloaded
         results.insert(std::make_pair(mPowerEntityId, result));
         return true;
