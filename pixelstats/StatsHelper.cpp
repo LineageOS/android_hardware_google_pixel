@@ -36,9 +36,14 @@ const int kVendorAtomOffset = 2;
 
 std::shared_ptr<IStats> getStatsService() {
     const std::string instance = std::string() + IStats::descriptor + "/default";
-    if (!AServiceManager_isDeclared(instance.c_str())) {
-        ALOGE("Stats service is not registered.");
-        return nullptr;
+    static bool isStatsDeclared = false;
+    if (!isStatsDeclared) {
+        // It is good to cache the result - it would not be changed
+        isStatsDeclared = AServiceManager_isDeclared(instance.c_str());
+        if (!isStatsDeclared) {
+            ALOGE("Stats service is not registered.");
+            return nullptr;
+        }
     }
     return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
 }
