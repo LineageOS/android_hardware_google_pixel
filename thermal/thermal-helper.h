@@ -108,7 +108,7 @@ class PowerHalService {
 
 class ThermalHelper {
   public:
-    ThermalHelper(const NotificationCallback &cb);
+    explicit ThermalHelper(const NotificationCallback &cb);
     ~ThermalHelper() = default;
 
     bool fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) const;
