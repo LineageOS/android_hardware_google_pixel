@@ -757,10 +757,10 @@ bool ThermalHelper::initializeCoolingDevices(const std::map<std::string, std::st
         }
     }
 
-    if (cooling_device_info_map_.size() * 2 == cooling_devices_.getNumThermalFiles()) {
-        return true;
+    if (cooling_device_info_map_.size() * 2 != cooling_devices_.getNumThermalFiles()) {
+        LOG(ERROR) << "Some cooling device can not be initialized";
     }
-    return false;
+    return true;
 }
 
 void ThermalHelper::setMinTimeout(SensorInfo *sensor_info) {
