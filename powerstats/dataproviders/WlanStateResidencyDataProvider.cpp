@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "android.hardware.power.stats-service.pixel"
+
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
