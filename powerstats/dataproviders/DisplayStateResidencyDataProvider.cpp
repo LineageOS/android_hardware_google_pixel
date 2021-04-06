@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.power.stats-service.pixel"
-
 #include <dataproviders/DisplayStateResidencyDataProvider.h>
 
 #include <android-base/chrono_utils.h>
