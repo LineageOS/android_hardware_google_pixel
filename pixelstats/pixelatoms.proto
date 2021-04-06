@@ -442,57 +442,57 @@ message StorageUfsResetCount {
 
 /* A message containing Pixel memory metrics collected hourly. */
 message PixelMmMetricsPerHour {
-    optional uint64 free_pages = 2;
-    optional uint64 anon_pages = 3;
-    optional uint64 file_pages = 4;
-    optional uint64 slab_reclaimable = 5;
-    optional uint64 zspages = 6;
-    optional uint64 unevictable = 7;
-    optional uint64 ion_total_pools = 8;
-    optional uint64 gpu_memory = 9;
+    optional int64 free_pages = 2;
+    optional int64 anon_pages = 3;
+    optional int64 file_pages = 4;
+    optional int64 slab_reclaimable = 5;
+    optional int64 zspages = 6;
+    optional int64 unevictable = 7;
+    optional int64 ion_total_pools = 8;
+    optional int64 gpu_memory = 9;
 }
 
 /* A message containing Pixel memory metrics collected daily. */
 message PixelMmMetricsPerDay {
-    optional uint64 workingset_refault = 2;
-    optional uint64 pswpin = 3;
-    optional uint64 pswpout = 4;
-    optional uint64 allocstall_dma = 5;
-    optional uint64 allocstall_dma32 = 6;
-    optional uint64 allocstall_normal = 7;
-    optional uint64 allocstall_movable = 8;
-    optional uint64 pgalloc_dma = 9;
-    optional uint64 pgalloc_dma32 = 10;
-    optional uint64 pgalloc_normal = 11;
-    optional uint64 pgalloc_movable = 12;
-    optional uint64 pgsteal_kswapd = 13;
-    optional uint64 pgsteal_direct = 14;
-    optional uint64 pgscan_kswapd = 15;
-    optional uint64 pgscan_direct = 16;
-    optional uint64 oom_kill = 17;
-    optional uint64 pgalloc_high = 18;
-    optional uint64 pgcache_hit = 19;
-    optional uint64 pgcache_miss = 20;
-    optional uint64 kswapd_time = 21;
-    optional uint64 kcompactd_time = 22;
+    optional int64 workingset_refault = 2;
+    optional int64 pswpin = 3;
+    optional int64 pswpout = 4;
+    optional int64 allocstall_dma = 5;
+    optional int64 allocstall_dma32 = 6;
+    optional int64 allocstall_normal = 7;
+    optional int64 allocstall_movable = 8;
+    optional int64 pgalloc_dma = 9;
+    optional int64 pgalloc_dma32 = 10;
+    optional int64 pgalloc_normal = 11;
+    optional int64 pgalloc_movable = 12;
+    optional int64 pgsteal_kswapd = 13;
+    optional int64 pgsteal_direct = 14;
+    optional int64 pgscan_kswapd = 15;
+    optional int64 pgscan_direct = 16;
+    optional int64 oom_kill = 17;
+    optional int64 pgalloc_high = 18;
+    optional int64 pgcache_hit = 19;
+    optional int64 pgcache_miss = 20;
+    optional int64 kswapd_time = 21;
+    optional int64 kcompactd_time = 22;
 }
 
 /* A message containing CMA metrics collected from dogfooding only. */
 message CmaStatus {
-  optional uint32 type = 2;
-  optional uint64 cma_alloc_pages_attempts = 3;
-  optional uint64 cma_alloc_pages_soft_attempts = 4;
-  optional uint64 cma_fail_pages = 5;
-  optional uint64 cma_fail_soft_pages = 6;
-  optional uint64 migrated_pages = 7;
+  optional int32 type = 2;
+  optional int64 cma_alloc_pages_attempts = 3;
+  optional int64 cma_alloc_pages_soft_attempts = 4;
+  optional int64 cma_fail_pages = 5;
+  optional int64 cma_fail_soft_pages = 6;
+  optional int64 migrated_pages = 7;
 }
 
 /* A message containing CMA metrics (External). */
 message CmaStatusExt {
-  optional uint32 type = 2;
-  optional uint64 cma_alloc_latency_low = 3;
-  optional uint64 cma_alloc_latency_mid = 4;
-  optional uint64 cma_alloc_latency_high = 5;
+  optional int32 type = 2;
+  optional int64 cma_alloc_latency_low = 3;
+  optional int64 cma_alloc_latency_mid = 4;
+  optional int64 cma_alloc_latency_high = 5;
 }
 
 message F2fsCompressionInfo {
