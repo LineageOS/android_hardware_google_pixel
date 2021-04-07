@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.power.stats-service.pixel"
-
 #include "include/PowerStatsAidl.h"
 #include <aidl/android/hardware/power/stats/BnPowerStats.h>
 
