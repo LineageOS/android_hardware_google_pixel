@@ -32,14 +32,20 @@ cc_library_static {
 
 cc_library {
     name: "android.hardware.power.stats-impl.pixel",
+    init_rc: ["android.hardware.power.stats-service.pixel.rc"],
+    vintf_fragments: ["android.hardware.power.stats-service.pixel.xml"],
     vendor_available: true,
     export_include_dirs: ["include"],
+    defaults: ["powerstats_pixel_defaults"],
 
     srcs: [
         "dataproviders/*.cpp",
         "PowerStatsAidl.cpp",
     ],
+}
 
+cc_defaults {
+    name: "powerstats_pixel_defaults",
     cflags: [
         "-Wall",
         "-Werror",
@@ -54,5 +60,28 @@ cc_library {
         "libutils",
         "pixel_stateresidency_provider_aidl_interface-ndk_platform",
         "android.hardware.power.stats-V1-ndk_platform",
+    ],
+}
+
+filegroup {
+    name: "pixel_powerstats_rc",
+    srcs: ["android.hardware.power.stats-service.pixel.rc"],
+}
+
+filegroup {
+    name: "pixel_powerstats_xml",
+    srcs: ["android.hardware.power.stats-service.pixel.xml"],
+}
+
+cc_defaults {
+    name: "powerstats_pixel_binary_defaults",
+    defaults: ["powerstats_pixel_defaults"],
+//  TODO(b/184567830): Uncomment these
+//    init_rc: [":pixel_powerstats_rc"],
+//    vintf_fragments: [":pixel_powerstats_xml"],
+    relative_install_path: "hw",
+    proprietary: true,
+    shared_libs: [
+        "android.hardware.power.stats-impl.pixel",
     ],
 }
