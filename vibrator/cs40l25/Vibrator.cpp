@@ -531,7 +531,7 @@ static void constructBrakingSegment(std::ostringstream &pwleBuilder, const int &
                                     int duration, Braking brakingType) {
     pwleBuilder << ",T" << segmentIdx << ":" << duration;
     pwleBuilder << ",L" << segmentIdx << ":" << 0;
-    pwleBuilder << ",F" << segmentIdx << ":" << 0;
+    pwleBuilder << ",F" << segmentIdx << ":" << PWLE_FREQUENCY_MIN_HZ;
     pwleBuilder << ",C" << segmentIdx << ":0";
     pwleBuilder << ",B" << segmentIdx << ":"
                 << static_cast<std::underlying_type<Braking>::type>(brakingType);
