@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.power.stats-service.pixel"
-
 #include <dataproviders/PowerStatsEnergyAttribution.h>
 
 #include <android-base/logging.h>
@@ -47,7 +45,7 @@ bool PowerStatsEnergyAttribution::readUidTimeInState(AttributionStats *attrStats
     // first element will be "uid:" and it's useless
     attrStats->uidTimeInStateNames.erase(attrStats->uidTimeInStateNames.begin());
 
-    while(getline(&buf, &size, fp.get()) != -1) {
+    while (getline(&buf, &size, fp.get()) != -1) {
         std::vector<std::string> uidInfos = Split(Trim(buf), " ");
         uidInfos[0].pop_back();
         int32_t uid = std::stoi(uidInfos[0]);
