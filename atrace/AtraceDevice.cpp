@@ -68,9 +68,11 @@ const std::map<std::string, TracingConfig> kTracingMap = {
                  {{"/sys/kernel/debug/tracing/events/msm_bus/enable", false}}},
         },
         {
-                "lmh_dcvs",
-                {"QCT HW Lmh-dcvs Frequency",
-                 {{"/sys/kernel/debug/tracing/events/lmh/lmh_dcvs_freq/enable", false}}},
+                "thermal_tj",
+                {"Tj power limits and frequency",
+                 {{"/sys/kernel/debug/tracing/events/lmh/lmh_dcvs_freq/enable", false},
+                  {"/sys/kernel/debug/tracing/events/thermal_exynos/enable", false},
+                  {"/sys/kernel/debug/tracing/events/thermal_exynos_gpu/enable", false}}},
         },
 };
 
