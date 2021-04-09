@@ -325,7 +325,7 @@ void SysfsCollector::logBatteryCapacity(const std::shared_ptr<IStats> &stats_cli
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::BATTERY_CAPACITY,
+                        .atomId = PixelAtoms::Atom::kBatteryCapacity,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -367,7 +367,7 @@ void SysfsCollector::logUFSLifetime(const std::shared_ptr<IStats> &stats_client)
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::STORAGE_UFS_HEALTH,
+                        .atomId = PixelAtoms::Atom::kStorageUfsHealth,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
@@ -396,7 +396,7 @@ void SysfsCollector::logUFSErrorStats(const std::shared_ptr<IStats> &stats_clien
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::UFS_RESET_COUNT,
+                        .atomId = PixelAtoms::Atom::kUfsResetCount,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
@@ -492,7 +492,7 @@ void SysfsCollector::logF2fsStats(const std::shared_ptr<IStats> &stats_client) {
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::F2FS_STATS,
+                        .atomId = PixelAtoms::Atom::kF2FsStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
@@ -550,7 +550,7 @@ void SysfsCollector::logF2fsCompressionInfo(const std::shared_ptr<IStats> &stats
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::F2FS_COMPRESSION_INFO,
+                        .atomId = PixelAtoms::Atom::kF2FsCompressionInfo,
                         .values = values};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
@@ -616,7 +616,7 @@ void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_clien
 
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                            .atomId = PixelAtoms::Ids::ZRAM_MM_STAT,
+                            .atomId = PixelAtoms::Atom::kZramMmStat,
                             .values = std::move(values)};
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
@@ -657,7 +657,7 @@ void SysfsCollector::reportZramBdStat(const std::shared_ptr<IStats> &stats_clien
 
         // Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                            .atomId = PixelAtoms::Ids::ZRAM_BD_STAT,
+                            .atomId = PixelAtoms::Atom::kZramBdStat,
                             .values = std::move(values)};
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
@@ -705,7 +705,7 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::BOOT_STATS,
+                        .atomId = PixelAtoms::Atom::kBootStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
