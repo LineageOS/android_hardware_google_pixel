@@ -473,8 +473,8 @@ message PixelMmMetricsPerDay {
     optional int64 pgalloc_high = 18;
     optional int64 pgcache_hit = 19;
     optional int64 pgcache_miss = 20;
-    optional int64 kswapd_time = 21;
-    optional int64 kcompactd_time = 22;
+    optional int64 kswapd_stime_clks = 21;
+    optional int64 kcompactd_stime_clks = 22;
 }
 
 /* A message containing CMA metrics collected from dogfooding only. */
