@@ -48,6 +48,7 @@ enum FormulaOption : uint32_t {
 struct VirtualSensorInfo {
     std::vector<std::string> linked_sensors;
     std::vector<float> coefficients;
+    float offset;
     std::string trigger_sensor;
     FormulaOption formula;
 };

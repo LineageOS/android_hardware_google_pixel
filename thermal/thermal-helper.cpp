@@ -938,6 +938,7 @@ bool ThermalHelper::checkVirtualSensor(std::string_view sensor_name, std::string
     float temp_val = 0.0;
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    float offset = sensor_info.virtual_sensor_info->offset;
     for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
         std::string data;
         const auto &linked_sensor_info =
@@ -984,7 +985,7 @@ bool ThermalHelper::checkVirtualSensor(std::string_view sensor_name, std::string
                 break;
         }
     }
-    *temp = std::to_string(temp_val);
+    *temp = std::to_string(temp_val + offset);
     return true;
 }
 
