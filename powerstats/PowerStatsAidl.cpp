@@ -224,7 +224,7 @@ void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
 
         oss << "Elapsed time: "
             << std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count()
-            << " ms";
+            << " ms\n";
 
         oss << ::android::base::StringPrintf(headerFormatDelta, "Channel", "Cumulative Energy",
                                              "Delta   ");
@@ -261,11 +261,11 @@ void PowerStats::dumpEnergyMeter(std::ostringstream &oss, bool delta) {
 }
 
 void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
-    const char *headerFormat = "  %14s   %14s   %16s   %15s   %17s\n";
+    const char *headerFormat = "  %16s   %18s   %16s   %15s   %17s\n";
     const char *dataFormat =
-            "  %14s   %14s   %13" PRIu64 " ms   %15" PRIu64 "   %14" PRIu64 " ms\n";
-    const char *headerFormatDelta = "  %14s   %14s   %16s (%14s)   %15s (%16s)   %17s (%14s)\n";
-    const char *dataFormatDelta = "  %14s   %14s   %13" PRIu64 " ms (%14" PRId64 ")   %15" PRIu64
+            "  %16s   %18s   %13" PRIu64 " ms   %15" PRIu64 "   %14" PRIu64 " ms\n";
+    const char *headerFormatDelta = "  %16s   %18s   %16s (%14s)   %15s (%16s)   %17s (%14s)\n";
+    const char *dataFormatDelta = "  %16s   %18s   %13" PRIu64 " ms (%14" PRId64 ")   %15" PRIu64
                                   " (%16" PRId64 ")   %14" PRIu64 " ms (%14" PRId64 ")\n";
 
     // Construct maps to entity and state names
@@ -285,7 +285,7 @@ void PowerStats::dumpStateResidency(std::ostringstream &oss, bool delta) {
 
         oss << "Elapsed time: "
             << std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count()
-            << " ms";
+            << " ms\n";
 
         oss << ::android::base::StringPrintf(headerFormatDelta, "Entity", "State", "Total time",
                                              "Delta   ", "Total entries", "Delta   ",
