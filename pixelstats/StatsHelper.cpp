@@ -60,7 +60,7 @@ void reportSpeakerImpedance(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_SPEAKER_IMPEDANCE,
+                        .atomId = PixelAtoms::Atom::kVendorSpeakerImpedance,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -79,7 +79,7 @@ void reportSlowIo(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_SLOW_IO,
+                        .atomId = PixelAtoms::Atom::kVendorSlowIo,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -100,7 +100,7 @@ void reportChargeCycles(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_CHARGE_CYCLES,
+                        .atomId = PixelAtoms::Atom::kVendorChargeCycles,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -121,7 +121,7 @@ void reportHardwareFailed(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_HARDWARE_FAILED,
+                        .atomId = PixelAtoms::Atom::kVendorHardwareFailed,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -144,7 +144,7 @@ void reportSpeechDspStat(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_SPEECH_DSP_STAT,
+                        .atomId = PixelAtoms::Atom::kVendorSpeechDspStat,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -165,7 +165,7 @@ void reportPhysicalDropDetected(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_PHYSICAL_DROP_DETECTED,
+                        .atomId = PixelAtoms::Atom::kVendorPhysicalDropDetected,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -190,7 +190,7 @@ void reportUsbPortOverheat(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_USB_PORT_OVERHEAT,
+                        .atomId = PixelAtoms::Atom::kVendorUsbPortOverheat,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
