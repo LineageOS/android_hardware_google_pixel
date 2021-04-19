@@ -67,7 +67,7 @@ void reportBatteryHealthSnapshot(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_BATTERY_HEALTH_SNAPSHOT,
+                        .atomId = PixelAtoms::Atom::kVendorBatteryHealthSnapshot,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -84,7 +84,7 @@ void reportBatteryCausedShutdown(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VENDOR_BATTERY_CAUSED_SHUTDOWN,
+                        .atomId = PixelAtoms::Atom::kVendorBatteryCausedShutdown,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())

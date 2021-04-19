@@ -32,40 +32,41 @@ option java_outer_classname = "PixelAtoms";
  */
 
 /* Allocated Westworld atom IDs. */
-enum Ids {
-    // AOSP atom ID range starts at 105000
-    CHARGE_STATS = 105000;
-    VOLTAGE_TIER_STATS = 105001;
-    BATTERY_CAPACITY = 105002;
-    STORAGE_UFS_HEALTH = 105003;
-    F2FS_STATS = 105004;
-    ZRAM_MM_STAT = 105005;
-    ZRAM_BD_STAT = 105006;
-    BOOT_STATS = 105007;
-    WIRELESS_CHARGING_STATS = 105008;
-    DEVICE_ORIENTATION = 105009;
-    FG_CAPACITY = 105010;
-    PD_VID_PID = 105011;
-    BATTERY_EEPROM = 105012;
-    VENDOR_SPEAKER_IMPEDANCE = 105013; // Moved from atoms.proto
-    UFS_RESET_COUNT = 105014;
-    PIXEL_MM_METRICS_PER_HOUR = 105015;
-    PIXEL_MM_METRICS_PER_DAY = 105016;
-    F2FS_COMPRESSION_INFO = 105017;
-    VENDOR_CHARGE_CYCLES = 105018; // Moved from atoms.proto
-    VENDOR_HARDWARE_FAILED = 105019; // Moved from atoms.proto
-    VENDOR_SLOW_IO = 105020; // Moved from atoms.proto
-    VENDOR_SPEECH_DSP_STAT = 105021; // Moved from atoms.proto
-    VENDOR_PHYSICAL_DROP_DETECTED = 105022; // Moved from atoms.proto
-    VENDOR_USB_PORT_OVERHEAT = 105023; // Moved from atoms.proto
-    CMA_STATUS = 105024;
-    CMA_STATUS_EXT = 105025;
-    VENDOR_BATTERY_HEALTH_SNAPSHOT = 105026; // Moved from atoms.proto
-    VENDOR_BATTERY_CAUSED_SHUTDOWN = 105027; // Moved from atoms.proto
+message Atom {
+    oneof pushed {
+      // AOSP atom ID range starts at 105000
+      ChargeStats charge_stats = 105000;
+      VoltageTierStats voltage_tier_stats = 105001;
+      BatteryCapacity battery_capacity = 105002;
+      StorageUfsHealth storage_ufs_health = 105003;
+      F2fsStatsInfo f2fs_stats = 105004;
+      ZramMmStat zram_mm_stat = 105005;
+      ZramBdStat zram_bd_stat = 105006;
+      BootStatsInfo boot_stats = 105007;
+      WirelessChargingStats wireless_charging_stats = 105008;
+      DeviceOrientation device_orientation = 105009;
+      BatteryCapacityFG fg_capacity = 105010;
+      PdVidPid pd_vid_pid = 105011;
+      BatteryEEPROM battery_eeprom = 105012;
+      VendorSpeakerImpedance vendor_speaker_impedance = 105013; // moved from atoms.proto
+      StorageUfsResetCount ufs_reset_count = 105014;
+      PixelMmMetricsPerHour pixel_mm_metrics_per_hour = 105015;
+      PixelMmMetricsPerDay pixel_mm_metrics_per_day = 105016;
+      F2fsCompressionInfo f2fs_compression_info = 105017;
+      VendorChargeCycles vendor_charge_cycles = 105018; // moved from atoms.proto
+      VendorHardwareFailed vendor_hardware_failed = 105019; // moved from atoms.proto
+      VendorSlowIo vendor_slow_io = 105020; // moved from atoms.proto
+      VendorSpeechDspStat vendor_speech_dsp_stat = 105021; // moved from atoms.proto
+      VendorPhysicalDropDetected vendor_physical_drop_detected = 105022; // moved from atoms.proto
+      VendorUsbPortOverheat vendor_usb_port_overheat = 105023; // moved from atoms.proto
+      CmaStatus cma_status = 105024;
+      CmaStatusExt cma_status_ext = 105025;
+      VendorBatteryHealthSnapshot vendor_battery_health_snapshot = 105026; // moved from atoms.proto
+      VendorBatteryCausedShutdown vendor_battery_caused_shutdown = 105027; // moved from atoms.proto
 
-    CITADEL_VERSION = 100018; // Moved from vendor proprietary
-    CITADEL_EVENT = 100019;  // Moved from vendor proprietary
-
+      CitadelVersion citadel_version = 100018; // moved from vendor proprietary
+      CitadelEvent citadel_event = 100019;  // moved from vendor proprietary
+    }
     // AOSP atom ID range ends at 109999
 }
 
