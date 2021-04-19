@@ -306,7 +306,7 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
     // Don't report the first atom to avoid big spike in accumulated values.
     if (!is_first_atom) {
         // Send vendor atom to IStats HAL
-        reportVendorAtom(stats_client, PixelAtoms::Ids::PIXEL_MM_METRICS_PER_HOUR, values,
+        reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerHour, values,
                          "PixelMmMetricsPerHour");
     }
 }
@@ -337,7 +337,7 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     // Don't report the first atom to avoid big spike in accumulated values.
     if (!is_first_atom) {
         // Send vendor atom to IStats HAL
-        reportVendorAtom(stats_client, PixelAtoms::Ids::PIXEL_MM_METRICS_PER_DAY, values,
+        reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerDay, values,
                          "PixelMmMetricsPerDay");
     }
 }
@@ -483,7 +483,7 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
  * to its CmaType.
  *
  * stats_client: The Stats service
- * atom_id: The id of atom. It can be PixelAtoms::Ids::CMA_STATUS or CMA_STATUS_EXT
+ * atom_id: The id of atom. It can be PixelAtoms::Atom::kCmaStatus or kCmaStatusExt
  * cma_type: The name of CMA heap. We only collect metrics from CMA heaps defined
  *           in kCmaTypeInfo.
  * type_idx: The id of the CMA heap. We add this id in atom values to identify
@@ -538,9 +538,9 @@ void MmMetricsReporter::logCmaStatus(const std::shared_ptr<IStats> &stats_client
         if (type == kCmaTypeInfo.end())
             continue;
 
-        reportCmaStatusAtom(stats_client, PixelAtoms::Ids::CMA_STATUS, cma_type, type->second,
+        reportCmaStatusAtom(stats_client, PixelAtoms::Atom::kCmaStatus, cma_type, type->second,
                             kCmaStatusInfo, &prev_cma_stat_);
-        reportCmaStatusAtom(stats_client, PixelAtoms::Ids::CMA_STATUS_EXT, cma_type, type->second,
+        reportCmaStatusAtom(stats_client, PixelAtoms::Atom::kCmaStatusExt, cma_type, type->second,
                             kCmaStatusExtInfo, &prev_cma_stat_ext_);
     }
 }

@@ -88,7 +88,7 @@ bool WlcReporter::reportVendor(const std::shared_ptr<IStats> &stats_client,
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::WIRELESS_CHARGING_STATS,
+                        .atomId = PixelAtoms::Atom::kWirelessChargingStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus retStat = stats_client->reportVendorAtom(event);
     if (!retStat.isOk()) {
@@ -138,7 +138,7 @@ void WlcReporter::reportOrientation(const std::shared_ptr<IStats> &stats_client)
         values[PixelAtoms::DeviceOrientation::kOrientationFieldNumber - kVendorAtomOffset] = tmp;
 
         VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                            .atomId = PixelAtoms::Ids::DEVICE_ORIENTATION,
+                            .atomId = PixelAtoms::Atom::kDeviceOrientation,
                             .values = std::move(values)};
         const ndk::ScopedAStatus retStat = stats_client->reportVendorAtom(event);
         if (!retStat.isOk()) {
