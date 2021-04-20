@@ -201,7 +201,7 @@ void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_clie
     }
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::CHARGE_STATS,
+                        .atomId = PixelAtoms::Atom::kChargeStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -248,7 +248,7 @@ void UeventListener::ReportVoltageTierStats(const std::shared_ptr<IStats> &stats
     }
 
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::VOLTAGE_TIER_STATS,
+                        .atomId = PixelAtoms::Atom::kVoltageTierStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
@@ -376,7 +376,7 @@ void UeventListener::ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_c
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::PD_VID_PID,
+                        .atomId = PixelAtoms::Atom::kPdVidPid,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
