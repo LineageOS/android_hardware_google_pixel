@@ -106,6 +106,7 @@ message ChargeStats {
         ADAPTER_TYPE_WPC_BPP = 24;
         ADAPTER_TYPE_WPC_L7 = 25;
     }
+    optional string reverse_domain_name = 1;
     /* Type of charge adapter, enumerated above. */
     optional AdapterType adapter_type = 2;
     /* Max negotiated voltage by charge adapter, in mV. */
@@ -151,6 +152,7 @@ message ChargeStats {
 
 /* A message containing stats from each charge voltage tier. */
 message VoltageTierStats {
+    optional string reverse_domain_name = 1;
     /* Voltage tier number, custom to implementation, should be <= 3. */
     optional int32 voltage_tier = 2;
 
@@ -197,6 +199,7 @@ message VoltageTierStats {
 
 /* A message containing an alternate proprietary full battery capacity estimate. */
 message BatteryCapacity {
+    optional string reverse_domain_name = 1;
     /* Sum of the change in coulomb count. */
     optional int32 delta_cc_sum = 2;
     /* Sum of the change in state of charge (battery level). */
@@ -205,6 +208,7 @@ message BatteryCapacity {
 
 /* A message containing health values of UFS */
 message StorageUfsHealth {
+    optional string reverse_domain_name = 1;
     /* The value of lifetimeA for UFS health */
     optional int32 lifetime_a = 2;
     /* The value of lifetimeB for UFS health */
@@ -215,6 +219,7 @@ message StorageUfsHealth {
 
 /* A message containing filesystem stats of F2FS */
 message F2fsStatsInfo {
+    optional string reverse_domain_name = 1;
     /* The value of dirty segments of f2fs */
     optional int32 dirty_segments = 2;
     /* The value of free segments of f2fs */
@@ -236,6 +241,7 @@ message F2fsStatsInfo {
 }
 
 message ZramMmStat {
+    optional string reverse_domain_name = 1;
     /* The value of original memory size */
     optional int64 orig_data_size = 2;
     /* The value of compressed memory size */
@@ -251,6 +257,7 @@ message ZramMmStat {
 }
 
 message ZramBdStat {
+    optional string reverse_domain_name = 1;
     /* the number of pages in backing device */
     optional int64 bd_count = 2;
     /* The number of pages readed from backing device */
@@ -261,6 +268,7 @@ message ZramBdStat {
 
 /* A message containing boot times */
 message BootStatsInfo {
+    optional string reverse_domain_name = 1;
     /* The F2FS fsck time in secs */
     optional int32 fsck_time_sec = 2;
     /* The F2FS mounted time in secs */
@@ -277,6 +285,7 @@ message WirelessChargingStats {
         VENDOR_GOOGLE = 1;
     }
 
+    optional string reverse_domain_name = 1;
     optional ChargerVendor charger_vendor = 2;
 }
 
@@ -290,6 +299,7 @@ message DeviceOrientation {
         ORIENTATION_270 = 4;
     }
 
+    optional string reverse_domain_name = 1;
     /* Device orientation. */
     optional Orientation orientation = 2;
 }
@@ -305,6 +315,7 @@ message BatteryCapacityFG {
         LOG_REASON_DIVERGING_FG = 5;
     }
 
+    optional string reverse_domain_name = 1;
     /* Uevent logging reason, enumerated above. */
     optional LogReason capacity_log_reason = 2;
 
@@ -319,6 +330,7 @@ message BatteryCapacityFG {
 }
 
 message  PdVidPid {
+    optional string reverse_domain_name = 1;
     /* Vendor ID of wired charger */
     optional int32 vid = 2;
     /* Product ID of wired charger */
@@ -326,7 +338,8 @@ message  PdVidPid {
 }
 
 message BatteryEEPROM {
-    /* The cycle count number; record of charge/discharge times */
+    optional string reverse_domain_name = 1;
+   /* The cycle count number; record of charge/discharge times */
     optional int32 cycle_cnt = 2;
     /* The current full capacity of the battery under nominal conditions */
     optional int32 full_cap = 3;
@@ -381,6 +394,7 @@ message CitadelEvent {
     UPGRADED = 3;
     ALERT_V2 = 4;
   };
+  optional string reverse_domain_name = 1;
   optional Event event = 2;
   optional int32 reset_count = 3;
   optional int64 uptime_micros = 4;
@@ -426,23 +440,27 @@ message CitadelEvent {
 
 /* A message containing the citadel firmware version. */
 message CitadelVersion {
-    optional string version = 2;
+   optional string reverse_domain_name = 1;
+   optional string version = 2;
 }
 
 /* A message containing the speaker impedance. */
  message VendorSpeakerImpedance {
+    optional string reverse_domain_name = 1;
     optional int32 speaker_location = 2;
     optional int32 impedance = 3;
 }
 
 /* A message containing how many times of ufs host reset */
 message StorageUfsResetCount {
+    optional string reverse_domain_name = 1;
     /* How many UFS error reset are triggered */
     optional int32 host_reset_count = 2;
 }
 
 /* A message containing Pixel memory metrics collected hourly. */
 message PixelMmMetricsPerHour {
+    optional string reverse_domain_name = 1;
     optional int64 free_pages = 2;
     optional int64 anon_pages = 3;
     optional int64 file_pages = 4;
@@ -455,6 +473,7 @@ message PixelMmMetricsPerHour {
 
 /* A message containing Pixel memory metrics collected daily. */
 message PixelMmMetricsPerDay {
+    optional string reverse_domain_name = 1;
     optional int64 workingset_refault = 2;
     optional int64 pswpin = 3;
     optional int64 pswpout = 4;
@@ -480,6 +499,7 @@ message PixelMmMetricsPerDay {
 
 /* A message containing CMA metrics collected from dogfooding only. */
 message CmaStatus {
+  optional string reverse_domain_name = 1;
   optional int32 type = 2;
   optional int64 cma_alloc_pages_attempts = 3;
   optional int64 cma_alloc_pages_soft_attempts = 4;
@@ -490,6 +510,7 @@ message CmaStatus {
 
 /* A message containing CMA metrics (External). */
 message CmaStatusExt {
+  optional string reverse_domain_name = 1;
   optional int32 type = 2;
   optional int64 cma_alloc_latency_low = 3;
   optional int64 cma_alloc_latency_mid = 4;
@@ -497,6 +518,7 @@ message CmaStatusExt {
 }
 
 message F2fsCompressionInfo {
+    optional string reverse_domain_name = 1;
     /* Show the block count written after compression since mount */
     optional int32 compr_written_blocks = 2;
     /* Show the saved block count with compression since mount */
@@ -516,6 +538,7 @@ message F2fsCompressionInfo {
  * /sys/class/power_supply/bms/cycle_count, via Vendor.
  */
 message VendorChargeCycles {
+    optional string reverse_domain_name = 1;
     optional int32 cycle_bucket_1 = 2;
     optional int32 cycle_bucket_2 = 3;
     optional int32 cycle_bucket_3 = 4;
@@ -543,6 +566,7 @@ message VendorHardwareFailed {
       HARDWARE_FAILED_SPEAKER = 3;
       HARDWARE_FAILED_FINGERPRINT = 4;
     }
+    optional string reverse_domain_name = 1;
     optional HardwareType hardware_type = 2;
 
     /**
@@ -579,6 +603,7 @@ message VendorSlowIo {
       UNMAP = 3;
       SYNC = 4;
     }
+    optional string reverse_domain_name = 1;
     optional IoOperation operation = 2;
 
     // The number of slow IO operations of this type over 24 hours.
@@ -590,6 +615,7 @@ message VendorSlowIo {
  * Logged from: Vendor audio implementation.
  */
 message VendorSpeechDspStat {
+    optional string reverse_domain_name = 1;
     // The total Speech DSP uptime in milliseconds.
     optional int32 total_uptime_millis = 2;
     // The total Speech DSP downtime in milliseconds.
@@ -603,6 +629,7 @@ message VendorSpeechDspStat {
  * Reported from the /vendor partition.
  */
 message VendorPhysicalDropDetected {
+  optional string reverse_domain_name = 1;
   // Confidence that the event was actually a drop, 0 -> 100
   optional int32 confidence_pctg = 2;
   // Peak acceleration of the drop, in 1/1000s of a g.
@@ -613,6 +640,7 @@ message VendorPhysicalDropDetected {
 
 /** Represents USB port overheat event. */
 message VendorUsbPortOverheat {
+  optional string reverse_domain_name = 1;
   /* Temperature of USB port at USB plug event, in 1/10ths of degree C. */
   optional int32 plug_temperature_deci_c = 2;
   /* Maximum temperature of USB port during overheat event, in 1/10ths of degree
@@ -647,6 +675,7 @@ message VendorBatteryHealthSnapshot {
     BATTERY_SNAPSHOT_TYPE_MAX_BATT_LEVEL = 10;  // Snapshot at max battery level (SoC) over 24hrs.
     BATTERY_SNAPSHOT_TYPE_AVG_RESISTANCE = 11;  // Snapshot at average battery resistance over 24hrs.
   }
+  optional string reverse_domain_name = 1;
   optional BatterySnapshotType type = 2;
   // Temperature, in 1/10ths of degree C.
   optional int32 temperature_deci_celsius = 3;
@@ -666,6 +695,7 @@ message VendorBatteryHealthSnapshot {
  * Log battery caused shutdown with the last recorded voltage.
  */
 message VendorBatteryCausedShutdown {
-  // The last recorded battery voltage prior to shutdown.
-  optional int32 last_recorded_micro_volt = 2;
+ optional string reverse_domain_name = 1;
+ // The last recorded battery voltage prior to shutdown.
+ optional int32 last_recorded_micro_volt = 2;
 }
