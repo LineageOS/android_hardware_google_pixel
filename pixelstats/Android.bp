@@ -41,6 +41,16 @@ java_library {
     sdk_version: "current",
 }
 
+java_library_host {
+    name: "pixelatoms-java_host",
+    proto: {
+        type: "full",
+    },
+    srcs: [
+        "pixelatoms.proto",
+    ],
+}
+
 cc_library {
   name: "libpixelstats",
   vendor: true,
