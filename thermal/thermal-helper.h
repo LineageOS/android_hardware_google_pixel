@@ -27,8 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef THERMAL_THERMAL_HELPER_H__
-#define THERMAL_THERMAL_HELPER_H__
+#pragma once
 
 #include <array>
 #include <chrono>
@@ -45,6 +44,7 @@
 #include <android/hardware/thermal/2.0/IThermal.h>
 
 #include "utils/config_parser.h"
+#include "utils/power_files.h"
 #include "utils/thermal_files.h"
 #include "utils/thermal_watcher.h"
 
@@ -71,7 +71,7 @@ using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 
 using NotificationCallback = std::function<void(const Temperature_2_0 &t)>;
 using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
-using CdevRequestStatus = std::map<std::string, int>;
+using CdevRequestStatus = std::unordered_map<std::string, unsigned int>;
 
 // Get thermal_zone type
 bool getThermalZoneTypeById(int tz_id, std::string *);
@@ -82,8 +82,8 @@ struct SensorStatus {
     ThrottlingSeverity prev_cold_severity;
     ThrottlingSeverity prev_hint_severity;
     boot_clock::time_point last_update_time;
-    std::map<std::string, int> pid_request_map;
-    std::map<std::string, int> hard_limit_request_map;
+    std::unordered_map<std::string, unsigned int> pid_request_map;
+    std::unordered_map<std::string, unsigned int> hard_limit_request_map;
     float err_integral;
     float prev_err;
 };
@@ -137,7 +137,9 @@ class ThermalHelper {
     // Read the value of a single cooling device.
     bool readCoolingDevice(std::string_view cooling_device, CoolingDevice_2_0 *out) const;
     // Get SensorInfo Map
-    const std::map<std::string, SensorInfo> &GetSensorInfoMap() const { return sensor_info_map_; }
+    const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const {
+        return sensor_info_map_;
+    }
 
     void sendPowerExtHint(const Temperature_2_0 &t);
 
@@ -146,10 +148,10 @@ class ThermalHelper {
     bool isPowerHalExtConnected() { return power_hal_service_.isPowerHalExtConnected(); }
 
   private:
-    bool initializeSensorMap(const std::map<std::string, std::string> &path_map);
-    bool initializeCoolingDevices(const std::map<std::string, std::string> &path_map);
+    bool initializeSensorMap(const std::unordered_map<std::string, std::string> &path_map);
+    bool initializeCoolingDevices(const std::unordered_map<std::string, std::string> &path_map);
     void setMinTimeout(SensorInfo *sensor_info);
-    void initializeTrip(const std::map<std::string, std::string> &path_map,
+    void initializeTrip(const std::unordered_map<std::string, std::string> &path_map,
                         std::set<std::string> *monitored_sensors, bool thermal_genl_enabled);
 
     // For thermal_watcher_'s polling thread, return the sleep interval
@@ -172,21 +174,25 @@ class ThermalHelper {
                             const SensorInfo &sensor_info, float total_power_budget);
     void requestCdevBySeverity(std::string_view sensor_name, SensorStatus *sensor_status,
                                const SensorInfo &sensor_info);
+    void computeCoolingDevicesRequest(std::string_view sensor_name,
+                                      const SensorStatus &sensor_status,
+                                      std::vector<std::string> *cooling_devices_to_update);
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
     sp<ThermalWatcher> thermal_watcher_;
+    PowerFiles power_files_;
     ThermalFiles thermal_sensors_;
     ThermalFiles cooling_devices_;
     bool is_initialized_;
     const NotificationCallback cb_;
-    std::map<std::string, CdevInfo> cooling_device_info_map_;
-    std::map<std::string, SensorInfo> sensor_info_map_;
-    std::map<std::string, std::map<ThrottlingSeverity, ThrottlingSeverity>>
+    std::unordered_map<std::string, CdevInfo> cooling_device_info_map_;
+    std::unordered_map<std::string, SensorInfo> sensor_info_map_;
+    std::unordered_map<std::string, std::map<ThrottlingSeverity, ThrottlingSeverity>>
             supported_powerhint_map_;
     PowerHalService power_hal_service_;
 
     mutable std::shared_mutex sensor_status_map_mutex_;
-    std::map<std::string, SensorStatus> sensor_status_map_;
-    std::map<std::string, CdevRequestStatus> cdev_status_map_;
+    std::unordered_map<std::string, SensorStatus> sensor_status_map_;
+    std::unordered_map<std::string, CdevRequestStatus> cdev_status_map_;
 };
 
 }  // namespace implementation
@@ -194,5 +200,3 @@ class ThermalHelper {
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
-
-#endif  // THERMAL_THERMAL_HELPER_H__
