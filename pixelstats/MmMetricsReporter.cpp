@@ -329,10 +329,10 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     std::map<std::string, uint64_t> pixel_vmstat =
             readVmStat(android::base::StringPrintf("%s/vmstat", kPixelStatMm).c_str());
     fillAtomValues(kMmMetricsPerDayInfo, pixel_vmstat, &prev_day_pixel_vmstat_, &values);
-    fillProcessStime(PixelMmMetricsPerDay::kKswapdTimeFieldNumber, "kswapd0", &kswapd_pid_,
+    fillProcessStime(PixelMmMetricsPerDay::kKswapdStimeClksFieldNumber, "kswapd0", &kswapd_pid_,
                      &prev_kswapd_stime_, &values);
-    fillProcessStime(PixelMmMetricsPerDay::kKcompactdTimeFieldNumber, "kcompactd0", &kcompactd_pid_,
-                     &prev_kcompactd_stime_, &values);
+    fillProcessStime(PixelMmMetricsPerDay::kKcompactdStimeClksFieldNumber, "kcompactd0",
+                     &kcompactd_pid_, &prev_kcompactd_stime_, &values);
 
     // Don't report the first atom to avoid big spike in accumulated values.
     if (!is_first_atom) {
