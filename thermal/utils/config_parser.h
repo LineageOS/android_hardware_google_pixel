@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef THERMAL_UTILS_CONFIG_PARSER_H__
-#define THERMAL_UTILS_CONFIG_PARSER_H__
+#pragma once
 
-#include <map>
 #include <string>
+#include <unordered_map>
 
 #include <android/hardware/thermal/2.0/IThermal.h>
 
@@ -53,13 +52,23 @@ struct VirtualSensorInfo {
     FormulaOption formula;
 };
 
-enum ThrottleType : uint32_t {
-    PID = 0,  // Enabled PID power allocator
-    LIMIT,    // Enable hard limit throttling
+// The method when the ODPM power is lower than threshold
+enum ReleaseLogic : uint32_t {
+    DECREASE = 0,  // DECREASE THROTTLING
+    BYPASS,        // BYPASS THROTTLING
     NONE,
 };
 
-using ThrottlingTypeArray = std::array<ThrottleType, static_cast<size_t>(kThrottlingSeverityCount)>;
+struct BindedCdevInfo {
+    ThrottlingArray limit_info;
+    ThrottlingArray power_thresholds;
+    ReleaseLogic release_logic;
+    float cdev_weight;
+    int cdev_ceiling;
+    int power_sample_count;
+    std::chrono::milliseconds power_sample_delay;
+    bool power_reversly_check;
+};
 
 struct ThrottlingInfo {
     ThrottlingArray k_po;
@@ -71,11 +80,7 @@ struct ThrottlingInfo {
     ThrottlingArray min_alloc_power;
     ThrottlingArray s_power;
     ThrottlingArray i_cutoff;
-    ThrottlingTypeArray throttle_type;
-    std::vector<std::string> cdev_request;
-    std::vector<float> cdev_weight;
-    std::vector<int> cdev_ceiling;
-    std::map<std::string, ThrottlingArray> limit_info;
+    std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
 };
 
 struct SensorInfo {
@@ -90,6 +95,7 @@ struct SensorInfo {
     std::chrono::milliseconds passive_delay;
     bool send_cb;
     bool send_powerhint;
+    bool power_tracking_enabled;
     bool is_monitor;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::unique_ptr<ThrottlingInfo> throttling_info;
@@ -100,15 +106,16 @@ struct CdevInfo {
     std::string read_path;
     std::string write_path;
     std::vector<float> state2power;
+    std::string power_rail;
+    std::chrono::milliseconds power_sample_rate;
+    int power_sample_count;
 };
 
-std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
-std::map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path);
+std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
+std::unordered_map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path);
 
 }  // namespace implementation
 }  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
-
-#endif  // THERMAL_UTILS_CONFIG_PARSER_H__
