@@ -207,6 +207,7 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
         cold_hysteresis.fill(0.0);
         std::vector<std::string> linked_sensors;
         std::vector<float> coefficients;
+        float offset = 0;
         std::string trigger_sensor;
 
         FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
@@ -326,6 +327,10 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
             } else {
                 sensors_parsed.clear();
                 return sensors_parsed;
+            }
+
+            if (!sensors[i]["Offset"].empty()) {
+                offset = sensors[i]["Offset"].asFloat();
             }
 
             if (linked_sensors.size() != coefficients.size()) {
@@ -533,8 +538,8 @@ std::map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path) 
 
         std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
         if (is_virtual_sensor) {
-            virtual_sensor_info.reset(
-                    new VirtualSensorInfo{linked_sensors, coefficients, trigger_sensor, formula});
+            virtual_sensor_info.reset(new VirtualSensorInfo{linked_sensors, coefficients, offset,
+                                                            trigger_sensor, formula});
         }
 
         std::unique_ptr<ThrottlingInfo> throttling_info(new ThrottlingInfo{
