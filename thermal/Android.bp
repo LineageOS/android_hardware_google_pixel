@@ -26,6 +26,7 @@ cc_binary {
     "utils/config_parser.cpp",
     "utils/thermal_files.cpp",
     "utils/thermal_watcher.cpp",
+    "utils/power_files.cpp",
   ],
   shared_libs: [
     "libbase",
