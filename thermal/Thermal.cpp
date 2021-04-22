@@ -398,23 +398,8 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 dump_buf << "Throttling Info:" << std::endl;
                 const auto &map = thermal_helper_.GetSensorInfoMap();
                 for (const auto &name_info_pair : map) {
-                    bool pid_enabled = false;
-                    bool hard_limit_enabled = false;
-                    dump_buf << " Name: " << name_info_pair.first << "[";
-                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                        if (name_info_pair.second.throttling_info->throttle_type[i] == PID) {
-                            pid_enabled = true;
-                            dump_buf << "PID ";
-                        } else if (name_info_pair.second.throttling_info->throttle_type[i] ==
-                                   LIMIT) {
-                            hard_limit_enabled = true;
-                            dump_buf << "LIMIT ";
-                        } else {
-                            dump_buf << "None ";
-                        }
-                    }
-                    dump_buf << "]" << std::endl;
-                    if (pid_enabled) {
+                    if (name_info_pair.second.throttling_info->binded_cdev_info_map.size()) {
+                        dump_buf << " Name: " << name_info_pair.first << std::endl;
                         dump_buf << "  PID Info:" << std::endl;
                         dump_buf << "   K_po: [";
                         for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
@@ -463,16 +448,15 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                             dump_buf << name_info_pair.second.throttling_info->i_cutoff[i] << " ";
                         }
                         dump_buf << "]" << std::endl;
-                    }
-                    if (hard_limit_enabled) {
                         dump_buf << "  Hard Limit Info:" << std::endl;
-                        if (name_info_pair.second.throttling_info->limit_info.size()) {
-                            for (const auto &limit_info_pair :
-                                 name_info_pair.second.throttling_info->limit_info) {
-                                dump_buf << "   Cdev limit " << limit_info_pair.first << ": [";
+                        if (name_info_pair.second.throttling_info->binded_cdev_info_map.size()) {
+                            for (const auto &binded_cdev_info_pair :
+                                 name_info_pair.second.throttling_info->binded_cdev_info_map) {
+                                dump_buf << "   Cdev limit " << binded_cdev_info_pair.first
+                                         << ": [";
 
                                 for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                                    dump_buf << limit_info_pair.second[i] << " ";
+                                    dump_buf << binded_cdev_info_pair.second.limit_info[i] << " ";
                                 }
                                 dump_buf << "]" << std::endl;
                             }
