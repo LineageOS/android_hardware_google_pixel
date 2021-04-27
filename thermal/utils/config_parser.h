@@ -109,6 +109,7 @@ struct CdevInfo {
     std::string power_rail;
     std::chrono::milliseconds power_sample_rate;
     int power_sample_count;
+    unsigned int max_state;
 };
 
 std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
