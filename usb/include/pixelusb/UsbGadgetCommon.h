@@ -19,6 +19,7 @@
 
 #include <android-base/file.h>
 #include <android-base/properties.h>
+#include <android-base/strings.h>
 #include <android-base/unique_fd.h>
 
 #include <android/hardware/usb/gadget/1.0/IUsbGadget.h>
@@ -74,9 +75,13 @@ constexpr char kVendorRndisConfig[] = "vendor.usb.rndis.config";
 #define FUNCTION_NAME "function"
 #define FUNCTION_PATH CONFIG_PATH FUNCTION_NAME
 #define RNDIS_PATH FUNCTIONS_PATH "gsi.rndis"
+#define TYPEC_GADGET_MODE_DISABLE "0"
+#define TYPEC_GADGET_MODE_ENABLE "1"
 
 using ::android::base::GetProperty;
+using ::android::base::ReadFileToString;
 using ::android::base::SetProperty;
+using ::android::base::Trim;
 using ::android::base::unique_fd;
 using ::android::base::WriteStringToFile;
 using ::android::hardware::usb::gadget::V1_0::GadgetFunction;
@@ -126,11 +131,13 @@ class MonitorFfs {
   void *mPayload;
   // Name of the USB gadget. Used for pullup.
   const char *const mGadgetName;
+  // Extcon USB state from Type-C notification.
+  const char *const mExtconUsbState;
   // Monitor State
   bool mMonitorRunning;
 
  public:
-  MonitorFfs(const char *const gadget);
+  MonitorFfs(const char *const gadget, const char *const extconUsbState);
   // Inits all the UniqueFds.
   void reset();
   // Starts monitoring endpoints and pullup the gadget when
