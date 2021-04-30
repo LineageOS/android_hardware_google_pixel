@@ -16,6 +16,7 @@
 #pragma once
 
 #include <aidl/android/hardware/vibrator/BnVibrator.h>
+#include <tinyalsa/asoundlib.h>
 
 #include <array>
 #include <fstream>
@@ -193,6 +194,9 @@ class Vibrator : public BnVibrator {
     bool isUnderExternalControl();
     void waitForComplete(std::shared_ptr<IVibratorCallback> &&callback);
     uint32_t intensityToVolLevel(float intensity, uint32_t effectIndex);
+    bool findHapticAlsaDevice(int *card, int *device);
+    bool hasHapticAlsaDevice();
+    bool enableHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card, int device);
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
@@ -203,6 +207,11 @@ class Vibrator : public BnVibrator {
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
     int32_t compositionSizeMax;
+    struct pcm *mHapticPcm;
+    int mCard;
+    int mDevice;
+    bool mHasHapticAlsaDevice;
+    bool mIsUnderExternalControl;
 };
 
 }  // namespace vibrator

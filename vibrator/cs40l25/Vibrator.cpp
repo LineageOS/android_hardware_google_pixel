@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-
 #include "Vibrator.h"
 
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
 #include <log/log.h>
+#include <stdio.h>
 #include <utils/Trace.h>
 
 #include <cinttypes>
@@ -31,6 +31,9 @@
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
 #endif
+
+#define PROC_SND_PCM "/proc/asound/pcm"
+#define HAPTIC_PCM_DEVICE_SYMBOL "haptic nohost playback"
 
 namespace aidl {
 namespace android {
@@ -96,6 +99,14 @@ static constexpr float PWLE_LEVEL_MAX = 1.0;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
+
+static struct pcm_config haptic_nohost_config = {
+    .channels = 1,
+    .rate = 48000,
+    .period_size = 80,
+    .period_count = 2,
+    .format = PCM_FORMAT_S16_LE,
+};
 
 static uint8_t amplitudeToScale(float amplitude, float maximum) {
     return std::round((-20 * std::log10(amplitude / static_cast<float>(maximum))) /
@@ -188,7 +199,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     if (mHwApi->hasEffectScale()) {
         ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
     }
-    if (mHwApi->hasAspEnable()) {
+    if (mHwApi->hasAspEnable() || hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
     }
     *_aidl_return = ret;
@@ -250,10 +261,20 @@ ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
     ATRACE_NAME("Vibrator::setExternalControl");
     setGlobalAmplitude(enabled);
 
-    if (!mHwApi->setAspEnable(enabled)) {
-        ALOGE("Failed to set external control (%d): %s", errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    if (mHasHapticAlsaDevice) {
+        if (!enableHapticPcmAmp(&mHapticPcm, enabled, mCard, mDevice)) {
+            ALOGE("Failed to %s haptic pcm device: %d", (enabled ? "enable" : "disable"), mDevice);
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        }
     }
+    if (mHwApi->hasAspEnable()) {
+        if (!mHwApi->setAspEnable(enabled)) {
+            ALOGE("Failed to set external control (%d): %s", errno, strerror(errno));
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        }
+    }
+
+    mIsUnderExternalControl = enabled;
     return ndk::ScopedAStatus::ok();
 }
 
@@ -638,9 +659,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 }
 
 bool Vibrator::isUnderExternalControl() {
-    bool isAspEnabled;
-    mHwApi->getAspEnable(&isAspEnabled);
-    return isAspEnabled;
+    return mIsUnderExternalControl;
 }
 
 binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
@@ -929,6 +948,79 @@ uint32_t Vibrator::intensityToVolLevel(float intensity, uint32_t effectIndex) {
     }
 
     return volLevel;
+}
+
+bool Vibrator::findHapticAlsaDevice(int *card, int *device) {
+    std::string line;
+    std::ifstream myfile(PROC_SND_PCM);
+    if (myfile.is_open()) {
+        while (getline(myfile, line)) {
+            if (line.find(HAPTIC_PCM_DEVICE_SYMBOL) != std::string::npos) {
+                std::stringstream ss(line);
+                std::string currentToken;
+                std::getline(ss, currentToken, ':');
+                sscanf(currentToken.c_str(), "%d-%d", card, device);
+                return true;
+            }
+        }
+        myfile.close();
+    } else {
+        ALOGE("Failed to read file: %s", PROC_SND_PCM);
+    }
+    return false;
+}
+
+bool Vibrator::hasHapticAlsaDevice() {
+    // We need to call findHapticAlsaDevice once only. Calling in the
+    // constructor is too early in the boot process and the pcm file contents
+    // are empty. Hence we make the call here once only right before we need to.
+    static bool configHapticAlsaDeviceDone = false;
+    if (!configHapticAlsaDeviceDone) {
+        if (findHapticAlsaDevice(&mCard, &mDevice)) {
+            mHasHapticAlsaDevice = true;
+            configHapticAlsaDeviceDone = true;
+        } else {
+            ALOGE("Haptic ALSA device not supported");
+        }
+    }
+    return mHasHapticAlsaDevice;
+}
+
+bool Vibrator::enableHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card, int device) {
+    int ret = 0;
+
+    if (enable) {
+        *haptic_pcm = pcm_open(card, device, PCM_OUT, &haptic_nohost_config);
+        if (!pcm_is_ready(*haptic_pcm)) {
+            ALOGE("cannot open pcm_out driver: %s", pcm_get_error(*haptic_pcm));
+            goto fail;
+        }
+
+        ret = pcm_prepare(*haptic_pcm);
+        if (ret < 0) {
+            ALOGE("cannot prepare haptic_pcm: %s", pcm_get_error(*haptic_pcm));
+            goto fail;
+        }
+
+        ret = pcm_start(*haptic_pcm);
+        if (ret < 0) {
+            ALOGE("cannot start haptic_pcm: %s", pcm_get_error(*haptic_pcm));
+            goto fail;
+        }
+
+        return true;
+    } else {
+        if (*haptic_pcm) {
+            pcm_close(*haptic_pcm);
+            *haptic_pcm = NULL;
+        }
+        return true;
+    }
+
+fail:
+    pcm_close(*haptic_pcm);
+    *haptic_pcm = NULL;
+    return false;
 }
 
 }  // namespace vibrator
