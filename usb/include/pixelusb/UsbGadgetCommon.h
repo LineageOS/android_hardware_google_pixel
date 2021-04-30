@@ -131,8 +131,6 @@ class MonitorFfs {
   void *mPayload;
   // Name of the USB gadget. Used for pullup.
   const char *const mGadgetName;
-  // Extcon USB state from Type-C notification.
-  const char *const mExtconUsbState;
   // Monitor State
   bool mMonitorRunning;
 
