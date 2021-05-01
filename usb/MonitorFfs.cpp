@@ -26,7 +26,8 @@ namespace usb {
 
 static volatile bool gadgetPullup;
 
-MonitorFfs::MonitorFfs(const char *const gadget, const char *const extconUsbState)
+MonitorFfs::MonitorFfs(const char *const gadget,
+                       __attribute__((unused)) const char *const extconUsbState)
     : mWatchFd(),
       mEndpointList(),
       mLock(),
@@ -37,7 +38,6 @@ MonitorFfs::MonitorFfs(const char *const gadget, const char *const extconUsbStat
       mCallback(NULL),
       mPayload(NULL),
       mGadgetName(gadget),
-      mExtconUsbState(extconUsbState),
       mMonitorRunning(false) {
     unique_fd eventFd(eventfd(0, 0));
     if (eventFd == -1) {
@@ -119,7 +119,6 @@ void *MonitorFfs::startMonitorFd(void *param) {
     bool writeUdc = true, stopMonitor = false;
     struct epoll_event events[kEpollEvents];
     steady_clock::time_point disconnect;
-    std::string usb_state;
 
     bool descriptorWritten = true;
     for (int i = 0; i < static_cast<int>(monitorFfs->mEndpointList.size()); i++) {
@@ -129,17 +128,7 @@ void *MonitorFfs::startMonitorFd(void *param) {
         }
     }
 
-    if (ReadFileToString(monitorFfs->mExtconUsbState, &usb_state))
-        usb_state = Trim(usb_state);
-    else
-        usb_state = TYPEC_GADGET_MODE_ENABLE;
-
-    // notify here if the endpoints are already present.
-    if (usb_state == TYPEC_GADGET_MODE_DISABLE) {
-        gadgetPullup = false;
-        writeUdc = false;
-        ALOGI("pending GADGET pulled up due to USB disconnected");
-    } else if (descriptorWritten) {
+    if (descriptorWritten) {
         usleep(kPullUpDelay);
         if (!!WriteStringToFile(monitorFfs->mGadgetName, PULLUP_PATH)) {
             lock_guard<mutex> lock(monitorFfs->mLock);
@@ -183,17 +172,7 @@ void *MonitorFfs::startMonitorFd(void *param) {
                         }
                     }
 
-                    if (ReadFileToString(monitorFfs->mExtconUsbState, &usb_state))
-                        usb_state = Trim(usb_state);
-                    else
-                        usb_state = TYPEC_GADGET_MODE_ENABLE;
-
-                    if (usb_state == TYPEC_GADGET_MODE_DISABLE) {
-                        if (kDebug)
-                            ALOGI("pending GADGET pulled up due to USB disconnected");
-                        gadgetPullup = false;
-                        writeUdc = false;
-                    } else if (!descriptorPresent && !writeUdc) {
+                    if (!descriptorPresent && !writeUdc) {
                         if (kDebug)
                             ALOGI("endpoints not up");
                         writeUdc = true;
