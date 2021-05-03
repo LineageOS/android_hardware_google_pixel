@@ -8,6 +8,10 @@ PRODUCT_PACKAGES += \
     android.hardware.rebootescrow-service.citadel \
     wait_for_strongbox
 
+# AIDL
+PRODUCT_PACKAGES += \
+    android.hardware.security.keymint-service.citadel
+
 # init scripts (won't be in AOSP)
 -include vendor/google_nos/init/dauntless/init.mk
 
