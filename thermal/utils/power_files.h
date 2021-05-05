@@ -17,6 +17,7 @@
 #pragma once
 
 #include <queue>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -39,6 +40,7 @@ struct ReleaseStatus {
     // A queue to record ODPM info pair (timestamp, mWs)
     std::queue<PowerSample> power_history;
     unsigned int release_step;
+    unsigned int max_release_step;
 };
 
 using CdevReleaseStatus = std::unordered_map<std::string, ReleaseStatus>;
@@ -55,7 +57,8 @@ class PowerFiles {
     // Register a map for the throttling release decision of target power rail
     // Return false if the power_rail is not supported.
     bool registerPowerRailsToWatch(std::string_view sensor_name, std::string_view power_rail,
-                                   const BindedCdevInfo &binded_cdev_info);
+                                   const BindedCdevInfo &binded_cdev_info,
+                                   const CdevInfo &cdev_info);
 
     // Find the energy source path, return false if no energy source found.
     bool findEnergySourceToWatch(void);
@@ -79,11 +82,18 @@ class PowerFiles {
     // Clear the data of throttling_release_map_.
     void setPowerDataToDefault(std::string_view sensor_name);
 
+    // Get throttling release status map
+    const std::unordered_map<std::string, CdevReleaseStatus> &GetThrottlingReleaseMap() const {
+        std::shared_lock<std::shared_mutex> _lock(throttling_release_map_mutex_);
+        return throttling_release_map_;
+    }
+
   private:
     // The map to record the energy info for each power rail.
     std::unordered_map<std::string, PowerSample> energy_info_map_;
     // The map to record the throttling release status for each thermal sensor.
     std::unordered_map<std::string, CdevReleaseStatus> throttling_release_map_;
+    mutable std::shared_mutex throttling_release_map_mutex_;
     // The set to store the energy source paths
     std::unordered_set<std::string> energy_path_set_;
 };
