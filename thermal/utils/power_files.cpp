@@ -36,6 +36,7 @@ using android::base::ReadFileToString;
 using android::base::StringPrintf;
 
 void PowerFiles::setPowerDataToDefault(std::string_view sensor_name) {
+    std::unique_lock<std::shared_mutex> _lock(throttling_release_map_mutex_);
     if (!throttling_release_map_.count(sensor_name.data())) {
         return;
     }
@@ -55,6 +56,7 @@ void PowerFiles::setPowerDataToDefault(std::string_view sensor_name) {
 
 unsigned int PowerFiles::getReleaseStep(std::string_view sensor_name, std::string_view power_rail) {
     unsigned int release_step = 0;
+    std::shared_lock<std::shared_mutex> _lock(throttling_release_map_mutex_);
 
     if (throttling_release_map_.count(sensor_name.data()) &&
         throttling_release_map_[sensor_name.data()].count(power_rail.data())) {
@@ -66,7 +68,8 @@ unsigned int PowerFiles::getReleaseStep(std::string_view sensor_name, std::strin
 
 bool PowerFiles::registerPowerRailsToWatch(std::string_view sensor_name,
                                            std::string_view power_rail,
-                                           const BindedCdevInfo &binded_cdev_info) {
+                                           const BindedCdevInfo &binded_cdev_info,
+                                           const CdevInfo &cdev_info) {
     std::queue<PowerSample> power_history;
     PowerSample power_sample = {
             .energy_counter = 0,
@@ -78,16 +81,14 @@ bool PowerFiles::registerPowerRailsToWatch(std::string_view sensor_name,
         return false;
     }
 
-    for (int i = 0; i < binded_cdev_info.power_sample_count; i++) {
-        if (energy_info_map_.count(power_rail.data())) {
+    if (energy_info_map_.count(power_rail.data())) {
+        for (int i = 0; i < binded_cdev_info.power_sample_count; i++) {
             power_history.emplace(power_sample);
         }
-    }
-
-    if (energy_info_map_.count(power_rail.data())) {
         throttling_release_map_[sensor_name.data()][power_rail.data()] = {
                 .power_history = power_history,
                 .release_step = 0,
+                .max_release_step = cdev_info.max_state,
                 .time_remaining = binded_cdev_info.power_sample_delay,
         };
     } else {
@@ -199,6 +200,7 @@ void PowerFiles::throttlingReleaseUpdate(std::string_view sensor_name,
                                          const std::chrono::milliseconds time_elapsed_ms,
                                          const BindedCdevInfo &binded_cdev_info,
                                          std::string_view power_rail) {
+    std::unique_lock<std::shared_mutex> _lock(throttling_release_map_mutex_);
     if (!throttling_release_map_.count(sensor_name.data()) ||
         !throttling_release_map_[sensor_name.data()].count(power_rail.data())) {
         return;
@@ -254,16 +256,16 @@ void PowerFiles::throttlingReleaseUpdate(std::string_view sensor_name,
                 is_over_budget = false;
             }
         }
-        LOG(VERBOSE) << "Power rail " << power_rail << ": power threshold = "
-                     << binded_cdev_info.power_thresholds[static_cast<int>(severity)]
-                     << ", avg power = " << avg_power << ", duration = " << duration
-                     << ", deltaEnergy = " << deltaEnergy;
+        LOG(INFO) << "Power rail " << power_rail << ": power threshold = "
+                  << binded_cdev_info.power_thresholds[static_cast<int>(severity)]
+                  << ", avg power = " << avg_power << ", duration = " << duration
+                  << ", deltaEnergy = " << deltaEnergy;
     }
 
     switch (binded_cdev_info.release_logic) {
         case ReleaseLogic::DECREASE:
             if (!is_over_budget) {
-                if (cdev_release_status.release_step < std::numeric_limits<int>::max()) {
+                if (cdev_release_status.release_step < cdev_release_status.max_release_step) {
                     cdev_release_status.release_step++;
                 }
             } else {

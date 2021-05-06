@@ -42,7 +42,10 @@ std::shared_ptr<IStats> getStatsService() {
             return nullptr;
         }
     }
-    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
+    /* TODO stayfan@: b/187221893 Review implementing separate thread to log atoms
+     * to prevent data loss at device boot stage, while IStats might not be ready
+     */
+    return IStats::fromBinder(ndk::SpAIBinder(AServiceManager_getService(instance.c_str())));
 }
 
 void reportBatteryHealthSnapshot(const std::shared_ptr<IStats> &stats_client,

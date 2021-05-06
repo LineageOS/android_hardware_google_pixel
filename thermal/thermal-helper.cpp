@@ -50,6 +50,7 @@ constexpr std::string_view kSensorTripPointTempZeroFile("trip_point_0_temp");
 constexpr std::string_view kSensorTripPointHystZeroFile("trip_point_0_hyst");
 constexpr std::string_view kUserSpaceSuffix("user_space");
 constexpr std::string_view kCoolingDeviceCurStateSuffix("cur_state");
+constexpr std::string_view kCoolingDeviceMaxStateSuffix("max_state");
 constexpr std::string_view kConfigProperty("vendor.thermal.config");
 constexpr std::string_view kConfigDefaultFileName("thermal_info_config.json");
 constexpr std::string_view kThermalGenlProperty("persist.vendor.enable.thermal.genl");
@@ -273,6 +274,14 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
       sensor_info_map_(ParseSensorInfo(
               "/vendor/etc/" +
               android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data()))) {
+    auto tz_map = parseThermalPathMap(kSensorPrefix.data());
+    auto cdev_map = parseThermalPathMap(kCoolingDevicePrefix.data());
+
+    is_initialized_ = initializeSensorMap(tz_map) && initializeCoolingDevices(cdev_map);
+    if (!is_initialized_) {
+        LOG(FATAL) << "ThermalHAL could not be initialized properly.";
+    }
+
     for (auto const &name_status_pair : sensor_info_map_) {
         sensor_status_map_[name_status_pair.first] = {
                 .severity = ThrottlingSeverity::NONE,
@@ -306,8 +315,9 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                 power_files_.findEnergySourceToWatch()) {
                 const auto power_rail =
                         cooling_device_info_map_.at(binded_cdev_pair.first).power_rail;
-                if (!power_files_.registerPowerRailsToWatch(name_status_pair.first, power_rail,
-                                                            binded_cdev_pair.second)) {
+                if (!power_files_.registerPowerRailsToWatch(
+                            name_status_pair.first, power_rail, binded_cdev_pair.second,
+                            cooling_device_info_map_.at(binded_cdev_pair.first))) {
                     invalid_binded_cdev = true;
                     LOG(ERROR) << "Could not find " << binded_cdev_pair.first
                                << "'s power energy source: " << power_rail;
@@ -332,14 +342,6 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                            << name_status_pair.second.virtual_sensor_info->trigger_sensor;
             }
         }
-    }
-
-    auto tz_map = parseThermalPathMap(kSensorPrefix.data());
-    auto cdev_map = parseThermalPathMap(kCoolingDevicePrefix.data());
-
-    is_initialized_ = initializeSensorMap(tz_map) && initializeCoolingDevices(cdev_map);
-    if (!is_initialized_) {
-        LOG(FATAL) << "ThermalHAL could not be initialized properly.";
     }
 
     const bool thermal_throttling_disabled =
@@ -654,19 +656,24 @@ void ThermalHelper::computeCoolingDevicesRequest(
         std::vector<std::string> *cooling_devices_to_update) {
     unsigned int release_step = 0;
 
+    std::unique_lock<std::shared_mutex> _lock(cdev_status_map_mutex_);
     for (auto &cdev_request_pair : cdev_status_map_) {
-        unsigned int pid_max = 0;
-        unsigned int limit_max = 0;
+        unsigned int pid_request = 0;
+        unsigned int hard_limit_request = 0;
+        const auto max_state = cooling_device_info_map_.at(cdev_request_pair.first).max_state;
         release_step = 0;
 
         if (sensor_status.pid_request_map.count(cdev_request_pair.first)) {
-            pid_max = sensor_status.pid_request_map.at(cdev_request_pair.first);
-        }
-        if (sensor_status.hard_limit_request_map.count(cdev_request_pair.first)) {
-            limit_max = sensor_status.hard_limit_request_map.at(cdev_request_pair.first);
+            pid_request =
+                    std::min(sensor_status.pid_request_map.at(cdev_request_pair.first), max_state);
         }
 
-        auto request_state = fmax(pid_max, limit_max);
+        if (sensor_status.hard_limit_request_map.count(cdev_request_pair.first)) {
+            hard_limit_request = std::min(
+                    sensor_status.hard_limit_request_map.at(cdev_request_pair.first), max_state);
+        }
+
+        auto request_state = std::max(pid_request, hard_limit_request);
 
         release_step = power_files_.getReleaseStep(
                 sensor_name, cooling_device_info_map_.at(cdev_request_pair.first).power_rail);
@@ -770,7 +777,7 @@ bool ThermalHelper::initializeSensorMap(
 
 bool ThermalHelper::initializeCoolingDevices(
         const std::unordered_map<std::string, std::string> &path_map) {
-    for (const auto &cooling_device_info_pair : cooling_device_info_map_) {
+    for (auto &cooling_device_info_pair : cooling_device_info_map_) {
         std::string cooling_device_name = cooling_device_info_pair.first;
         if (!path_map.count(cooling_device_name)) {
             LOG(ERROR) << "Could not find " << cooling_device_name << " in sysfs";
@@ -789,6 +796,20 @@ bool ThermalHelper::initializeCoolingDevices(
             LOG(ERROR) << "Could not add " << cooling_device_name
                        << " read path to cooling device map";
             continue;
+        }
+
+        // Get max cooling device request state
+        std::string max_state;
+        std::string max_state_path = android::base::StringPrintf(
+                "%s/%s", path.data(), kCoolingDeviceMaxStateSuffix.data());
+        if (!android::base::ReadFileToString(max_state_path, &max_state)) {
+            LOG(ERROR) << cooling_device_info_pair.first
+                       << " could not open max state file:" << max_state_path;
+            cooling_device_info_pair.second.max_state = std::numeric_limits<unsigned int>::max();
+        } else {
+            cooling_device_info_pair.second.max_state = std::stoi(android::base::Trim(max_state));
+            LOG(INFO) << "Cooling device " << cooling_device_info_pair.first
+                      << " max state: " << cooling_device_info_pair.second.max_state;
         }
 
         // Add cooling device path for thermalHAL to request state
@@ -1207,9 +1228,6 @@ void ThermalHelper::updateSupportedPowerHints() {
         }
         ThrottlingSeverity current_severity = ThrottlingSeverity::NONE;
         for (const auto &severity : hidl_enum_range<ThrottlingSeverity>()) {
-            LOG(ERROR) << "sensor: " << name_status_pair.first
-                       << " current_severity :" << toString(current_severity) << " severity "
-                       << toString(severity);
             if (severity == ThrottlingSeverity::NONE) {
                 supported_powerhint_map_[name_status_pair.first][ThrottlingSeverity::NONE] =
                         ThrottlingSeverity::NONE;
