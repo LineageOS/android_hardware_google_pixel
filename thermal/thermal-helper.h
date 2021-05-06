@@ -140,9 +140,25 @@ class ThermalHelper {
     const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const {
         return sensor_info_map_;
     }
-
+    // Get CdevInfo Map
+    const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const {
+        return cooling_device_info_map_;
+    }
+    // Get SensorStatus Map
+    const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const {
+        std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
+        return sensor_status_map_;
+    }
+    // Get CdevStatus Map
+    const std::unordered_map<std::string, CdevRequestStatus> &GetCdevStatusMap() const {
+        std::shared_lock<std::shared_mutex> _lock(cdev_status_map_mutex_);
+        return cdev_status_map_;
+    }
+    // Get throttling release Map
+    const std::unordered_map<std::string, CdevReleaseStatus> &GetThrottlingReleaseMap() const {
+        return power_files_.GetThrottlingReleaseMap();
+    }
     void sendPowerExtHint(const Temperature_2_0 &t);
-
     bool isAidlPowerHalExist() { return power_hal_service_.isAidlPowerHalExist(); }
     bool isPowerHalConnected() { return power_hal_service_.isPowerHalConnected(); }
     bool isPowerHalExtConnected() { return power_hal_service_.isPowerHalExtConnected(); }
@@ -192,6 +208,7 @@ class ThermalHelper {
 
     mutable std::shared_mutex sensor_status_map_mutex_;
     std::unordered_map<std::string, SensorStatus> sensor_status_map_;
+    mutable std::shared_mutex cdev_status_map_mutex_;
     std::unordered_map<std::string, CdevRequestStatus> cdev_status_map_;
 };
 

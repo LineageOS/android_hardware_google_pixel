@@ -15,6 +15,7 @@
  */
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <cmath>
 #include <unordered_set>
@@ -29,6 +30,8 @@ namespace hardware {
 namespace thermal {
 namespace V2_0 {
 namespace implementation {
+
+constexpr std::string_view kPowerLinkDisabledProperty("vendor.disable.thermal.powerlink");
 
 using ::android::hardware::hidl_enum_range;
 using ::android::hardware::thermal::V2_0::toString;
@@ -489,45 +492,50 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
             bool is_power_data_invalid = false;
             bool power_reversly_check = false;
             int power_sample_count = 0;
-
             std::chrono::milliseconds power_sample_delay;
-            if (!values[j]["PowerSampleDelay"]) {
-                power_sample_delay = std::chrono::milliseconds::max();
-            } else {
-                power_sample_delay =
-                        std::chrono::milliseconds(getIntFromValue(values[j]["PowerSampleDelay"]));
-            }
-            LOG(INFO) << "Power sample delay: " << power_sample_delay.count();
 
-            if (values[j]["PowerReverslyCheck"].asBool()) {
-                power_reversly_check = true;
-            }
-            LOG(INFO) << "Power reversly check: " << power_reversly_check;
-
-            power_sample_count = values[j]["PowerSampleCount"].asInt();
-            LOG(INFO) << "Power sample Count: " << power_sample_count;
-
-            sub_values = values[j]["PowerThreshold"];
-            if (sub_values.size()) {
-                LOG(INFO) << "Sensor[" << name << "]: Parse " << cdev_name << "'s Power threshold";
-                if (!getFloatFromJsonValues(sub_values, &power_thresholds, false, false)) {
-                    LOG(ERROR) << "Sensor[" << name << "]: failed to parse power thresholds";
-                    is_power_data_invalid = true;
-                }
-
-                if (values[j]["ReleaseLogic"].asString() == "DECREASE") {
-                    release_logic = ReleaseLogic::DECREASE;
-                    LOG(INFO) << "Release logic: DECREASE";
-                } else if (values[j]["ReleaseLogic"].asString() == "BYPASS") {
-                    release_logic = ReleaseLogic::BYPASS;
-                    LOG(INFO) << "Release logic: BYPASS";
+            const bool power_link_disabled =
+                    android::base::GetBoolProperty(kPowerLinkDisabledProperty.data(), false);
+            if (!power_link_disabled) {
+                if (!values[j]["PowerSampleDelay"]) {
+                    power_sample_delay = std::chrono::milliseconds::max();
                 } else {
-                    is_power_data_invalid = true;
+                    power_sample_delay = std::chrono::milliseconds(
+                            getIntFromValue(values[j]["PowerSampleDelay"]));
                 }
+                LOG(INFO) << "Power sample delay: " << power_sample_delay.count();
 
-                if (is_power_data_invalid) {
-                    sensors_parsed.clear();
-                    return sensors_parsed;
+                if (values[j]["PowerReverslyCheck"].asBool()) {
+                    power_reversly_check = true;
+                }
+                LOG(INFO) << "Power reversly check: " << power_reversly_check;
+
+                power_sample_count = values[j]["PowerSampleCount"].asInt();
+                LOG(INFO) << "Power sample Count: " << power_sample_count;
+
+                sub_values = values[j]["PowerThreshold"];
+                if (sub_values.size()) {
+                    LOG(INFO) << "Sensor[" << name << "]: Parse " << cdev_name
+                              << "'s Power threshold";
+                    if (!getFloatFromJsonValues(sub_values, &power_thresholds, false, false)) {
+                        LOG(ERROR) << "Sensor[" << name << "]: failed to parse power thresholds";
+                        is_power_data_invalid = true;
+                    }
+
+                    if (values[j]["ReleaseLogic"].asString() == "DECREASE") {
+                        release_logic = ReleaseLogic::DECREASE;
+                        LOG(INFO) << "Release logic: DECREASE";
+                    } else if (values[j]["ReleaseLogic"].asString() == "BYPASS") {
+                        release_logic = ReleaseLogic::BYPASS;
+                        LOG(INFO) << "Release logic: BYPASS";
+                    } else {
+                        is_power_data_invalid = true;
+                    }
+
+                    if (is_power_data_invalid) {
+                        sensors_parsed.clear();
+                        return sensors_parsed;
+                    }
                 }
             }
 
