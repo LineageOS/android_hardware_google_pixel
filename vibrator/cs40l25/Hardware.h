@@ -74,6 +74,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool pollVibeState(bool value) override { return poll(value, &mVibeState); }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
     bool getAvailablePwleSegments(uint32_t *value) override { return get(value, &mAvailablePwleSegments); }
+    bool hasPwle() override { return has(mPwle); }
     bool setPwle(std::string value) override { return set(value, &mPwle); }
     void debug(int fd) override { HwApiBase::debug(fd); }
 
