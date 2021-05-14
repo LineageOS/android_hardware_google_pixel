@@ -159,6 +159,7 @@ INSTANTIATE_TEST_CASE_P(
         ValuesIn({
                 HasTest::MakeParam("device/cp_dig_scale", &Vibrator::HwApi::hasEffectScale),
                 HasTest::MakeParam("device/asp_enable", &Vibrator::HwApi::hasAspEnable),
+                HasTest::MakeParam("device/pwle", &Vibrator::HwApi::hasPwle),
         }),
         HasTest::PrintParam);
 
