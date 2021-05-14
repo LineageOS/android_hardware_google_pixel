@@ -183,13 +183,15 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     ATRACE_NAME("Vibrator::getCapabilities");
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
                   IVibrator::CAP_COMPOSE_EFFECTS | IVibrator::CAP_ALWAYS_ON_CONTROL |
-                  IVibrator::CAP_GET_RESONANT_FREQUENCY | IVibrator::CAP_GET_Q_FACTOR |
-                  IVibrator::CAP_FREQUENCY_CONTROL | IVibrator::CAP_COMPOSE_PWLE_EFFECTS;
+                  IVibrator::CAP_GET_RESONANT_FREQUENCY | IVibrator::CAP_GET_Q_FACTOR;
     if (mHwApi->hasEffectScale()) {
         ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
     }
     if (mHwApi->hasAspEnable()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
+    }
+    if (mHwApi->hasPwle()) {
+        ret |= IVibrator::CAP_FREQUENCY_CONTROL | IVibrator::CAP_COMPOSE_PWLE_EFFECTS;
     }
     *_aidl_return = ret;
     return ndk::ScopedAStatus::ok();
@@ -451,45 +453,81 @@ ndk::ScopedAStatus Vibrator::getQFactor(float *qFactor) {
 }
 
 ndk::ScopedAStatus Vibrator::getFrequencyResolution(float *freqResolutionHz) {
-    *freqResolutionHz = PWLE_FREQUENCY_RESOLUTION_HZ;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        *freqResolutionHz = PWLE_FREQUENCY_RESOLUTION_HZ;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
-    *freqMinimumHz = PWLE_FREQUENCY_MIN_HZ;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        *freqMinimumHz = PWLE_FREQUENCY_MIN_HZ;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_return) {
     // TODO(b/170919640): complete implementation
-    int mapSize =
-        1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
-    std::vector<float> bandwidthAmplitudeMap(mapSize, 1.0);
-    *_aidl_return = bandwidthAmplitudeMap;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        int mapSize =
+            1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
+        std::vector<float> bandwidthAmplitudeMap(mapSize, 1.0);
+        *_aidl_return = bandwidthAmplitudeMap;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getPwlePrimitiveDurationMax(int32_t *durationMs) {
-    *durationMs = COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
+        *durationMs = COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getPwleCompositionSizeMax(int32_t *maxSize) {
-    uint32_t segments;
-    if (!mHwApi->getAvailablePwleSegments(&segments)) {
-        ALOGE("Failed to get availablePwleSegments (%d): %s", errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
+        uint32_t segments;
+        if (!mHwApi->getAvailablePwleSegments(&segments)) {
+            ALOGE("Failed to get availablePwleSegments (%d): %s", errno, strerror(errno));
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        }
+        *maxSize = segments;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
-    *maxSize = segments;
-    return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported) {
-    *supported = {
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
+        *supported = {
             Braking::NONE,
             Braking::CLAB,
-    };
-    return ndk::ScopedAStatus::ok();
+        };
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::setPwle(const std::string &pwleQueue) {
