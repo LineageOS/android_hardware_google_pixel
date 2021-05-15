@@ -95,6 +95,8 @@ class Vibrator : public BnVibrator {
         virtual bool setClabEnable(bool value) = 0;
         // Reports the number of available PWLE segments.
         virtual bool getAvailablePwleSegments(uint32_t *value) = 0;
+        // Reports whether piecewise-linear envelope for waveforms is supported.
+        virtual bool hasPwle() = 0;
         // Specifies piecewise-linear specifications to generate complex
         // waveforms.
         virtual bool setPwle(std::string value) = 0;
