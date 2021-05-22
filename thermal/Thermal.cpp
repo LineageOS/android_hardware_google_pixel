@@ -285,6 +285,9 @@ void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
                 case FormulaOption::COUNT_THRESHOLD:
                     *dump_buf << "COUNT_THRESHOLD";
                     break;
+                case FormulaOption::WEIGHTED_AVG:
+                    *dump_buf << "WEIGHTED_AVG";
+                    break;
                 case FormulaOption::MAXIMUM:
                     *dump_buf << "MAXIMUM";
                     break;
