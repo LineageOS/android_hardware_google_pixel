@@ -54,6 +54,7 @@ class MmMetricsReporter {
         FATPU = 2,
         FAPREV = 3,
         VFRAME = 4,
+        VSTREAM = 5,
     };
 
     static const std::vector<MmMetricsInfo> kMmMetricsPerHourInfo;
