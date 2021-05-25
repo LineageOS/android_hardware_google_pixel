@@ -26,8 +26,7 @@ namespace usb {
 
 static volatile bool gadgetPullup;
 
-MonitorFfs::MonitorFfs(const char *const gadget,
-                       __attribute__((unused)) const char *const extconUsbState)
+MonitorFfs::MonitorFfs(const char *const gadget)
     : mWatchFd(),
       mEndpointList(),
       mLock(),
@@ -128,6 +127,7 @@ void *MonitorFfs::startMonitorFd(void *param) {
         }
     }
 
+    // notify here if the endpoints are already present.
     if (descriptorWritten) {
         usleep(kPullUpDelay);
         if (!!WriteStringToFile(monitorFfs->mGadgetName, PULLUP_PATH)) {
