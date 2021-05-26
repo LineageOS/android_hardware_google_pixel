@@ -71,14 +71,6 @@ void IioEnergyMeterDataProvider::parseEnabledRails() {
     std::string data;
     int32_t id = 0;
     for (const auto &path : mDevicePaths) {
-        // Get sampling rate
-        unsigned long samplingRate;
-        if (!::android::base::ReadFileToString(path.first + kSamplingRateNode, &data) ||
-            (samplingRate = std::stoul(data)) == 0) {
-            LOG(ERROR) << "Error reading sampling rate from " << path.first;
-            continue;
-        }
-
         // Get list of enabled rails
         if (!::android::base::ReadFileToString(path.first + kEnabledRailsNode, &data)) {
             LOG(ERROR) << "Error reading enabled rails from " << path.first;
