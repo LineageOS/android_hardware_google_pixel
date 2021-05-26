@@ -78,23 +78,23 @@ const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetric
 };
 
 const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kCmaStatusInfo = {
-        {"cma_alloc_pages_attempts", CmaStatus::kCmaAllocPagesAttemptsFieldNumber, true},
-        {"cma_alloc_pages_soft_attempts", CmaStatus::kCmaAllocPagesSoftAttemptsFieldNumber, true},
-        {"cma_fail_pages", CmaStatus::kCmaFailPagesFieldNumber, true},
-        {"cma_fail_soft_pages", CmaStatus::kCmaFailSoftPagesFieldNumber, true},
+        {"alloc_pages_attempts", CmaStatus::kCmaAllocPagesAttemptsFieldNumber, true},
+        {"alloc_pages_failfast_attempts", CmaStatus::kCmaAllocPagesSoftAttemptsFieldNumber, true},
+        {"fail_pages", CmaStatus::kCmaFailPagesFieldNumber, true},
+        {"fail_failfast_pages", CmaStatus::kCmaFailSoftPagesFieldNumber, true},
         {"migrated_pages", CmaStatus::kMigratedPagesFieldNumber, true},
 };
 
 const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kCmaStatusExtInfo = {
-        {"cma_alloc_latency_low", CmaStatusExt::kCmaAllocLatencyLowFieldNumber, false},
-        {"cma_alloc_latency_mid", CmaStatusExt::kCmaAllocLatencyMidFieldNumber, false},
-        {"cma_alloc_latency_high", CmaStatusExt::kCmaAllocLatencyHighFieldNumber, false},
+        {"latency_low", CmaStatusExt::kCmaAllocLatencyLowFieldNumber, false},
+        {"latency_mid", CmaStatusExt::kCmaAllocLatencyMidFieldNumber, false},
+        {"latency_high", CmaStatusExt::kCmaAllocLatencyHighFieldNumber, false},
 };
 
 const std::map<std::string, MmMetricsReporter::CmaType> MmMetricsReporter::kCmaTypeInfo = {
-        {"farawimg", MmMetricsReporter::FARAWIMG}, {"faimg", MmMetricsReporter::FAIMG},
-        {"fatpu", MmMetricsReporter::FATPU},       {"faprev", MmMetricsReporter::FAPREV},
-        {"vframe", MmMetricsReporter::VFRAME},
+        {"farawimg", MmMetricsReporter::FARAWIMG},  {"faimg", MmMetricsReporter::FAIMG},
+        {"faceauth_tpu", MmMetricsReporter::FATPU}, {"faprev", MmMetricsReporter::FAPREV},
+        {"vframe", MmMetricsReporter::VFRAME},      {"vstream", MmMetricsReporter::VSTREAM},
 };
 
 MmMetricsReporter::MmMetricsReporter()
@@ -466,8 +466,8 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
     uint64_t file_contents;
     std::map<std::string, uint64_t> cma_stat;
     for (auto &entry : metrics_info) {
-        std::string path = android::base::StringPrintf("%s/%s/%s", kPixelStatMm, cma_type.c_str(),
-                                                       entry.name.c_str());
+        std::string path = android::base::StringPrintf("%s/cma/%s/%s", kPixelStatMm,
+                                                       cma_type.c_str(), entry.name.c_str());
         if (!ReadFileToUint(path.c_str(), &file_contents))
             continue;
         cma_stat[entry.name] = file_contents;
