@@ -52,7 +52,6 @@ class IioEnergyMeterDataProvider : public PowerStats::IEnergyMeterDataProvider {
     const std::string kDeviceType = "iio:device";
     const std::string kIioRootDir = "/sys/bus/iio/devices/";
     const std::string kNameNode = "/name";
-    const std::string kSamplingRateNode = "/sampling_rate";
     const std::string kEnabledRailsNode = "/enabled_rails";
     const std::string kEnergyValueNode = "/energy_value";
 };

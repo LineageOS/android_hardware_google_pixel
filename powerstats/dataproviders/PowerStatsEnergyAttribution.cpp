@@ -17,6 +17,7 @@
 #include <dataproviders/PowerStatsEnergyAttribution.h>
 
 #include <android-base/logging.h>
+#include <android-base/parseint.h>
 #include <android-base/strings.h>
 
 #include <utility>
@@ -48,17 +49,28 @@ bool PowerStatsEnergyAttribution::readUidTimeInState(AttributionStats *attrStats
     while (getline(&buf, &size, fp.get()) != -1) {
         std::vector<std::string> uidInfos = Split(Trim(buf), " ");
         uidInfos[0].pop_back();
-        int32_t uid = std::stoi(uidInfos[0]);
+        int32_t uid;
+        if (!::android::base::ParseInt(uidInfos[0], &uid)) {
+            PLOG(ERROR) << __func__ << "Failed to parse uid from " << path;
+            free(buf);
+            return false;
+        }
 
         std::vector<long> uidStats;
         // first element will be uid number so skipping it
         for (auto it = ++uidInfos.begin(); it != uidInfos.end(); ++it) {
-            uidStats.push_back(std::stol(*it));
+            long uidStat;
+            if (!::android::base::ParseInt(*it, &uidStat)) {
+                PLOG(ERROR) << __func__ << "Failed to parse uidStat from " << path;
+                free(buf);
+                return false;
+            }
+            uidStats.push_back(uidStat);
         }
         attrStats->uidTimeInStats.emplace(uid, uidStats);
     }
-    free(buf);
 
+    free(buf);
     return true;
 }
 
@@ -70,6 +82,7 @@ AttributionStats PowerStatsEnergyAttribution::getAttributionStats(
     if (paths.count(UID_TIME_IN_STATE) &&
         !readUidTimeInState(&attrStats, paths.at(UID_TIME_IN_STATE))) {
             PLOG(ERROR) << ":Failed to read uid_time_in_state";
+            return {};
     }
 
     return attrStats;
