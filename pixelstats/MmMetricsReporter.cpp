@@ -455,7 +455,7 @@ void MmMetricsReporter::fillProcessStime(int atom_key, const char *name, int *pi
 }
 
 /**
- * Collect CMA metrics from kPixelStatMm/<cma_type>/<metric>
+ * Collect CMA metrics from kPixelStatMm/cma/<cma_type>/<metric>
  * cma_type: CMA heap name
  * metrics_info: This is a vector of MmMetricsInfo {metric, atom_key, update_diff}.
  *               Currently, we only collect CMA metrics defined in metrics_info
@@ -493,8 +493,8 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
  * all_prev_cma_stat: This is the CMA status collected last time.
  *                    It is a map containing pairs of {type_idx, cma_stat}, and cma_stat is
  *                    a map contains pairs of {metric, cur_value}.
- *                    e.g. {CmaType::FARAWIMG, {"cma_alloc_pages_attempts", 100000}, {...}, ....}
- *                    is collected from kPixelStatMm/farawimg/cma_alloc_pages_attempts
+ *                    e.g. {CmaType::FARAWIMG, {"alloc_pages_attempts", 100000}, {...}, ....}
+ *                    is collected from kPixelStatMm/cma/farawimg/alloc_pages_attempts
  */
 void MmMetricsReporter::reportCmaStatusAtom(
         const std::shared_ptr<IStats> &stats_client, int atom_id, const std::string &cma_type,
@@ -522,10 +522,11 @@ void MmMetricsReporter::reportCmaStatusAtom(
 
 /**
  * Find the CMA heap defined in kCmaTypeInfo, and then call reportCmaStatusAtom()
- * to collect the CMA metrics from kPixelStatMm/<cma_type> and upload them.
+ * to collect the CMA metrics from kPixelStatMm/cma/<cma_type> and upload them.
  */
 void MmMetricsReporter::logCmaStatus(const std::shared_ptr<IStats> &stats_client) {
-    std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(kPixelStatMm), closedir);
+    std::string cma_root = android::base::StringPrintf("%s/cma", kPixelStatMm);
+    std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(cma_root.c_str()), closedir);
     if (!dir)
         return;
 
