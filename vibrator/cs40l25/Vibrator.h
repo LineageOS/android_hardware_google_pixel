@@ -214,6 +214,8 @@ class Vibrator : public BnVibrator {
     int mDevice;
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
+    // TODO(b/189395620)
+    bool mBypassPending = false;
 };
 
 }  // namespace vibrator
