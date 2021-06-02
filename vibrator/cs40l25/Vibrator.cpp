@@ -371,9 +371,16 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
         ALOGE("Previous vibration pending.");
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        // TODO(b/189395620): Need vendor's support about the chip "STATUS" correctness
+        if (!mBypassPending)
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
+    // TODO(b/189395620): Need vendor's support about the chip "STATUS" correctness
+    // Only bypass CLICK effect
+    mBypassPending = (effectIndex == WAVEFORM_CLICK_INDEX) ? true : false;
+
+    ALOGI("Effect index: %d", effectIndex);
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);
     mHwApi->setActivate(1);
@@ -958,7 +965,6 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
 }
 
 uint32_t Vibrator::intensityToVolLevel(float intensity, uint32_t effectIndex) {
-
     uint32_t volLevel;
     auto calc = [](float intst, std::array<uint32_t, 2> v) -> uint32_t {
                 return std::lround(intst * (v[1] - v[0])) + v[0]; };
