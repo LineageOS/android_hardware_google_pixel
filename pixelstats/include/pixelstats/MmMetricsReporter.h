@@ -88,7 +88,7 @@ class MmMetricsReporter {
     const char *const kVmstatPath;
     const char *const kIonTotalPoolsPath;
     const char *const kIonTotalPoolsPathForLegacy;
-    const char *const kMgmDebugFs;
+    const char *const kGpuTotalPages;
     const char *const kPixelStatMm;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
