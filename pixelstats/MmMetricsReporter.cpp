@@ -101,7 +101,7 @@ MmMetricsReporter::MmMetricsReporter()
     : kVmstatPath("/proc/vmstat"),
       kIonTotalPoolsPath("/sys/kernel/dma_heap/total_pools_kb"),
       kIonTotalPoolsPathForLegacy("/sys/kernel/ion/total_pools_kb"),
-      kMgmDebugFs("/sys/kernel/debug/physical-memory-group-manager"),
+      kGpuTotalPages("/sys/kernel/pixel_stat/gpu/mem/total_page_count"),
       kPixelStatMm("/sys/kernel/pixel_stat/mm") {}
 
 bool MmMetricsReporter::ReadFileToUint(const char *const path, uint64_t *val) {
@@ -182,35 +182,13 @@ uint64_t MmMetricsReporter::getIonTotalPools() {
 }
 
 /**
- * Collect GPU memory from kMgmDebugFs and return the total number of 4K page.
- * <kMgmDebugFs>/<group>/size is the 4KB page number
- * <kMgmDebugFs>/<group>/lp_size is the 2MB page number
+ * Collect GPU memory from kGpuTotalPages and return the total number of 4K page.
  */
 uint64_t MmMetricsReporter::getGpuMemory() {
     uint64_t gpu_size = 0;
 
-    std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(kMgmDebugFs), closedir);
-    if (!dir) {
+    if (!ReadFileToUint(kGpuTotalPages, &gpu_size)) {
         return 0;
-    }
-
-    while (struct dirent *dp = readdir(dir.get())) {
-        if (dp->d_type != DT_DIR)
-            continue;
-
-        if (!StartsWith(dp->d_name, "group"))
-            continue;
-
-        uint64_t size;
-        std::string path_4K = android::base::StringPrintf("%s/%s/size", kMgmDebugFs, dp->d_name);
-        std::string path_2M = android::base::StringPrintf("%s/%s/lp_size", kMgmDebugFs, dp->d_name);
-        if (ReadFileToUint(path_4K.c_str(), &size)) {
-            gpu_size += size;
-        }
-
-        if (ReadFileToUint(path_2M.c_str(), &size)) {
-            gpu_size += (size * SZ_2M / SZ_4K);
-        }
     }
     return gpu_size;
 }
@@ -455,7 +433,7 @@ void MmMetricsReporter::fillProcessStime(int atom_key, const char *name, int *pi
 }
 
 /**
- * Collect CMA metrics from kPixelStatMm/<cma_type>/<metric>
+ * Collect CMA metrics from kPixelStatMm/cma/<cma_type>/<metric>
  * cma_type: CMA heap name
  * metrics_info: This is a vector of MmMetricsInfo {metric, atom_key, update_diff}.
  *               Currently, we only collect CMA metrics defined in metrics_info
@@ -493,8 +471,8 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
  * all_prev_cma_stat: This is the CMA status collected last time.
  *                    It is a map containing pairs of {type_idx, cma_stat}, and cma_stat is
  *                    a map contains pairs of {metric, cur_value}.
- *                    e.g. {CmaType::FARAWIMG, {"cma_alloc_pages_attempts", 100000}, {...}, ....}
- *                    is collected from kPixelStatMm/farawimg/cma_alloc_pages_attempts
+ *                    e.g. {CmaType::FARAWIMG, {"alloc_pages_attempts", 100000}, {...}, ....}
+ *                    is collected from kPixelStatMm/cma/farawimg/alloc_pages_attempts
  */
 void MmMetricsReporter::reportCmaStatusAtom(
         const std::shared_ptr<IStats> &stats_client, int atom_id, const std::string &cma_type,
@@ -522,10 +500,11 @@ void MmMetricsReporter::reportCmaStatusAtom(
 
 /**
  * Find the CMA heap defined in kCmaTypeInfo, and then call reportCmaStatusAtom()
- * to collect the CMA metrics from kPixelStatMm/<cma_type> and upload them.
+ * to collect the CMA metrics from kPixelStatMm/cma/<cma_type> and upload them.
  */
 void MmMetricsReporter::logCmaStatus(const std::shared_ptr<IStats> &stats_client) {
-    std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(kPixelStatMm), closedir);
+    std::string cma_root = android::base::StringPrintf("%s/cma", kPixelStatMm);
+    std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(cma_root.c_str()), closedir);
     if (!dir)
         return;
 
