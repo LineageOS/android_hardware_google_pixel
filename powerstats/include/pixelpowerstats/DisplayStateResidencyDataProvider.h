@@ -32,8 +32,7 @@ namespace google {
 namespace pixel {
 namespace powerstats {
 
-class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider,
-                                          public android::Thread {
+class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider {
   public:
     // id = powerEntityId to be associated with this data provider
     // path = path to the display state file descriptor
@@ -46,8 +45,8 @@ class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider,
     std::vector<PowerEntityStateSpace> getStateSpaces() override;
 
   private:
-    // The thread that will poll for display state changes
-    bool threadLoop() override;
+    // Poll for display state changes
+    void pollLoop();
     // Main function to update the stats when display state change is detected
     void updateStats();
 
@@ -67,6 +66,8 @@ class DisplayStateResidencyDataProvider : public IStateResidencyDataProvider,
     int mCurState;
     // Looper to facilitate polling of display state file desciptor
     sp<Looper> mLooper;
+
+    std::thread mThread;
 };
 
 }  // namespace powerstats
