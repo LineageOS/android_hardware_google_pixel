@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <perfmgr/HintManager.h>
 #include <chrono>
+#include <thread>
 #include <vector>
 
 namespace aidl {
@@ -30,6 +31,14 @@ namespace pixel {
 
 using ::aidl::android::hardware::power::WorkDuration;
 using ::android::perfmgr::HintManager;
+
+struct WorkDurationBatch {
+    WorkDurationBatch(const std::vector<WorkDuration> &workDurations,
+                      std::chrono::nanoseconds targetDuration)
+        : workDurations(workDurations), targetDuration(targetDuration) {}
+    std::vector<WorkDuration> workDurations;
+    std::chrono::nanoseconds targetDuration;
+};
 
 // Applies CPU frequency hints infered by an ML model based on the recent CPU statistics and work
 // durations.
@@ -48,7 +57,25 @@ class AdaptiveCpu {
                              std::chrono::nanoseconds targetDuration);
 
   private:
+    // The main loop of Adaptive CPU
+    void RunMainLoop();
+
+    // Atomically clears the available work durations from mWorkDurations and returns them.
+    std::vector<WorkDurationBatch> TakeWorkDurations();
+
     std::shared_ptr<HintManager> mHintManager;
+
+    // The thread in which work durations are processed.
+    std::thread mLoopThread;
+
+    // For guarding access to mWorkDurations.
+    std::mutex mWorkDurationsMutex;
+
+    // A condition variable that will be notified when new work durations arrive.
+    std::condition_variable mWorkDurationsAvailableCondition;
+
+    // The work durations waiting to be processed, ordered from least recent to most recent.
+    std::vector<WorkDurationBatch> mWorkDurationBatches;
 };
 
 }  // namespace pixel
