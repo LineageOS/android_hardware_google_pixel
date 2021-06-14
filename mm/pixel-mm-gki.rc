@@ -12,5 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+on init
+    # memory reserve tuning
+    write /proc/sys/vm/watermark_boost_factor 0
+    write /proc/sys/vm/min_free_kbytes 27386
+    write /proc/sys/vm/lowmem_reserve_ratio "0 0 0"
+
 on property:sys.boot_completed=1
     chmod 444 /sys/kernel/debug/page_owner
