@@ -18,24 +18,6 @@ package {
 }
 
 cc_library {
-    name: "libadpf-pixel",
-    relative_install_path: "hw",
-    proprietary: true,
-    vendor: true,
-    srcs: [
-        "adpf/PowerHintSession.cpp",
-    ],
-     shared_libs: [
-        "android.hardware.power-V2-ndk_platform",
-        "libbase",
-        "libbinder_ndk",
-        "libcutils",
-        "liblog",
-        "libutils",
-    ],
-}
-
-cc_library {
     name: "libdisppower-pixel",
     proprietary: true,
     srcs: [
@@ -67,7 +49,6 @@ cc_binary {
     vendor: true,
     shared_libs: [
         "android.hardware.power-V2-ndk_platform",
-        "libadpf-pixel",
         "libbase",
         "libcutils",
         "liblog",
@@ -81,5 +62,7 @@ cc_binary {
         "aidl/service.cpp",
         "aidl/Power.cpp",
         "aidl/PowerExt.cpp",
+        "aidl/PowerHintSession.cpp",
+        "aidl/PowerSessionManager.cpp",
     ],
 }
