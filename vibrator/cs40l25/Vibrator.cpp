@@ -96,6 +96,7 @@ static constexpr int32_t Q16_BIT_SHIFT = 16;
 static constexpr int32_t COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS = 16383;
 static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
+static constexpr float CS40L2X_PWLE_LEVEL_MAX = 0.999511;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
@@ -637,6 +638,13 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     active.endAmplitude < PWLE_LEVEL_MIN || active.endAmplitude > PWLE_LEVEL_MAX) {
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
+                if (active.startAmplitude > CS40L2X_PWLE_LEVEL_MAX) {
+                    active.startAmplitude = CS40L2X_PWLE_LEVEL_MAX;
+                }
+                if (active.endAmplitude > CS40L2X_PWLE_LEVEL_MAX) {
+                    active.endAmplitude = CS40L2X_PWLE_LEVEL_MAX;
+                }
+
                 if (active.startFrequency < PWLE_FREQUENCY_MIN_HZ ||
                     active.startFrequency > PWLE_FREQUENCY_MAX_HZ ||
                     active.endFrequency < PWLE_FREQUENCY_MIN_HZ ||
