@@ -179,15 +179,28 @@ void UeventListener::ReportUsbPortOverheatEvent(const std::shared_ptr<IStats> &s
 }
 
 void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_client,
-                                       const char *line) {
-    std::vector<int> charge_stats_fields = {
-            ChargeStats::kAdapterTypeFieldNumber,     ChargeStats::kAdapterVoltageFieldNumber,
-            ChargeStats::kAdapterAmperageFieldNumber, ChargeStats::kSsocInFieldNumber,
-            ChargeStats::kVoltageInFieldNumber,       ChargeStats::kSsocOutFieldNumber,
-            ChargeStats::kVoltageOutFieldNumber};
-    std::vector<VendorAtomValue> values(charge_stats_fields.size());
+                                       const char *line, const char *wline_at,
+                                       const char *wline_ac) {
+    int charge_stats_fields[] = {ChargeStats::kAdapterTypeFieldNumber,
+                                 ChargeStats::kAdapterVoltageFieldNumber,
+                                 ChargeStats::kAdapterAmperageFieldNumber,
+                                 ChargeStats::kSsocInFieldNumber,
+                                 ChargeStats::kVoltageInFieldNumber,
+                                 ChargeStats::kSsocOutFieldNumber,
+                                 ChargeStats::kVoltageOutFieldNumber,
+                                 ChargeStats::kAdapterCapabilities0FieldNumber,
+                                 ChargeStats::kAdapterCapabilities1FieldNumber,
+                                 ChargeStats::kAdapterCapabilities2FieldNumber,
+                                 ChargeStats::kAdapterCapabilities3FieldNumber,
+                                 ChargeStats::kAdapterCapabilities4FieldNumber,
+                                 ChargeStats::kReceiverState0FieldNumber,
+                                 ChargeStats::kReceiverState1FieldNumber};
+    const int32_t chg_fields_size = std::size(charge_stats_fields);
+    static_assert(chg_fields_size == 14, "Unexpected charge stats fields size");
+    const int32_t wlc_fields_size = 7;
+    std::vector<VendorAtomValue> values(chg_fields_size);
     VendorAtomValue val;
-    int32_t i = 0, tmp[7] = {0};
+    int32_t i = 0, tmp[chg_fields_size] = {0}, fields_size = (chg_fields_size - wlc_fields_size);
 
     ALOGD("ChargeStats: processing %s", line);
     if (sscanf(line, "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5],
@@ -195,7 +208,24 @@ void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_clie
         ALOGE("Couldn't process %s", line);
         return;
     }
-    for (i = 0; i < charge_stats_fields.size(); i++) {
+
+    if (wline_at) {
+        int32_t ssoc_tmp = 0;
+        ALOGD("ChargeStats(wlc): processing %s", wline_at);
+        if (sscanf(wline_at, "A:%d", &ssoc_tmp) != 1) {
+            ALOGE("Couldn't process %s", wline_at);
+        } else {
+            tmp[0] = wireless_charge_stats_.TranslateSysModeToAtomValue(ssoc_tmp);
+            ALOGD("ChargeStats(wlc): processing %s", wline_ac);
+            if (sscanf(wline_ac, "D:%x,%x,%x,%x,%x, %x,%x", &tmp[7], &tmp[8], &tmp[9], &tmp[10],
+                       &tmp[11], &tmp[12], &tmp[13]) != 7)
+                ALOGE("Couldn't process %s", wline_ac);
+            else
+                fields_size = chg_fields_size; /* include wlc stats */
+        }
+    }
+
+    for (i = 0; i < fields_size; i++) {
         val.set<VendorAtomValue::intValue>(tmp[i]);
         values[charge_stats_fields[i] - kVendorAtomOffset] = val;
     }
@@ -209,27 +239,38 @@ void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_clie
 }
 
 void UeventListener::ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client,
-                                            const char *line) {
-    std::vector<int> voltage_tier_stats_fields = {VoltageTierStats::kVoltageTierFieldNumber,
-                                                  VoltageTierStats::kSocInFieldNumber,
-                                                  VoltageTierStats::kCcInFieldNumber,
-                                                  VoltageTierStats::kTempInFieldNumber,
-                                                  VoltageTierStats::kTimeFastSecsFieldNumber,
-                                                  VoltageTierStats::kTimeTaperSecsFieldNumber,
-                                                  VoltageTierStats::kTimeOtherSecsFieldNumber,
-                                                  VoltageTierStats::kTempMinFieldNumber,
-                                                  VoltageTierStats::kTempAvgFieldNumber,
-                                                  VoltageTierStats::kTempMaxFieldNumber,
-                                                  VoltageTierStats::kIbattMinFieldNumber,
-                                                  VoltageTierStats::kIbattAvgFieldNumber,
-                                                  VoltageTierStats::kIbattMaxFieldNumber,
-                                                  VoltageTierStats::kIclMinFieldNumber,
-                                                  VoltageTierStats::kIclAvgFieldNumber,
-                                                  VoltageTierStats::kIclMaxFieldNumber};
-    std::vector<VendorAtomValue> values(voltage_tier_stats_fields.size());
+                                            const char *line, const bool has_wireless,
+                                            const std::string wfile_contents) {
+    int voltage_tier_stats_fields[] = {
+            VoltageTierStats::kVoltageTierFieldNumber,
+            VoltageTierStats::kSocInFieldNumber, /* retrieved via ssoc_tmp */
+            VoltageTierStats::kCcInFieldNumber,
+            VoltageTierStats::kTempInFieldNumber,
+            VoltageTierStats::kTimeFastSecsFieldNumber,
+            VoltageTierStats::kTimeTaperSecsFieldNumber,
+            VoltageTierStats::kTimeOtherSecsFieldNumber,
+            VoltageTierStats::kTempMinFieldNumber,
+            VoltageTierStats::kTempAvgFieldNumber,
+            VoltageTierStats::kTempMaxFieldNumber,
+            VoltageTierStats::kIbattMinFieldNumber,
+            VoltageTierStats::kIbattAvgFieldNumber,
+            VoltageTierStats::kIbattMaxFieldNumber,
+            VoltageTierStats::kIclMinFieldNumber,
+            VoltageTierStats::kIclAvgFieldNumber,
+            VoltageTierStats::kIclMaxFieldNumber,
+            VoltageTierStats::kMinAdapterPowerOutFieldNumber,
+            VoltageTierStats::kTimeAvgAdapterPowerOutFieldNumber,
+            VoltageTierStats::kMaxAdapterPowerOutFieldNumber,
+            VoltageTierStats::kChargingOperatingPointFieldNumber};
+
+    const int32_t vtier_fields_size = std::size(voltage_tier_stats_fields);
+    static_assert(vtier_fields_size == 20, "Unexpected voltage tier stats fields size");
+    const int32_t wlc_fields_size = 4;
+    std::vector<VendorAtomValue> values(vtier_fields_size);
     VendorAtomValue val;
     float ssoc_tmp;
-    int32_t i = 0, tmp[15] = {0};
+    int32_t i = 0, tmp[vtier_fields_size - 1] = {0}, /* ssoc_tmp is not saved in this array */
+            fields_size = (vtier_fields_size - wlc_fields_size);
 
     if (sscanf(line, "%d, %f,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d, %d,%d,%d", &tmp[0], &ssoc_tmp,
                &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5], &tmp[6], &tmp[7], &tmp[8], &tmp[9],
@@ -237,12 +278,23 @@ void UeventListener::ReportVoltageTierStats(const std::shared_ptr<IStats> &stats
         /* If format isn't as expected, then ignore line on purpose */
         return;
     }
+
+    if (has_wireless) {
+        wireless_charge_stats_.CalculateWirelessChargeStats(static_cast<int>(ssoc_tmp),
+                                                            wfile_contents);
+        tmp[15] = wireless_charge_stats_.pout_min_;
+        tmp[16] = wireless_charge_stats_.pout_avg_;
+        tmp[17] = wireless_charge_stats_.pout_max_;
+        tmp[18] = wireless_charge_stats_.of_freq_;
+        fields_size = vtier_fields_size; /* include wlc stats */
+    }
+
     ALOGD("VoltageTierStats: processed %s", line);
     val.set<VendorAtomValue::intValue>(tmp[0]);
     values[voltage_tier_stats_fields[0] - kVendorAtomOffset] = val;
     val.set<VendorAtomValue::floatValue>(ssoc_tmp);
     values[voltage_tier_stats_fields[1] - kVendorAtomOffset] = val;
-    for (i = 2; i < voltage_tier_stats_fields.size(); i++) {
+    for (i = 2; i < fields_size; i++) {
         val.set<VendorAtomValue::intValue>(tmp[i - 1]);
         values[voltage_tier_stats_fields[i] - kVendorAtomOffset] = val;
     }
@@ -261,8 +313,9 @@ void UeventListener::ReportChargeMetricsEvent(const std::shared_ptr<IStats> &sta
         return;
     }
 
-    std::string file_contents, line;
+    std::string file_contents, line, wfile_contents;
     std::istringstream ss;
+    bool has_wireless = wireless_charge_stats_.CheckWirelessContentsAndAck(&wfile_contents);
 
     if (!ReadFileToString(kChargeMetricsPath.c_str(), &file_contents)) {
         ALOGE("Unable to read %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
@@ -280,10 +333,23 @@ void UeventListener::ReportChargeMetricsEvent(const std::shared_ptr<IStats> &sta
         ALOGE("Couldn't clear %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
     }
 
-    ReportChargeStats(stats_client, line.c_str());
+    if (has_wireless) {
+        std::string wline_at, wline_ac;
+        std::istringstream wss;
+
+        /* there are two lines in the head, A: ...(Adapter Type) and D: ...(Adapter Capabilities) */
+        wss.str(wfile_contents);
+        std::getline(wss, wline_at);
+        std::getline(wss, wline_ac);
+        ReportChargeStats(stats_client, line.c_str(), wline_at.c_str(), wline_ac.c_str());
+        /* reset initial tier soc */
+        wireless_charge_stats_.tier_soc_ = 0;
+    } else {
+        ReportChargeStats(stats_client, line.c_str(), NULL, NULL);
+    }
 
     while (std::getline(ss, line)) {
-        ReportVoltageTierStats(stats_client, line.c_str());
+        ReportVoltageTierStats(stats_client, line.c_str(), has_wireless, wfile_contents);
     }
 }
 
