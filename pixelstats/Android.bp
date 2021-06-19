@@ -65,6 +65,7 @@ cc_library {
     "StatsHelper.cpp",
     "SysfsCollector.cpp",
     "UeventListener.cpp",
+    "WirelessChargeStats.cpp",
     "WlcReporter.cpp",
   ],
   cflags: [
