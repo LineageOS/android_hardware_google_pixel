@@ -3,8 +3,7 @@ PRODUCT_PACKAGES += \
     citadeld \
     citadel_updater \
     android.hardware.weaver@1.0-service.citadel \
-    android.hardware.identity@1.0-service.citadel \
-    android.hardware.rebootescrow-service.citadel
+    android.hardware.identity@1.0-service.citadel
 
 # AIDL
 PRODUCT_PACKAGES += \
