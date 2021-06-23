@@ -658,6 +658,9 @@ void ThermalHelper::computeCoolingDevicesRequest(
 
     std::unique_lock<std::shared_mutex> _lock(cdev_status_map_mutex_);
     for (auto &cdev_request_pair : cdev_status_map_) {
+        if (!cdev_request_pair.second.count(sensor_name.data())) {
+            continue;
+        }
         unsigned int pid_request = 0;
         unsigned int hard_limit_request = 0;
         const auto max_state = cooling_device_info_map_.at(cdev_request_pair.first).max_state;
