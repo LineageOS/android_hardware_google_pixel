@@ -1,4 +1,5 @@
-on property:vendor.all.modules.ready=1
+on boot
+    wait /sys/class/leds/vibrator/device
 
     mkdir /mnt/vendor/persist/haptics 0770 system system
     chmod 770 /mnt/vendor/persist/haptics
