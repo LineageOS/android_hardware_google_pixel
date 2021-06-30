@@ -43,20 +43,19 @@
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
 #include <cutils/uevent.h>
+#include <fcntl.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <log/log.h>
 #include <pixelstats/StatsHelper.h>
 #include <pixelstats/UeventListener.h>
 #include <pixelstats/WlcReporter.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <utils/StrongPointer.h>
 
 #include <string>
 #include <thread>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 
 namespace android {
 namespace hardware {
@@ -405,8 +404,8 @@ void UeventListener::ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_c
     }
 
     if (sscanf(file_contents_vid.c_str(), "%x", &vid) != 1) {
-        ALOGE("Unable to parse vid %s from file %s to int.",
-                file_contents_vid.c_str(), kTypeCPartnerVidPath.c_str());
+        ALOGE("Unable to parse vid %s from file %s to int.", file_contents_vid.c_str(),
+              kTypeCPartnerVidPath.c_str());
         return;
     }
 
@@ -521,8 +520,10 @@ bool UeventListener::ProcessUevent() {
             pow_wireless = true;
         } else if (!strncmp(cp, "POWER_SUPPLY_ONLINE=1", strlen("POWER_SUPPLY_ONLINE=1"))) {
             pow_online = true;
-        } else if (!strncmp(cp, "POWER_SUPPLY_PTMC_ID=", strlen("POWER_SUPPLY_PTMC_ID="))) {
-            pow_ptmc = cp;
+        } else if (!kWirelessChargerPtmcUevent.empty() &&
+                   !strncmp(cp, kWirelessChargerPtmcUevent.c_str(),
+                            strlen(kWirelessChargerPtmcUevent.c_str()))) {
+            pow_ptmc = cp + strlen(kWirelessChargerPtmcUevent.c_str());
         }
         /* advance to after the next \0 */
         while (*cp++) {
@@ -562,6 +563,32 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
       kChargeMetricsPath(charge_metrics_path),
       kTypeCPartnerVidPath(typec_partner_vid_path),
       kTypeCPartnerPidPath(typec_partner_pid_path),
+      kWirelessChargerPtmcUevent(""),
+      kWirelessChargerPtmcPath(""),
+      uevent_fd_(-1),
+      log_fd_(-1) {}
+
+UeventListener::UeventListener(const struct UeventPaths &uevents_paths)
+    : kAudioUevent((uevents_paths.AudioUevent == nullptr) ? "" : uevents_paths.AudioUevent),
+      kBatterySSOCPath((uevents_paths.SsocDetailsPath == nullptr) ? ssoc_details_path
+                                                                  : uevents_paths.SsocDetailsPath),
+      kUsbPortOverheatPath((uevents_paths.OverheatPath == nullptr) ? overheat_path_default
+                                                                   : uevents_paths.OverheatPath),
+      kChargeMetricsPath((uevents_paths.ChargeMetricsPath == nullptr)
+                                 ? charge_metrics_path_default
+                                 : uevents_paths.ChargeMetricsPath),
+      kTypeCPartnerVidPath((uevents_paths.TypeCPartnerVidPath == nullptr)
+                                   ? typec_partner_vid_path_default
+                                   : uevents_paths.TypeCPartnerVidPath),
+      kTypeCPartnerPidPath((uevents_paths.TypeCPartnerPidPath == nullptr)
+                                   ? typec_partner_pid_path_default
+                                   : uevents_paths.TypeCPartnerPidPath),
+      kWirelessChargerPtmcUevent((uevents_paths.WirelessChargerPtmcUevent == nullptr)
+                                         ? ""
+                                         : uevents_paths.WirelessChargerPtmcUevent),
+      kWirelessChargerPtmcPath((uevents_paths.WirelessChargerPtmcPath == nullptr)
+                                       ? ""
+                                       : uevents_paths.WirelessChargerPtmcPath),
       uevent_fd_(-1),
       log_fd_(-1) {}
 
