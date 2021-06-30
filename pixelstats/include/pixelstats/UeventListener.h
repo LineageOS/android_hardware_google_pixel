@@ -38,15 +38,37 @@ using aidl::android::frameworks::stats::IStats;
  */
 class UeventListener {
   public:
-    UeventListener(
-            const std::string audio_uevent, const std::string ssoc_details_path = "",
-            const std::string overheat_path =
-                    "/sys/devices/platform/soc/soc:google,overheat_mitigation",
-            const std::string charge_metrics_path = "/sys/class/power_supply/battery/charge_stats",
-            const std::string typec_partner_vid_path =
-                    "/sys/class/typec/port0-partner/identity/id_header",
-            const std::string typec_partner_pid_path =
-                    "/sys/class/typec/port0-partner/identity/product");
+    /* Both WirelessChargerPtmcUevent and WirelessChargerPtmcPath is use to get
+     * wireless charger ptmx id, for most case we don't need asisign both of
+     * them.
+     **/
+    struct UeventPaths {
+        const char *const AudioUevent;
+        const char *const SsocDetailsPath;
+        const char *const OverheatPath;
+        const char *const ChargeMetricsPath;
+        const char *const TypeCPartnerVidPath;
+        const char *const TypeCPartnerPidPath;
+        const char *const WirelessChargerPtmcUevent;
+        const char *const WirelessChargerPtmcPath;
+    };
+    constexpr static const char *const ssoc_details_path =
+            "/sys/class/power_supply/battery/ssoc_details";
+    constexpr static const char *const overheat_path_default =
+            "/sys/devices/platform/soc/soc:google,overheat_mitigation";
+    constexpr static const char *const charge_metrics_path_default =
+            "/sys/class/power_supply/battery/charge_stats";
+    constexpr static const char *const typec_partner_vid_path_default =
+            "/sys/class/typec/port0-partner/identity/id_header";
+    constexpr static const char *const typec_partner_pid_path_default =
+            "/sys/class/typec/port0-partner/identity/product";
+
+    UeventListener(const std::string audio_uevent, const std::string ssoc_details_path = "",
+                   const std::string overheat_path = overheat_path_default,
+                   const std::string charge_metrics_path = charge_metrics_path_default,
+                   const std::string typec_partner_vid_path = typec_partner_vid_path_default,
+                   const std::string typec_partner_pid_path = typec_partner_pid_path_default);
+    UeventListener(const struct UeventPaths &paths);
 
     bool ProcessUevent();  // Process a single Uevent.
     void ListenForever();  // Process Uevents forever
@@ -77,6 +99,8 @@ class UeventListener {
     const std::string kChargeMetricsPath;
     const std::string kTypeCPartnerVidPath;
     const std::string kTypeCPartnerPidPath;
+    const std::string kWirelessChargerPtmcUevent;
+    const std::string kWirelessChargerPtmcPath;
 
     BatteryCapacityReporter battery_capacity_reporter_;
 
@@ -90,7 +114,7 @@ class UeventListener {
 
     WirelessChargeStats wireless_charge_stats_;
 
-    WlcReporter wlc_reporter_;
+    WlcReporter wlc_reporter_ = WlcReporter(kWirelessChargerPtmcPath.c_str());
 };
 
 }  // namespace pixel
