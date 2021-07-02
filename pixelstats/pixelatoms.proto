@@ -31,7 +31,7 @@ option java_outer_classname = "PixelAtoms";
  *   - field # 1 - this will be occupied by the vendor namespace
  */
 
-/* Allocated Westworld atom IDs. */
+/* Allocated atom IDs. */
 enum Ids {
     // AOSP atom ID range starts at 105000
     CHARGE_STATS = 105000;
@@ -51,7 +51,7 @@ enum Ids {
     // AOSP atom ID range ends at 109999
 }
 
-/* Westworld-supported reverse domain names. */
+/* Supported reverse domain names. */
 message ReverseDomainNames {
     optional string pixel = 1 [default = "com.google.pixel"];
 }
