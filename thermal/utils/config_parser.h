@@ -89,6 +89,7 @@ struct SensorInfo {
     ThrottlingArray cold_thresholds;
     ThrottlingArray hot_hysteresis;
     ThrottlingArray cold_hysteresis;
+    std::string temp_path;
     float vr_threshold;
     float multiplier;
     std::chrono::milliseconds polling_delay;

@@ -767,8 +767,14 @@ bool ThermalHelper::initializeSensorMap(
             LOG(ERROR) << "Could not find " << sensor_name << " in sysfs";
             return false;
         }
-        std::string path = android::base::StringPrintf(
-                "%s/%s", path_map.at(sensor_name.data()).c_str(), kSensorTempSuffix.data());
+
+        std::string path;
+        if (sensor_info_pair.second.temp_path.empty()) {
+            path = android::base::StringPrintf("%s/%s", path_map.at(sensor_name.data()).c_str(),
+                                               kSensorTempSuffix.data());
+        } else {
+            path = sensor_info_pair.second.temp_path;
+        }
 
         if (!thermal_sensors_.addThermalFile(sensor_name, path)) {
             LOG(ERROR) << "Could not add " << sensor_name << "to sensors map";
