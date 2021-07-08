@@ -53,10 +53,19 @@ struct VirtualSensorInfo {
     FormulaOption formula;
 };
 
+struct VirtualPowerRailInfo {
+    std::vector<std::string> linked_power_rails;
+    std::vector<float> coefficients;
+    float offset;
+    FormulaOption formula;
+};
+
 // The method when the ODPM power is lower than threshold
 enum ReleaseLogic : uint32_t {
-    DECREASE = 0,  // DECREASE THROTTLING
-    BYPASS,        // BYPASS THROTTLING
+    INCREASE = 0,      // Increase throttling by step
+    DECREASE,          // Decrease throttling by step
+    STEPWISE,          // Support both increase and decrease logix
+    RELEASE_TO_FLOOR,  // Release throttling to floor directly
     NONE,
 };
 
@@ -66,9 +75,12 @@ struct BindedCdevInfo {
     ReleaseLogic release_logic;
     ThrottlingArray cdev_weight_for_pid;
     CdevArray cdev_ceiling;
-    int power_sample_count;
-    std::chrono::milliseconds power_sample_delay;
-    bool power_reversly_check;
+    CdevArray cdev_floor_with_power_link;
+    std::string power_rail;
+    // The flag for activate release logic when power is higher than power threshold
+    bool high_power_check;
+    // The flag for only triggering throttling until all power samples are collected
+    bool throttling_with_power_link;
 };
 
 struct ThrottlingInfo {
@@ -96,7 +108,6 @@ struct SensorInfo {
     std::chrono::milliseconds passive_delay;
     bool send_cb;
     bool send_powerhint;
-    bool power_tracking_enabled;
     bool is_monitor;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::unique_ptr<ThrottlingInfo> throttling_info;
@@ -107,14 +118,18 @@ struct CdevInfo {
     std::string read_path;
     std::string write_path;
     std::vector<float> state2power;
-    std::string power_rail;
-    std::chrono::milliseconds power_sample_rate;
+    int max_state;
+};
+struct PowerRailInfo {
+    std::string rail;
     int power_sample_count;
-    unsigned int max_state;
+    std::chrono::milliseconds power_sample_delay;
+    std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
 };
 
 std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
 std::unordered_map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path);
+std::unordered_map<std::string, PowerRailInfo> ParsePowerRailInfo(std::string_view config_path);
 
 }  // namespace implementation
 }  // namespace V2_0

@@ -267,13 +267,13 @@ void PowerHalService::setMode(const std::string &type, const ThrottlingSeverity 
 ThermalHelper::ThermalHelper(const NotificationCallback &cb)
     : thermal_watcher_(new ThermalWatcher(
               std::bind(&ThermalHelper::thermalWatcherCallbackFunc, this, std::placeholders::_1))),
-      cb_(cb),
-      cooling_device_info_map_(ParseCoolingDevice(
-              "/vendor/etc/" +
-              android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data()))),
-      sensor_info_map_(ParseSensorInfo(
-              "/vendor/etc/" +
-              android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data()))) {
+      cb_(cb) {
+    const std::string config_path =
+            "/vendor/etc/" +
+            android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data());
+    cooling_device_info_map_ = ParseCoolingDevice(config_path);
+    sensor_info_map_ = ParseSensorInfo(config_path);
+    power_rail_info_map_ = ParsePowerRailInfo(config_path);
     auto tz_map = parseThermalPathMap(kSensorPrefix.data());
     auto cdev_map = parseThermalPathMap(kCoolingDevicePrefix.data());
 
@@ -321,25 +321,27 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
             const auto &cdev_info = cooling_device_info_map_.at(binded_cdev_pair.first);
 
             for (auto &cdev_ceiling : binded_cdev_pair.second.cdev_ceiling) {
-                if (cdev_ceiling < 0 ||
-                    static_cast<unsigned int>(cdev_ceiling) > cdev_info.max_state) {
-                    LOG(ERROR) << "Sensor " << name_status_pair.first << "'s "
-                               << binded_cdev_pair.first << " cdev_ceiling:" << cdev_ceiling
-                               << " is higher than max state:" << cdev_info.max_state;
+                if (cdev_ceiling > cdev_info.max_state) {
+                    if (cdev_ceiling != std::numeric_limits<int>::max()) {
+                        LOG(ERROR) << "Sensor " << name_status_pair.first << "'s "
+                                   << binded_cdev_pair.first << " cdev_ceiling:" << cdev_ceiling
+                                   << " is higher than max state:" << cdev_info.max_state;
+                    }
                     cdev_ceiling = cdev_info.max_state;
                 }
             }
 
-            if (binded_cdev_pair.second.power_sample_count &&
+            if (power_rail_info_map_.count(binded_cdev_pair.second.power_rail) &&
+                power_rail_info_map_.at(binded_cdev_pair.second.power_rail).power_sample_count &&
                 power_files_.findEnergySourceToWatch()) {
-                const auto power_rail =
-                        cooling_device_info_map_.at(binded_cdev_pair.first).power_rail;
+                const auto &power_rail_info =
+                        power_rail_info_map_.at(binded_cdev_pair.second.power_rail);
                 if (!power_files_.registerPowerRailsToWatch(
-                            name_status_pair.first, power_rail, binded_cdev_pair.second,
-                            cooling_device_info_map_.at(binded_cdev_pair.first))) {
+                            name_status_pair.first, binded_cdev_pair.first, binded_cdev_pair.second,
+                            cdev_info, power_rail_info)) {
                     invalid_binded_cdev = true;
                     LOG(ERROR) << "Could not find " << binded_cdev_pair.first
-                               << "'s power energy source: " << power_rail;
+                               << "'s power energy source: " << binded_cdev_pair.second.power_rail;
                 }
             }
         }
@@ -553,6 +555,7 @@ bool ThermalHelper::readTemperatureThreshold(std::string_view sensor_name,
     return true;
 }
 
+// To find the next PID target state according to the current thermal severity
 size_t ThermalHelper::getTargetStateOfPID(const SensorInfo &sensor_info,
                                           const SensorStatus &sensor_status) {
     size_t target_state = 0;
@@ -567,8 +570,6 @@ size_t ThermalHelper::getTargetStateOfPID(const SensorInfo &sensor_info,
             break;
         }
     }
-
-    LOG(VERBOSE) << "PID target state=" << target_state;
     return target_state;
 }
 
@@ -579,6 +580,8 @@ float ThermalHelper::pidPowerCalculator(const Temperature_2_0 &temp, const Senso
                                         size_t target_state) {
     float p = 0, i = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
+
+    LOG(VERBOSE) << "PID target state=" << target_state;
     if (!target_state || (sensor_status->severity == ThrottlingSeverity::NONE)) {
         sensor_status->err_integral = 0;
         sensor_status->prev_err = NAN;
@@ -653,8 +656,7 @@ bool ThermalHelper::requestCdevByPower(std::string_view sensor_name, SensorStatu
                     break;
                 }
             }
-            sensor_status->pid_request_map.at(binded_cdev_info_pair.first) =
-                    static_cast<unsigned int>(j);
+            sensor_status->pid_request_map.at(binded_cdev_info_pair.first) = static_cast<int>(j);
             LOG(VERBOSE) << "Power allocator: Sensor " << sensor_name.data() << " allocate "
                          << cdev_power_budget << "mW to " << binded_cdev_info_pair.first
                          << "(cdev_weight=" << cdev_weight << ") update state to " << j;
@@ -678,19 +680,22 @@ void ThermalHelper::requestCdevBySeverity(std::string_view sensor_name, SensorSt
 void ThermalHelper::computeCoolingDevicesRequest(
         std::string_view sensor_name, const SensorInfo &sensor_info,
         const SensorStatus &sensor_status, std::vector<std::string> *cooling_devices_to_update) {
-    unsigned int release_step = 0;
+    int release_step = 0;
 
     std::unique_lock<std::shared_mutex> _lock(cdev_status_map_mutex_);
     for (auto &cdev_request_pair : cdev_status_map_) {
         if (!cdev_request_pair.second.count(sensor_name.data())) {
             continue;
         }
-        unsigned int pid_request = 0;
-        unsigned int hard_limit_request = 0;
+        int pid_request = 0;
+        int hard_limit_request = 0;
         const auto &binded_cdev_info =
                 sensor_info.throttling_info->binded_cdev_info_map.at(cdev_request_pair.first);
         const auto cdev_ceiling =
                 binded_cdev_info.cdev_ceiling[static_cast<size_t>(sensor_status.severity)];
+        const auto cdev_floor =
+                binded_cdev_info
+                        .cdev_floor_with_power_link[static_cast<size_t>(sensor_status.severity)];
         release_step = 0;
 
         if (sensor_status.pid_request_map.count(cdev_request_pair.first)) {
@@ -705,22 +710,26 @@ void ThermalHelper::computeCoolingDevicesRequest(
         LOG(VERBOSE) << "Sensor: " << sensor_name.data() << " binded cooling device "
                      << cdev_request_pair.first << "'s pid_request=" << pid_request
                      << " hard_limit_request=" << hard_limit_request
-                     << " release_step=" << release_step << " cdev_ceiling=" << cdev_ceiling;
+                     << " release_step=" << release_step
+                     << " cdev_floor_with_power_link=" << cdev_floor
+                     << " cdev_ceiling=" << cdev_ceiling;
 
         auto request_state = std::max(pid_request, hard_limit_request);
-
         if (release_step) {
             if (release_step >= request_state) {
                 request_state = 0;
             } else {
                 request_state = request_state - release_step;
             }
+            // Only check the cdev_floor when release step is non zero
+            if (request_state < cdev_floor) {
+                request_state = cdev_floor;
+            }
         }
 
-        if (cdev_ceiling >= 0 && request_state > static_cast<unsigned int>(cdev_ceiling)) {
-            request_state = static_cast<unsigned int>(cdev_ceiling);
+        if (request_state > cdev_ceiling) {
+            request_state = cdev_ceiling;
         }
-
         if (cdev_request_pair.second.at(sensor_name.data()) != request_state) {
             cdev_request_pair.second.at(sensor_name.data()) = request_state;
             cooling_devices_to_update->emplace_back(cdev_request_pair.first);
@@ -731,7 +740,7 @@ void ThermalHelper::computeCoolingDevicesRequest(
 }
 
 void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated_cdev) {
-    unsigned int max_state;
+    int max_state;
 
     for (const auto &target_cdev : updated_cdev) {
         max_state = 0;
@@ -840,7 +849,7 @@ bool ThermalHelper::initializeCoolingDevices(
         if (!android::base::ReadFileToString(max_state_path, &max_state)) {
             LOG(ERROR) << cooling_device_info_pair.first
                        << " could not open max state file:" << max_state_path;
-            cooling_device_info_pair.second.max_state = std::numeric_limits<unsigned int>::max();
+            cooling_device_info_pair.second.max_state = std::numeric_limits<int>::max();
         } else {
             cooling_device_info_pair.second.max_state = std::stoi(android::base::Trim(max_state));
             LOG(INFO) << "Cooling device " << cooling_device_info_pair.first
@@ -1103,11 +1112,13 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         const std::set<std::string> &uevent_sensors) {
     std::vector<Temperature_2_0> temps;
     std::vector<std::string> cooling_devices_to_update;
+    std::set<std::string> updated_power_rails;
     boot_clock::time_point now = boot_clock::now();
     auto min_sleep_ms = std::chrono::milliseconds::max();
 
     for (auto &name_status_pair : sensor_status_map_) {
         bool force_update = false;
+        bool severity_changed = false;
         Temperature_2_0 temp;
         TemperatureThreshold threshold;
         SensorStatus &sensor_status = name_status_pair.second;
@@ -1130,6 +1141,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         } else {
             time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now - sensor_status.last_update_time);
+
             if (time_elapsed_ms > sleep_ms) {
                 // Update the sensor because sleep timeout
                 force_update = true;
@@ -1188,6 +1200,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
             }
             if (temp.throttlingStatus != sensor_status.severity) {
                 temps.push_back(temp);
+                severity_changed = true;
                 sensor_status.severity = temp.throttlingStatus;
                 sleep_ms = (sensor_status.severity != ThrottlingSeverity::NONE)
                                    ? sensor_info.passive_delay
@@ -1224,11 +1237,20 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
             } else {
                 for (const auto &binded_cdev_info_pair :
                      sensor_info.throttling_info->binded_cdev_info_map) {
-                    const auto power_rail =
-                            cooling_device_info_map_.at(binded_cdev_info_pair.first).power_rail;
-                    power_files_.throttlingReleaseUpdate(name_status_pair.first,
-                                                         sensor_status.severity, time_elapsed_ms,
-                                                         binded_cdev_info_pair.second, power_rail);
+                    if (binded_cdev_info_pair.second.power_rail != "") {
+                        const auto &power_rail_info =
+                                power_rail_info_map_.at(binded_cdev_info_pair.second.power_rail);
+
+                        if (power_files_.throttlingReleaseUpdate(
+                                    name_status_pair.first, binded_cdev_info_pair.first,
+                                    sensor_status.severity, time_elapsed_ms,
+                                    binded_cdev_info_pair.second, power_rail_info,
+                                    !updated_power_rails.count(
+                                            binded_cdev_info_pair.second.power_rail),
+                                    severity_changed)) {
+                            updated_power_rails.insert(binded_cdev_info_pair.second.power_rail);
+                        }
+                    }
                 }
             }
             computeCoolingDevicesRequest(name_status_pair.first, sensor_info, sensor_status,
