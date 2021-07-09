@@ -26,6 +26,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 
 #ifndef ARRAY_SIZE
@@ -100,6 +101,8 @@ static constexpr float CS40L2X_PWLE_LEVEL_MAX = 0.999511;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
+static constexpr float PWLE_BW_MAP_SIZE =
+    1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 
 static struct pcm_config haptic_nohost_config = {
     .channels = 1,
@@ -112,6 +115,46 @@ static struct pcm_config haptic_nohost_config = {
 static uint8_t amplitudeToScale(float amplitude, float maximum) {
     return std::round((-20 * std::log10(amplitude / static_cast<float>(maximum))) /
                       (AMP_ATTENUATE_STEP_SIZE));
+}
+
+// Discrete points of frequency:max_level pairs as recommended by the document
+// [R4O6] Max. Allowable Chirp Levels (go/r4o6-max-chirp-levels) around resonant frequency
+static std::map<float, float> discretePwleMaxLevels = {{120.0, 0.4},  {130.0, 0.31}, {140.0, 0.14},
+                                                       {145.0, 0.09}, {150.0, 0.15}, {160.0, 0.35},
+                                                       {170.0, 0.4}};
+
+// Initialize all limits to 0.4 according to the document [R4O6] Max. Allowable Chirp Levels
+// (go/r4o6-max-chirp-levels)
+std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 0.4);
+
+void Vibrator::createPwleMaxLevelLimitMap() {
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        std::map<float, float>::iterator itr0, itr1;
+
+        itr0 = discretePwleMaxLevels.begin();
+        itr1 = std::next(itr0, 1);
+
+        while (itr1 != discretePwleMaxLevels.end()) {
+            float x0 = itr0->first;
+            float y0 = itr0->second;
+            float x1 = itr1->first;
+            float y1 = itr1->second;
+            float pwleMaxLevelLimitMapIdx =
+                (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
+
+            for (float xp = x0; xp < (x1 + PWLE_FREQUENCY_RESOLUTION_HZ);
+                 xp += PWLE_FREQUENCY_RESOLUTION_HZ) {
+                float yp = y0 + ((y1 - y0) / (x1 - x0)) * (xp - x0);
+
+                pwleMaxLevelLimitMap[pwleMaxLevelLimitMapIdx++] = yp;
+            }
+
+            itr0++;
+            itr1++;
+        }
+    }
 }
 
 enum class AlwaysOnId : uint32_t {
@@ -189,6 +232,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
               COMPOSE_PWLE_SIZE_MAX_DEFAULT);
         compositionSizeMax = COMPOSE_PWLE_SIZE_MAX_DEFAULT;
     }
+
+    createPwleMaxLevelLimitMap();
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -501,9 +546,7 @@ ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
-        int mapSize =
-            1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
-        std::vector<float> bandwidthAmplitudeMap(mapSize, 1.0);
+        std::vector<float> bandwidthAmplitudeMap(PWLE_BW_MAP_SIZE, 1.0);
         *_aidl_return = bandwidthAmplitudeMap;
         return ndk::ScopedAStatus::ok();
     } else {
@@ -643,6 +686,18 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     active.endFrequency < PWLE_FREQUENCY_MIN_HZ ||
                     active.endFrequency > PWLE_FREQUENCY_MAX_HZ) {
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+                }
+
+                // clip to the hard limit on input level from pwleMaxLevelLimitMap
+                float maxLevelLimit =
+                    pwleMaxLevelLimitMap[active.startFrequency / PWLE_FREQUENCY_RESOLUTION_HZ - 1];
+                if (active.startAmplitude > maxLevelLimit) {
+                    active.startAmplitude = maxLevelLimit;
+                }
+                maxLevelLimit =
+                    pwleMaxLevelLimitMap[active.endFrequency / PWLE_FREQUENCY_RESOLUTION_HZ - 1];
+                if (active.endAmplitude > maxLevelLimit) {
+                    active.endAmplitude = maxLevelLimit;
                 }
 
                 if (!((active.startAmplitude == prevEndAmplitude) &&
