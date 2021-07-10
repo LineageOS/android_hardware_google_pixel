@@ -71,7 +71,7 @@ using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 
 using NotificationCallback = std::function<void(const Temperature_2_0 &t)>;
 using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
-using CdevRequestStatus = std::unordered_map<std::string, unsigned int>;
+using CdevRequestStatus = std::unordered_map<std::string, int>;
 
 // Get thermal_zone type
 bool getThermalZoneTypeById(int tz_id, std::string *);
@@ -82,8 +82,8 @@ struct SensorStatus {
     ThrottlingSeverity prev_cold_severity;
     ThrottlingSeverity prev_hint_severity;
     boot_clock::time_point last_update_time;
-    std::unordered_map<std::string, unsigned int> pid_request_map;
-    std::unordered_map<std::string, unsigned int> hard_limit_request_map;
+    std::unordered_map<std::string, int> pid_request_map;
+    std::unordered_map<std::string, int> hard_limit_request_map;
     float err_integral;
     float prev_err;
 };
@@ -144,6 +144,10 @@ class ThermalHelper {
     const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const {
         return cooling_device_info_map_;
     }
+    // Get PowerRailInfo Map
+    const std::unordered_map<std::string, PowerRailInfo> &GetPowerRailInfoMap() const {
+        return power_rail_info_map_;
+    }
     // Get SensorStatus Map
     const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
@@ -154,10 +158,16 @@ class ThermalHelper {
         std::shared_lock<std::shared_mutex> _lock(cdev_status_map_mutex_);
         return cdev_status_map_;
     }
-    // Get throttling release Map
+    // Get ThrottlingRelease Map
     const std::unordered_map<std::string, CdevReleaseStatus> &GetThrottlingReleaseMap() const {
         return power_files_.GetThrottlingReleaseMap();
     }
+
+    // Get PowerStatus Map
+    const std::unordered_map<std::string, PowerStatusMap> &GetPowerStatusMap() const {
+        return power_files_.GetPowerStatusMap();
+    }
+
     void sendPowerExtHint(const Temperature_2_0 &t);
     bool isAidlPowerHalExist() { return power_hal_service_.isAidlPowerHalExist(); }
     bool isPowerHalConnected() { return power_hal_service_.isPowerHalConnected(); }
@@ -183,7 +193,6 @@ class ThermalHelper {
 
     // Return the target state of PID algorithm
     size_t getTargetStateOfPID(const SensorInfo &sensor_info, const SensorStatus &sensor_status);
-
     // Return the power budget which is computed by PID algorithm
     float pidPowerCalculator(const Temperature_2_0 &temp, const SensorInfo &sensor_info,
                              SensorStatus *sensor_status,
@@ -207,6 +216,7 @@ class ThermalHelper {
     const NotificationCallback cb_;
     std::unordered_map<std::string, CdevInfo> cooling_device_info_map_;
     std::unordered_map<std::string, SensorInfo> sensor_info_map_;
+    std::unordered_map<std::string, PowerRailInfo> power_rail_info_map_;
     std::unordered_map<std::string, std::map<ThrottlingSeverity, ThrottlingSeverity>>
             supported_powerhint_map_;
     PowerHalService power_hal_service_;
