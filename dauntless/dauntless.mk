@@ -10,7 +10,7 @@ PRODUCT_PACKAGES += \
     android.hardware.security.keymint-service.citadel
 
 PRODUCT_COPY_FILES += \
-    frameworks/native/data/etc/android.hardware.strongbox_keystore.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.strongbox_keystore.xml
+    hardware/google/pixel/dauntless/android.hardware.strongbox_keystore.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.strongbox_keystore.xml
 
 # init scripts (won't be in AOSP)
 -include vendor/google_nos/init/dauntless/init.mk
