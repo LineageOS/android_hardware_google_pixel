@@ -295,7 +295,7 @@ void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
                     *dump_buf << "MINIMUM";
                     break;
                 default:
-                    *dump_buf << "None";
+                    *dump_buf << "NONE";
                     break;
             }
 
@@ -362,37 +362,61 @@ void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
                      name_info_pair.second.throttling_info->binded_cdev_info_map) {
                     *dump_buf << "   Cooling device name: " << binded_cdev_info_pair.first
                               << std::endl;
+                    *dump_buf << "    WeightForPID: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        *dump_buf << binded_cdev_info_pair.second.cdev_weight_for_pid[i] << " ";
+                    }
+                    *dump_buf << "]" << std::endl;
+                    *dump_buf << "    Ceiling: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        *dump_buf << binded_cdev_info_pair.second.cdev_ceiling[i] << " ";
+                    }
+                    *dump_buf << "]" << std::endl;
+                    *dump_buf << "    Floor with PowerLink: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        *dump_buf << binded_cdev_info_pair.second.cdev_floor_with_power_link[i]
+                                  << " ";
+                    }
+                    *dump_buf << "]" << std::endl;
                     *dump_buf << "    Hard limit: [";
                     for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         *dump_buf << binded_cdev_info_pair.second.limit_info[i] << " ";
                     }
-                    *dump_buf << "]";
-                    *dump_buf << " Power threshold: [";
-                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                        *dump_buf << binded_cdev_info_pair.second.power_thresholds[i] << " ";
+                    *dump_buf << "]" << std::endl;
+
+                    if (!binded_cdev_info_pair.second.power_rail.empty()) {
+                        *dump_buf << "    Binded power rail: "
+                                  << binded_cdev_info_pair.second.power_rail << std::endl;
+                        *dump_buf << "    Power threshold: [";
+                        for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                            *dump_buf << binded_cdev_info_pair.second.power_thresholds[i] << " ";
+                        }
+                        *dump_buf << "]" << std::endl;
+                        *dump_buf << "    Release logic: ";
+                        switch (binded_cdev_info_pair.second.release_logic) {
+                            case ReleaseLogic::INCREASE:
+                                *dump_buf << "INCREASE";
+                                break;
+                            case ReleaseLogic::DECREASE:
+                                *dump_buf << "DECREASE";
+                                break;
+                            case ReleaseLogic::STEPWISE:
+                                *dump_buf << "STEPWISE";
+                                break;
+                            case ReleaseLogic::RELEASE_TO_FLOOR:
+                                *dump_buf << "RELEASE_TO_FLOOR";
+                                break;
+                            default:
+                                *dump_buf << "NONE";
+                                break;
+                        }
+                        *dump_buf << std::endl;
+                        *dump_buf << "    high_power_check: " << std::boolalpha
+                                  << binded_cdev_info_pair.second.high_power_check << std::endl;
+                        *dump_buf << "    throttling_with_power_link: " << std::boolalpha
+                                  << binded_cdev_info_pair.second.throttling_with_power_link
+                                  << std::endl;
                     }
-                    *dump_buf << "]";
-                    *dump_buf << " Release logic: ";
-                    switch (binded_cdev_info_pair.second.release_logic) {
-                        case ReleaseLogic::DECREASE:
-                            *dump_buf << "DECREASE";
-                            break;
-                        case ReleaseLogic::BYPASS:
-                            *dump_buf << "BYPASS";
-                            break;
-                        default:
-                            *dump_buf << "None";
-                            break;
-                    }
-                    *dump_buf << std::endl;
-                    *dump_buf << "    Weight: " << binded_cdev_info_pair.second.cdev_weight;
-                    *dump_buf << " Cdev_ceiling: " << binded_cdev_info_pair.second.cdev_ceiling;
-                    *dump_buf << " Power_sample_count: "
-                              << binded_cdev_info_pair.second.power_sample_count;
-                    *dump_buf << " Power_sample_delay: "
-                              << binded_cdev_info_pair.second.power_sample_delay.count();
-                    *dump_buf << " Power_reversly_check: "
-                              << binded_cdev_info_pair.second.power_reversly_check << std::endl;
                 }
             }
         }
@@ -403,7 +427,6 @@ void Thermal::dumpThrottlingRequestStatus(std::ostringstream *dump_buf) {
     const auto &sensor_status_map = thermal_helper_.GetSensorStatusMap();
     const auto &cdev_status_map = thermal_helper_.GetCdevStatusMap();
     const auto &release_map = thermal_helper_.GetThrottlingReleaseMap();
-    const auto &cdev_info_map = thermal_helper_.GetCdevInfoMap();
     *dump_buf << "Throttling Request Status " << std::endl;
     for (const auto &cdev_status_pair : cdev_status_map) {
         *dump_buf << " Name: " << cdev_status_pair.first << std::endl;
@@ -427,21 +450,77 @@ void Thermal::dumpThrottlingRequestStatus(std::ostringstream *dump_buf) {
                           << std::endl;
             }
             if (release_map.count(request_pair.first) &&
-                release_map.at(request_pair.first)
-                        .count(cdev_info_map.at(cdev_status_pair.first).power_rail)) {
+                release_map.at(request_pair.first).count(cdev_status_pair.first)) {
                 const auto &cdev_release_info =
-                        release_map.at(request_pair.first)
-                                .at(cdev_info_map.at(cdev_status_pair.first).power_rail);
+                        release_map.at(request_pair.first).at(cdev_status_pair.first);
                 *dump_buf << "   Release Step: " << cdev_release_info.release_step << std::endl;
-                *dump_buf << "    Power History: ";
-                auto power_history = cdev_release_info.power_history;
-                while (power_history.size() > 0) {
-                    const auto power_sample = power_history.front();
-                    power_history.pop();
-                    *dump_buf << "(T=" << power_sample.duration
-                              << ", uWs=" << power_sample.energy_counter << ") ";
+            }
+        }
+    }
+}
+
+void Thermal::dumpPowerRailInfo(std::ostringstream *dump_buf) {
+    const auto &power_rail_info_map = thermal_helper_.GetPowerRailInfoMap();
+    const auto &power_status_map = thermal_helper_.GetPowerStatusMap();
+
+    *dump_buf << "Power Rail Info " << std::endl;
+    for (const auto &power_rail_pair : power_rail_info_map) {
+        *dump_buf << " Power Rail: " << power_rail_pair.first << std::endl;
+        *dump_buf << "  Power Sample Count: " << power_rail_pair.second.power_sample_count
+                  << std::endl;
+        *dump_buf << "  Power Sample Delay: " << power_rail_pair.second.power_sample_delay.count()
+                  << std::endl;
+        for (const auto &power_status_pair : power_status_map) {
+            if (power_status_pair.second.count(power_rail_pair.first)) {
+                auto power_history =
+                        power_status_pair.second.at(power_rail_pair.first).power_history;
+                *dump_buf << "  Request Sensor: " << power_status_pair.first << std::endl;
+                *dump_buf
+                        << "   Last Updated AVG Power: "
+                        << power_status_pair.second.at(power_rail_pair.first).last_updated_avg_power
+                        << " mW" << std::endl;
+                if (power_rail_pair.second.virtual_power_rail_info != nullptr) {
+                    *dump_buf << "   Formula=";
+                    switch (power_rail_pair.second.virtual_power_rail_info->formula) {
+                        case FormulaOption::COUNT_THRESHOLD:
+                            *dump_buf << "COUNT_THRESHOLD";
+                            break;
+                        case FormulaOption::WEIGHTED_AVG:
+                            *dump_buf << "WEIGHTED_AVG";
+                            break;
+                        case FormulaOption::MAXIMUM:
+                            *dump_buf << "MAXIMUM";
+                            break;
+                        case FormulaOption::MINIMUM:
+                            *dump_buf << "MINIMUM";
+                            break;
+                        default:
+                            *dump_buf << "NONE";
+                            break;
+                    }
+                    *dump_buf << std::endl;
                 }
-                *dump_buf << std::endl;
+                for (size_t i = 0; i < power_history.size(); ++i) {
+                    if (power_rail_pair.second.virtual_power_rail_info != nullptr) {
+                        *dump_buf << "   Linked power rail "
+                                  << power_rail_pair.second.virtual_power_rail_info
+                                             ->linked_power_rails[i]
+                                  << std::endl;
+                        *dump_buf << "    Coefficient="
+                                  << power_rail_pair.second.virtual_power_rail_info->coefficients[i]
+                                  << std::endl;
+                        *dump_buf << "    Power Samples: ";
+                    } else {
+                        *dump_buf << "   Power Samples: ";
+                    }
+                    while (power_history[i].size() > 0) {
+                        const auto power_sample = power_history[i].front();
+                        power_history[i].pop();
+                        *dump_buf << "(T=" << power_sample.duration
+                                  << ", uWs=" << power_sample.energy_counter << ") ";
+                    }
+                    *dump_buf << std::endl;
+                }
             }
         }
     }
@@ -584,6 +663,7 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
             dumpVirtualSensorInfo(&dump_buf);
             dumpThrottlingInfo(&dump_buf);
             dumpThrottlingRequestStatus(&dump_buf);
+            dumpPowerRailInfo(&dump_buf);
             {
                 dump_buf << "AIDL Power Hal exist: " << std::boolalpha
                          << thermal_helper_.isAidlPowerHalExist() << std::endl;
