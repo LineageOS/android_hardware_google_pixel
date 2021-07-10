@@ -34,6 +34,7 @@ using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 constexpr size_t kThrottlingSeverityCount = std::distance(
     hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
 using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
+using CdevArray = std::array<int, static_cast<size_t>(kThrottlingSeverityCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
 constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
 
@@ -60,11 +61,11 @@ enum ReleaseLogic : uint32_t {
 };
 
 struct BindedCdevInfo {
-    ThrottlingArray limit_info;
+    CdevArray limit_info;
     ThrottlingArray power_thresholds;
     ReleaseLogic release_logic;
-    float cdev_weight;
-    int cdev_ceiling;
+    ThrottlingArray cdev_weight_for_pid;
+    CdevArray cdev_ceiling;
     int power_sample_count;
     std::chrono::milliseconds power_sample_delay;
     bool power_reversly_check;

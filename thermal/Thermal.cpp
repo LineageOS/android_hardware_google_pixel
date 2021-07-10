@@ -295,7 +295,7 @@ void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
                     *dump_buf << "MINIMUM";
                     break;
                 default:
-                    *dump_buf << "None";
+                    *dump_buf << "NONE";
                     break;
             }
 
@@ -362,17 +362,28 @@ void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
                      name_info_pair.second.throttling_info->binded_cdev_info_map) {
                     *dump_buf << "   Cooling device name: " << binded_cdev_info_pair.first
                               << std::endl;
+                    *dump_buf << "    WeightForPID: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        *dump_buf << binded_cdev_info_pair.second.cdev_weight_for_pid[i] << " ";
+                    }
+                    *dump_buf << "]" << std::endl;
+                    *dump_buf << "    Ceiling: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        *dump_buf << binded_cdev_info_pair.second.cdev_ceiling[i] << " ";
+                    }
+                    *dump_buf << "]" << std::endl;
                     *dump_buf << "    Hard limit: [";
                     for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         *dump_buf << binded_cdev_info_pair.second.limit_info[i] << " ";
                     }
-                    *dump_buf << "]";
-                    *dump_buf << " Power threshold: [";
+                    *dump_buf << "]" << std::endl;
+
+                    *dump_buf << "    Power threshold: [";
                     for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         *dump_buf << binded_cdev_info_pair.second.power_thresholds[i] << " ";
                     }
-                    *dump_buf << "]";
-                    *dump_buf << " Release logic: ";
+                    *dump_buf << "]" << std::endl;
+                    *dump_buf << "    Release logic: ";
                     switch (binded_cdev_info_pair.second.release_logic) {
                         case ReleaseLogic::DECREASE:
                             *dump_buf << "DECREASE";
@@ -385,13 +396,12 @@ void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
                             break;
                     }
                     *dump_buf << std::endl;
-                    *dump_buf << "    Weight: " << binded_cdev_info_pair.second.cdev_weight;
-                    *dump_buf << " Cdev_ceiling: " << binded_cdev_info_pair.second.cdev_ceiling;
-                    *dump_buf << " Power_sample_count: "
-                              << binded_cdev_info_pair.second.power_sample_count;
-                    *dump_buf << " Power_sample_delay: "
-                              << binded_cdev_info_pair.second.power_sample_delay.count();
-                    *dump_buf << " Power_reversly_check: "
+                    *dump_buf << "    Power_sample_count: "
+                              << binded_cdev_info_pair.second.power_sample_count << std::endl;
+                    *dump_buf << "    Power_sample_delay: "
+                              << binded_cdev_info_pair.second.power_sample_delay.count()
+                              << std::endl;
+                    *dump_buf << "    Power_reversly_check: " << std::boolalpha
                               << binded_cdev_info_pair.second.power_reversly_check << std::endl;
                 }
             }

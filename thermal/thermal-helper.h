@@ -180,17 +180,22 @@ class ThermalHelper {
         ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
         float value) const;
     bool checkVirtualSensor(std::string_view sensor_name, std::string *temp) const;
+
+    // Return the target state of PID algorithm
+    size_t getTargetStateOfPID(const SensorInfo &sensor_info, const SensorStatus &sensor_status);
+
     // Return the power budget which is computed by PID algorithm
     float pidPowerCalculator(const Temperature_2_0 &temp, const SensorInfo &sensor_info,
                              SensorStatus *sensor_status,
-                             const std::chrono::milliseconds time_elapsed_ms);
+                             const std::chrono::milliseconds time_elapsed_ms, size_t target_state);
     bool connectToPowerHal();
     void updateSupportedPowerHints();
     bool requestCdevByPower(std::string_view sensor_name, SensorStatus *sensor_status,
-                            const SensorInfo &sensor_info, float total_power_budget);
+                            const SensorInfo &sensor_info, float total_power_budget,
+                            size_t target_state);
     void requestCdevBySeverity(std::string_view sensor_name, SensorStatus *sensor_status,
                                const SensorInfo &sensor_info);
-    void computeCoolingDevicesRequest(std::string_view sensor_name,
+    void computeCoolingDevicesRequest(std::string_view sensor_name, const SensorInfo &sensor_info,
                                       const SensorStatus &sensor_status,
                                       std::vector<std::string> *cooling_devices_to_update);
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
