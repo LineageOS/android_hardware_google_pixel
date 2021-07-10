@@ -62,7 +62,8 @@ float getFloatFromValue(const Json::Value &value) {
 
 int getIntFromValue(const Json::Value &value) {
     if (value.isString()) {
-        return std::stoi(value.asString());
+        return (value.asString() == "max") ? std::numeric_limits<int>::max()
+                                           : std::stoul(value.asString());
     } else {
         return value.asInt();
     }
@@ -479,7 +480,6 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
                 sensors_parsed.clear();
                 return sensors_parsed;
             }
-
             // Confirm we have at least one valid PID combination
             bool valid_pid_combination = false;
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
@@ -504,8 +504,6 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
             }
         }
 
-        // Parse binded power info
-        LOG(INFO) << "start to parse binded cdev info";
         // Parse binded cooling device
         bool support_hard_limit = false;
         std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
@@ -559,49 +557,66 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
 
             // Parse linked power info
             bool is_power_data_invalid = false;
-            bool power_reversly_check = false;
-            int power_sample_count = 0;
-            std::chrono::milliseconds power_sample_delay;
+            std::string power_rail;
+            bool high_power_check = false;
+            bool throttling_with_power_link = false;
+            CdevArray cdev_floor_with_power_link;
+            cdev_floor_with_power_link.fill(0);
 
             const bool power_link_disabled =
                     android::base::GetBoolProperty(kPowerLinkDisabledProperty.data(), false);
             if (!power_link_disabled) {
-                if (!values[j]["PowerSampleDelay"]) {
-                    power_sample_delay = std::chrono::milliseconds::max();
-                } else {
-                    power_sample_delay = std::chrono::milliseconds(
-                            getIntFromValue(values[j]["PowerSampleDelay"]));
+                power_rail = values[j]["BindedPowerRail"].asString();
+
+                if (values[j]["HighPowerCheck"].asBool()) {
+                    high_power_check = true;
                 }
-                LOG(INFO) << "Power sample delay: " << power_sample_delay.count();
+                LOG(INFO) << "Highpowercheck: " << std::boolalpha << high_power_check;
 
-                if (values[j]["PowerReverslyCheck"].asBool()) {
-                    power_reversly_check = true;
+                if (values[j]["ThrottlingWithPowerLink"].asBool()) {
+                    throttling_with_power_link = true;
                 }
-                LOG(INFO) << "Power reversly check: " << power_reversly_check;
+                LOG(INFO) << "ThrottlingwithPowerLink: " << std::boolalpha
+                          << throttling_with_power_link;
 
-                power_sample_count = values[j]["PowerSampleCount"].asInt();
-                LOG(INFO) << "Power sample Count: " << power_sample_count;
-
+                sub_values = values[j]["CdevFloorWithPowerLink"];
+                if (sub_values.size()) {
+                    LOG(INFO) << "Sensor[" << name << "]: Start to parse " << cdev_name
+                              << "'s CdevFloorWithPowerLink";
+                    if (!getIntFromJsonValues(sub_values, &cdev_floor_with_power_link, false,
+                                              false)) {
+                        LOG(ERROR) << "Failed to parse CdevFloor";
+                        is_power_data_invalid = true;
+                    }
+                }
                 sub_values = values[j]["PowerThreshold"];
                 if (sub_values.size()) {
-                    LOG(INFO) << "Sensor[" << name << "]: Parse " << cdev_name
-                              << "'s Power threshold";
+                    LOG(INFO) << "Sensor[" << name << "]: Start to parse " << cdev_name
+                              << "'s PowerThreshold";
                     if (!getFloatFromJsonValues(sub_values, &power_thresholds, false, false)) {
-                        LOG(ERROR) << "Sensor[" << name << "]: failed to parse power thresholds";
+                        LOG(ERROR) << "Failed to parse power thresholds";
                         is_power_data_invalid = true;
                     }
 
-                    if (values[j]["ReleaseLogic"].asString() == "DECREASE") {
+                    if (values[j]["ReleaseLogic"].asString() == "INCREASE") {
+                        release_logic = ReleaseLogic::INCREASE;
+                        LOG(INFO) << "Release logic: INCREASE";
+                    } else if (values[j]["ReleaseLogic"].asString() == "DECREASE") {
                         release_logic = ReleaseLogic::DECREASE;
                         LOG(INFO) << "Release logic: DECREASE";
-                    } else if (values[j]["ReleaseLogic"].asString() == "BYPASS") {
-                        release_logic = ReleaseLogic::BYPASS;
-                        LOG(INFO) << "Release logic: BYPASS";
+                    } else if (values[j]["ReleaseLogic"].asString() == "STEPWISE") {
+                        release_logic = ReleaseLogic::STEPWISE;
+                        LOG(INFO) << "Release logic: STEPWISE";
+                    } else if (values[j]["ReleaseLogic"].asString() == "RELEASE_TO_FLOOR") {
+                        release_logic = ReleaseLogic::RELEASE_TO_FLOOR;
+                        LOG(INFO) << "Release logic: RELEASE_TO_FLOOR";
                     } else {
+                        LOG(ERROR) << "Release logic is invalid";
                         is_power_data_invalid = true;
                     }
 
                     if (is_power_data_invalid) {
+                        LOG(ERROR) << cdev_name << "'s power rail " << power_rail << " is invalid";
                         sensors_parsed.clear();
                         return sensors_parsed;
                     }
@@ -612,11 +627,12 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
                     .limit_info = limit_info,
                     .power_thresholds = power_thresholds,
                     .release_logic = release_logic,
-                    .power_reversly_check = power_reversly_check,
+                    .high_power_check = high_power_check,
+                    .throttling_with_power_link = throttling_with_power_link,
                     .cdev_weight_for_pid = cdev_weight_for_pid,
                     .cdev_ceiling = cdev_ceiling,
-                    .power_sample_count = power_sample_count,
-                    .power_sample_delay = power_sample_delay,
+                    .cdev_floor_with_power_link = cdev_floor_with_power_link,
+                    .power_rail = power_rail,
             };
         }
 
@@ -735,13 +751,145 @@ std::unordered_map<std::string, CdevInfo> ParseCoolingDevice(std::string_view co
                 .read_path = read_path,
                 .write_path = write_path,
                 .state2power = state2power,
-                .power_rail = power_rail,
         };
         ++total_parsed;
     }
 
     LOG(INFO) << total_parsed << " CoolingDevices parsed successfully";
     return cooling_devices_parsed;
+}
+
+std::unordered_map<std::string, PowerRailInfo> ParsePowerRailInfo(std::string_view config_path) {
+    std::string json_doc;
+    std::unordered_map<std::string, PowerRailInfo> power_rails_parsed;
+    if (!android::base::ReadFileToString(config_path.data(), &json_doc)) {
+        LOG(ERROR) << "Failed to read JSON config from " << config_path;
+        return power_rails_parsed;
+    }
+
+    Json::Value root;
+    Json::CharReaderBuilder builder;
+    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    std::string errorMessage;
+
+    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
+        LOG(ERROR) << "Failed to parse JSON config";
+        return power_rails_parsed;
+    }
+
+    Json::Value power_rails = root["PowerRails"];
+    std::size_t total_parsed = 0;
+    std::unordered_set<std::string> power_rails_name_parsed;
+
+    for (Json::Value::ArrayIndex i = 0; i < power_rails.size(); ++i) {
+        const std::string &name = power_rails[i]["Name"].asString();
+        LOG(INFO) << "PowerRail[" << i << "]'s Name: " << name;
+        if (name.empty()) {
+            LOG(ERROR) << "Failed to read "
+                       << "PowerRail[" << i << "]'s Name";
+            power_rails_parsed.clear();
+            return power_rails_parsed;
+        }
+
+        std::string rail;
+        if (power_rails[i]["Rail"].empty()) {
+            rail = name;
+        } else {
+            rail = power_rails[i]["Rail"].asString();
+        }
+        LOG(INFO) << "PowerRail[" << i << "]'s Rail: " << rail;
+
+        std::vector<std::string> linked_power_rails;
+        std::vector<float> coefficients;
+        float offset = 0;
+        FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
+        bool is_virtual_power_rail = false;
+        Json::Value values;
+        int power_sample_count = 0;
+        std::chrono::milliseconds power_sample_delay;
+
+        if (!power_rails[i]["VirtualRails"].empty() && power_rails[i]["VirtualRails"].isBool()) {
+            is_virtual_power_rail = power_rails[i]["VirtualRails"].asBool();
+            LOG(INFO) << "PowerRails[" << name << "]'s VirtualRail, set to 'true'";
+        }
+
+        if (is_virtual_power_rail) {
+            values = power_rails[i]["Combination"];
+            if (values.size()) {
+                linked_power_rails.reserve(values.size());
+                for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
+                    linked_power_rails.emplace_back(values[j].asString());
+                    LOG(INFO) << "PowerRail[" << name << "]'s combination[" << j
+                              << "]: " << linked_power_rails[j];
+                }
+            } else {
+                power_rails_parsed.clear();
+                return power_rails_parsed;
+            }
+
+            values = power_rails[i]["Coefficient"];
+            if (values.size()) {
+                coefficients.reserve(values.size());
+                for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
+                    coefficients.emplace_back(getFloatFromValue(values[j]));
+                    LOG(INFO) << "PowerRail[" << name << "]'s coefficient[" << j
+                              << "]: " << coefficients[j];
+                }
+            } else {
+                power_rails_parsed.clear();
+                return power_rails_parsed;
+            }
+
+            if (!power_rails[i]["Offset"].empty()) {
+                offset = power_rails[i]["Offset"].asFloat();
+            }
+
+            if (linked_power_rails.size() != coefficients.size()) {
+                power_rails_parsed.clear();
+                return power_rails_parsed;
+            }
+
+            if (power_rails[i]["Formula"].asString().compare("COUNT_THRESHOLD") == 0) {
+                formula = FormulaOption::COUNT_THRESHOLD;
+            } else if (power_rails[i]["Formula"].asString().compare("WEIGHTED_AVG") == 0) {
+                formula = FormulaOption::WEIGHTED_AVG;
+            } else if (power_rails[i]["Formula"].asString().compare("MAXIMUM") == 0) {
+                formula = FormulaOption::MAXIMUM;
+            } else if (power_rails[i]["Formula"].asString().compare("MINIMUM") == 0) {
+                formula = FormulaOption::MINIMUM;
+            } else {
+                power_rails_parsed.clear();
+                return power_rails_parsed;
+            }
+        }
+
+        std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
+        if (is_virtual_power_rail) {
+            virtual_power_rail_info.reset(
+                    new VirtualPowerRailInfo{linked_power_rails, coefficients, offset, formula});
+        }
+
+        power_sample_count = power_rails[i]["PowerSampleCount"].asInt();
+        LOG(INFO) << "Power sample Count: " << power_sample_count;
+
+        if (!power_rails[i]["PowerSampleDelay"]) {
+            power_sample_delay = std::chrono::milliseconds::max();
+        } else {
+            power_sample_delay =
+                    std::chrono::milliseconds(getIntFromValue(power_rails[i]["PowerSampleDelay"]));
+        }
+
+        power_rails_parsed[name] = {
+                .rail = rail,
+                .power_sample_count = power_sample_count,
+                .power_sample_delay = power_sample_delay,
+                .virtual_power_rail_info = std::move(virtual_power_rail_info),
+        };
+        ++total_parsed;
+    }
+
+    LOG(INFO) << total_parsed << " PowerRails parsed successfully";
+    return power_rails_parsed;
 }
 
 }  // namespace implementation
