@@ -288,6 +288,7 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                 .prev_hot_severity = ThrottlingSeverity::NONE,
                 .prev_cold_severity = ThrottlingSeverity::NONE,
                 .prev_hint_severity = ThrottlingSeverity::NONE,
+                .last_update_time = boot_clock::time_point::min(),
                 .err_integral = 0.0,
                 .prev_err = NAN,
         };
@@ -574,7 +575,8 @@ float ThermalHelper::pidPowerCalculator(const Temperature_2_0 &temp, const Senso
         }
     }
 
-    if (!std::isnan(sensor_status->prev_err)) {
+    if (!std::isnan(sensor_status->prev_err) &&
+        time_elapsed_ms != std::chrono::milliseconds::zero()) {
         d = sensor_info.throttling_info->k_d[target_state] * (err - sensor_status->prev_err) /
             time_elapsed_ms.count();
     }
@@ -589,7 +591,7 @@ float ThermalHelper::pidPowerCalculator(const Temperature_2_0 &temp, const Senso
         power_budget = sensor_info.throttling_info->max_alloc_power[target_state];
     }
 
-    LOG(VERBOSE) << " power_budget=" << power_budget << " err=" << err
+    LOG(VERBOSE) << "power_budget=" << power_budget << " err=" << err
                  << " err_integral=" << sensor_status->err_integral
                  << " s_power=" << sensor_info.throttling_info->s_power[target_state]
                  << " time_elpased_ms=" << time_elapsed_ms.count() << " p=" << p << " i=" << i
@@ -1086,25 +1088,35 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
             continue;
         }
 
-        // Check if the sensor need to be updated
-        auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - sensor_status.last_update_time);
+        std::chrono::milliseconds time_elapsed_ms = std::chrono::milliseconds::zero();
         auto sleep_ms = (sensor_status.severity != ThrottlingSeverity::NONE)
                                 ? sensor_info.passive_delay
                                 : sensor_info.polling_delay;
-
-        if (time_elapsed_ms > sleep_ms) {
+        // Check if the sensor need to be updated
+        if (sensor_status.last_update_time == boot_clock::time_point::min()) {
             force_update = true;
-        } else if (uevent_sensors.size() &&
-                   uevent_sensors.find((sensor_info.virtual_sensor_info != nullptr)
-                                               ? sensor_info.virtual_sensor_info->trigger_sensor
-                                               : name_status_pair.first) != uevent_sensors.end()) {
-            force_update = true;
-        } else if (sensor_info.virtual_sensor_info != nullptr) {
-            const auto trigger_sensor_status =
-                    sensor_status_map_.at(sensor_info.virtual_sensor_info->trigger_sensor);
-            if (trigger_sensor_status.severity != ThrottlingSeverity::NONE) {
+            LOG(VERBOSE) << "Force update " << name_status_pair.first
+                         << "'s temperature after booting";
+        } else {
+            time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - sensor_status.last_update_time);
+            if (time_elapsed_ms > sleep_ms) {
+                // Update the sensor because sleep timeout
                 force_update = true;
+            } else if (uevent_sensors.size() &&
+                       uevent_sensors.find((sensor_info.virtual_sensor_info != nullptr)
+                                                   ? sensor_info.virtual_sensor_info->trigger_sensor
+                                                   : name_status_pair.first) !=
+                               uevent_sensors.end()) {
+                // Update the sensor from uevent
+                force_update = true;
+            } else if (sensor_info.virtual_sensor_info != nullptr) {
+                // Update the virtual sensor if it's trigger sensor over the threshold
+                const auto trigger_sensor_status =
+                        sensor_status_map_.at(sensor_info.virtual_sensor_info->trigger_sensor);
+                if (trigger_sensor_status.severity != ThrottlingSeverity::NONE) {
+                    force_update = true;
+                }
             }
         }
 
