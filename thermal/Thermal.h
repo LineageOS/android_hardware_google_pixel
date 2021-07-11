@@ -85,6 +85,7 @@ class Thermal : public IThermal {
     void dumpVirtualSensorInfo(std::ostringstream *dump_buf);
     void dumpThrottlingInfo(std::ostringstream *dump_buf);
     void dumpThrottlingRequestStatus(std::ostringstream *dump_buf);
+    void dumpPowerRailInfo(std::ostringstream *dump_buf);
     std::mutex thermal_callback_mutex_;
     std::vector<CallbackSetting> callbacks_;
 };
