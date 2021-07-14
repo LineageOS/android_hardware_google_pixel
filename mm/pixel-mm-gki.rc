@@ -16,6 +16,8 @@ on init
     # memory reserve tuning
     write /proc/sys/vm/min_free_kbytes 27386
     write /proc/sys/vm/lowmem_reserve_ratio "0 0 0"
+    # khugepaged tuning
+    write /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 60000
 
 on property:sys.boot_completed=1
     chmod 444 /sys/kernel/debug/page_owner
