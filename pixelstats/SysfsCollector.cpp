@@ -46,6 +46,7 @@ using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
@@ -558,6 +559,68 @@ void SysfsCollector::logF2fsCompressionInfo(const std::shared_ptr<IStats> &stats
     }
 }
 
+int SysfsCollector::getReclaimedSegments(const std::string &mode) {
+    std::string userDataStatsPath = kF2fsStatsPath + getUserDataBlock();
+    std::string gcSegmentModePath = userDataStatsPath + "/gc_segment_mode";
+    std::string gcReclaimedSegmentsPath = userDataStatsPath + "/gc_reclaimed_segments";
+    int reclaimed_segments;
+
+    if (!WriteStringToFile(mode, gcSegmentModePath)) {
+        ALOGE("Failed to change gc_segment_mode to %s", mode.c_str());
+        return -1;
+    }
+
+    if (!ReadFileToInt(gcReclaimedSegmentsPath, &reclaimed_segments)) {
+        ALOGE("GC mode(%s): Unable to read gc_reclaimed_segments", mode.c_str());
+        return -1;
+    }
+
+    if (!WriteStringToFile(std::to_string(0), gcReclaimedSegmentsPath)) {
+        ALOGE("GC mode(%s): Failed to reset gc_reclaimed_segments", mode.c_str());
+        return -1;
+    }
+
+    return reclaimed_segments;
+}
+
+void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_client) {
+    int reclaimed_segments_normal, reclaimed_segments_urgent_high, reclaimed_segments_urgent_low;
+    std::string gc_normal_mode = std::to_string(0);         // GC normal mode
+    std::string gc_urgent_high_mode = std::to_string(4);    // GC urgent high mode
+    std::string gc_urgent_low_mode = std::to_string(5);     // GC urgent low mode
+
+    if (kF2fsStatsPath == nullptr) {
+        ALOGV("F2fs stats path not specified");
+        return;
+    }
+
+    reclaimed_segments_normal = getReclaimedSegments(gc_normal_mode);
+    if (reclaimed_segments_normal == -1) return;
+    reclaimed_segments_urgent_high = getReclaimedSegments(gc_urgent_high_mode);
+    if (reclaimed_segments_urgent_high == -1) return;
+    reclaimed_segments_urgent_low = getReclaimedSegments(gc_urgent_low_mode);
+    if (reclaimed_segments_urgent_low == -1) return;
+
+    // Load values array
+    std::vector<VendorAtomValue> values(3);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(reclaimed_segments_normal);
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsNormalFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_high);
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentHighFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_low);
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Atom::kF2FsGcSegmentInfo,
+                        .values = values};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report F2fs GC Segment info to Stats service");
+    }
+}
+
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
@@ -732,6 +795,7 @@ void SysfsCollector::logPerDay() {
     logCodecFailed(stats_client);
     logF2fsStats(stats_client);
     logF2fsCompressionInfo(stats_client);
+    logF2fsGcSegmentInfo(stats_client);
     logSlowIO(stats_client);
     logSpeakerImpedance(stats_client);
     logSpeechDspStat(stats_client);
