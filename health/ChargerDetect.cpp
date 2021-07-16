@@ -116,7 +116,7 @@ void ChargerDetect::onlineUpdate(struct android::BatteryProperties *props) {
 
     if (tcpmPsyName.empty()) {
         populateTcpmPsyName(&tcpmPsyName);
-	KLOG_INFO(LOG_TAG, "TcpmPsyName:%s\n", tcpmPsyName.c_str());
+        KLOG_INFO(LOG_TAG, "TcpmPsyName:%s\n", tcpmPsyName.c_str());
     }
 
     if (!getIntField(kUsbOnlinePath)) {
@@ -134,6 +134,9 @@ void ChargerDetect::onlineUpdate(struct android::BatteryProperties *props) {
 	}
     }
 
+    /* Safe to assume AC charger here if BC1.2 non compliant */
+    props->chargerAcOnline = true;
+
     if (tcpmPsyName.empty()) {
         return;
     }
@@ -145,9 +148,6 @@ void ChargerDetect::onlineUpdate(struct android::BatteryProperties *props) {
     }
 
     KLOG_INFO(LOG_TAG, "TcpmPsy Usbtype:%s\n", usbPsyType.c_str());
-    if (usbPsyType == "PD" || usbPsyType == "PD_PPS") {
-        props->chargerAcOnline = true;
-    }
 
     return;
 }
