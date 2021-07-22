@@ -76,7 +76,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
-      kEEPROMPath(sysfs_paths.EEPROMPath) {}
+      kEEPROMPath(sysfs_paths.EEPROMPath),
+      kPowerMitigationStatsPath(sysfs_paths.MitigationPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -813,6 +814,9 @@ void SysfsCollector::logPerHour() {
         return;
     }
     mm_metrics_reporter_.logPixelMmMetricsPerHour(stats_client);
+    if (kPowerMitigationStatsPath != nullptr && strlen(kPowerMitigationStatsPath) > 0)
+        mitigation_stats_reporter_.logMitigationStatsPerHour(stats_client,
+                                                             kPowerMitigationStatsPath);
 }
 
 /**
