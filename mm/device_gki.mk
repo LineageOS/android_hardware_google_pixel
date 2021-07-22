@@ -12,4 +12,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.zram.first_wb_delay_mins=1440 \
     ro.zram.periodic_wb_delay_hours=24
 
+# LMK tuning
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.lmk.filecache_min_kb=153600
+
 BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/mm/gki
