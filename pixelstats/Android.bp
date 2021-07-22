@@ -61,6 +61,7 @@ cc_library {
     "BatteryEEPROMReporter.cpp",
     "DropDetect.cpp",
     "MmMetricsReporter.cpp",
+    "MitigationStatsReporter.cpp",
     "OrientationCollector.cpp",
     "StatsHelper.cpp",
     "SysfsCollector.cpp",
