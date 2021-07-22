@@ -64,6 +64,7 @@ message Atom {
       VendorBatteryHealthSnapshot vendor_battery_health_snapshot = 105026; // moved from atoms.proto
       VendorBatteryCausedShutdown vendor_battery_caused_shutdown = 105027; // moved from atoms.proto
       F2fsGcSegmentInfo f2fs_gc_segment_info = 105028;
+      PowerMitigationStats mitigation_stats = 105029; // moved from atoms.proto
 
       CitadelVersion citadel_version = 100018; // moved from vendor proprietary
       CitadelEvent citadel_event = 100019;  // moved from vendor proprietary
@@ -699,6 +700,61 @@ message VendorBatteryCausedShutdown {
  optional string reverse_domain_name = 1;
  // The last recorded battery voltage prior to shutdown.
  optional int32 last_recorded_micro_volt = 2;
+}
+
+/**
+ * Log mitigation statistics.
+ */
+message PowerMitigationStats {
+ optional string reverse_domain_name = 1;
+ // The last triggered count: batoilo.
+ optional int32 batoilo_count = 2;
+ // The last triggered count: vdroop1.
+ optional int32 vdroop1_count = 3;
+ // The last triggered count: vdroop2.
+ optional int32 vdroop2_count = 4;
+ // The last triggered count: smpl_warn.
+ optional int32 smpl_warn_count = 5;
+ // The last triggered count: ocp_cpu1.
+ optional int32 ocp_cpu1_count = 6;
+ // The last triggered count: ocp_cpu2.
+ optional int32 ocp_cpu2_count = 7;
+ // The last triggered count: ocp_gpu.
+ optional int32 ocp_gpu_count = 8;
+ // The last triggered count: ocp_tpu.
+ optional int32 ocp_tpu_count = 9;
+ // The last triggered count: soft_ocp_cpu1.
+ optional int32 soft_ocp_cpu1_count = 10;
+ // The last triggered count: soft_ocp_cpu2.
+ optional int32 soft_ocp_cpu2_count = 11;
+ // The last triggered count: soft_ocp_gpu.
+ optional int32 soft_ocp_gpu_count = 12;
+ // The last triggered count: soft_ocp_tpu.
+ optional int32 soft_ocp_tpu_count = 13;
+ // The last triggered capacity: batoilo.
+ optional int32 batoilo_cap = 14;
+ // The last triggered capacity: vdroop1.
+ optional int32 vdroop1_cap = 15;
+ // The last triggered capacity: vdroop2.
+ optional int32 vdroop2_cap = 16;
+ // The last triggered capacity: smpl_warn.
+ optional int32 smpl_warn_cap = 17;
+ // The last triggered capacity: ocp_cpu1.
+ optional int32 ocp_cpu1_cap = 18;
+ // The last triggered capacity: ocp_cpu2.
+ optional int32 ocp_cpu2_cap = 19;
+ // The last triggered capacity: ocp_gpu.
+ optional int32 ocp_gpu_cap = 20;
+ // The last triggered capacity: ocp_tpu.
+ optional int32 ocp_tpu_cap = 21;
+ // The last triggered capacity: soft_ocp_cpu1.
+ optional int32 soft_ocp_cpu1_cap = 22;
+ // The last triggered capacity: soft_ocp_cpu2.
+ optional int32 soft_ocp_cpu2_cap = 23;
+ // The last triggered capacity: soft_ocp_gpu.
+ optional int32 soft_ocp_gpu_cap = 24;
+ // The last triggered capacity: soft_ocp_tpu.
+ optional int32 soft_ocp_tpu_cap = 25;
 }
 
 /**
