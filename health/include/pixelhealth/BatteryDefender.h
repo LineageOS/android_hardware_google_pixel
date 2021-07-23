@@ -40,6 +40,7 @@ const int DEFAULT_CHARGE_LEVEL_STOP = 100;
 const int DEFAULT_CHARGE_LEVEL_DEFENDER_START = 70;
 const int DEFAULT_CHARGE_LEVEL_DEFENDER_STOP = 80;
 const int DEFAULT_CAPACITY_LEVEL = 100;
+const int WRITE_DELAY_SECS = 2 * ONE_MIN_IN_SECONDS;
 
 const char *const PATH_NOT_SUPPORTED = "";
 
@@ -116,6 +117,7 @@ class BatteryDefender {
     const int kChargeLevelDefenderStart = DEFAULT_CHARGE_LEVEL_DEFENDER_START;
     const int kChargeLevelDefenderStop = DEFAULT_CHARGE_LEVEL_DEFENDER_STOP;
     const int kChargeHighCapacityLevel = DEFAULT_CAPACITY_LEVEL;
+    const int kWriteDelaySecs = WRITE_DELAY_SECS;
 
     // Inputs
     int64_t mTimeBetweenUpdateCalls = 0;
