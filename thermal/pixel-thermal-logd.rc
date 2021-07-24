@@ -129,6 +129,8 @@ on property:vendor.disable.bcl.control=0
 # Switch USB port overheat protection
 on property:vendor.disable.usb.overheat.mitigation.control=1
     write /sys/module/overheat_mitigation/parameters/enable 0
+    write /dev/thermal/tz-by-name/usb_pwr_therm2/emul_temp 25000
 
 on property:vendor.disable.usb.overheat.mitigation.control=0
     write /sys/module/overheat_mitigation/parameters/enable 1
+    write /dev/thermal/tz-by-name/usb_pwr_therm2/emul_temp 0
