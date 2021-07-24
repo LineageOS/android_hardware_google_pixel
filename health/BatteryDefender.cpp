@@ -113,9 +113,10 @@ bool BatteryDefender::writeIntToFile(const std::string &path, const int value) {
 }
 
 void BatteryDefender::writeTimeToFile(const std::string &path, const int value, int64_t *previous) {
-    // 30 second delay before repeated writes
-    const bool hasTimeChangedSignificantly = ((value == 0) || (*previous == -1) ||
-                                              (value > *previous + 30) || (value < *previous - 30));
+    // Some number of seconds delay before repeated writes
+    const bool hasTimeChangedSignificantly =
+            ((value == 0) || (*previous == -1) || (value > (*previous + kWriteDelaySecs)) ||
+             (value < (*previous - kWriteDelaySecs)));
     if ((value != *previous) && hasTimeChangedSignificantly) {
         writeIntToFile(path, value);
         *previous = value;
