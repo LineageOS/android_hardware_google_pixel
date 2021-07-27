@@ -14,6 +14,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES_DEBUG += \
     test_citadel
 
+# Resume on Reboot support
+PRODUCT_PACKAGES += \
+    android.hardware.rebootescrow-service.citadel
+
 # init scripts (won't be in AOSP)
 -include vendor/google_nos/init/citadel/init.mk
 
