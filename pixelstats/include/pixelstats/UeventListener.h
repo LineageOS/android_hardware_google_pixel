@@ -20,6 +20,7 @@
 #include <aidl/android/frameworks/stats/IStats.h>
 #include <android-base/chrono_utils.h>
 #include <pixelstats/BatteryCapacityReporter.h>
+#include <pixelstats/PcaChargeStats.h>
 #include <pixelstats/WirelessChargeStats.h>
 #include <pixelstats/WlcReporter.h>
 
@@ -82,8 +83,9 @@ class UeventListener {
                                    const bool isBroken);
     void ReportUsbPortOverheatEvent(const std::shared_ptr<IStats> &stats_client,
                                     const char *driver);
-    void ReportChargeStats(const std::shared_ptr<IStats> &stats_client, const char *line,
-                           const char *wline_at, const char *wline_ac);
+    void ReportChargeStats(const std::shared_ptr<IStats> &stats_client, const std::string line,
+                           const std::string wline_at, const std::string wline_ac,
+                           const std::string pca_line);
     void ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client, const char *line,
                                 const bool has_wireless, const std::string wfile_contents);
     void ReportChargeMetricsEvent(const std::shared_ptr<IStats> &stats_client, const char *driver);
@@ -112,6 +114,7 @@ class UeventListener {
     int uevent_fd_;
     int log_fd_;
 
+    PcaChargeStats pca_charge_stats_;
     WirelessChargeStats wireless_charge_stats_;
 
     WlcReporter wlc_reporter_ = WlcReporter(kWirelessChargerPtmcPath.c_str());
