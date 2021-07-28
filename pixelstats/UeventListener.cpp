@@ -178,8 +178,8 @@ void UeventListener::ReportUsbPortOverheatEvent(const std::shared_ptr<IStats> &s
 }
 
 void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_client,
-                                       const char *line, const char *wline_at,
-                                       const char *wline_ac) {
+                                       const std::string line, const std::string wline_at,
+                                       const std::string wline_ac, const std::string pca_line) {
     int charge_stats_fields[] = {ChargeStats::kAdapterTypeFieldNumber,
                                  ChargeStats::kAdapterVoltageFieldNumber,
                                  ChargeStats::kAdapterAmperageFieldNumber,
@@ -200,27 +200,47 @@ void UeventListener::ReportChargeStats(const std::shared_ptr<IStats> &stats_clie
     std::vector<VendorAtomValue> values(chg_fields_size);
     VendorAtomValue val;
     int32_t i = 0, tmp[chg_fields_size] = {0}, fields_size = (chg_fields_size - wlc_fields_size);
+    int32_t pca_ac[2] = {0}, pca_rs[5] = {0};
 
-    ALOGD("ChargeStats: processing %s", line);
-    if (sscanf(line, "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5],
-               &tmp[6]) != 7) {
-        ALOGE("Couldn't process %s", line);
+    ALOGD("ChargeStats: processing %s", line.c_str());
+    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
+               &tmp[5], &tmp[6]) != 7) {
+        ALOGE("Couldn't process %s", line.c_str());
         return;
     }
 
-    if (wline_at) {
+    if (!wline_at.empty()) {
         int32_t ssoc_tmp = 0;
-        ALOGD("ChargeStats(wlc): processing %s", wline_at);
-        if (sscanf(wline_at, "A:%d", &ssoc_tmp) != 1) {
-            ALOGE("Couldn't process %s", wline_at);
+        ALOGD("ChargeStats(wlc): processing %s", wline_at.c_str());
+        if (sscanf(wline_at.c_str(), "A:%d", &ssoc_tmp) != 1) {
+            ALOGE("Couldn't process %s", wline_at.c_str());
         } else {
             tmp[0] = wireless_charge_stats_.TranslateSysModeToAtomValue(ssoc_tmp);
-            ALOGD("ChargeStats(wlc): processing %s", wline_ac);
-            if (sscanf(wline_ac, "D:%x,%x,%x,%x,%x, %x,%x", &tmp[7], &tmp[8], &tmp[9], &tmp[10],
-                       &tmp[11], &tmp[12], &tmp[13]) != 7)
-                ALOGE("Couldn't process %s", wline_ac);
+            ALOGD("ChargeStats(wlc): processing %s", wline_ac.c_str());
+            if (sscanf(wline_ac.c_str(), "D:%x,%x,%x,%x,%x, %x,%x", &tmp[7], &tmp[8], &tmp[9],
+                       &tmp[10], &tmp[11], &tmp[12], &tmp[13]) != 7)
+                ALOGE("Couldn't process %s", wline_ac.c_str());
             else
                 fields_size = chg_fields_size; /* include wlc stats */
+        }
+    }
+
+    if (!pca_line.empty()) {
+        ALOGD("ChargeStats(pca): processing %s", pca_line.c_str());
+        if (sscanf(pca_line.c_str(), "D:%x,%x %x,%x,%x,%x,%x", &pca_ac[0], &pca_ac[1], &pca_rs[0],
+                   &pca_rs[1], &pca_rs[2], &pca_rs[3], &pca_rs[4]) != 7) {
+            ALOGE("Couldn't process %s", pca_line.c_str());
+        } else {
+            fields_size = chg_fields_size; /* include pca stats */
+            tmp[9] = pca_rs[2];
+            tmp[10] = pca_rs[3];
+            tmp[11] = pca_rs[4];
+            tmp[13] = pca_rs[1];
+            if (wline_at.empty()) {
+                tmp[7] = pca_ac[0];
+                tmp[8] = pca_ac[1];
+                tmp[12] = pca_rs[0];
+            }
         }
     }
 
@@ -312,9 +332,11 @@ void UeventListener::ReportChargeMetricsEvent(const std::shared_ptr<IStats> &sta
         return;
     }
 
-    std::string file_contents, line, wfile_contents;
+    std::string file_contents, line, wfile_contents, wline_at, wline_ac, pca_file_contents,
+            pca_line;
     std::istringstream ss;
     bool has_wireless = wireless_charge_stats_.CheckWirelessContentsAndAck(&wfile_contents);
+    bool has_pca = pca_charge_stats_.CheckPcaContentsAndAck(&pca_file_contents);
 
     if (!ReadFileToString(kChargeMetricsPath.c_str(), &file_contents)) {
         ALOGE("Unable to read %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
@@ -332,20 +354,26 @@ void UeventListener::ReportChargeMetricsEvent(const std::shared_ptr<IStats> &sta
         ALOGE("Couldn't clear %s - %s", kChargeMetricsPath.c_str(), strerror(errno));
     }
 
+    if (has_pca) {
+        std::istringstream pca_ss;
+
+        pca_ss.str(pca_file_contents);
+        std::getline(pca_ss, pca_line);
+    }
+
     if (has_wireless) {
-        std::string wline_at, wline_ac;
         std::istringstream wss;
 
         /* there are two lines in the head, A: ...(Adapter Type) and D: ...(Adapter Capabilities) */
         wss.str(wfile_contents);
         std::getline(wss, wline_at);
         std::getline(wss, wline_ac);
-        ReportChargeStats(stats_client, line.c_str(), wline_at.c_str(), wline_ac.c_str());
+
         /* reset initial tier soc */
         wireless_charge_stats_.tier_soc_ = 0;
-    } else {
-        ReportChargeStats(stats_client, line.c_str(), NULL, NULL);
     }
+
+    ReportChargeStats(stats_client, line, wline_at, wline_ac, pca_line);
 
     while (std::getline(ss, line)) {
         ReportVoltageTierStats(stats_client, line.c_str(), has_wireless, wfile_contents);
