@@ -99,9 +99,12 @@ bool HwApiBase::get(T *value, std::istream *stream) {
     std::scoped_lock ioLock{mIoMutex};
     bool ret;
     stream->seekg(0);
-    *stream >> *value;
+    utils::unpack(*stream, value);
     if (!(ret = !!*stream)) {
         ALOGE("Failed to read %s (%d): %s", mNames[stream].c_str(), errno, strerror(errno));
+    }
+    if (!(ret = stream->eof())) {
+        ALOGE("Invalid %s !", mNames[stream].c_str());
     }
     stream->clear();
     HWAPI_RECORD(*value, stream);
