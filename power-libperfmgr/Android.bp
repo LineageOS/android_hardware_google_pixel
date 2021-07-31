@@ -33,6 +33,22 @@ cc_library {
     ],
 }
 
+cc_library {
+    name: "libadaptivecpu",
+    proprietary: true,
+    vendor: true,
+    srcs: [
+        "adaptivecpu/AdaptiveCpu.cpp",
+    ],
+    shared_libs: [
+        "android.hardware.power-V2-ndk_platform",
+        "libbase",
+        "liblog",
+        "libperfmgr",
+        "libutils",
+    ],
+}
+
 // Deprecated, do not use
 // Use pixel-power-ext for vendor extension
 cc_library_headers {
@@ -49,6 +65,7 @@ cc_binary {
     vendor: true,
     shared_libs: [
         "android.hardware.power-V2-ndk_platform",
+        "libadaptivecpu",
         "libbase",
         "libcutils",
         "liblog",
