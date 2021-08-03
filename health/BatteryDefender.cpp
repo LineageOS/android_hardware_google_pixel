@@ -291,6 +291,13 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
                 const int timeToClear = android::base::GetIntProperty(
                         kPropBatteryDefenderCtrlResumeTime, kTimeToClearTimerSecs, 0, INT32_MAX);
 
+                const int bdClear = android::base::GetIntProperty(kPropBatteryDefenderCtrlClear, 0);
+
+                if (bdClear > 0) {
+                    android::base::SetProperty(kPropBatteryDefenderCtrlClear, "0");
+                    nextState = STATE_DISCONNECTED;
+                }
+
                 /* Check for mIsPowerAvailable in case timeToClear is 0 */
                 if ((mTimeChargerNotPresentSecs >= timeToClear) && (mIsPowerAvailable == false)) {
                     nextState = STATE_DISCONNECTED;
