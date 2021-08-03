@@ -98,6 +98,7 @@ class BatteryDefender {
     const char *const kPropBatteryDefenderDisable = "vendor.battery.defender.disable";
     const char *const kPropBatteryDefenderThreshold = "vendor.battery.defender.threshold";
     const char *const kPropBootmode = "ro.bootmode";
+
     const char *const kPropBatteryDefenderCtrlEnable = "vendor.battery.defender.ctrl.enable";
     const char *const kPropBatteryDefenderCtrlActivateTime =
             "vendor.battery.defender.ctrl.trigger_time";
@@ -109,6 +110,7 @@ class BatteryDefender {
             "vendor.battery.defender.ctrl.recharge_soc_stop";
     const char *const kPropBatteryDefenderCtrlTriggerSOC =
             "vendor.battery.defender.ctrl.trigger_soc";
+    const char *const kPropBatteryDefenderCtrlClear = "vendor.battery.defender.ctrl.clear";
 
     // Default thresholds
     const bool kDefaultEnable = true;
