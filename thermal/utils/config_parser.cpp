@@ -360,6 +360,12 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
             }
         }
 
+        std::string temp_path;
+        if (!sensors[i]["TempPath"].empty()) {
+            temp_path = sensors[i]["TempPath"].asString();
+            LOG(INFO) << "Sensor[" << name << "]'s TempPath: " << temp_path;
+        }
+
         float vr_threshold = NAN;
         vr_threshold = getFloatFromValue(sensors[i]["VrThreshold"]);
         LOG(INFO) << "Sensor[" << name << "]'s VrThreshold: " << vr_threshold;
@@ -655,6 +661,7 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
                 .cold_thresholds = cold_thresholds,
                 .hot_hysteresis = hot_hysteresis,
                 .cold_hysteresis = cold_hysteresis,
+                .temp_path = temp_path,
                 .vr_threshold = vr_threshold,
                 .multiplier = multiplier,
                 .polling_delay = polling_delay,
