@@ -75,7 +75,7 @@ cc_library {
     "-Werror",
   ],
   shared_libs: [
-    "android.frameworks.stats-V1-ndk_platform",
+    "android.frameworks.stats-V1-ndk",
     "libbase",
     "libbinder_ndk",
     "libcutils",
@@ -86,7 +86,7 @@ cc_library {
     "pixelatoms-cpp",
   ],
   export_shared_lib_headers: [
-    "android.frameworks.stats-V1-ndk_platform",
+    "android.frameworks.stats-V1-ndk",
     "pixelatoms-cpp",
   ],
   static_libs: [
