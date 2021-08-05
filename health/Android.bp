@@ -28,12 +28,12 @@ cc_library {
     ],
 
     export_shared_lib_headers: [
-        "android.frameworks.stats-V1-ndk_platform",
+        "android.frameworks.stats-V1-ndk",
         "pixelatoms-cpp",
     ],
 
     shared_libs: [
-        "android.frameworks.stats-V1-ndk_platform",
+        "android.frameworks.stats-V1-ndk",
         "libbase",
         "libbinder_ndk",
         "libcutils",
