@@ -1,4 +1,4 @@
-on boot
+on boot && property:ro.boot.revision=PROTO1.0
     wait /sys/class/leds/vibrator_1/device
 
     mkdir /mnt/vendor/persist/haptics 0770 system system
@@ -47,7 +47,7 @@ on boot
 
     enable vendor.vibrator.cs40l25-dual
 
-service vendor.vibrator.cs40l25-dual /vendor/bin/hw/android.hardware.vibrator-service.cs40l25-dual
+service vendor.vibrator.cs40l25-dual /vendor/bin/hw/android.hardware.vibrator-service.cs40l25-specific-revision-dual
     class hal
     user system
     group system
