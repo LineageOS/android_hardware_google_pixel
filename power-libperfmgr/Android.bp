@@ -41,7 +41,7 @@ cc_library {
         "adaptivecpu/AdaptiveCpu.cpp",
     ],
     shared_libs: [
-        "android.hardware.power-V2-ndk_platform",
+        "android.hardware.power-V2-ndk",
         "libbase",
         "liblog",
         "libperfmgr",
@@ -64,7 +64,7 @@ cc_binary {
     vintf_fragments: ["aidl/android.hardware.power-service.pixel.xml"],
     vendor: true,
     shared_libs: [
-        "android.hardware.power-V2-ndk_platform",
+        "android.hardware.power-V2-ndk",
         "libadaptivecpu",
         "libbase",
         "libcutils",
@@ -74,7 +74,7 @@ cc_binary {
         "libdisppower-pixel",
         "libperfmgr",
         "libprocessgroup",
-        "pixel-power-ext-V1-ndk_platform",
+        "pixel-power-ext-V1-ndk",
     ],
     srcs: [
         "aidl/service.cpp",
