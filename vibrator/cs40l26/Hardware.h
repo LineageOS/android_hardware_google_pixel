@@ -38,8 +38,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setQ(std::string value) override { return set(value, &mQ); }
     bool setActivate(bool value) override { return set(value, &mActivate); }
     bool setDuration(uint32_t value) override { return set(value, &mDuration); }
-    bool getEffectCount(uint32_t *value) override { return get(value, &mEffectCount); }
-    bool getEffectDuration(uint32_t *value) override { return get(value, &mEffectDuration); }
+    bool getEffectCount(uint32_t *value) override { return getStr(value, &mEffectCount); }
+    bool getEffectDuration(uint32_t *value) override { return getStr(value, &mEffectDuration); }
     bool setEffectIndex(uint32_t value) override { return set(value, &mEffectIndex); }
     bool setEffectQueue(std::string value) override { return set(value, &mEffectQueue); }
     bool hasEffectScale() override { return has(mEffectScale); }
@@ -47,16 +47,16 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setGlobalScale(uint32_t value) override { return set(value, &mGlobalScale); }
     bool setState(bool value) override { return set(value, &mState); }
     bool hasAspEnable() override { return false; }
-    bool getAspEnable(bool *value) override { return get(value, &mAspEnable); }
+    bool getAspEnable(bool *value) override { return getStr(value, &mAspEnable); }
     bool setAspEnable(bool value) override { return set(value, &mAspEnable); }
     bool setGpioFallIndex(uint32_t value) override { return set(value, &mGpioFallIndex); }
     bool setGpioFallScale(uint32_t value) override { return set(value, &mGpioFallScale); }
     bool setGpioRiseIndex(uint32_t value) override { return set(value, &mGpioRiseIndex); }
     bool setGpioRiseScale(uint32_t value) override { return set(value, &mGpioRiseScale); }
-    bool pollVibeState(std::string value) override { return poll(value, &mVibeState); }
+    bool pollVibeState(std::string value) override { return pollStr(value, &mVibeState); }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
     bool getAvailablePwleSegments(uint32_t *value) override {
-        return get(value, &mAvailablePwleSegments);
+        return getStr(value, &mAvailablePwleSegments);
     }
     bool setPwle(std::string value) override { return set(value, &mPwle); }
     void debug(int fd) override { HwApiBase::debug(fd); }
