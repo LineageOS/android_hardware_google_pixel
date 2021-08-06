@@ -51,6 +51,7 @@ constexpr std::string_view kSensorTripPointHystZeroFile("trip_point_0_hyst");
 constexpr std::string_view kUserSpaceSuffix("user_space");
 constexpr std::string_view kCoolingDeviceCurStateSuffix("cur_state");
 constexpr std::string_view kCoolingDeviceMaxStateSuffix("max_state");
+constexpr std::string_view kCoolingDeviceState2powerSuffix("state2power_table");
 constexpr std::string_view kConfigProperty("vendor.thermal.config");
 constexpr std::string_view kConfigDefaultFileName("thermal_info_config.json");
 constexpr std::string_view kThermalGenlProperty("persist.vendor.enable.thermal.genl");
@@ -848,6 +849,26 @@ bool ThermalHelper::initializeCoolingDevices(
             continue;
         }
 
+        std::string state2power_path = android::base::StringPrintf(
+                "%s/%s", path.data(), kCoolingDeviceState2powerSuffix.data());
+        std::string state2power_str;
+        if (android::base::ReadFileToString(state2power_path, &state2power_str)) {
+            LOG(INFO) << "Cooling device " << cooling_device_info_pair.first
+                      << " use state2power read from sysfs";
+            cooling_device_info_pair.second.state2power.clear();
+
+            std::stringstream power(state2power_str);
+            unsigned int power_number;
+            int i = 0;
+            while (power >> power_number) {
+                cooling_device_info_pair.second.state2power.push_back(
+                        static_cast<float>(power_number));
+                LOG(INFO) << "Cooling device " << cooling_device_info_pair.first << " state:" << i
+                          << " power: " << power_number;
+                i++;
+            }
+        }
+
         // Get max cooling device request state
         std::string max_state;
         std::string max_state_path = android::base::StringPrintf(
@@ -859,7 +880,17 @@ bool ThermalHelper::initializeCoolingDevices(
         } else {
             cooling_device_info_pair.second.max_state = std::stoi(android::base::Trim(max_state));
             LOG(INFO) << "Cooling device " << cooling_device_info_pair.first
-                      << " max state: " << cooling_device_info_pair.second.max_state;
+                      << " max state: " << cooling_device_info_pair.second.max_state
+                      << " state2power number: "
+                      << cooling_device_info_pair.second.state2power.size();
+            if (cooling_device_info_pair.second.state2power.size() > 0 &&
+                cooling_device_info_pair.second.state2power.size() !=
+                        (size_t)cooling_device_info_pair.second.max_state + 1) {
+                LOG(ERROR) << "Invalid state2power number: "
+                           << cooling_device_info_pair.second.state2power.size()
+                           << ", number should be " << cooling_device_info_pair.second.max_state + 1
+                           << " (max_state + 1)";
+            }
         }
 
         // Add cooling device path for thermalHAL to request state
