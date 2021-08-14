@@ -34,11 +34,13 @@ namespace google {
 namespace pixel {
 namespace health {
 
-BatteryDefender::BatteryDefender(const char *pathWirelessPresent, const char *pathChargeLevelStart,
-                                 const char *pathChargeLevelStop, const int32_t timeToActivateSecs,
+BatteryDefender::BatteryDefender(const std::string pathWirelessPresent,
+                                 const std::string pathChargeLevelStart,
+                                 const std::string pathChargeLevelStop,
+                                 const int32_t timeToActivateSecs,
                                  const int32_t timeToClearTimerSecs)
 
-    : kPathWirelessPresent(pathWirelessPresent),
+    : mPathWirelessPresent(pathWirelessPresent),
       kPathChargeLevelStart(pathChargeLevelStart),
       kPathChargeLevelStop(pathChargeLevelStop),
       kTimeToActivateSecs(timeToActivateSecs),
@@ -51,6 +53,10 @@ void BatteryDefender::clearStateData(void) {
     mTimeActiveSecs = 0;
     mTimeChargerNotPresentSecs = 0;
     mTimeChargerPresentSecs = 0;
+}
+
+void BatteryDefender::setWirelessNotSupported(void) {
+    mPathWirelessPresent = PATH_NOT_SUPPORTED;
 }
 
 void BatteryDefender::loadPersistentStorage(void) {
@@ -77,16 +83,19 @@ void BatteryDefender::removeLineEndings(std::string *str) {
     str->erase(std::remove(str->begin(), str->end(), '\r'), str->end());
 }
 
-int BatteryDefender::readFileToInt(const char *path, const bool optionalFile) {
+int BatteryDefender::readFileToInt(const std::string &path) {
     std::string buffer;
     int value = 0;  // default
+
+    if (path == PATH_NOT_SUPPORTED) {
+        return value;
+    }
+
     if (!android::base::ReadFileToString(path, &buffer)) {
-        if (optionalFile == false) {
-            LOG(ERROR) << "Failed to read " << path;
-        }
+        LOG(ERROR) << "Failed to read " << path;
     } else {
         removeLineEndings(&buffer);
-        if (!android::base::ParseInt(buffer.c_str(), &value)) {
+        if (!android::base::ParseInt(buffer, &value)) {
             LOG(ERROR) << "Failed to parse " << path;
         }
     }
@@ -94,7 +103,7 @@ int BatteryDefender::readFileToInt(const char *path, const bool optionalFile) {
     return value;
 }
 
-bool BatteryDefender::writeIntToFile(const char *path, const int value) {
+bool BatteryDefender::writeIntToFile(const std::string &path, const int value) {
     bool success = android::base::WriteStringToFile(std::to_string(value), path);
     if (!success) {
         LOG(ERROR) << "Failed to write " << path;
@@ -103,10 +112,11 @@ bool BatteryDefender::writeIntToFile(const char *path, const int value) {
     return success;
 }
 
-void BatteryDefender::writeTimeToFile(const char *path, const int value, int64_t *previous) {
-    // 30 second delay before repeated writes
-    const bool hasTimeChangedSignificantly = ((value == 0) || (*previous == -1) ||
-                                              (value > *previous + 30) || (value < *previous - 30));
+void BatteryDefender::writeTimeToFile(const std::string &path, const int value, int64_t *previous) {
+    // Some number of seconds delay before repeated writes
+    const bool hasTimeChangedSignificantly =
+            ((value == 0) || (*previous == -1) || (value > (*previous + kWriteDelaySecs)) ||
+             (value < (*previous - kWriteDelaySecs)));
     if ((value != *previous) && hasTimeChangedSignificantly) {
         writeIntToFile(path, value);
         *previous = value;
@@ -152,13 +162,9 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
 bool BatteryDefender::isChargePowerAvailable(void) {
     // USB presence is an indicator of power availability
     const bool chargerPresentWired = readFileToInt(kPathUSBChargerPresent) != 0;
-    const bool chargerPresentWireless =
-            readFileToInt(kPathWirelessPresent, mIgnoreWirelessFileError) != 0;
+    const bool chargerPresentWireless = readFileToInt(mPathWirelessPresent) != 0;
     mIsUsbPresent = chargerPresentWired;
     mIsWirelessPresent = chargerPresentWireless;
-
-    // Report wireless read error only once; some devices may not have a wireless adapter
-    mIgnoreWirelessFileError = true;
 
     return chargerPresentWired || chargerPresentWireless;
 }
@@ -285,6 +291,13 @@ BatteryDefender::state_E BatteryDefender::stateMachine_getNextState(const state_
                 const int timeToClear = android::base::GetIntProperty(
                         kPropBatteryDefenderCtrlResumeTime, kTimeToClearTimerSecs, 0, INT32_MAX);
 
+                const int bdClear = android::base::GetIntProperty(kPropBatteryDefenderCtrlClear, 0);
+
+                if (bdClear > 0) {
+                    android::base::SetProperty(kPropBatteryDefenderCtrlClear, "0");
+                    nextState = STATE_DISCONNECTED;
+                }
+
                 /* Check for mIsPowerAvailable in case timeToClear is 0 */
                 if ((mTimeChargerNotPresentSecs >= timeToClear) && (mIsPowerAvailable == false)) {
                     nextState = STATE_DISCONNECTED;
@@ -401,7 +414,7 @@ void BatteryDefender::update(struct android::BatteryProperties *props) {
                     &mTimeChargerPresentSecsPrevious);
     writeTimeToFile(kPathPersistDefenderActiveTime, mTimeActiveSecs, &mTimeActiveSecsPrevious);
     writeChargeLevelsToFile(chargeLevelVendorStart, chargeLevelVendorStop);
-    android::base::SetProperty(kPropBatteryDefenderState, stateStringMap[mCurrentState]);
+    android::base::SetProperty(kPropBatteryDefenderState, kStateStringMap[mCurrentState]);
 }
 
 }  // namespace health

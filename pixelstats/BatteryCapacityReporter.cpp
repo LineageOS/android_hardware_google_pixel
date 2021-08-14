@@ -23,8 +23,8 @@
 
 #include <android-base/file.h>
 
-#include <android/frameworks/stats/1.0/IStats.h>
 #include <pixelstats/BatteryCapacityReporter.h>
+#include <pixelstats/StatsHelper.h>
 
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 
@@ -33,9 +33,10 @@ namespace hardware {
 namespace google {
 namespace pixel {
 
+using aidl::android::frameworks::stats::IStats;
+using aidl::android::frameworks::stats::VendorAtom;
+using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
-using android::frameworks::stats::V1_0::IStats;
-using android::frameworks::stats::V1_0::VendorAtom;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacityFG;
 
 #define ONE_HOUR_SECS (60 * 60)
@@ -57,10 +58,11 @@ BatteryCapacityReporter::BatteryCapacityReporter() {
                   static_cast<int>(BatteryCapacityFG::LOG_REASON_DIVERGING_FG));
 }
 
-void BatteryCapacityReporter::checkAndReport(const std::string &path) {
+void BatteryCapacityReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
+                                             const std::string &path) {
     if (parse(path)) {
         if (checkLogEvent()) {
-            reportEvent();
+            reportEvent(stats_client);
         }
     }
 }
@@ -173,32 +175,26 @@ bool BatteryCapacityReporter::checkLogEvent(void) {
     return false;
 }
 
-void BatteryCapacityReporter::reportEvent(void) {
-    sp<IStats> stats_client = IStats::tryGetService();
-    if (!stats_client) {
-        ALOGD("Couldn't connect to IStats service");
-        return;
-    }
-
+void BatteryCapacityReporter::reportEvent(const std::shared_ptr<IStats> &stats_client) {
     // Load values array
-    std::vector<VendorAtom::Value> values(5);
-    VendorAtom::Value tmp;
-    tmp.intValue(log_reason_);
+    std::vector<VendorAtomValue> values(5);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(log_reason_);
     values[BatteryCapacityFG::kCapacityLogReasonFieldNumber - kVendorAtomOffset] = tmp;
-    tmp.floatValue(gdf_);
+    tmp.set<VendorAtomValue::floatValue>(gdf_);
     values[BatteryCapacityFG::kCapacityGdfFieldNumber - kVendorAtomOffset] = tmp;
-    tmp.floatValue(ssoc_);
+    tmp.set<VendorAtomValue::floatValue>(ssoc_);
     values[BatteryCapacityFG::kCapacitySsocFieldNumber - kVendorAtomOffset] = tmp;
-    tmp.floatValue(gdf_curve_);
+    tmp.set<VendorAtomValue::floatValue>(gdf_curve_);
     values[BatteryCapacityFG::kCapacityGdfCurveFieldNumber - kVendorAtomOffset] = tmp;
-    tmp.floatValue(ssoc_curve_);
+    tmp.set<VendorAtomValue::floatValue>(ssoc_curve_);
     values[BatteryCapacityFG::kCapacitySsocCurveFieldNumber - kVendorAtomOffset] = tmp;
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
-                        .atomId = PixelAtoms::Ids::FG_CAPACITY,
-                        .values = values};
-    Return<void> ret = stats_client->reportVendorAtom(event);
+                        .atomId = PixelAtoms::Atom::kFgCapacity,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report to IStats service");
 }

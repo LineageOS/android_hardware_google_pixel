@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+// TODO(b/167628903): Delete this file
 #define LOG_TAG "libpixelpowerstats"
 
 #include <android-base/chrono_utils.h>
@@ -113,7 +113,7 @@ void DisplayStateResidencyDataProvider::updateStats() {
     // Read display state
     ssize_t ret = pread(mFd, data, sizeof(data) - 1, 0);
     if (ret < 0) {
-        PLOG(ERROR) << "Failed to read display state";
+        PLOG(WARNING) << "Failed to read display state";
         return;
     }
     data[ret] = '\0';
