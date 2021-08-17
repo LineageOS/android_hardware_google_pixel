@@ -206,6 +206,11 @@ bool UsbOverheatEvent::registerListener() {
 
 bool UsbOverheatEvent::startRecording() {
     lock_guard<mutex> lock(lock_);
+
+    // Bail out if temperature was being monitored previously
+    if (monitorTemperature)
+        return true;
+
     wakeLockAcquire();
     monitorTemperature = true;
     cv_.notify_all();
@@ -216,6 +221,10 @@ bool UsbOverheatEvent::stopRecording() {
     // <flag> value does not have any significance here
     uint64_t flag = 100;
     unsigned long ret;
+
+    // Bail out if temperature was not being monitored previously
+    if (!monitorTemperature)
+        return true;
 
     wakeLockRelease();
     monitorTemperature = false;
