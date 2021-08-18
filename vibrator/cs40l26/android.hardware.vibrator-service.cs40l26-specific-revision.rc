@@ -14,7 +14,7 @@ on boot && property:vendor.all.modules.ready=1 && property:ro.boot.revision=EVT1
 
     enable vendor.vibrator.cs40l26
 
-service vendor.vibrator.cs40l26 /vendor/bin/hw/android.hardware.vibrator-service.cs40l26
+service vendor.vibrator.cs40l26 /vendor/bin/hw/android.hardware.vibrator-service.cs40l26-specific-revision
     class hal
     user system
     group system input
