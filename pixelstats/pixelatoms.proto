@@ -508,6 +508,7 @@ message CmaStatus {
   optional int64 cma_fail_pages = 5;
   optional int64 cma_fail_soft_pages = 6;
   optional int64 migrated_pages = 7;
+  optional string cma_heap_name = 8;
 }
 
 /* A message containing CMA metrics (External). */
@@ -517,6 +518,7 @@ message CmaStatusExt {
   optional int64 cma_alloc_latency_low = 3;
   optional int64 cma_alloc_latency_mid = 4;
   optional int64 cma_alloc_latency_high = 5;
+  optional string cma_heap_name = 6;
 }
 
 message F2fsCompressionInfo {
