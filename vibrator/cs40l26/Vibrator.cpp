@@ -162,48 +162,6 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         return;
     }
 
-    if (mHwCal->getF0(&caldata)) {
-        mHwApi->setF0(caldata);
-    }
-    if (mHwCal->getRedc(&caldata)) {
-        mHwApi->setRedc(caldata);
-    }
-    if (mHwCal->getQ(&caldata)) {
-        mHwApi->setQ(caldata);
-    }
-
-    mHwCal->getLongFrequencyShift(&longFreqencyShift);
-    if (longFreqencyShift > 0) {
-        mF0Offset = longFreqencyShift * std::pow(2, 14);
-    } else if (longFreqencyShift < 0) {
-        mF0Offset = std::pow(2, 24) - std::abs(longFreqencyShift) * std::pow(2, 14);
-    } else {
-        mF0Offset = 0;
-    }
-
-    mHwCal->getVersion(&calVer);
-    if (calVer == 1) {
-        std::array<uint32_t, 6> volLevels;
-        mHwCal->getVolLevels(&volLevels);
-        /*
-         * Given voltage levels for two intensities, assuming a linear function,
-         * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
-         */
-        mClickEffectVol[0] = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
-                                                  (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
-                                                   volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
-                                                          4.0f),
-                                      static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
-        mClickEffectVol[1] = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
-        mTickEffectVol = mClickEffectVol;
-        mLongEffectVol[0] = 0;
-        mLongEffectVol[1] = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
-    } else {
-        mHwCal->getTickVolLevels(&mTickEffectVol);
-        mHwCal->getClickVolLevels(&mClickEffectVol);
-        mHwCal->getLongVolLevels(&mLongEffectVol);
-    }
-
     /*
      * Create custom effects for all physical waveforms.
      * 1. Set the initial duration for the corresponding RAM waveform.
@@ -253,6 +211,49 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
     if (effectIndex != WAVEFORM_MAX_PHYSICAL_INDEX) {
         ALOGE("Incomplete effect initialization!");
+        return;
+    }
+
+    if (mHwCal->getF0(&caldata)) {
+        mHwApi->setF0(caldata);
+    }
+    if (mHwCal->getRedc(&caldata)) {
+        mHwApi->setRedc(caldata);
+    }
+    if (mHwCal->getQ(&caldata)) {
+        mHwApi->setQ(caldata);
+    }
+
+    mHwCal->getLongFrequencyShift(&longFreqencyShift);
+    if (longFreqencyShift > 0) {
+        mF0Offset = longFreqencyShift * std::pow(2, 14);
+    } else if (longFreqencyShift < 0) {
+        mF0Offset = std::pow(2, 24) - std::abs(longFreqencyShift) * std::pow(2, 14);
+    } else {
+        mF0Offset = 0;
+    }
+
+    mHwCal->getVersion(&calVer);
+    if (calVer == 1) {
+        std::array<uint32_t, 6> volLevels;
+        mHwCal->getVolLevels(&volLevels);
+        /*
+         * Given voltage levels for two intensities, assuming a linear function,
+         * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
+         */
+        mClickEffectVol[0] = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
+                                                  (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
+                                                   volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
+                                                          4.0f),
+                                      static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
+        mClickEffectVol[1] = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
+        mTickEffectVol = mClickEffectVol;
+        mLongEffectVol[0] = 0;
+        mLongEffectVol[1] = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
+    } else {
+        mHwCal->getTickVolLevels(&mTickEffectVol);
+        mHwCal->getClickVolLevels(&mClickEffectVol);
+        mHwCal->getLongVolLevels(&mLongEffectVol);
     }
 }
 
