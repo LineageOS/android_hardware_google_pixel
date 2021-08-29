@@ -42,13 +42,23 @@ cc_defaults {
         "PixelVibratorTestDefaults",
         "android.hardware.vibrator-defaults.cs40l26",
     ],
-    static_libs: ["android.hardware.vibrator-impl.cs40l26"],
+    shared_libs: ["android.hardware.vibrator-impl.cs40l26"],
+    include_dirs: [
+        "external/tinyalsa/include",
+    ],
 }
 
-cc_library {
+cc_library_shared {
     name: "android.hardware.vibrator-impl.cs40l26",
     defaults: ["VibratorHalCs40l26BinaryDefaults"],
     srcs: ["Vibrator.cpp"],
+    include_dirs: [
+        "external/tinyalsa/include",
+    ],
+    shared_libs: [
+        "libcutils",
+        "libtinyalsa",
+    ],
     export_include_dirs: ["."],
     vendor_available: true,
     visibility: [":__subpackages__"],
@@ -60,7 +70,14 @@ cc_binary {
     init_rc: ["android.hardware.vibrator-service.cs40l26.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l26.xml"],
     srcs: ["service.cpp"],
-    static_libs: ["android.hardware.vibrator-impl.cs40l26"],
+    include_dirs: [
+        "external/tinyalsa/include"
+    ],
+    shared_libs: [
+        "android.hardware.vibrator-impl.cs40l26",
+        "libcutils",
+        "libtinyalsa",
+    ],
     proprietary: true,
 }
 
@@ -70,7 +87,14 @@ cc_binary {
     init_rc: ["android.hardware.vibrator-service.cs40l26-dual.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l26-dual.xml"],
     srcs: ["service.cpp"],
-    static_libs: ["android.hardware.vibrator-impl.cs40l26"],
+    include_dirs: [
+        "external/tinyalsa/include"
+    ],
+    shared_libs: [
+        "android.hardware.vibrator-impl.cs40l26",
+        "libcutils",
+        "libtinyalsa",
+    ],
     cflags: ["-DVIBRATOR_NAME=\"dual\""],
     proprietary: true,
 }
@@ -81,7 +105,14 @@ cc_binary {
     init_rc: ["android.hardware.vibrator-service.cs40l26-specific-revision.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l26.xml"],
     srcs: ["service.cpp"],
-    static_libs: ["android.hardware.vibrator-impl.cs40l26"],
+    include_dirs: [
+        "external/tinyalsa/include"
+    ],
+    shared_libs: [
+        "android.hardware.vibrator-impl.cs40l26",
+        "libcutils",
+        "libtinyalsa",
+    ],
     proprietary: true,
 }
 
@@ -91,7 +122,14 @@ cc_binary {
     init_rc: ["android.hardware.vibrator-service.cs40l26-specific-revision-dual.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l26-dual.xml"],
     srcs: ["service.cpp"],
-    static_libs: ["android.hardware.vibrator-impl.cs40l26"],
+    include_dirs: [
+        "external/tinyalsa/include"
+    ],
+    shared_libs: [
+        "android.hardware.vibrator-impl.cs40l26",
+        "libcutils",
+        "libtinyalsa",
+    ],
     cflags: ["-DVIBRATOR_NAME=\"dual\""],
     proprietary: true,
 }
