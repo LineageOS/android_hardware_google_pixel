@@ -234,6 +234,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     createPwleMaxLevelLimitMap();
+    mIsUnderExternalControl = false;
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -309,6 +310,27 @@ ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
     ATRACE_NAME("Vibrator::setExternalControl");
     setGlobalAmplitude(enabled);
 
+    if (isUnderExternalControl() == enabled) {
+        if (enabled) {
+            ALOGE("Restart the external process.");
+            if (mHasHapticAlsaDevice) {
+                if (!enableHapticPcmAmp(&mHapticPcm, !enabled, mCard, mDevice)) {
+                    ALOGE("Failed to %s haptic pcm device: %d", (enabled ? "enable" : "disable"),
+                          mDevice);
+                    return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+                }
+            }
+            if (mHwApi->hasAspEnable()) {
+                if (!mHwApi->setAspEnable(!enabled)) {
+                    ALOGE("Failed to set external control (%d): %s", errno, strerror(errno));
+                    return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+                }
+            }
+        } else {
+            ALOGE("The external control is already disabled.");
+            return ndk::ScopedAStatus::ok();
+        }
+    }
     if (mHasHapticAlsaDevice) {
         if (!enableHapticPcmAmp(&mHapticPcm, enabled, mCard, mDevice)) {
             ALOGE("Failed to %s haptic pcm device: %d", (enabled ? "enable" : "disable"), mDevice);
@@ -415,6 +437,11 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
 
 ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
+    if (isUnderExternalControl()) {
+        setExternalControl(false);
+        ALOGE("Device is under external control mode. Force to disable it to prevent chip hang "
+              "problem.");
+    }
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
         ALOGE("Previous vibration pending.");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
