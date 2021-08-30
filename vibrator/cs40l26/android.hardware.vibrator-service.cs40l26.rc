@@ -1,5 +1,5 @@
 on boot && property:vendor.all.modules.ready=1
-    wait /sys/bus/i2c/devices/i2c-cs40l26a/input/
+    wait /sys/bus/i2c/devices/i2c-cs40l26a/calibration/redc_cal_time_ms
 
     mkdir /mnt/vendor/persist/haptics 0770 system system
     chmod 770 /mnt/vendor/persist/haptics
