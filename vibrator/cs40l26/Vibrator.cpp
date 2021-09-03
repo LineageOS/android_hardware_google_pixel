@@ -496,7 +496,6 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
 
     mActiveId = play.code;
 
-    mHwApi->pollVibeState("Vibe state: Haptic\n");
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
     usleep(50 * 1000);  // TODO(b/193793095): Remove when fixed.
 
@@ -776,7 +775,6 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 
     // mHwApi->setActivate(1);
 
-    mHwApi->pollVibeState("Vibe state: Haptic\n");
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
 
     return ndk::ScopedAStatus::ok();
@@ -1112,6 +1110,7 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
+    mHwApi->pollVibeState("Vibe state: Haptic\n");
     mHwApi->pollVibeState("Vibe state: Stopped\n");
 
     if (callback) {
