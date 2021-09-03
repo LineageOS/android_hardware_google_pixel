@@ -55,6 +55,9 @@ class SysfsCollector {
         const char *const ZramBdStatPath;
         const char *const EEPROMPath;
         const char *const MitigationPath;
+        const char *const SpeakerTemperaturePath;
+        const char *const SpeakerExcursionPath;
+        const char *const SpeakerHeartBeatPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -81,6 +84,7 @@ class SysfsCollector {
     void logZramStats(const std::shared_ptr<IStats> &stats_client);
     void logBootStats(const std::shared_ptr<IStats> &stats_client);
     void logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client);
+    void logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
@@ -108,6 +112,9 @@ class SysfsCollector {
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
     const char *const kPowerMitigationStatsPath;
+    const char *const kSpeakerTemperaturePath;
+    const char *const kSpeakerExcursionPath;
+    const char *const kSpeakerHeartbeatPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
