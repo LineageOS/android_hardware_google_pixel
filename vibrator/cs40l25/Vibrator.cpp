@@ -119,19 +119,48 @@ static uint8_t amplitudeToScale(float amplitude, float maximum) {
 
 // Discrete points of frequency:max_level pairs as recommended by the document
 // [R4O6] Max. Allowable Chirp Levels (go/r4o6-max-chirp-levels) around resonant frequency
+#if defined(LUXSHARE_ICT_081545)
 static std::map<float, float> discretePwleMaxLevels = {{120.0, 0.4},  {130.0, 0.31}, {140.0, 0.14},
                                                        {145.0, 0.09}, {150.0, 0.15}, {160.0, 0.35},
                                                        {170.0, 0.4}};
+// Discrete points of frequency:max_level pairs as recommended by the document
+// [P7] Max. Allowable Chirp Levels (go/p7-max-chirp-levels) around resonant frequency
+#elif defined(LUXSHARE_ICT_LT_XLRA1906D)
+static std::map<float, float> discretePwleMaxLevels = {{145.0, 0.38}, {150.0, 0.35}, {160.0, 0.35},
+                                                       {170.0, 0.15}, {180.0, 0.35}, {190.0, 0.35},
+                                                       {200.0, 0.38}};
+#else
+static std::map<float, float> discretePwleMaxLevels = {};
+#endif
 
 // Initialize all limits to 0.4 according to the document [R4O6] Max. Allowable Chirp Levels
 // (go/r4o6-max-chirp-levels)
+#if defined(LUXSHARE_ICT_081545)
 std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 0.4);
+// Initialize all limits to 0.38 according to the document [P7] Max. Allowable Chirp Levels
+// (go/p7-max-chirp-levels)
+#elif defined(LUXSHARE_ICT_LT_XLRA1906D)
+std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 0.38);
+#else
+std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 1.0);
+#endif
 
 void Vibrator::createPwleMaxLevelLimitMap() {
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
         std::map<float, float>::iterator itr0, itr1;
+
+        if (discretePwleMaxLevels.empty()) {
+            return;
+        }
+        if (discretePwleMaxLevels.size() == 1) {
+            itr0 = discretePwleMaxLevels.begin();
+            float pwleMaxLevelLimitMapIdx =
+                    (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
+            pwleMaxLevelLimitMap[pwleMaxLevelLimitMapIdx] = itr0->second;
+            return;
+        }
 
         itr0 = discretePwleMaxLevels.begin();
         itr1 = std::next(itr0, 1);
@@ -142,7 +171,7 @@ void Vibrator::createPwleMaxLevelLimitMap() {
             float x1 = itr1->first;
             float y1 = itr1->second;
             float pwleMaxLevelLimitMapIdx =
-                (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
+                    (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
 
             for (float xp = x0; xp < (x1 + PWLE_FREQUENCY_RESOLUTION_HZ);
                  xp += PWLE_FREQUENCY_RESOLUTION_HZ) {
