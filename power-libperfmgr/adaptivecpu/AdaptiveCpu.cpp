@@ -19,6 +19,8 @@
 #include "AdaptiveCpu.h"
 
 #include <android-base/logging.h>
+#include <chrono>
+#include <numeric>
 
 namespace aidl {
 namespace google {
@@ -27,18 +29,103 @@ namespace power {
 namespace impl {
 namespace pixel {
 
+using std::chrono_literals::operator""ms;
+using std::chrono_literals::operator""ns;
+
+// The standard target duration, based on 60 FPS. Durations submitted with different targets are
+// normalized against this target. For example, a duration that was at 80% of its target will be
+// scaled to 0.8 * kNormalTargetDuration.
+static const std::chrono::nanoseconds kNormalTargetDuration = 16666666ns;
+
+// All durations shorter than this are ignored.
+static const std::chrono::nanoseconds kMinDuration = 0ns;
+
+// All durations longer than this are ignored.
+static const std::chrono::nanoseconds kMaxDuration = 600 * kNormalTargetDuration;
+
+// Whether to block until work durations are available before running the model. We currently block
+// in order to avoid spinning needlessly and wasting energy. In the final version, the iteration
+// should be controlled by the model itself, so we may return an empty vector instead.
+// TODO(b/188770301) Once the gating logic is implemented, don't block indefinitely.
+static const bool kBlockForWorkDurations = true;
+
+// The sleep duration for each iteration. Currently set to a large value as a safeguard measure, so
+// we don't spin needlessly and waste energy. To experiment with the model, set to a smaller value,
+// e.g. around 25ms.
+// TODO(b/188770301) Once the gating logic is implemented, reduce the sleep duration.
+static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
+
 AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager) : mHintManager(hintManager) {}
 
 void AdaptiveCpu::StartInBackground() {
-    // TODO(b/188770301) Start the main loop thead.
     LOG(INFO) << "AdaptiveCpu starting.";
+
+    if (mLoopThread.joinable()) {
+        LOG(ERROR) << "AdaptiveCpu already running.";
+        return;
+    }
+
+    mLoopThread = std::thread([&]() { RunMainLoop(); });
 }
 
 void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                                       std::chrono::nanoseconds targetDuration) {
-    // TODO(b/188770301) Enqueue the work duration for processing.
     LOG(VERBOSE) << "AdaptiveCpu received " << workDurations.size()
                  << " work durations with target " << targetDuration.count() << "ns";
+    {
+        std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
+        mWorkDurationBatches.emplace_back(workDurations, targetDuration);
+    }
+    mWorkDurationsAvailableCondition.notify_one();
+}
+
+std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
+    std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
+
+    if (kBlockForWorkDurations) {
+        mWorkDurationsAvailableCondition.wait(lock, [&] { return !mWorkDurationBatches.empty(); });
+    }
+
+    std::vector<WorkDurationBatch> result;
+    mWorkDurationBatches.swap(result);
+    return result;
+}
+
+void AdaptiveCpu::RunMainLoop() {
+    while (true) {
+        std::vector<WorkDurationBatch> workDurationBatches = TakeWorkDurations();
+
+        if (workDurationBatches.empty()) {
+            continue;
+        }
+
+        std::chrono::nanoseconds durationsSum;
+        int durationsCount = 0;
+        for (const WorkDurationBatch &batch : workDurationBatches) {
+            for (const WorkDuration workDuration : batch.workDurations) {
+                std::chrono::nanoseconds duration(workDuration.durationNanos);
+
+                if (duration < kMinDuration || duration > kMaxDuration) {
+                    continue;
+                }
+                // Normalise the duration and add it to the total.
+                // kMaxDuration * kStandardTarget.count() fits comfortably within int64_t.
+                durationsSum +=
+                        duration * kNormalTargetDuration.count() / batch.targetDuration.count();
+                ++durationsCount;
+            }
+        }
+
+        std::chrono::nanoseconds averageDuration = durationsSum / durationsCount;
+
+        LOG(VERBOSE) << "AdaptiveCPU processing durations: count=" << durationsCount
+                     << " average=" << averageDuration.count() << "ns";
+
+        // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.
+        std::this_thread::sleep_for(kIterationSleepDuration);
+
+        // TODO(b/188770301) Actually do the processing.
+    }
 }
 
 }  // namespace pixel
