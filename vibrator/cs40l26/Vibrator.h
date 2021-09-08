@@ -185,12 +185,13 @@ class Vibrator : public BnVibrator {
                                           uint32_t *outTimeMs, uint32_t *outVolLevel,
                                           std::string *outEffectQueue);
     ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, uint32_t *outEffectIndex);
-    ndk::ScopedAStatus setEffectQueue(const std::string &effectQueue);
+    ndk::ScopedAStatus uploadOwtEffect(uint8_t *owtData, uint32_t num_bytes,
+                                       uint32_t *outEffectIndex);
     ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *outTimeMs);
     ndk::ScopedAStatus performEffect(uint32_t effectIndex, uint32_t volLevel,
-                                     const std::string *effectQueue,
+                                     struct dspmem_chunk *ch,
                                      const std::shared_ptr<IVibratorCallback> &callback);
     ndk::ScopedAStatus setPwle(const std::string &pwleQueue);
     bool isUnderExternalControl();

@@ -42,6 +42,7 @@ namespace android {
 namespace hardware {
 namespace vibrator {
 static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
+static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 1152;
 
 static constexpr uint32_t WAVEFORM_EFFECT_0_20_LEVEL = 0;
 static constexpr uint32_t WAVEFORM_EFFECT_1_00_LEVEL = 4;
@@ -61,8 +62,9 @@ static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
 
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
-static constexpr int32_t COMPOSE_SIZE_MAX = 127;
-// static constexpr int32_t COMPOSE_PWLE_SIZE_MAX_DEFAULT = 127;
+
+/* Preserve 1 section for the first delay before the first effect. */
+static constexpr int32_t COMPOSE_SIZE_MAX = 255;
 
 // Measured resonant frequency, f0_measured, is represented by Q10.14 fixed
 // point format on cs40l26 devices. The expression to calculate f0 is:
@@ -77,6 +79,7 @@ static constexpr int32_t Q14_BIT_SHIFT = 14;
 static constexpr int32_t Q16_BIT_SHIFT = 16;
 
 static constexpr int32_t COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS = 16383;
+
 static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
@@ -114,6 +117,7 @@ enum WaveformBankID : uint8_t {
 };
 
 enum WaveformIndex : uint16_t {
+    /* Physical waveform */
     WAVEFORM_LONG_VIBRATION_EFFECT_INDEX = 0,
     WAVEFORM_RESERVED_INDEX_1 = 1,
     WAVEFORM_CLICK_INDEX = 2,
@@ -125,22 +129,92 @@ enum WaveformIndex : uint16_t {
     WAVEFORM_QUICK_FALL_INDEX = 8,
     WAVEFORM_LIGHT_TICK_INDEX = 9,
     WAVEFORM_LOW_TICK_INDEX = 10,
+    WAVEFORM_RESERVED_MFG_1,
+    WAVEFORM_RESERVED_MFG_2,
+    WAVEFORM_RESERVED_MFG_3,
+    WAVEFORM_MAX_PHYSICAL_INDEX,
+    /* OWT waveform */
+    WAVEFORM_COMPOSE = WAVEFORM_MAX_PHYSICAL_INDEX,
+    WAVEFORM_PWLE,
     /*
-     * Refer to <linux/input.h>, the WAVEFORM_MAX_PHYSICAL_INDEX must not exceed 96.
+     * Refer to <linux/input.h>, the WAVEFORM_MAX_INDEX must not exceed 96.
      * #define FF_GAIN		0x60  // 96 in decimal
      * #define FF_MAX_EFFECTS	FF_GAIN
      */
-    WAVEFORM_MAX_PHYSICAL_INDEX,
-    // TODO(b/193782625): Driver does not support multiple effect queue yet.
-    WAVEFORM_UNSAVED_TRIGGER_QUEUE_INDEX = 65529,
-    WAVEFORM_TRIGGER_QUEUE_INDEX = 65534,
+    WAVEFORM_MAX_INDEX,
 };
+
+static int min(int x, int y) {
+    return x < y ? x : y;
+}
+
+struct dspmem_chunk {
+    uint8_t *head;
+    uint8_t *current;
+    uint8_t *max;
+    int bytes;
+
+    uint32_t cache;
+    int cachebits;
+};
+
+static dspmem_chunk *dspmem_chunk_create(void *data, int size) {
+    auto ch = new dspmem_chunk{
+            .head = reinterpret_cast<uint8_t *>(data),
+            .current = reinterpret_cast<uint8_t *>(data),
+            .max = reinterpret_cast<uint8_t *>(data) + size,
+    };
+
+    return ch;
+}
+
+static bool dspmem_chunk_end(struct dspmem_chunk *ch) {
+    return ch->current == ch->max;
+}
+
+static int dspmem_chunk_bytes(struct dspmem_chunk *ch) {
+    return ch->bytes;
+}
+
+static int dspmem_chunk_write(struct dspmem_chunk *ch, int nbits, uint32_t val) {
+    int nwrite, i;
+
+    nwrite = min(24 - ch->cachebits, nbits);
+    ch->cache <<= nwrite;
+    ch->cache |= val >> (nbits - nwrite);
+    ch->cachebits += nwrite;
+    nbits -= nwrite;
+
+    if (ch->cachebits == 24) {
+        if (dspmem_chunk_end(ch))
+            return -ENOSPC;
+
+        ch->cache &= 0xFFFFFF;
+        for (i = 0; i < sizeof(ch->cache); i++, ch->cache <<= 8)
+            *ch->current++ = (ch->cache & 0xFF000000) >> 24;
+
+        ch->bytes += sizeof(ch->cache);
+        ch->cachebits = 0;
+    }
+
+    if (nbits)
+        return dspmem_chunk_write(ch, nbits, val);
+
+    return 0;
+}
+
+static int dspmem_chunk_flush(struct dspmem_chunk *ch) {
+    if (!ch->cachebits)
+        return 0;
+
+    return dspmem_chunk_write(ch, 24 - ch->cachebits, 0);
+}
 
 std::vector<struct ff_effect> mFfEffects;
 
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
-    int32_t longFreqencyShift;
+    int32_t longFrequencyShift;
     std::string caldata{8, '0'};
     uint32_t calVer;
 
@@ -180,15 +254,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
      * 3. Store the effect ID.
      */
     uint8_t retry = 0;
-    mFfEffects.resize(WAVEFORM_MAX_PHYSICAL_INDEX);
-    mEffectDurations.resize(WAVEFORM_MAX_PHYSICAL_INDEX);
+    mFfEffects.resize(WAVEFORM_MAX_INDEX);
+    mEffectDurations.resize(WAVEFORM_MAX_INDEX);
     // TODO(b/193786559): Driver does not support wave counts and duration reading yet.
     mEffectDurations = {
-            1000, 100, 100, 1000, 350, 180, 200, 550, 150, 100, 100,
-    }; /* 11 waveforms. The duration must < UINT16_MAX */
-
-    std::vector<Effect> effects;
-    getSupportedEffects(&effects);
+            1000, 100, 100, 1000, 350, 180, 200, 550, 150, 100, 100, 1000, 1000, 1000,
+    }; /* 11+3 waveforms. The duration must < UINT16_MAX */
 
     uint8_t effectIndex = 0;
 
@@ -224,6 +295,19 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         return;
     }
 
+    /* Initiate placeholders for OWT effects. */
+    for (effectIndex = WAVEFORM_MAX_PHYSICAL_INDEX; effectIndex < WAVEFORM_MAX_INDEX;
+         effectIndex++) {
+        mFfEffects[effectIndex] = {
+                .type = FF_PERIODIC,
+                .id = -1,
+                .replay.length = 0,
+                .u.periodic.waveform = FF_CUSTOM,
+                .u.periodic.custom_data = nullptr,
+                .u.periodic.custom_len = 0,
+        };
+    }
+
     if (mHwCal->getF0(&caldata)) {
         mHwApi->setF0(caldata);
     }
@@ -234,11 +318,11 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         mHwApi->setQ(caldata);
     }
 
-    mHwCal->getLongFrequencyShift(&longFreqencyShift);
-    if (longFreqencyShift > 0) {
-        mF0Offset = longFreqencyShift * std::pow(2, 14);
-    } else if (longFreqencyShift < 0) {
-        mF0Offset = std::pow(2, 24) - std::abs(longFreqencyShift) * std::pow(2, 14);
+    mHwCal->getLongFrequencyShift(&longFrequencyShift);
+    if (longFrequencyShift > 0) {
+        mF0Offset = longFrequencyShift * std::pow(2, 14);
+    } else if (longFrequencyShift < 0) {
+        mF0Offset = std::pow(2, 24) - std::abs(longFrequencyShift) * std::pow(2, 14);
     } else {
         mF0Offset = 0;
     }
@@ -410,58 +494,87 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDuration(CompositePrimitive primitive,
 ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composite,
                                      const std::shared_ptr<IVibratorCallback> &callback) {
     ATRACE_NAME("Vibrator::compose");
-    std::ostringstream effectBuilder;
-    std::string effectQueue;
-    // TODO(b/193782625): Driver does not support multiple effect queue yet.
-    uint32_t volLevel;
-    uint32_t effectIndex;
+    uint16_t size;
+    uint16_t nextEffectDelay;
 
-    if (composite.size() > COMPOSE_SIZE_MAX) {
+    auto ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_COMP]{0x00},
+                                  FF_CUSTOM_DATA_LEN_MAX_COMP);
+
+    if (composite.size() > COMPOSE_SIZE_MAX || composite.empty()) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
-    for (auto &e : composite) {
-        if (e.scale < 0.0f || e.scale > 1.0f) {
+    /* Check if there is a wait before the first effect. */
+    nextEffectDelay = composite.front().delayMs;
+    if (nextEffectDelay > COMPOSE_DELAY_MAX_MS || nextEffectDelay < 0) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    } else if (nextEffectDelay > 0) {
+        size = composite.size() + 1;
+    } else {
+        size = composite.size();
+    }
+
+    dspmem_chunk_write(ch, 8, 0);                      /* Padding */
+    dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & size)); /* nsections */
+    dspmem_chunk_write(ch, 8, 0);                      /* repeat */
+    uint8_t header_count = ch->bytes;
+
+    /* Insert 1 section for a wait before the first effect. */
+    if (nextEffectDelay) {
+        dspmem_chunk_write(ch, 32, 0); /* amplitude, index, repeat & flags */
+        dspmem_chunk_write(ch, 16, (uint16_t)(0xFFFF & nextEffectDelay)); /* delay */
+    }
+
+    for (uint32_t i_curr = 0, i_next = 1; i_curr < composite.size(); i_curr++, i_next++) {
+        auto &e_curr = composite[i_curr];
+        uint32_t effectIndex = 0;
+        uint32_t effectVolLevel = 0;
+        if (e_curr.scale < 0.0f || e_curr.scale > 1.0f) {
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
 
-        if (e.delayMs) {
-            if (e.delayMs > COMPOSE_DELAY_MAX_MS) {
-                return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-            }
-            effectBuilder << e.delayMs << ",";
-        }
-        if (e.primitive != CompositePrimitive::NOOP) {
+        if (e_curr.primitive != CompositePrimitive::NOOP) {
             ndk::ScopedAStatus status;
-            // uint32_t effectIndex;
-
-            status = getPrimitiveDetails(e.primitive, &effectIndex);
+            status = getPrimitiveDetails(e_curr.primitive, &effectIndex);
             if (!status.isOk()) {
                 return status;
             }
-
-            // effectBuilder << effectIndex << "." << intensityToVolLevel(e.scale, effectIndex) <<
-            // ",";
-            volLevel = intensityToVolLevel(e.scale, effectIndex);
-            effectBuilder << effectIndex << "." << volLevel << ",";
+            effectVolLevel = intensityToVolLevel(e_curr.scale, effectIndex);
         }
-    }
 
-    if (effectBuilder.tellp() == 0) {
+        /* Fetch the next composite effect delay and fill into the current section */
+        nextEffectDelay = 0;
+        if (i_next < composite.size()) {
+            auto &e_next = composite[i_next];
+            int32_t delay = e_next.delayMs;
+
+            if (delay > COMPOSE_DELAY_MAX_MS || delay < 0) {
+                return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+            }
+            nextEffectDelay = delay;
+        }
+
+        if (effectIndex == 0 && nextEffectDelay == 0) {
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+        }
+
+        dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & effectVolLevel));      /* amplitude */
+        dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & effectIndex));         /* index */
+        dspmem_chunk_write(ch, 8, 0);                                     /* repeat */
+        dspmem_chunk_write(ch, 8, 0);                                     /* flags */
+        dspmem_chunk_write(ch, 16, (uint16_t)(0xFFFF & nextEffectDelay)); /* delay */
+    }
+    dspmem_chunk_flush(ch);
+    if (header_count == ch->bytes) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    } else {
+        return performEffect(0 /*ignored*/, 0 /*ignored*/, ch, callback);
     }
-
-    effectBuilder << 0;
-
-    effectQueue = effectBuilder.str();
-
-    // return performEffect(0 /*ignored*/, 0 /*ignored*/, &effectQueue, callback);
-    return performEffect(effectIndex, volLevel, nullptr, callback);
 }
 
 ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
-    if (effectIndex > WAVEFORM_MAX_PHYSICAL_INDEX) {
+    if (effectIndex > WAVEFORM_MAX_INDEX) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
@@ -1044,12 +1157,50 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus Vibrator::setEffectQueue(const std::string &effectQueue) {
-    if (!mHwApi->setEffectQueue(effectQueue)) {
-        ALOGE("Failed to write \"%s\" to effect queue (%d): %s", effectQueue.c_str(), errno,
+ndk::ScopedAStatus Vibrator::uploadOwtEffect(uint8_t *owtData, uint32_t numBytes,
+                                             uint32_t *outEffectIndex) {
+    if (owtData == nullptr) {
+        ALOGE("Invalid waveform bank");
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+
+    ff_effect effect{};
+    bool isPwle = (*reinterpret_cast<uint16_t *>(owtData) != 0x0000);
+    WaveformIndex targetId = isPwle ? WAVEFORM_PWLE : WAVEFORM_COMPOSE;
+
+    /* Erase the created OWT waveform. */
+    bool isCreated = (mFfEffects[targetId].id != -1);
+    if (isCreated && ioctl(mInputFd, EVIOCRMFF, mFfEffects[targetId].id) < 0) {
+        ALOGE("Failed to erase effect %d (%d): %s", mFfEffects[targetId].id, errno,
               strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
+
+    /* Create a new OWT waveform for PWLE or composite effects. */
+    effect.id = -1; /* New Effect */
+    effect.type = FF_PERIODIC;
+    effect.u.periodic.waveform = FF_CUSTOM;
+    effect.replay.length = 0;                    /* Reserved value for OWT waveforms */
+    effect.u.periodic.custom_len = numBytes / 2; /* # of 16-bit elements */
+    effect.u.periodic.custom_data = new int16_t[effect.u.periodic.custom_len]{0x0000};
+    if (effect.u.periodic.custom_data == nullptr) {
+        ALOGE("Failed to allocate memory for custom data\n");
+        return ndk::ScopedAStatus::fromExceptionCode(EX_NULL_POINTER);
+    }
+    memcpy(effect.u.periodic.custom_data, owtData, numBytes);
+
+    if (ioctl(mInputFd, EVIOCSFF, &effect) < 0) {
+        ALOGE("Failed to upload effect %d (%d): %s", targetId, errno, strerror(errno));
+        delete (effect.u.periodic.custom_data);
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+
+    *outEffectIndex = effect.id;
+    /* Update mFfEffects. */
+    mFfEffects[targetId].id = effect.id;
+    mFfEffects[targetId].u.periodic.custom_len = effect.u.periodic.custom_len;
+    delete[](mFfEffects[targetId].u.periodic.custom_data);
+    mFfEffects[targetId].u.periodic.custom_data = effect.u.periodic.custom_data;
 
     return ndk::ScopedAStatus::ok();
 }
@@ -1061,7 +1212,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
     uint32_t effectIndex;
     uint32_t timeMs = 0;
     uint32_t volLevel;
-    std::string effectQueue;
+    dspmem_chunk *ch = nullptr;
 
     switch (effect) {
         case Effect::TEXTURE_TICK:
@@ -1085,7 +1236,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
         goto exit;
     }
 
-    status = performEffect(static_cast<uint16_t>(effectIndex), volLevel, &effectQueue, callback);
+    status = performEffect(static_cast<uint16_t>(effectIndex), volLevel, ch, callback);
 
 exit:
     *outTimeMs = timeMs;
@@ -1093,15 +1244,15 @@ exit:
 }
 
 ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLevel,
-                                           const std::string *effectQueue,
+                                           dspmem_chunk *ch,
                                            const std::shared_ptr<IVibratorCallback> &callback) {
-    if (effectQueue && !effectQueue->empty()) {
-        ndk::ScopedAStatus status = setEffectQueue(*effectQueue);
+    if (ch) {
+        ndk::ScopedAStatus status = uploadOwtEffect(ch->head, dspmem_chunk_bytes(ch), &effectIndex);
+        delete ch;
         if (!status.isOk()) {
             return status;
         }
         setEffectAmplitude(VOLTAGE_SCALE_MAX, VOLTAGE_SCALE_MAX);
-        effectIndex = WAVEFORM_TRIGGER_QUEUE_INDEX;
     } else {
         setEffectAmplitude(volLevel, VOLTAGE_SCALE_MAX);
     }
