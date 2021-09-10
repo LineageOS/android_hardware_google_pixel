@@ -918,26 +918,35 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "    Long Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mLongEffectVol[0],
             mLongEffectVol[1]);
 
-    dprintf(fd, "  Effect Durations:");
-    for (auto d : mEffectDurations) {
-        dprintf(fd, " %" PRIu32, d);
-    }
-    dprintf(fd, "\n");
-
     dprintf(fd, "  FF effect:\n");
-    dprintf(fd, "\tid\ttype\tlength\twvfm\tdata[0]\tdata[1]\tlen:\n");
-    for (uint8_t effectIndex = 0; effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX; effectIndex++) {
-        dprintf(fd, "\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", mFfEffects[effectIndex].id,
-                mFfEffects[effectIndex].type, mFfEffects[effectIndex].replay.length,
-                mFfEffects[effectIndex].u.periodic.waveform,
-                mFfEffects[effectIndex].u.periodic.custom_data[0],
-                mFfEffects[effectIndex].u.periodic.custom_data[1],
-                mFfEffects[effectIndex].u.periodic.custom_len);
+    dprintf(fd, "    Physical waveform:\n");
+    dprintf(fd, "\tId\tIndex\tt   ->\tt'\n");
+    for (uint8_t effectId = 0; effectId < WAVEFORM_MAX_PHYSICAL_INDEX; effectId++) {
+        dprintf(fd, "\t%d\t%d\t%d\t%d\n", mFfEffects[effectId].id,
+                mFfEffects[effectId].u.periodic.custom_data[1], mEffectDurations[effectId],
+                mFfEffects[effectId].replay.length);
+    }
+    dprintf(fd, "    OWT waveform:\n");
+    dprintf(fd, "\tId\tBytes\tData\n");
+    for (uint8_t effectId = WAVEFORM_MAX_PHYSICAL_INDEX; effectId < WAVEFORM_MAX_INDEX;
+         effectId++) {
+        uint32_t numBytes = mFfEffects[effectId].u.periodic.custom_len * 2;
+        std::stringstream ss;
+        ss << " ";
+        for (int i = 0; i < numBytes; i++) {
+            ss << std::uppercase << std::setfill('0') << std::setw(2) << std::hex
+               << (uint16_t)(*(
+                          reinterpret_cast<uint8_t *>(mFfEffects[effectId].u.periodic.custom_data) +
+                          i))
+               << " ";
+        }
+        dprintf(fd, "\t%d\t%d\t{%s}\n", mFfEffects[effectId].id, numBytes, ss.str().c_str());
     }
 
     dprintf(fd, "\n");
+    dprintf(fd, "\n");
 
-    // mHwApi->debug(fd);
+    mHwApi->debug(fd);
 
     dprintf(fd, "\n");
 
