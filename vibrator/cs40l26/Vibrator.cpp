@@ -417,9 +417,8 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedEffects(std::vector<Effect> *_aidl_return) {
-    // *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK,
-    //                  Effect::DOUBLE_CLICK */};
-    *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK};
+    *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK,
+                     Effect::DOUBLE_CLICK};
     return ndk::ScopedAStatus::ok();
 }
 
@@ -1081,40 +1080,47 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
 }
 
 ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength strength,
-                                                uint32_t *outTimeMs, uint32_t * /*outVolLevel*/,
-                                                std::string *outEffectQueue) {
+                                                uint32_t *outTimeMs, dspmem_chunk *outCh) {
     ndk::ScopedAStatus status;
-    uint32_t timeMs;
-    std::ostringstream effectBuilder;
+    uint32_t timeMs = 0;
     uint32_t thisEffectIndex;
     uint32_t thisTimeMs;
     uint32_t thisVolLevel;
     switch (effect) {
         case Effect::DOUBLE_CLICK:
-            timeMs = 0;
+            dspmem_chunk_write(outCh, 8, 0); /* Padding */
+            dspmem_chunk_write(outCh, 8, 2); /* nsections */
+            dspmem_chunk_write(outCh, 8, 0); /* repeat */
 
             status = getSimpleDetails(Effect::CLICK, strength, &thisEffectIndex, &thisTimeMs,
                                       &thisVolLevel);
             if (!status.isOk()) {
                 return status;
             }
-            effectBuilder << thisEffectIndex << "." << thisVolLevel;
             timeMs += thisTimeMs;
 
-            effectBuilder << ",";
+            dspmem_chunk_write(outCh, 8, (uint8_t)(0xFF & thisVolLevel));    /* amplitude */
+            dspmem_chunk_write(outCh, 8, (uint8_t)(0xFF & thisEffectIndex)); /* index */
+            dspmem_chunk_write(outCh, 8, 0);                                 /* repeat */
+            dspmem_chunk_write(outCh, 8, 0);                                 /* flags */
+            dspmem_chunk_write(outCh, 16,
+                               (uint16_t)(0xFFFF & WAVEFORM_DOUBLE_CLICK_SILENCE_MS)); /* delay */
 
-            effectBuilder << WAVEFORM_DOUBLE_CLICK_SILENCE_MS;
             timeMs += WAVEFORM_DOUBLE_CLICK_SILENCE_MS + MAX_PAUSE_TIMING_ERROR_MS;
-
-            effectBuilder << ",";
 
             status = getSimpleDetails(Effect::HEAVY_CLICK, strength, &thisEffectIndex, &thisTimeMs,
                                       &thisVolLevel);
             if (!status.isOk()) {
                 return status;
             }
-            effectBuilder << thisEffectIndex << "." << thisVolLevel;
             timeMs += thisTimeMs;
+
+            dspmem_chunk_write(outCh, 8, (uint8_t)(0xFF & thisVolLevel));    /* amplitude */
+            dspmem_chunk_write(outCh, 8, (uint8_t)(0xFF & thisEffectIndex)); /* index */
+            dspmem_chunk_write(outCh, 8, 0);                                 /* repeat */
+            dspmem_chunk_write(outCh, 8, 0);                                 /* flags */
+            dspmem_chunk_write(outCh, 16, 0);                                /* delay */
+            dspmem_chunk_flush(outCh);
 
             break;
         default:
@@ -1122,7 +1128,6 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
     }
 
     *outTimeMs = timeMs;
-    *outEffectQueue = effectBuilder.str();
 
     return ndk::ScopedAStatus::ok();
 }
@@ -1234,9 +1239,10 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
             status = getSimpleDetails(effect, strength, &effectIndex, &timeMs, &volLevel);
             break;
         case Effect::DOUBLE_CLICK:
-            // fall-through
-            // status = getCompoundDetails(effect, strength, &timeMs, &volLevel, &effectQueue);
-            // break;
+            ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_COMP]{0x00},
+                                     FF_CUSTOM_DATA_LEN_MAX_COMP);
+            status = getCompoundDetails(effect, strength, &timeMs, ch);
+            break;
         default:
             status = ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
             break;

@@ -182,8 +182,7 @@ class Vibrator : public BnVibrator {
                                         uint32_t *outVolLevel);
     // 'compound' effects are those composed by stringing multiple 'simple' effects
     ndk::ScopedAStatus getCompoundDetails(Effect effect, EffectStrength strength,
-                                          uint32_t *outTimeMs, uint32_t *outVolLevel,
-                                          std::string *outEffectQueue);
+                                          uint32_t *outTimeMs, struct dspmem_chunk *outCh);
     ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, uint32_t *outEffectIndex);
     ndk::ScopedAStatus uploadOwtEffect(uint8_t *owtData, uint32_t num_bytes,
                                        uint32_t *outEffectIndex);
