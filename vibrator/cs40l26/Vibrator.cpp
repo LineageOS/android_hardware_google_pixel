@@ -54,9 +54,7 @@ static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 static constexpr uint32_t VOLTAGE_GLOBAL_SCALE_LEVEL = 5;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
-// static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP
-// Return-From-Standby
-static constexpr int8_t MAX_COLD_START_LATENCY_MS = 0;  // I2C Transaction + DSP Return-From-Standby
+static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
 static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;  // ALERT Irq Handling
 static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 
@@ -319,7 +317,9 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
     const uint16_t index = (timeoutMs < WAVEFORM_LONG_VIBRATION_THRESHOLD_MS)
                                    ? WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX
                                    : WAVEFORM_LONG_VIBRATION_EFFECT_INDEX;
-
+    if (MAX_COLD_START_LATENCY_MS <= MAX_TIME_MS - timeoutMs) {
+        timeoutMs += MAX_COLD_START_LATENCY_MS;
+    }
     setGlobalAmplitude(true);
 
     return on(timeoutMs, index, callback);
@@ -1110,7 +1110,6 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
-    mHwApi->pollVibeState("Vibe state: Haptic\n");
     mHwApi->pollVibeState("Vibe state: Stopped\n");
 
     if (callback) {
