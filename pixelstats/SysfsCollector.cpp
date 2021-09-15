@@ -73,7 +73,6 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kUFSLifetimeA(sysfs_paths.UFSLifetimeA),
       kUFSLifetimeB(sysfs_paths.UFSLifetimeB),
       kUFSLifetimeC(sysfs_paths.UFSLifetimeC),
-      kUFSHostResetPath(sysfs_paths.UFSHostResetPath),
       kF2fsStatsPath(sysfs_paths.F2fsStatsPath),
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
@@ -81,7 +80,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
-      kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath) {}
+      kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
+      kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -467,16 +467,19 @@ void SysfsCollector::logUFSLifetime(const std::shared_ptr<IStats> &stats_client)
 }
 
 void SysfsCollector::logUFSErrorStats(const std::shared_ptr<IStats> &stats_client) {
-    int host_reset_count;
+    int value, host_reset_count = 0;
 
-    if (kUFSHostResetPath == nullptr || strlen(kUFSHostResetPath) == 0) {
+    if (kUFSErrStatsPath.empty() || strlen(kUFSErrStatsPath.front().c_str()) == 0) {
         ALOGV("UFS host reset count specified");
         return;
     }
 
-    if (!ReadFileToInt(kUFSHostResetPath, &host_reset_count)) {
-        ALOGE("Unable to read host reset count");
-        return;
+    for (int i = 0; i < kUFSErrStatsPath.size(); i++) {
+        if (!ReadFileToInt(kUFSErrStatsPath[i], &value)) {
+            ALOGE("Unable to read host reset count");
+            return;
+        }
+        host_reset_count += value;
     }
 
     // Load values array
