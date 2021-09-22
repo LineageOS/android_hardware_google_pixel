@@ -58,7 +58,7 @@ static const bool kBlockForWorkDurations = true;
 static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
 
 AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
-    : mHintManager(hintManager), mIsEnabled(false) {}
+    : mHintManager(hintManager), mIsEnabled(false), mIsInitialized(false) {}
 
 bool AdaptiveCpu::IsEnabled() const {
     return mIsEnabled;
@@ -110,6 +110,14 @@ void AdaptiveCpu::DumpToFd(int fd) const {
     std::stringstream result;
     result << "========== Begin Adaptive CPU stats ==========\n";
     result << "Enabled: " << mIsEnabled << "\n";
+    result << "CPU frequencies per policy:\n";
+    const auto previousCpuPolicyFrequencies = mCpuFrequencyReader.getPreviousCpuPolicyFrequencies();
+    for (const auto &[policyId, cpuFrequencies] : previousCpuPolicyFrequencies) {
+        result << "- Policy=" << policyId << "\n";
+        for (const auto &[frequencyHz, time] : cpuFrequencies) {
+            result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
+        }
+    }
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";
@@ -129,6 +137,14 @@ std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
 }
 
 void AdaptiveCpu::RunMainLoop() {
+    if (!mIsInitialized) {
+        if (!mCpuFrequencyReader.init()) {
+            LOG(INFO) << "Failed to initialize CPU frequency reading";
+            mIsEnabled = false;
+            return;
+        }
+        mIsInitialized = true;
+    }
     while (true) {
         std::vector<WorkDurationBatch> workDurationBatches = TakeWorkDurations();
 
@@ -158,11 +174,24 @@ void AdaptiveCpu::RunMainLoop() {
         LOG(VERBOSE) << "AdaptiveCPU processing durations: count=" << durationsCount
                      << " average=" << averageDuration.count() << "ns";
 
+        std::vector<CpuPolicyAverageFrequency> cpuPolicyFrequencies;
+        if (!mCpuFrequencyReader.getRecentCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
+            break;
+        }
+        LOG(VERBOSE) << "Got CPU frequencies: " << cpuPolicyFrequencies.size();
+        for (const auto &cpuPolicyFrequency : cpuPolicyFrequencies) {
+            LOG(VERBOSE) << "policy=" << cpuPolicyFrequency.policyId
+                         << ", freq=" << cpuPolicyFrequency.averageFrequencyHz;
+        }
+
         // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.
         std::this_thread::sleep_for(kIterationSleepDuration);
 
         // TODO(b/188770301) Actually do the processing.
     }
+    // If the loop exits due to an error, disable Adaptive CPU so no work is done on e.g.
+    // TakeWorkDurations.
+    mIsEnabled = false;
 }
 
 }  // namespace pixel
