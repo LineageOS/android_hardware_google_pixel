@@ -32,6 +32,9 @@ enum class MiscWriterActions : int32_t {
   kClearDarkThemeFlag,
   kSetSotaFlag,
   kClearSotaFlag,
+  kSetEnablePkvmFlag,
+  kSetDisablePkvmFlag,
+  kClearPkvmFlag,
 
   kUnset = -1,
 };
@@ -42,6 +45,9 @@ class MiscWriter {
   static constexpr char kDarkThemeFlag[] = "theme-dark";
   static constexpr uint32_t kSotaFlagOffsetInVendorSpace = 32;
   static constexpr char kSotaFlag[] = "enable-sota";
+  static constexpr uint32_t kPkvmFlagOffsetInVendorSpace = 64;
+  static constexpr char kEnablePkvmFlag[] = "enable-pkvm";
+  static constexpr char kDisablePkvmFlag[] = "disable-pkvm";
 
   // Returns true of |size| bytes data starting from |offset| is fully inside the vendor space.
   static bool OffsetAndSizeInVendorSpace(size_t offset, size_t size);

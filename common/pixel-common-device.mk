@@ -12,10 +12,13 @@ PRODUCT_PACKAGES += \
     android.hardware.atrace@1.0-service.pixel \
     dmabuf_dump
 
-
 # fastbootd
 PRODUCT_PACKAGES += \
     fastbootd
 
 # Common ramdump file type.
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
+
+# Pixel Experience
+PRODUCT_PACKAGES_DEBUG += wifi_sniffer
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
