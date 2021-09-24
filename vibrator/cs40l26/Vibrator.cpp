@@ -605,7 +605,6 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
     mActiveId = play.code;
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
-    usleep(50 * 1000);  // TODO(b/193793095): Remove when fixed.
 
     return ndk::ScopedAStatus::ok();
 }
