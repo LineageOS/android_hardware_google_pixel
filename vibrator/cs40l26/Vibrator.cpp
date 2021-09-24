@@ -1276,6 +1276,7 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
+    mHwApi->pollVibeState("Vibe state: Haptic\n");
     mHwApi->pollVibeState("Vibe state: Stopped\n");
 
     if (callback) {
