@@ -75,8 +75,6 @@ static constexpr uint32_t MAX_TIME_MS = UINT32_MAX;
 static constexpr float AMP_ATTENUATE_STEP_SIZE = 0.125f;
 static constexpr float EFFECT_FREQUENCY_KHZ = 48.0f;
 
-static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
-
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 static constexpr int32_t COMPOSE_SIZE_MAX = 127;
 static constexpr int32_t COMPOSE_PWLE_SIZE_MAX_DEFAULT = 127;
@@ -471,10 +469,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
         ALOGE("Device is under external control mode. Force to disable it to prevent chip hang "
               "problem.");
     }
-    if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
-        ALOGE("Previous vibration pending.");
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
+    mHwApi->setActivate(0);
 
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);

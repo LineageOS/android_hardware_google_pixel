@@ -110,4 +110,4 @@ class MmMetricsReporter {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_PIXEL_PIXELSTATS_BATTERYCAPACITYREPORTER_H
+#endif  // HARDWARE_GOOGLE_PIXEL_PIXELSTATS_MMMETRICSREPORTER_H
