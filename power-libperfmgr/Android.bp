@@ -40,6 +40,8 @@ cc_library {
     srcs: [
         "adaptivecpu/AdaptiveCpu.cpp",
         "adaptivecpu/CpuFrequencyReader.cpp",
+        "adaptivecpu/CpuLoadReader.cpp",
+        "adaptivecpu/RealFilesystem.cpp",
     ],
     shared_libs: [
         "android.hardware.power-V2-ndk",
@@ -56,6 +58,7 @@ cc_test {
     vendor: true,
     srcs: [
         "adaptivecpu/tests/CpuFrequencyReaderTest.cpp",
+        "adaptivecpu/tests/CpuLoadReaderTest.cpp",
     ],
     static_libs: [
         "libadaptivecpu",

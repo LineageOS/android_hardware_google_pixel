@@ -41,7 +41,7 @@ TEST(CpuFrequencyReaderTest, cpuPolicyIds) {
     EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
             .WillOnce(Return(std::vector<std::string>(
                     {"ignored1", "policy1", "ignored2", "policy5", "policy10", "policybad"})));
-    EXPECT_CALL(*filesystem, readFile(_)).WillRepeatedly([]() {
+    EXPECT_CALL(*filesystem, readFileStream(_)).WillRepeatedly([]() {
         return std::make_unique<std::istringstream>("1 2\n3 4\n");
     });
 
@@ -58,12 +58,12 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
     EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
             .WillOnce(Return(std::vector<std::string>({"policy1", "policy2"})));
     EXPECT_CALL(*filesystem,
-                readFile("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
             .Times(2)
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 5\n2000 4"))))
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 7\n2000 10"))));
     EXPECT_CALL(*filesystem,
-                readFile("/sys/devices/system/cpu/cpufreq/policy2/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy2/stats/time_in_state"))
             .Times(2)
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1500 1\n2500 23"))))
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1500 5\n2500 23"))));
@@ -84,7 +84,7 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_frequenciesChange) {
     EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
             .WillOnce(Return(std::vector<std::string>({"policy1"})));
     EXPECT_CALL(*filesystem,
-                readFile("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
             .Times(2)
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 5\n2000 4"))))
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 6\n2001 4"))));
@@ -101,7 +101,7 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_badFormat) {
     EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
             .WillOnce(Return(std::vector<std::string>({"policy1"})));
     EXPECT_CALL(*filesystem,
-                readFile("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
             .Times(2)
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 1"))))
             .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 2\nfoo"))));

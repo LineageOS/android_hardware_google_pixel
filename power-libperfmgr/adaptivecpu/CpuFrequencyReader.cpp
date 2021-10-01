@@ -19,7 +19,6 @@
 #include "CpuFrequencyReader.h"
 
 #include <android-base/logging.h>
-#include <dirent.h>
 #include <inttypes.h>
 
 #include <fstream>
@@ -88,7 +87,7 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
         timeInStatePath << "/sys/devices/system/cpu/cpufreq/policy" << cpuPolicyId
                         << "/stats/time_in_state";
         std::unique_ptr<std::istream> timeInStateFile =
-                mFilesystem->readFile(timeInStatePath.str());
+                mFilesystem->readFileStream(timeInStatePath.str());
 
         std::map<uint64_t, std::chrono::milliseconds> cpuFrequencies;
         std::string timeInStateLine;
@@ -124,24 +123,6 @@ std::vector<uint32_t> CpuFrequencyReader::readCpuPolicyIds() const {
         cpuPolicyIds.push_back(cpuPolicyId);
     }
     return cpuPolicyIds;
-}
-
-std::vector<std::string> RealFilesystem::listDirectory(std::string path) const {
-    // We can't use std::filesystem, see aosp/894015 & b/175635923.
-    DIR *dir = opendir(path.c_str());
-    if (!dir) {
-        LOG(ERROR) << "Failed to open directory " << path;
-    }
-    std::vector<std::string> entries;
-    dirent *entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        entries.emplace_back(entry->d_name);
-    }
-    return entries;
-}
-
-std::unique_ptr<std::istream> RealFilesystem::readFile(std::string path) const {
-    return std::make_unique<std::ifstream>(path);
 }
 
 }  // namespace pixel
