@@ -541,7 +541,7 @@ bool UeventListener::ProcessUevent() {
             devpath = cp;
         } else if (!strncmp(cp, "SUBSYSTEM=", strlen("SUBSYSTEM="))) {
             subsystem = cp;
-        } else if (!strncmp(cp, "DEVTYPE=typec_partner", strlen("DEVTYPE=typec_partner"))) {
+        } else if (!strncmp(cp, kTypeCPartnerUevent.c_str(), kTypeCPartnerUevent.size())) {
             collect_partner_id = true;
         } else if (!strncmp(cp, "POWER_SUPPLY_NAME=wireless",
                             strlen("POWER_SUPPLY_NAME=wireless"))) {
@@ -589,6 +589,7 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
       kBatterySSOCPath(ssoc_details_path),
       kUsbPortOverheatPath(overheat_path),
       kChargeMetricsPath(charge_metrics_path),
+      kTypeCPartnerUevent(typec_partner_uevent_default),
       kTypeCPartnerVidPath(typec_partner_vid_path),
       kTypeCPartnerPidPath(typec_partner_pid_path),
       kWirelessChargerPtmcUevent(""),
@@ -605,6 +606,9 @@ UeventListener::UeventListener(const struct UeventPaths &uevents_paths)
       kChargeMetricsPath((uevents_paths.ChargeMetricsPath == nullptr)
                                  ? charge_metrics_path_default
                                  : uevents_paths.ChargeMetricsPath),
+      kTypeCPartnerUevent((uevents_paths.TypeCPartnerUevent == nullptr)
+                                  ? typec_partner_uevent_default
+                                  : uevents_paths.TypeCPartnerUevent),
       kTypeCPartnerVidPath((uevents_paths.TypeCPartnerVidPath == nullptr)
                                    ? typec_partner_vid_path_default
                                    : uevents_paths.TypeCPartnerVidPath),
