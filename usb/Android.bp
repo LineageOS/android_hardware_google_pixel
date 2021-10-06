@@ -26,6 +26,7 @@ cc_library_static {
     srcs: [
         "UsbGadgetUtils.cpp",
         "MonitorFfs.cpp",
+        "UsbOverheatEvent.cpp"
     ],
 
     cflags: [
@@ -34,11 +35,14 @@ cc_library_static {
     ],
 
     shared_libs: [
-        "android.hardware.usb.gadget@1.0",
         "libbase",
+        "libbinder",
         "libcutils",
         "libhidlbase",
         "libutils",
+        "android.hardware.usb.gadget@1.0",
+        "android.hardware.thermal@1.0",
+        "android.hardware.thermal@2.0",
     ],
 }
 

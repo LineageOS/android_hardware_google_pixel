@@ -17,7 +17,7 @@ package {
 }
 
 cc_library_static {
-    name: "libpowerstatsutil",
+    name: "libpwrstatsutil",
     defaults: ["pwrstatsutil_defaults"],
     export_include_dirs: ["."],
     srcs: [

@@ -41,28 +41,43 @@ java_library {
     sdk_version: "current",
 }
 
+java_library_host {
+    name: "pixelatoms-java_host",
+    proto: {
+        type: "full",
+    },
+    srcs: [
+        "pixelatoms.proto",
+    ],
+}
+
 cc_library {
   name: "libpixelstats",
   vendor: true,
   export_include_dirs: ["include"],
 
   srcs: [
-    "DropDetect.cpp",
-    "OrientationCollector.cpp",
-    "SysfsCollector.cpp",
-    "UeventListener.cpp",
-    "WlcReporter.cpp",
     "BatteryCapacityReporter.cpp",
     "BatteryEEPROMReporter.cpp",
+    "DropDetect.cpp",
+    "MmMetricsReporter.cpp",
+    "MitigationStatsReporter.cpp",
+    "OrientationCollector.cpp",
+    "PcaChargeStats.cpp",
+    "StatsHelper.cpp",
+    "SysfsCollector.cpp",
+    "UeventListener.cpp",
+    "WirelessChargeStats.cpp",
+    "WlcReporter.cpp",
   ],
   cflags: [
     "-Wall",
     "-Werror",
   ],
   shared_libs: [
-    "android.frameworks.stats@1.0",
+    "android.frameworks.stats-V1-ndk",
     "libbase",
-    "libbinder",
+    "libbinder_ndk",
     "libcutils",
     "libhidlbase",
     "liblog",
@@ -71,7 +86,8 @@ cc_library {
     "pixelatoms-cpp",
   ],
   export_shared_lib_headers: [
-    "android.frameworks.stats@1.0",
+    "android.frameworks.stats-V1-ndk",
+    "pixelatoms-cpp",
   ],
   static_libs: [
     "chre_client",
