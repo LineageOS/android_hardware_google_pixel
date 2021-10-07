@@ -60,7 +60,7 @@ static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;  // ALERT Irq Handling
 static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 
 static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
-
+static constexpr auto POLLING_TIMEOUT = 20;
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 
 /* Preserve 1 section for the first delay before the first effect. */
@@ -584,10 +584,6 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
     /* Update duration for long/short vibration. */
     if (effectIndex == WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX ||
         effectIndex == WAVEFORM_LONG_VIBRATION_EFFECT_INDEX) {
-        /* TODO(b/193793095): Remove when fixed */
-        if (effectIndex == WAVEFORM_LONG_VIBRATION_EFFECT_INDEX && timeoutMs < 60) {
-            timeoutMs = 60;
-        }
         mFfEffects[effectIndex].replay.length = static_cast<uint16_t>(timeoutMs);
         if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[effectIndex]) < 0) {
             ALOGE("Failed to edit effect %d (%d): %s", effectIndex, errno, strerror(errno));
@@ -609,7 +605,6 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
     mActiveId = play.code;
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
-    usleep(50 * 1000);  // TODO(b/193793095): Remove when fixed.
 
     return ndk::ScopedAStatus::ok();
 }
@@ -1276,6 +1271,9 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
+    if (!mHwApi->pollVibeState("Vibe state: Haptic\n", POLLING_TIMEOUT)) {
+        ALOGE("Fail to get state \"Haptic\"");
+    }
     mHwApi->pollVibeState("Vibe state: Stopped\n");
 
     if (callback) {
