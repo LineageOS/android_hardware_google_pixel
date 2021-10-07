@@ -93,7 +93,7 @@ class Vibrator : public BnVibrator {
         // Blocks until vibrator reaches desired state
         // ("Vibe state: Haptic" means enabled).
         // ("Vibe state: Stopped" means disabled).
-        virtual bool pollVibeState(std::string value) = 0;
+        virtual bool pollVibeState(std::string value, int32_t timeoutMs = -1) = 0;
         // Enables/disables closed-loop active braking.
         virtual bool setClabEnable(bool value) = 0;
         // Reports the number of available PWLE segments.

@@ -53,7 +53,9 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setGpioFallScale(uint32_t value) override { return set(value, &mGpioFallScale); }
     bool setGpioRiseIndex(uint32_t value) override { return set(value, &mGpioRiseIndex); }
     bool setGpioRiseScale(uint32_t value) override { return set(value, &mGpioRiseScale); }
-    bool pollVibeState(std::string value) override { return pollStr(value, &mVibeState); }
+    bool pollVibeState(std::string value, int32_t timeoutMs) override {
+        return pollStr(value, &mVibeState, timeoutMs);
+    }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
     bool getAvailablePwleSegments(uint32_t *value) override {
         return getStr(value, &mAvailablePwleSegments);
