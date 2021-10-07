@@ -388,7 +388,7 @@ ndk::ScopedAStatus Vibrator::off() {
 
     mActiveId = -1;
     setGlobalAmplitude(false);
-
+    mHwApi->setF0Offset(0);
     return ndk::ScopedAStatus::ok();
 }
 
@@ -405,7 +405,7 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
         timeoutMs += MAX_COLD_START_LATENCY_MS;
     }
     setGlobalAmplitude(true);
-
+    mHwApi->setF0Offset(mF0Offset);
     return on(timeoutMs, index, callback);
 }
 
