@@ -101,6 +101,10 @@ class Vibrator : public BnVibrator {
         // Specifies piecewise-linear specifications to generate complex
         // waveforms.
         virtual bool setPwle(std::string value) = 0;
+        // Reports whether getOwtFreeSpace() is supported.
+        virtual bool hasOwtFreeSpace() = 0;
+        // Reports the available OWT bytes.
+        virtual bool getOwtFreeSpace(uint32_t *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
