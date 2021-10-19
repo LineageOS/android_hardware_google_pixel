@@ -19,6 +19,8 @@
 #include "adaptivecpu/CpuLoadReader.h"
 #include "mocks.h"
 
+#define LOG_TAG "powerhal-libperfmgr"
+
 using testing::_;
 using testing::ByMove;
 using testing::Return;

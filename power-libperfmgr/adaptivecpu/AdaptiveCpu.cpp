@@ -22,7 +22,10 @@
 #include <android-base/logging.h>
 
 #include <chrono>
+#include <deque>
 #include <numeric>
+
+#include "Model.h"
 
 namespace aidl {
 namespace google {
@@ -56,6 +59,9 @@ static const bool kBlockForWorkDurations = true;
 // e.g. around 25ms.
 // TODO(b/188770301) Once the gating logic is implemented, reduce the sleep duration.
 static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
+
+// We pass the previous N ModelInputs to the model, including the most recent ModelInput.
+constexpr uint32_t kNumHistoricalModelInputs = 3;
 
 AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
     : mHintManager(hintManager), mIsEnabled(false), mIsInitialized(false) {}
@@ -152,6 +158,9 @@ void AdaptiveCpu::RunMainLoop() {
         mCpuLoadReader.init();
         mIsInitialized = true;
     }
+
+    std::deque<ModelInput> historicalModelInputs;
+    ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
     while (true) {
         std::vector<WorkDurationBatch> workDurationBatches = TakeWorkDurations();
 
@@ -200,10 +209,24 @@ void AdaptiveCpu::RunMainLoop() {
             LOG(VERBOSE) << "cpu=" << cpuLoad.cpuId << ", idle=" << cpuLoad.idleTimeFraction;
         }
 
+        ModelInput modelInput;
+        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, averageDuration, durationsCount,
+                             previousThrottleDecision)) {
+            break;
+        }
+        historicalModelInputs.push_back(modelInput);
+        if (historicalModelInputs.size() > kNumHistoricalModelInputs) {
+            historicalModelInputs.pop_front();
+        }
+
+        const ThrottleDecision throttleDecision = RunModel(historicalModelInputs);
+        LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
+        previousThrottleDecision = throttleDecision;
+
+        // TODO(b/188770301): Pass the model output to HintManager.
+
         // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.
         std::this_thread::sleep_for(kIterationSleepDuration);
-
-        // TODO(b/188770301) Actually do the processing.
     }
     // If the loop exits due to an error, disable Adaptive CPU so no work is done on e.g.
     // TakeWorkDurations.

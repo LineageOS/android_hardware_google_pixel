@@ -53,6 +53,7 @@ class CpuFrequencyReader {
     bool init();
 
     // Gets the average frequency each CPU policy was using, since this method was last called.
+    // Results are returned sorted by policyId.
     // Returns true on success.
     bool getRecentCpuPolicyFrequencies(std::vector<CpuPolicyAverageFrequency> *result);
 
@@ -62,7 +63,7 @@ class CpuFrequencyReader {
     getPreviousCpuPolicyFrequencies() const;
 
   private:
-    // CPU policy IDs read from /sys. Initialized in #init().
+    // CPU policy IDs read from /sys. Initialized in #init(). Sorted ascending.
     std::vector<uint32_t> mCpuPolicyIds;
     // The CPU frequencies when #getRecentCpuPolicyFrequencies was last called (or #init if it has
     // not been called yet).

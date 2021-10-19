@@ -41,6 +41,7 @@ cc_library {
         "adaptivecpu/AdaptiveCpu.cpp",
         "adaptivecpu/CpuFrequencyReader.cpp",
         "adaptivecpu/CpuLoadReader.cpp",
+        "adaptivecpu/Model.cpp",
         "adaptivecpu/RealFilesystem.cpp",
     ],
     shared_libs: [
@@ -59,6 +60,7 @@ cc_test {
     srcs: [
         "adaptivecpu/tests/CpuFrequencyReaderTest.cpp",
         "adaptivecpu/tests/CpuLoadReaderTest.cpp",
+        "adaptivecpu/tests/ModelTest.cpp",
     ],
     static_libs: [
         "libadaptivecpu",

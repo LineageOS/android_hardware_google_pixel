@@ -122,6 +122,9 @@ std::vector<uint32_t> CpuFrequencyReader::readCpuPolicyIds() const {
         }
         cpuPolicyIds.push_back(cpuPolicyId);
     }
+    // Sort the list, so that getRecentCpuPolicyFrequencies always returns frequencies sorted by
+    // policy ID.
+    std::sort(cpuPolicyIds.begin(), cpuPolicyIds.end());
     return cpuPolicyIds;
 }
 
