@@ -221,9 +221,16 @@ void AdaptiveCpu::RunMainLoop() {
 
         const ThrottleDecision throttleDecision = RunModel(historicalModelInputs);
         LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
-        previousThrottleDecision = throttleDecision;
 
-        // TODO(b/188770301): Pass the model output to HintManager.
+        if (throttleDecision != previousThrottleDecision) {
+            for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
+                mHintManager->EndHint(hintName);
+            }
+            for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
+                mHintManager->DoHint(hintName);
+            }
+            previousThrottleDecision = throttleDecision;
+        }
 
         // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.
         std::this_thread::sleep_for(kIterationSleepDuration);
@@ -232,6 +239,18 @@ void AdaptiveCpu::RunMainLoop() {
     // TakeWorkDurations.
     mIsEnabled = false;
 }
+
+const std::unordered_map<ThrottleDecision, std::vector<std::string>>
+        AdaptiveCpu::kThrottleDecisionToHintNames = {
+                {ThrottleDecision::NO_THROTTLE, {}},
+                {ThrottleDecision::THROTTLE_60,
+                 {"LOW_POWER_LITTLE_CLUSTER_60", "LOW_POWER_MID_CLUSTER_60", "LOW_POWER_CPU_60"}},
+                {ThrottleDecision::THROTTLE_70,
+                 {"LOW_POWER_LITTLE_CLUSTER_70", "LOW_POWER_MID_CLUSTER_70", "LOW_POWER_CPU_70"}},
+                {ThrottleDecision::THROTTLE_80,
+                 {"LOW_POWER_LITTLE_CLUSTER_80", "LOW_POWER_MID_CLUSTER_80", "LOW_POWER_CPU_80"}},
+                {ThrottleDecision::THROTTLE_90,
+                 {"LOW_POWER_LITTLE_CLUSTER_90", "LOW_POWER_MID_CLUSTER_90", "LOW_POWER_CPU_90"}}};
 
 }  // namespace pixel
 }  // namespace impl
