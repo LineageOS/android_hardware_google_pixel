@@ -44,15 +44,10 @@ namespace vibrator {
 static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 1152;
 
-static constexpr uint32_t WAVEFORM_EFFECT_0_20_LEVEL = 0;
-static constexpr uint32_t WAVEFORM_EFFECT_1_00_LEVEL = 4;
-static constexpr uint32_t WAVEFORM_EFFECT_LEVEL_MINIMUM = 4;
-
 static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_SILENCE_MS = 100;
 
 static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 
-static constexpr uint32_t VOLTAGE_GLOBAL_SCALE_LEVEL = 5;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
 static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
@@ -256,7 +251,6 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     uint8_t retry = 0;
     mFfEffects.resize(WAVEFORM_MAX_INDEX);
     mEffectDurations.resize(WAVEFORM_MAX_INDEX);
-    // TODO(b/193786559): Driver does not support wave counts and duration reading yet.
     mEffectDurations = {
             1000, 100, 100, 1000, 350, 180, 200, 550, 150, 100, 100, 1000, 1000, 1000,
     }; /* 11+3 waveforms. The duration must < UINT16_MAX */
@@ -265,12 +259,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 
     for (effectIndex = 0; effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX; effectIndex++) {
         mFfEffects[effectIndex] = {
-                .id = -1,
                 .type = FF_PERIODIC,
+                .id = -1,
+                .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
                 .u.periodic.waveform = FF_CUSTOM,
                 .u.periodic.custom_data = new int16_t[2]{RAM_WVFRM_BANK, effectIndex},
                 .u.periodic.custom_len = FF_CUSTOM_DATA_LEN,
-                .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
         };
 
         while (true) {
@@ -328,26 +322,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     mHwCal->getVersion(&calVer);
-    if (calVer == 1) {
-        std::array<uint32_t, 6> volLevels;
-        mHwCal->getVolLevels(&volLevels);
-        /*
-         * Given voltage levels for two intensities, assuming a linear function,
-         * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
-         */
-        mClickEffectVol[0] = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
-                                                  (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
-                                                   volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
-                                                          4.0f),
-                                      static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
-        mClickEffectVol[1] = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
-        mTickEffectVol = mClickEffectVol;
-        mLongEffectVol[0] = 0;
-        mLongEffectVol[1] = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
-    } else {
+    if (calVer == 2) {
         mHwCal->getTickVolLevels(&mTickEffectVol);
         mHwCal->getClickVolLevels(&mClickEffectVol);
         mHwCal->getLongVolLevels(&mLongEffectVol);
+    } else {
+        ALOGW("Unsupported calibration version!");
     }
 
     mIsUnderExternalControl = false;
@@ -357,13 +337,13 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     ATRACE_NAME("Vibrator::getCapabilities");
 
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
-                  IVibrator::CAP_COMPOSE_EFFECTS | IVibrator::CAP_ALWAYS_ON_CONTROL |
+                  IVibrator::CAP_AMPLITUDE_CONTROL | IVibrator::CAP_ALWAYS_ON_CONTROL |
                   IVibrator::CAP_GET_RESONANT_FREQUENCY | IVibrator::CAP_GET_Q_FACTOR;
-    if (mHwApi->hasEffectScale()) {
-        ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
-    }
     if (hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
+    }
+    if (mHwApi->hasOwtFreeSpace()) {
+        ret |= IVibrator::CAP_COMPOSE_EFFECTS;
     }
     *_aidl_return = ret;
     return ndk::ScopedAStatus::ok();

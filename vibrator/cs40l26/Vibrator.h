@@ -45,51 +45,8 @@ class Vibrator : public BnVibrator {
         // Stores the LRA Q factor to be used for Q-dependent waveform
         // selection.
         virtual bool setQ(std::string value) = 0;
-        // Activates/deactivates the vibrator for durations specified by
-        // setDuration().
-        virtual bool setActivate(bool value) = 0;
-        // Specifies the vibration duration in milliseconds.
-        virtual bool setDuration(uint32_t value) = 0;
         // Reports the number of effect waveforms loaded in firmware.
         virtual bool getEffectCount(uint32_t *value) = 0;
-        // Reports the duration of the waveform selected by
-        // setEffectIndex(), measured in 48-kHz periods.
-        virtual bool getEffectDuration(uint32_t *value) = 0;
-        // Selects the waveform associated with vibration calls from
-        // the Android vibrator HAL.
-        virtual bool setEffectIndex(uint32_t value) = 0;
-        // Specifies an array of waveforms, delays, and repetition markers to
-        // generate complex waveforms.
-        virtual bool setEffectQueue(std::string value) = 0;
-        // Reports whether setEffectScale() is supported.
-        virtual bool hasEffectScale() = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // waveforms triggered in response to vibration calls from the
-        // Android vibrator HAL.
-        virtual bool setEffectScale(uint32_t value) = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // any output waveform (additive to all other set*Scale()
-        // controls).
-        virtual bool setGlobalScale(uint32_t value) = 0;
-        // Specifies the active state of the vibrator
-        // (true = enabled, false = disabled).
-        virtual bool setState(bool value) = 0;
-        // Reports whether getAspEnable()/setAspEnable() is supported.
-        virtual bool hasAspEnable() = 0;
-        // Enables/disables ASP playback.
-        virtual bool getAspEnable(bool *value) = 0;
-        // Reports enabled/disabled state of ASP playback.
-        virtual bool setAspEnable(bool value) = 0;
-        // Selects the waveform associated with a GPIO1 falling edge.
-        virtual bool setGpioFallIndex(uint32_t value) = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // waveforms triggered in response to a GPIO1 falling edge.
-        virtual bool setGpioFallScale(uint32_t value) = 0;
-        // Selects the waveform associated with a GPIO1 rising edge.
-        virtual bool setGpioRiseIndex(uint32_t value) = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // waveforms triggered in response to a GPIO1 rising edge.
-        virtual bool setGpioRiseScale(uint32_t value) = 0;
         // Blocks until vibrator reaches desired state
         // ("Vibe state: Haptic" means enabled).
         // ("Vibe state: Stopped" means disabled).
@@ -126,9 +83,6 @@ class Vibrator : public BnVibrator {
         virtual bool getQ(std::string *value) = 0;
         // Obtains frequency shift for long vibrations.
         virtual bool getLongFrequencyShift(int32_t *value) = 0;
-        // Obtains the discreet voltage levels to be applied for the various
-        // waveforms, in units of 1%.
-        virtual bool getVolLevels(std::array<uint32_t, 6> *value) = 0;
         // Obtains the v0/v1(min/max) voltage levels to be applied for
         // tick/click/long in units of 1%.
         virtual bool getTickVolLevels(std::array<uint32_t, 2> *value) = 0;
