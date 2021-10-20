@@ -408,8 +408,9 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
+    mLongEffectScale = amplitude;
     if (!isUnderExternalControl()) {
-        return setEffectAmplitude(amplitude, 1.0);
+        return setGlobalAmplitude(true);
     } else {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
@@ -604,7 +605,10 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) 
 }
 
 ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
-    uint8_t amplitude = set ? mLongEffectVol[1] : VOLTAGE_SCALE_MAX;
+    uint8_t amplitude = set ? roundf(mLongEffectScale * mLongEffectVol[1]) : VOLTAGE_SCALE_MAX;
+    if (!set) {
+        mLongEffectScale = 1.0;  // Reset the scale for the later new effect.
+    }
     return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX);
 }
 

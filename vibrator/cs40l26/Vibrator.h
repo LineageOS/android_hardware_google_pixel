@@ -174,6 +174,7 @@ class Vibrator : public BnVibrator {
     int mDevice;
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
+    float mLongEffectScale = 1.0;
 };
 
 }  // namespace vibrator
