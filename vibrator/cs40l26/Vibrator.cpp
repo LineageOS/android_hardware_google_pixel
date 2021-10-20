@@ -43,6 +43,7 @@ namespace hardware {
 namespace vibrator {
 static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 2044;  // (COMPOSE_SIZE_MAX + 1) * 8 + 4
+static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_PWLE = 2302;
 
 static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_SILENCE_MS = 100;
 
@@ -76,8 +77,15 @@ static constexpr int32_t Q16_BIT_SHIFT = 16;
 
 static constexpr int32_t COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS = 16383;
 
+static constexpr uint32_t WT_LEN_CALCD = 0x00800000;
+static constexpr uint8_t PWLE_CHIRP_BIT = 0x8;  // Dynamic/static frequency and voltage
+static constexpr uint8_t PWLE_BRAKE_BIT = 0x4;
+static constexpr uint8_t PWLE_AMP_REG_BIT = 0x2;
+
 static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
+static constexpr float CS40L26_PWLE_LEVEL_MIX = -1.0;
+static constexpr float CS40L26_PWLE_LEVEL_MAX = 0.9995118;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
@@ -153,6 +161,14 @@ enum vibe_state {
 
 static int min(int x, int y) {
     return x < y ? x : y;
+}
+
+static int floatToUint16(float input, uint16_t *output, float scale, float min, float max) {
+    if (input < min || input > max)
+        return -ERANGE;
+
+    *output = roundf(input * scale);
+    return 0;
 }
 
 struct dspmem_chunk {
@@ -792,15 +808,6 @@ ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported
     }
 }
 
-ndk::ScopedAStatus Vibrator::setPwle(const std::string &pwleQueue) {
-    if (!mHwApi->setPwle(pwleQueue)) {
-        ALOGE("Failed to write \"%s\" to pwle (%d): %s", pwleQueue.c_str(), errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
-
-    return ndk::ScopedAStatus::ok();
-}
-
 static void resetPreviousEndAmplitudeEndFrequency(float *prevEndAmplitude,
                                                   float *prevEndFrequency) {
     const float reset = -1.0;
@@ -812,56 +819,95 @@ static void incrementIndex(int *index) {
     *index += 1;
 }
 
-static void constructActiveDefaults(std::ostringstream &pwleBuilder, const int &segmentIdx) {
-    pwleBuilder << ",C" << segmentIdx << ":1";
-    pwleBuilder << ",B" << segmentIdx << ":0";
-    pwleBuilder << ",AR" << segmentIdx << ":0";
-    pwleBuilder << ",V" << segmentIdx << ":0";
+static void constructPwleSegment(dspmem_chunk *ch, uint16_t delay, uint16_t amplitude,
+                                 uint16_t frequency, uint8_t flags, uint32_t vbemfTarget = 0) {
+    dspmem_chunk_write(ch, 16, delay);
+    dspmem_chunk_write(ch, 12, amplitude);
+    dspmem_chunk_write(ch, 12, frequency);
+    /* feature flags to control the chirp, CLAB braking, back EMF amplitude regulation */
+    dspmem_chunk_write(ch, 8, (flags | 1) << 4);
+    if (flags & PWLE_AMP_REG_BIT) {
+        dspmem_chunk_write(ch, 24, vbemfTarget); /* target back EMF voltage */
+    }
 }
 
-static void constructActiveSegment(std::ostringstream &pwleBuilder, const int &segmentIdx,
-                                   int duration, float amplitude, float frequency) {
-    pwleBuilder << ",T" << segmentIdx << ":" << duration;
-    pwleBuilder << ",L" << segmentIdx << ":" << amplitude;
-    pwleBuilder << ",F" << segmentIdx << ":" << frequency;
-    constructActiveDefaults(pwleBuilder, segmentIdx);
+static int constructActiveSegment(dspmem_chunk *ch, int duration, float amplitude, float frequency,
+                                  bool chirp) {
+    uint16_t delay = 0;
+    uint16_t amp = 0;
+    uint16_t freq = 0;
+    uint8_t flags = 0x0;
+    if ((floatToUint16(duration, &delay, 4, 0.0f, COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) < 0) ||
+        (floatToUint16(amplitude, &amp, 2048, CS40L26_PWLE_LEVEL_MIX, CS40L26_PWLE_LEVEL_MAX) <
+         0) ||
+        (floatToUint16(frequency, &freq, 4, PWLE_FREQUENCY_MIN_HZ, PWLE_FREQUENCY_MAX_HZ) < 0)) {
+        ALOGE("Invalid argument: %d, %f, %f", duration, amplitude, frequency);
+        return -ERANGE;
+    }
+    if (chirp) {
+        flags |= PWLE_CHIRP_BIT;
+    }
+    constructPwleSegment(ch, delay, amp, freq, flags, 0 /*ignored*/);
+    return 0;
 }
 
-static void constructBrakingSegment(std::ostringstream &pwleBuilder, const int &segmentIdx,
-                                    int duration, Braking brakingType) {
-    pwleBuilder << ",T" << segmentIdx << ":" << duration;
-    pwleBuilder << ",L" << segmentIdx << ":" << 0;
-    pwleBuilder << ",F" << segmentIdx << ":" << PWLE_FREQUENCY_MIN_HZ;
-    pwleBuilder << ",C" << segmentIdx << ":0";
-    pwleBuilder << ",B" << segmentIdx << ":"
-                << static_cast<std::underlying_type<Braking>::type>(brakingType);
-    pwleBuilder << ",AR" << segmentIdx << ":0";
-    pwleBuilder << ",V" << segmentIdx << ":0";
+static int constructBrakingSegment(dspmem_chunk *ch, int duration, Braking brakingType) {
+    uint16_t delay = 0;
+    uint16_t freq = 0;
+    uint8_t flags = 0x00;
+    if (floatToUint16(duration, &delay, 4, 0.0f, COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) < 0) {
+        ALOGE("Invalid argument: %d", duration);
+        return -ERANGE;
+    }
+    floatToUint16(PWLE_FREQUENCY_MIN_HZ, &freq, 4, PWLE_FREQUENCY_MIN_HZ, PWLE_FREQUENCY_MAX_HZ);
+    if (static_cast<std::underlying_type<Braking>::type>(brakingType)) {
+        flags |= PWLE_BRAKE_BIT;
+    }
+
+    constructPwleSegment(ch, delay, 0 /*ignored*/, freq, flags, 0 /*ignored*/);
+    return 0;
+}
+
+static void updateWLength(dspmem_chunk *ch, uint32_t totalDuration) {
+    totalDuration *= 8;            /* Unit: 0.125 ms (since wlength played @ 8kHz). */
+    totalDuration |= WT_LEN_CALCD; /* Bit 23 is for WT_LEN_CALCD; Bit 22 is for WT_INDEFINITE. */
+    *(ch->head + 0) = (totalDuration >> 24) & 0xFF;
+    *(ch->head + 1) = (totalDuration >> 16) & 0xFF;
+    *(ch->head + 2) = (totalDuration >> 8) & 0xFF;
+    *(ch->head + 3) = totalDuration & 0xFF;
+}
+
+static void updateNSection(dspmem_chunk *ch, int segmentIdx) {
+    *(ch->head + 7) |= (0xF0 & segmentIdx) >> 4; /* Bit 4 to 7 */
+    *(ch->head + 9) |= (0x0F & segmentIdx) << 4; /* Bit 3 to 0 */
 }
 
 ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &composite,
                                          const std::shared_ptr<IVibratorCallback> &callback) {
     ATRACE_NAME("Vibrator::composePwle");
-    std::ostringstream pwleBuilder;
-    std::string pwleQueue;
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if ((capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) == 0) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
-    if (composite.size() <= 0 || composite.size() > compositionSizeMax) {
+    if (composite.empty() || composite.size() > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
+    int segmentIdx = 0;
+    uint32_t totalDuration = 0;
     float prevEndAmplitude;
     float prevEndFrequency;
     resetPreviousEndAmplitudeEndFrequency(&prevEndAmplitude, &prevEndFrequency);
+    auto ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_PWLE]{0x00},
+                                  FF_CUSTOM_DATA_LEN_MAX_PWLE);
+    bool chirp = false;
 
-    int segmentIdx = 0;
-    uint32_t totalDuration = 0;
-
-    pwleBuilder << "S:0,WF:4,RP:0,WT:0";
+    dspmem_chunk_write(ch, 24, 0x000000); /* Waveform length placeholder */
+    dspmem_chunk_write(ch, 8, 0);         /* Repeat */
+    dspmem_chunk_write(ch, 12, 0);        /* Wait time between repeats */
+    dspmem_chunk_write(ch, 8, 0x00);      /* nsections placeholder */
 
     for (auto &e : composite) {
         switch (e.getTag()) {
@@ -876,6 +922,13 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     active.endAmplitude < PWLE_LEVEL_MIN || active.endAmplitude > PWLE_LEVEL_MAX) {
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
+                if (active.startAmplitude > CS40L26_PWLE_LEVEL_MAX) {
+                    active.startAmplitude = CS40L26_PWLE_LEVEL_MAX;
+                }
+                if (active.endAmplitude > CS40L26_PWLE_LEVEL_MAX) {
+                    active.endAmplitude = CS40L26_PWLE_LEVEL_MAX;
+                }
+
                 if (active.startFrequency < PWLE_FREQUENCY_MIN_HZ ||
                     active.startFrequency > PWLE_FREQUENCY_MAX_HZ ||
                     active.endFrequency < PWLE_FREQUENCY_MIN_HZ ||
@@ -885,18 +938,26 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 
                 if (!((active.startAmplitude == prevEndAmplitude) &&
                       (active.startFrequency == prevEndFrequency))) {
-                    constructActiveSegment(pwleBuilder, segmentIdx, 0, active.startAmplitude,
-                                           active.startFrequency);
+                    if (constructActiveSegment(ch, 0, active.startAmplitude, active.startFrequency,
+                                               false) < 0) {
+                        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+                    }
                     incrementIndex(&segmentIdx);
                 }
 
-                constructActiveSegment(pwleBuilder, segmentIdx, active.duration,
-                                       active.endAmplitude, active.endFrequency);
+                if (active.startFrequency != active.endFrequency) {
+                    chirp = true;
+                }
+                if (constructActiveSegment(ch, active.duration, active.endAmplitude,
+                                           active.endFrequency, chirp) < 0) {
+                    return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+                }
                 incrementIndex(&segmentIdx);
 
                 prevEndAmplitude = active.endAmplitude;
                 prevEndFrequency = active.endFrequency;
                 totalDuration += active.duration;
+                chirp = false;
                 break;
             }
             case PrimitivePwle::braking: {
@@ -908,10 +969,14 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
-                constructBrakingSegment(pwleBuilder, segmentIdx, 0, braking.braking);
+                if (constructBrakingSegment(ch, 0, braking.braking) < 0) {
+                    return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+                }
                 incrementIndex(&segmentIdx);
 
-                constructBrakingSegment(pwleBuilder, segmentIdx, braking.duration, braking.braking);
+                if (constructBrakingSegment(ch, braking.duration, braking.braking) < 0) {
+                    return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+                }
                 incrementIndex(&segmentIdx);
 
                 resetPreviousEndAmplitudeEndFrequency(&prevEndAmplitude, &prevEndFrequency);
@@ -919,27 +984,26 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 break;
             }
         }
+
+        if (segmentIdx > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
+            ALOGE("Too many PrimitivePwle section!");
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+        }
     }
+    dspmem_chunk_flush(ch);
 
-    pwleQueue = pwleBuilder.str();
-    ALOGD("composePwle queue: (%s)", pwleQueue.c_str());
-
-    ndk::ScopedAStatus status = setPwle(pwleQueue);
-    if (!status.isOk()) {
-        ALOGE("Failed to write pwle queue");
-        return status;
-    }
-
-    // mHwApi->setEffectIndex(WAVEFORM_UNSAVED_TRIGGER_QUEUE_INDEX);
-
+    /* Update wlength */
     totalDuration += MAX_COLD_START_LATENCY_MS;
-    // mHwApi->setDuration(MAX_TIME_MS);
+    if (totalDuration > 0x7FFFF) {
+        ALOGE("Total duration is too long (%d)!", totalDuration);
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+    updateWLength(ch, totalDuration);
 
-    // mHwApi->setActivate(1);
+    /* Update nsections */
+    updateNSection(ch, segmentIdx);
 
-    mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
-
-    return ndk::ScopedAStatus::ok();
+    return performEffect(0 /*ignored*/, 0 /*ignored*/, ch, callback);
 }
 
 bool Vibrator::isUnderExternalControl() {
