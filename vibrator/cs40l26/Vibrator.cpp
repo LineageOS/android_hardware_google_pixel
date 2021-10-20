@@ -42,7 +42,7 @@ namespace android {
 namespace hardware {
 namespace vibrator {
 static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
-static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 1152;
+static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 2044;  // (COMPOSE_SIZE_MAX + 1) * 8 + 4
 
 static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_SILENCE_MS = 100;
 
@@ -58,8 +58,8 @@ static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
 static constexpr auto POLLING_TIMEOUT = 20;
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 
-/* Preserve 1 section for the first delay before the first effect. */
-static constexpr int32_t COMPOSE_SIZE_MAX = 255;
+/* nsections is 8 bits. Need to preserve 1 section for the first delay before the first effect. */
+static constexpr int32_t COMPOSE_SIZE_MAX = 254;
 
 // Measured resonant frequency, f0_measured, is represented by Q10.14 fixed
 // point format on cs40l26 devices. The expression to calculate f0 is:
@@ -1157,43 +1157,42 @@ ndk::ScopedAStatus Vibrator::uploadOwtEffect(uint8_t *owtData, uint32_t numBytes
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
-    ff_effect effect{};
     bool isPwle = (*reinterpret_cast<uint16_t *>(owtData) != 0x0000);
     WaveformIndex targetId = isPwle ? WAVEFORM_PWLE : WAVEFORM_COMPOSE;
 
     /* Erase the created OWT waveform. */
     bool isCreated = (mFfEffects[targetId].id != -1);
     if (isCreated && ioctl(mInputFd, EVIOCRMFF, mFfEffects[targetId].id) < 0) {
-        ALOGE("Failed to erase effect %d (%d): %s", mFfEffects[targetId].id, errno,
+        ALOGW("Failed to erase effect %d(%d) (%d): %s", targetId, mFfEffects[targetId].id, errno,
               strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        mFfEffects[targetId].id = -1;
     }
 
-    /* Create a new OWT waveform for PWLE or composite effects. */
-    effect.id = -1; /* New Effect */
-    effect.type = FF_PERIODIC;
-    effect.u.periodic.waveform = FF_CUSTOM;
-    effect.replay.length = 0;                    /* Reserved value for OWT waveforms */
-    effect.u.periodic.custom_len = numBytes / 2; /* # of 16-bit elements */
-    effect.u.periodic.custom_data = new int16_t[effect.u.periodic.custom_len]{0x0000};
-    if (effect.u.periodic.custom_data == nullptr) {
+    uint32_t freeBytes;
+    mHwApi->getOwtFreeSpace(&freeBytes);
+    if (numBytes > freeBytes) {
+        ALOGE("Effect %d length: %d > %d!", targetId, numBytes, freeBytes);
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+
+    /* Create a new OWT waveform to update the PWLE or composite effect. */
+    mFfEffects[targetId].id = -1;                              /* New Effect */
+    mFfEffects[targetId].u.periodic.custom_len = numBytes / 2; /* # of 16-bit elements */
+    delete[](mFfEffects[targetId].u.periodic.custom_data);
+    mFfEffects[targetId].u.periodic.custom_data =
+            new int16_t[mFfEffects[targetId].u.periodic.custom_len]{0x0000};
+    if (mFfEffects[targetId].u.periodic.custom_data == nullptr) {
         ALOGE("Failed to allocate memory for custom data\n");
         return ndk::ScopedAStatus::fromExceptionCode(EX_NULL_POINTER);
     }
-    memcpy(effect.u.periodic.custom_data, owtData, numBytes);
+    memcpy(mFfEffects[targetId].u.periodic.custom_data, owtData, numBytes);
 
-    if (ioctl(mInputFd, EVIOCSFF, &effect) < 0) {
+    if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[targetId]) < 0) {
         ALOGE("Failed to upload effect %d (%d): %s", targetId, errno, strerror(errno));
-        delete (effect.u.periodic.custom_data);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
-    *outEffectIndex = effect.id;
-    /* Update mFfEffects. */
-    mFfEffects[targetId].id = effect.id;
-    mFfEffects[targetId].u.periodic.custom_len = effect.u.periodic.custom_len;
-    delete[](mFfEffects[targetId].u.periodic.custom_data);
-    mFfEffects[targetId].u.periodic.custom_data = effect.u.periodic.custom_data;
+    *outEffectIndex = mFfEffects[targetId].id;
 
     return ndk::ScopedAStatus::ok();
 }
