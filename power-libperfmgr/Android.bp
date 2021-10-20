@@ -50,6 +50,7 @@ cc_library {
         "liblog",
         "libperfmgr",
         "libutils",
+        "libcutils",
     ],
 }
 
@@ -69,6 +70,7 @@ cc_test {
     shared_libs: [
         "liblog",
         "libbase",
+        "libcutils",
     ],
 }
 

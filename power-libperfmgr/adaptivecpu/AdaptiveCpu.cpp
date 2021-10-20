@@ -15,11 +15,13 @@
  */
 
 #define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "AdaptiveCpu.h"
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <utils/Trace.h>
 
 #include <chrono>
 #include <deque>
@@ -71,6 +73,7 @@ bool AdaptiveCpu::IsEnabled() const {
 }
 
 void AdaptiveCpu::HintReceived(bool enable) {
+    ATRACE_CALL();
     LOG(INFO) << "AdaptiveCpu received hint: enable=" << enable;
     if (enable) {
         StartThread();
@@ -80,6 +83,7 @@ void AdaptiveCpu::HintReceived(bool enable) {
 }
 
 void AdaptiveCpu::StartThread() {
+    ATRACE_CALL();
     std::lock_guard lock(mThreadCreationMutex);
     LOG(INFO) << "Starting AdaptiveCpu thread";
     mIsEnabled = true;
@@ -92,6 +96,7 @@ void AdaptiveCpu::StartThread() {
 }
 
 void AdaptiveCpu::SuspendThread() {
+    ATRACE_CALL();
     LOG(INFO) << "Stopping AdaptiveCpu thread";
     // This stops the thread from receiving work durations in ReportWorkDurations, which means the
     // thread blocks indefinitely.
@@ -100,12 +105,14 @@ void AdaptiveCpu::SuspendThread() {
 
 void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                                       std::chrono::nanoseconds targetDuration) {
+    ATRACE_CALL();
     if (!mIsEnabled) {
         return;
     }
     LOG(VERBOSE) << "AdaptiveCpu received " << workDurations.size()
                  << " work durations with target " << targetDuration.count() << "ns";
     {
+        ATRACE_NAME("lock");
         std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
         mWorkDurationBatches.emplace_back(workDurations, targetDuration);
     }
@@ -137,9 +144,11 @@ void AdaptiveCpu::DumpToFd(int fd) const {
 }
 
 std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
+    ATRACE_CALL();
     std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
 
     if (kBlockForWorkDurations) {
+        ATRACE_NAME("wait");
         mWorkDurationsAvailableCondition.wait(lock, [&] { return !mWorkDurationBatches.empty(); });
     }
 
@@ -149,6 +158,7 @@ std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
 }
 
 void AdaptiveCpu::RunMainLoop() {
+    ATRACE_CALL();
     if (!mIsInitialized) {
         if (!mCpuFrequencyReader.init()) {
             LOG(INFO) << "Failed to initialize CPU frequency reading";
@@ -162,8 +172,10 @@ void AdaptiveCpu::RunMainLoop() {
     std::deque<ModelInput> historicalModelInputs;
     ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
     while (true) {
+        ATRACE_NAME("loop");
         std::vector<WorkDurationBatch> workDurationBatches = TakeWorkDurations();
 
+        ATRACE_BEGIN("compute");
         if (workDurationBatches.empty()) {
             continue;
         }
@@ -214,6 +226,7 @@ void AdaptiveCpu::RunMainLoop() {
                              previousThrottleDecision)) {
             break;
         }
+        modelInput.LogToAtrace();
         historicalModelInputs.push_back(modelInput);
         if (historicalModelInputs.size() > kNumHistoricalModelInputs) {
             historicalModelInputs.pop_front();
@@ -221,8 +234,10 @@ void AdaptiveCpu::RunMainLoop() {
 
         const ThrottleDecision throttleDecision = RunModel(historicalModelInputs);
         LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
+        ATRACE_INT("AdaptiveCpu_throttleDecision", static_cast<uint32_t>(throttleDecision));
 
         if (throttleDecision != previousThrottleDecision) {
+            ATRACE_NAME("sendHints");
             for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
                 mHintManager->EndHint(hintName);
             }
@@ -232,8 +247,11 @@ void AdaptiveCpu::RunMainLoop() {
             previousThrottleDecision = throttleDecision;
         }
 
-        // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.
-        std::this_thread::sleep_for(kIterationSleepDuration);
+        ATRACE_END();  // compute
+        {
+            ATRACE_NAME("sleep");
+            std::this_thread::sleep_for(kIterationSleepDuration);
+        }
     }
     // If the loop exits due to an error, disable Adaptive CPU so no work is done on e.g.
     // TakeWorkDurations.

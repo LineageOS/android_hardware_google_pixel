@@ -15,10 +15,12 @@
  */
 
 #define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "Model.h"
 
 #include <android-base/logging.h>
+#include <utils/Trace.h>
 
 namespace aidl {
 namespace google {
@@ -31,6 +33,7 @@ bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAve
                       const std::vector<CpuLoad> &cpuLoads,
                       std::chrono::nanoseconds averageFrameTime, uint16_t numRenderedFrames,
                       ThrottleDecision previousThrottleDecision) {
+    ATRACE_CALL();
     if (cpuPolicyAverageFrequencies.size() != cpuPolicyAverageFrequencyHz.size()) {
         LOG(ERROR) << "Received incorrect amount of CPU policy frequencies, expected "
                    << cpuPolicyAverageFrequencyHz.size() << ", received "
@@ -67,7 +70,26 @@ bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAve
     return true;
 }
 
+void ModelInput::LogToAtrace() const {
+    if (!ATRACE_ENABLED()) {
+        return;
+    }
+    ATRACE_CALL();
+    for (int i = 0; i < cpuPolicyAverageFrequencyHz.size(); i++) {
+        ATRACE_INT((std::string("ModelInput_frequency_") + std::to_string(i)).c_str(),
+                   static_cast<int>(cpuPolicyAverageFrequencyHz[i]));
+    }
+    for (int i = 0; i < cpuCoreIdleTimesPercentage.size(); i++) {
+        ATRACE_INT((std::string("ModelInput_idle_") + std::to_string(i)).c_str(),
+                   static_cast<int>(cpuCoreIdleTimesPercentage[i] * 100));
+    }
+    ATRACE_INT("ModelInput_frameTimeNs", averageFrameTime.count());
+    ATRACE_INT("ModelInput_numFrames", numRenderedFrames);
+    ATRACE_INT("ModelInput_prevThrottle", (int)previousThrottleDecision);
+}
+
 ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs) {
+    ATRACE_CALL();
 #include "models/model.inc"
 }
 

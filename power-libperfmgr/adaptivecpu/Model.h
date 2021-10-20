@@ -57,6 +57,8 @@ struct ModelInput {
               const std::vector<CpuLoad> &cpuLoads, std::chrono::nanoseconds averageFrameTime,
               uint16_t numRenderedFrames, ThrottleDecision previousThrottleDecision);
 
+    void LogToAtrace() const;
+
     bool operator==(const ModelInput &other) const {
         return cpuPolicyAverageFrequencyHz == other.cpuPolicyAverageFrequencyHz &&
                cpuCoreIdleTimesPercentage == other.cpuCoreIdleTimesPercentage &&
