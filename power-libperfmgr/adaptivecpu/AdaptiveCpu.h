@@ -48,16 +48,29 @@ class AdaptiveCpu {
   public:
     AdaptiveCpu(std::shared_ptr<HintManager> hintManager);
 
-    // Starts Adaptive CPU in a background thread.
-    void StartInBackground();
+    bool IsEnabled() const;
+
+    // Called when the Adaptive CPU hint is received. This method enables/disables the Adaptive CPU
+    // thread.
+    void HintReceived(bool enable);
 
     // Reports work durations for processing. This method returns immediately as work durations are
     // processed asynchonuously.
     void ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                              std::chrono::nanoseconds targetDuration);
 
+    // Dump info to a file descriptor. Called when dumping service info.
+    void DumpToFd(int fd) const;
+
+    // When PowerExt receives a hint with this name, HintReceived() is called.
+    static constexpr char HINT_NAME[] = "ADAPTIVE_CPU";
+
   private:
-    // The main loop of Adaptive CPU
+    void StartThread();
+
+    void SuspendThread();
+
+    // The main loop of Adaptive CPU, which runs in a separate thread.
     void RunMainLoop();
 
     // Atomically clears the available work durations from mWorkDurations and returns them.
@@ -71,11 +84,17 @@ class AdaptiveCpu {
     // For guarding access to mWorkDurations.
     std::mutex mWorkDurationsMutex;
 
+    // Guards against creating multiple threads in the case HintReceived(true) is called on separate
+    // threads simultaneously.
+    std::mutex mThreadCreationMutex;
+
     // A condition variable that will be notified when new work durations arrive.
     std::condition_variable mWorkDurationsAvailableCondition;
 
     // The work durations waiting to be processed, ordered from least recent to most recent.
     std::vector<WorkDurationBatch> mWorkDurationBatches;
+
+    volatile bool mIsEnabled;
 };
 
 }  // namespace pixel
