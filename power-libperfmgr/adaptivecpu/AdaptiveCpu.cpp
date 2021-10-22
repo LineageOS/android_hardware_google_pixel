@@ -18,7 +18,9 @@
 
 #include "AdaptiveCpu.h"
 
+#include <android-base/file.h>
 #include <android-base/logging.h>
+
 #include <chrono>
 #include <numeric>
 
@@ -55,21 +57,46 @@ static const bool kBlockForWorkDurations = true;
 // TODO(b/188770301) Once the gating logic is implemented, reduce the sleep duration.
 static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
 
-AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager) : mHintManager(hintManager) {}
+AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
+    : mHintManager(hintManager), mIsEnabled(false) {}
 
-void AdaptiveCpu::StartInBackground() {
-    LOG(INFO) << "AdaptiveCpu starting.";
+bool AdaptiveCpu::IsEnabled() const {
+    return mIsEnabled;
+}
 
-    if (mLoopThread.joinable()) {
-        LOG(ERROR) << "AdaptiveCpu already running.";
-        return;
+void AdaptiveCpu::HintReceived(bool enable) {
+    LOG(INFO) << "AdaptiveCpu received hint: enable=" << enable;
+    if (enable) {
+        StartThread();
+    } else {
+        SuspendThread();
     }
+}
 
-    mLoopThread = std::thread([&]() { RunMainLoop(); });
+void AdaptiveCpu::StartThread() {
+    std::lock_guard lock(mThreadCreationMutex);
+    LOG(INFO) << "Starting AdaptiveCpu thread";
+    mIsEnabled = true;
+    if (!mLoopThread.joinable()) {
+        mLoopThread = std::thread([&]() {
+            LOG(INFO) << "Started AdaptiveCpu thread successfully";
+            RunMainLoop();
+        });
+    }
+}
+
+void AdaptiveCpu::SuspendThread() {
+    LOG(INFO) << "Stopping AdaptiveCpu thread";
+    // This stops the thread from receiving work durations in ReportWorkDurations, which means the
+    // thread blocks indefinitely.
+    mIsEnabled = false;
 }
 
 void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                                       std::chrono::nanoseconds targetDuration) {
+    if (!mIsEnabled) {
+        return;
+    }
     LOG(VERBOSE) << "AdaptiveCpu received " << workDurations.size()
                  << " work durations with target " << targetDuration.count() << "ns";
     {
@@ -77,6 +104,16 @@ void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurat
         mWorkDurationBatches.emplace_back(workDurations, targetDuration);
     }
     mWorkDurationsAvailableCondition.notify_one();
+}
+
+void AdaptiveCpu::DumpToFd(int fd) const {
+    std::stringstream result;
+    result << "========== Begin Adaptive CPU stats ==========\n";
+    result << "Enabled: " << mIsEnabled << "\n";
+    result << "==========  End Adaptive CPU stats  ==========\n";
+    if (!::android::base::WriteStringToFd(result.str(), fd)) {
+        PLOG(ERROR) << "Failed to dump state to fd";
+    }
 }
 
 std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
