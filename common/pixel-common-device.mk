@@ -22,3 +22,10 @@ BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
 # Pixel Experience
 PRODUCT_PACKAGES_DEBUG += wifi_sniffer
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
+
+# turbo Adapter
+PRODUCT_SOONG_NAMESPACES += vendor/unbundled_google/packages/TurboAdapter
+BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/turbo_adapter
+PRODUCT_PACKAGES += TurboAdapter
+
+include hardware/google/pixel/google_battery/google_battery_hal.mk
