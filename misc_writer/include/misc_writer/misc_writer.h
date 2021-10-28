@@ -34,7 +34,6 @@ enum class MiscWriterActions : int32_t {
   kClearSotaFlag,
   kSetEnablePkvmFlag,
   kSetDisablePkvmFlag,
-  kClearPkvmFlag,
 
   kUnset = -1,
 };

@@ -66,13 +66,9 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
       break;
     case MiscWriterActions::kSetEnablePkvmFlag:
     case MiscWriterActions::kSetDisablePkvmFlag:
-    case MiscWriterActions::kClearPkvmFlag:
       offset = override_offset.value_or(kPkvmFlagOffsetInVendorSpace);
-      content = (action_ == MiscWriterActions::kSetEnablePkvmFlag)
-                    ? kEnablePkvmFlag
-                    : (action_ == MiscWriterActions::kSetDisablePkvmFlag)
-                        ? kDisablePkvmFlag
-                        : std::string(strlen(kDisablePkvmFlag), 0);
+      content = (action_ == MiscWriterActions::kSetEnablePkvmFlag) ? kEnablePkvmFlag
+                                                                   : kDisablePkvmFlag;
       break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
