@@ -42,17 +42,12 @@ namespace android {
 namespace hardware {
 namespace vibrator {
 static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
-static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 1152;
-
-static constexpr uint32_t WAVEFORM_EFFECT_0_20_LEVEL = 0;
-static constexpr uint32_t WAVEFORM_EFFECT_1_00_LEVEL = 4;
-static constexpr uint32_t WAVEFORM_EFFECT_LEVEL_MINIMUM = 4;
+static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 2044;  // (COMPOSE_SIZE_MAX + 1) * 8 + 4
 
 static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_SILENCE_MS = 100;
 
 static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 
-static constexpr uint32_t VOLTAGE_GLOBAL_SCALE_LEVEL = 5;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
 static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
@@ -63,8 +58,8 @@ static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
 static constexpr auto POLLING_TIMEOUT = 20;
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 
-/* Preserve 1 section for the first delay before the first effect. */
-static constexpr int32_t COMPOSE_SIZE_MAX = 255;
+/* nsections is 8 bits. Need to preserve 1 section for the first delay before the first effect. */
+static constexpr int32_t COMPOSE_SIZE_MAX = 254;
 
 // Measured resonant frequency, f0_measured, is represented by Q10.14 fixed
 // point format on cs40l26 devices. The expression to calculate f0 is:
@@ -256,7 +251,6 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     uint8_t retry = 0;
     mFfEffects.resize(WAVEFORM_MAX_INDEX);
     mEffectDurations.resize(WAVEFORM_MAX_INDEX);
-    // TODO(b/193786559): Driver does not support wave counts and duration reading yet.
     mEffectDurations = {
             1000, 100, 100, 1000, 350, 180, 200, 550, 150, 100, 100, 1000, 1000, 1000,
     }; /* 11+3 waveforms. The duration must < UINT16_MAX */
@@ -265,12 +259,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 
     for (effectIndex = 0; effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX; effectIndex++) {
         mFfEffects[effectIndex] = {
-                .id = -1,
                 .type = FF_PERIODIC,
+                .id = -1,
+                .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
                 .u.periodic.waveform = FF_CUSTOM,
                 .u.periodic.custom_data = new int16_t[2]{RAM_WVFRM_BANK, effectIndex},
                 .u.periodic.custom_len = FF_CUSTOM_DATA_LEN,
-                .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
         };
 
         while (true) {
@@ -328,26 +322,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     mHwCal->getVersion(&calVer);
-    if (calVer == 1) {
-        std::array<uint32_t, 6> volLevels;
-        mHwCal->getVolLevels(&volLevels);
-        /*
-         * Given voltage levels for two intensities, assuming a linear function,
-         * solve for 'f(0)' in 'v = f(i) = a + b * i' (i.e 'v0 - (v1 - v0) / ((i1 - i0) / i0)').
-         */
-        mClickEffectVol[0] = std::max(std::lround(volLevels[WAVEFORM_EFFECT_0_20_LEVEL] -
-                                                  (volLevels[WAVEFORM_EFFECT_1_00_LEVEL] -
-                                                   volLevels[WAVEFORM_EFFECT_0_20_LEVEL]) /
-                                                          4.0f),
-                                      static_cast<long>(WAVEFORM_EFFECT_LEVEL_MINIMUM));
-        mClickEffectVol[1] = volLevels[WAVEFORM_EFFECT_1_00_LEVEL];
-        mTickEffectVol = mClickEffectVol;
-        mLongEffectVol[0] = 0;
-        mLongEffectVol[1] = volLevels[VOLTAGE_GLOBAL_SCALE_LEVEL];
-    } else {
+    if (calVer == 2) {
         mHwCal->getTickVolLevels(&mTickEffectVol);
         mHwCal->getClickVolLevels(&mClickEffectVol);
         mHwCal->getLongVolLevels(&mLongEffectVol);
+    } else {
+        ALOGW("Unsupported calibration version!");
     }
 
     mIsUnderExternalControl = false;
@@ -357,13 +337,13 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     ATRACE_NAME("Vibrator::getCapabilities");
 
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
-                  IVibrator::CAP_COMPOSE_EFFECTS | IVibrator::CAP_ALWAYS_ON_CONTROL |
+                  IVibrator::CAP_AMPLITUDE_CONTROL | IVibrator::CAP_ALWAYS_ON_CONTROL |
                   IVibrator::CAP_GET_RESONANT_FREQUENCY | IVibrator::CAP_GET_Q_FACTOR;
-    if (mHwApi->hasEffectScale()) {
-        ret |= IVibrator::CAP_AMPLITUDE_CONTROL;
-    }
     if (hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
+    }
+    if (mHwApi->hasOwtFreeSpace()) {
+        ret |= IVibrator::CAP_COMPOSE_EFFECTS;
     }
     *_aidl_return = ret;
     return ndk::ScopedAStatus::ok();
@@ -428,8 +408,9 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
+    mLongEffectScale = amplitude;
     if (!isUnderExternalControl()) {
-        return setEffectAmplitude(amplitude, 1.0);
+        return setGlobalAmplitude(true);
     } else {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
@@ -624,7 +605,10 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) 
 }
 
 ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
-    uint8_t amplitude = set ? mLongEffectVol[1] : VOLTAGE_SCALE_MAX;
+    uint8_t amplitude = set ? roundf(mLongEffectScale * mLongEffectVol[1]) : VOLTAGE_SCALE_MAX;
+    if (!set) {
+        mLongEffectScale = 1.0;  // Reset the scale for the later new effect.
+    }
     return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX);
 }
 
@@ -1173,43 +1157,42 @@ ndk::ScopedAStatus Vibrator::uploadOwtEffect(uint8_t *owtData, uint32_t numBytes
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
-    ff_effect effect{};
     bool isPwle = (*reinterpret_cast<uint16_t *>(owtData) != 0x0000);
     WaveformIndex targetId = isPwle ? WAVEFORM_PWLE : WAVEFORM_COMPOSE;
 
     /* Erase the created OWT waveform. */
     bool isCreated = (mFfEffects[targetId].id != -1);
     if (isCreated && ioctl(mInputFd, EVIOCRMFF, mFfEffects[targetId].id) < 0) {
-        ALOGE("Failed to erase effect %d (%d): %s", mFfEffects[targetId].id, errno,
+        ALOGW("Failed to erase effect %d(%d) (%d): %s", targetId, mFfEffects[targetId].id, errno,
               strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        mFfEffects[targetId].id = -1;
     }
 
-    /* Create a new OWT waveform for PWLE or composite effects. */
-    effect.id = -1; /* New Effect */
-    effect.type = FF_PERIODIC;
-    effect.u.periodic.waveform = FF_CUSTOM;
-    effect.replay.length = 0;                    /* Reserved value for OWT waveforms */
-    effect.u.periodic.custom_len = numBytes / 2; /* # of 16-bit elements */
-    effect.u.periodic.custom_data = new int16_t[effect.u.periodic.custom_len]{0x0000};
-    if (effect.u.periodic.custom_data == nullptr) {
+    uint32_t freeBytes;
+    mHwApi->getOwtFreeSpace(&freeBytes);
+    if (numBytes > freeBytes) {
+        ALOGE("Effect %d length: %d > %d!", targetId, numBytes, freeBytes);
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+
+    /* Create a new OWT waveform to update the PWLE or composite effect. */
+    mFfEffects[targetId].id = -1;                              /* New Effect */
+    mFfEffects[targetId].u.periodic.custom_len = numBytes / 2; /* # of 16-bit elements */
+    delete[](mFfEffects[targetId].u.periodic.custom_data);
+    mFfEffects[targetId].u.periodic.custom_data =
+            new int16_t[mFfEffects[targetId].u.periodic.custom_len]{0x0000};
+    if (mFfEffects[targetId].u.periodic.custom_data == nullptr) {
         ALOGE("Failed to allocate memory for custom data\n");
         return ndk::ScopedAStatus::fromExceptionCode(EX_NULL_POINTER);
     }
-    memcpy(effect.u.periodic.custom_data, owtData, numBytes);
+    memcpy(mFfEffects[targetId].u.periodic.custom_data, owtData, numBytes);
 
-    if (ioctl(mInputFd, EVIOCSFF, &effect) < 0) {
+    if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[targetId]) < 0) {
         ALOGE("Failed to upload effect %d (%d): %s", targetId, errno, strerror(errno));
-        delete (effect.u.periodic.custom_data);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
-    *outEffectIndex = effect.id;
-    /* Update mFfEffects. */
-    mFfEffects[targetId].id = effect.id;
-    mFfEffects[targetId].u.periodic.custom_len = effect.u.periodic.custom_len;
-    delete[](mFfEffects[targetId].u.periodic.custom_data);
-    mFfEffects[targetId].u.periodic.custom_data = effect.u.periodic.custom_data;
+    *outEffectIndex = mFfEffects[targetId].id;
 
     return ndk::ScopedAStatus::ok();
 }
