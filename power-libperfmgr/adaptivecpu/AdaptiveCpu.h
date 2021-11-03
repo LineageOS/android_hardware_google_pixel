@@ -18,9 +18,12 @@
 
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <perfmgr/HintManager.h>
+
 #include <chrono>
 #include <thread>
 #include <vector>
+
+#include "CpuFrequencyReader.h"
 
 namespace aidl {
 namespace google {
@@ -76,6 +79,8 @@ class AdaptiveCpu {
     // Atomically clears the available work durations from mWorkDurations and returns them.
     std::vector<WorkDurationBatch> TakeWorkDurations();
 
+    CpuFrequencyReader mCpuFrequencyReader;
+
     std::shared_ptr<HintManager> mHintManager;
 
     // The thread in which work durations are processed.
@@ -95,6 +100,7 @@ class AdaptiveCpu {
     std::vector<WorkDurationBatch> mWorkDurationBatches;
 
     volatile bool mIsEnabled;
+    bool mIsInitialized;
 };
 
 }  // namespace pixel
