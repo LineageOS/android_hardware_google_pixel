@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 
-#include <gmock/gmock.h>
+#define LOG_TAG "powerhal-libperfmgr"
 
-#include "adaptivecpu/CpuFrequencyReader.h"
+#include "RealFilesystem.h"
+
+#include <android-base/logging.h>
+#include <dirent.h>
+
+#include <fstream>
+#include <istream>
 
 namespace aidl {
 namespace google {
@@ -25,14 +31,23 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-class MockFilesystem : public IFilesystem {
-  public:
-    ~MockFilesystem() override {}
-    MOCK_METHOD(std::vector<std::string>, listDirectory, (const std::string &path),
-                (const, override));
-    MOCK_METHOD(std::unique_ptr<std::istream>, readFileStream, (const std::string &path),
-                (const, override));
-};
+std::vector<std::string> RealFilesystem::listDirectory(const std::string &path) const {
+    // We can't use std::filesystem, see aosp/894015 & b/175635923.
+    auto dir = std::unique_ptr<DIR, decltype(&closedir)>{opendir(path.c_str()), closedir};
+    if (!dir) {
+        LOG(ERROR) << "Failed to open directory " << path;
+    }
+    std::vector<std::string> entries;
+    dirent *entry;
+    while ((entry = readdir(&*dir)) != nullptr) {
+        entries.emplace_back(entry->d_name);
+    }
+    return entries;
+}
+
+std::unique_ptr<std::istream> RealFilesystem::readFileStream(const std::string &path) const {
+    return std::make_unique<std::ifstream>(path);
+}
 
 }  // namespace pixel
 }  // namespace impl
