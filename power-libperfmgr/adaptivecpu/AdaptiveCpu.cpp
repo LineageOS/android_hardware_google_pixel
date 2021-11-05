@@ -238,11 +238,11 @@ void AdaptiveCpu::RunMainLoop() {
 
         if (throttleDecision != previousThrottleDecision) {
             ATRACE_NAME("sendHints");
-            for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
-                mHintManager->EndHint(hintName);
-            }
             for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
                 mHintManager->DoHint(hintName);
+            }
+            for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
+                mHintManager->EndHint(hintName);
             }
             previousThrottleDecision = throttleDecision;
         }
