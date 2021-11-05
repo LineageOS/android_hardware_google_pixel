@@ -93,6 +93,7 @@ void AdaptiveCpu::StartThread() {
     mIsEnabled = true;
     if (!mLoopThread.joinable()) {
         mLoopThread = std::thread([&]() {
+            pthread_setname_np(pthread_self(), "AdaptiveCpu");
             LOG(INFO) << "Started AdaptiveCpu thread successfully";
             RunMainLoop();
         });
