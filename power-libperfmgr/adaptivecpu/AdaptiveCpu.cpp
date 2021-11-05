@@ -62,6 +62,10 @@ static const bool kBlockForWorkDurations = true;
 // TODO(b/188770301) Once the gating logic is implemented, reduce the sleep duration.
 static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
 
+// Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
+// hints are cancelled.
+static const std::chrono::milliseconds kHintTimeout = 2000ms;
+
 // We pass the previous N ModelInputs to the model, including the most recent ModelInput.
 constexpr uint32_t kNumHistoricalModelInputs = 3;
 
@@ -239,7 +243,7 @@ void AdaptiveCpu::RunMainLoop() {
         if (throttleDecision != previousThrottleDecision) {
             ATRACE_NAME("sendHints");
             for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
-                mHintManager->DoHint(hintName);
+                mHintManager->DoHint(hintName, kHintTimeout);
             }
             for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
                 mHintManager->EndHint(hintName);
