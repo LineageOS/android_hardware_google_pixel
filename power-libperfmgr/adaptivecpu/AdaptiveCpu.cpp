@@ -118,6 +118,12 @@ void AdaptiveCpu::DumpToFd(int fd) const {
             result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
         }
     }
+    result << "CPU loads:\n";
+    const auto previousCpuTimes = mCpuLoadReader.getPreviousCpuTimes();
+    for (const auto &[cpuId, cpuTime] : previousCpuTimes) {
+        result << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
+               << "ms, totalTime=" << cpuTime.totalTimeMs << "ms\n";
+    }
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";
@@ -143,6 +149,7 @@ void AdaptiveCpu::RunMainLoop() {
             mIsEnabled = false;
             return;
         }
+        mCpuLoadReader.init();
         mIsInitialized = true;
     }
     while (true) {
@@ -182,6 +189,15 @@ void AdaptiveCpu::RunMainLoop() {
         for (const auto &cpuPolicyFrequency : cpuPolicyFrequencies) {
             LOG(VERBOSE) << "policy=" << cpuPolicyFrequency.policyId
                          << ", freq=" << cpuPolicyFrequency.averageFrequencyHz;
+        }
+
+        std::vector<CpuLoad> cpuLoads;
+        if (!mCpuLoadReader.getRecentCpuLoads(&cpuLoads)) {
+            break;
+        }
+        LOG(VERBOSE) << "Got CPU loads: " << cpuLoads.size();
+        for (const auto &cpuLoad : cpuLoads) {
+            LOG(VERBOSE) << "cpu=" << cpuLoad.cpuId << ", idle=" << cpuLoad.idleTimeFraction;
         }
 
         // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.

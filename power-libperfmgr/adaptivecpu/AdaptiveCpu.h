@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "CpuFrequencyReader.h"
+#include "CpuLoadReader.h"
 
 namespace aidl {
 namespace google {
@@ -80,6 +81,7 @@ class AdaptiveCpu {
     std::vector<WorkDurationBatch> TakeWorkDurations();
 
     CpuFrequencyReader mCpuFrequencyReader;
+    CpuLoadReader mCpuLoadReader;
 
     std::shared_ptr<HintManager> mHintManager;
 
