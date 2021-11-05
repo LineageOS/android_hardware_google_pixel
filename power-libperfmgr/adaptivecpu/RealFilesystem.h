@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * Copyright (C) 2021 The Android Open Source Project
  *
@@ -14,9 +16,11 @@
  * limitations under the License.
  */
 
-#include <gmock/gmock.h>
+#include <memory>
+#include <ostream>
+#include <vector>
 
-#include "adaptivecpu/CpuFrequencyReader.h"
+#include "IFilesystem.h"
 
 namespace aidl {
 namespace google {
@@ -25,13 +29,11 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-class MockFilesystem : public IFilesystem {
+class RealFilesystem : public IFilesystem {
   public:
-    ~MockFilesystem() override {}
-    MOCK_METHOD(std::vector<std::string>, listDirectory, (const std::string &path),
-                (const, override));
-    MOCK_METHOD(std::unique_ptr<std::istream>, readFileStream, (const std::string &path),
-                (const, override));
+    virtual ~RealFilesystem() {}
+    std::vector<std::string> listDirectory(const std::string &path) const override;
+    std::unique_ptr<std::istream> readFileStream(const std::string &path) const override;
 };
 
 }  // namespace pixel

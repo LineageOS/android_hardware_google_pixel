@@ -22,6 +22,9 @@
 #include <set>
 #include <vector>
 
+#include "IFilesystem.h"
+#include "RealFilesystem.h"
+
 namespace aidl {
 namespace google {
 namespace hardware {
@@ -36,21 +39,6 @@ struct CpuPolicyAverageFrequency {
     bool operator==(const CpuPolicyAverageFrequency &other) const {
         return policyId == other.policyId && averageFrequencyHz == other.averageFrequencyHz;
     }
-};
-
-// Abstracted so we can mock in tests.
-class IFilesystem {
-  public:
-    virtual ~IFilesystem() {}
-    virtual std::vector<std::string> listDirectory(std::string path) const = 0;
-    virtual std::unique_ptr<std::istream> readFile(std::string path) const = 0;
-};
-
-class RealFilesystem : public IFilesystem {
-  public:
-    virtual ~RealFilesystem() {}
-    std::vector<std::string> listDirectory(std::string path) const override;
-    std::unique_ptr<std::istream> readFile(std::string path) const override;
 };
 
 class CpuFrequencyReader {
