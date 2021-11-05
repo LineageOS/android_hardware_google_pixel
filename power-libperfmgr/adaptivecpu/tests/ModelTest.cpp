@@ -54,7 +54,7 @@ TEST(ModelTest, ModelInput_SetCpuFreqiencies_failsWithOutOfOrderFrquencies) {
     }));
 }
 
-TEST(ModelTest, RunModel_randomInputs) {
+TEST(ModelTest, Run_randomInputs) {
     std::default_random_engine generator;
     std::uniform_real_distribution<double> frequencyDistribution(0, 1e6);
     std::uniform_real_distribution<double> idleTimesDistribution(0, 1);
@@ -86,7 +86,7 @@ TEST(ModelTest, RunModel_randomInputs) {
     for (int i = 0; i < 10; i++) {
         std::deque<ModelInput> modelInputs{randomModelInput(), randomModelInput(),
                                            randomModelInput()};
-        RunModel(modelInputs);
+        Model().Run(modelInputs);
     }
 }
 

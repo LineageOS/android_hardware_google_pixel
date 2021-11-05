@@ -193,7 +193,7 @@ void AdaptiveCpu::RunMainLoop() {
             historicalModelInputs.pop_front();
         }
 
-        const ThrottleDecision throttleDecision = RunModel(historicalModelInputs);
+        const ThrottleDecision throttleDecision = mModel.Run(historicalModelInputs);
         LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
         ATRACE_INT("AdaptiveCpu_throttleDecision", static_cast<uint32_t>(throttleDecision));
 

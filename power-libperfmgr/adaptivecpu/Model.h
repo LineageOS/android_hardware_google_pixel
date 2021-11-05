@@ -22,6 +22,7 @@
 #include <chrono>
 #include <deque>
 #include <map>
+#include <random>
 #include <vector>
 
 #include "CpuFrequencyReader.h"
@@ -42,7 +43,9 @@ enum class ThrottleDecision {
     THROTTLE_60 = 1,
     THROTTLE_70 = 2,
     THROTTLE_80 = 3,
-    THROTTLE_90 = 4
+    THROTTLE_90 = 4,
+    FIRST = NO_THROTTLE,
+    LAST = THROTTLE_90,
 };
 
 struct ModelInput {
@@ -64,7 +67,21 @@ struct ModelInput {
     }
 };
 
-ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs);
+class Model {
+  public:
+    Model()
+        : mShouldRandomThrottleDistribution(0, 1),
+          mRandomThrottleDistribution(static_cast<uint32_t>(ThrottleDecision::FIRST),
+                                      static_cast<uint32_t>(ThrottleDecision::LAST)) {}
+    ThrottleDecision Run(const std::deque<ModelInput> &modelInputs);
+
+  private:
+    std::default_random_engine mGenerator;
+    std::uniform_real_distribution<double> mShouldRandomThrottleDistribution;
+    std::uniform_int_distribution<uint32_t> mRandomThrottleDistribution;
+
+    ThrottleDecision RunDecisionTree(const std::deque<ModelInput> &modelInputs);
+};
 
 std::string ThrottleString(ThrottleDecision throttleDecision);
 

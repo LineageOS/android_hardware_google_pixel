@@ -83,6 +83,7 @@ class AdaptiveCpu {
 
     void WaitForEnabledAndWorkDurations();
 
+    Model mModel;
     WorkDurationProcessor mWorkDurationProcessor;
     CpuFrequencyReader mCpuFrequencyReader;
     std::unique_ptr<ICpuLoadReader> mCpuLoadReader;

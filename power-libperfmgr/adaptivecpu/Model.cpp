@@ -29,6 +29,10 @@ namespace power {
 namespace impl {
 namespace pixel {
 
+// Instead of throttling based on model output, choose a random throttle X% of the time. Must be
+// between 0 and 1 inclusive.
+constexpr double kRandomThrottleDecisionProbability = 0;
+
 bool ModelInput::SetCpuFreqiencies(
         const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies) {
     ATRACE_CALL();
@@ -73,7 +77,22 @@ void ModelInput::LogToAtrace() const {
     ATRACE_INT("ModelInput_prevThrottle", (int)previousThrottleDecision);
 }
 
-ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs) {
+ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs) {
+    ATRACE_CALL();
+    if (kRandomThrottleDecisionProbability > 0 &&
+        mShouldRandomThrottleDistribution(mGenerator) > kRandomThrottleDecisionProbability) {
+        const auto throttleDecision =
+                static_cast<ThrottleDecision>(mRandomThrottleDistribution(mGenerator));
+        LOG(VERBOSE) << "Randomly overrided throttle decision: "
+                     << static_cast<uint32_t>(throttleDecision);
+        ATRACE_INT("AdaptiveCpu_randomThrottleDecision", static_cast<uint32_t>(throttleDecision));
+        return throttleDecision;
+    }
+    ATRACE_INT("AdaptiveCpu_randomThrottleDecision", -1);
+    return RunDecisionTree(modelInputs);
+}
+
+ThrottleDecision Model::RunDecisionTree(const std::deque<ModelInput> &modelInputs) {
     ATRACE_CALL();
 #include "models/model.inc"
 }
