@@ -21,10 +21,12 @@
 
 #include <chrono>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "CpuFrequencyReader.h"
 #include "CpuLoadReader.h"
+#include "Model.h"
 
 namespace aidl {
 namespace google {
@@ -70,6 +72,9 @@ class AdaptiveCpu {
     static constexpr char HINT_NAME[] = "ADAPTIVE_CPU";
 
   private:
+    static const std::unordered_map<ThrottleDecision, std::vector<std::string>>
+            kThrottleDecisionToHintNames;
+
     void StartThread();
 
     void SuspendThread();

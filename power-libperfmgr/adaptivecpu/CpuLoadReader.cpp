@@ -15,11 +15,13 @@
  */
 
 #define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "CpuLoadReader.h"
 
 #include <android-base/logging.h>
 #include <inttypes.h>
+#include <utils/Trace.h>
 
 #include <fstream>
 #include <sstream>
@@ -37,6 +39,7 @@ void CpuLoadReader::init() {
 }
 
 bool CpuLoadReader::getRecentCpuLoads(std::vector<CpuLoad> *result) {
+    ATRACE_CALL();
     if (result == nullptr) {
         LOG(ERROR) << "Got nullptr output in getRecentCpuLoads";
         return false;
@@ -71,11 +74,14 @@ std::map<uint32_t, CpuTime> CpuLoadReader::getPreviousCpuTimes() const {
 }
 
 std::map<uint32_t, CpuTime> CpuLoadReader::readCpuTimes() {
+    ATRACE_CALL();
     std::map<uint32_t, CpuTime> cpuTimes;
 
     std::unique_ptr<std::istream> file = mFilesystem->readFileStream("/proc/stat");
     std::string line;
+    ATRACE_BEGIN("loop");
     while (std::getline(*file, line)) {
+        ATRACE_NAME("parse");
         uint32_t cpuId;
         // Times reported when the CPU is active.
         uint64_t user, nice, system, irq, softIrq, steal, guest, guestNice;
@@ -95,6 +101,7 @@ std::map<uint32_t, CpuTime> CpuLoadReader::readCpuTimes() {
         cpuTimes[cpuId] = {.idleTimeMs = jiffiesToMs(idleTimeJiffies),
                            .totalTimeMs = jiffiesToMs(totalTimeJiffies)};
     }
+    ATRACE_END();
     return cpuTimes;
 }
 
