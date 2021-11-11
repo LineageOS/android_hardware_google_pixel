@@ -81,6 +81,7 @@ cc_library {
     "libcutils",
     "libhidlbase",
     "liblog",
+    "libprotobuf-cpp-lite",
     "libutils",
     "libsensorndkbridge",
     "pixelatoms-cpp",
