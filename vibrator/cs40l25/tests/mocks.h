@@ -49,7 +49,6 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(getAvailablePwleSegments, bool(uint32_t *value));
     MOCK_METHOD0(hasPwle, bool());
     MOCK_METHOD1(setPwle, bool(std::string value));
-    MOCK_METHOD1(setPwleRampDown, bool(uint32_t value));
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockApi() override { destructor(); };
