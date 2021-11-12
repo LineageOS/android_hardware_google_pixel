@@ -15,14 +15,19 @@
  */
 
 #define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "AdaptiveCpu.h"
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <utils/Trace.h>
 
 #include <chrono>
+#include <deque>
 #include <numeric>
+
+#include "Model.h"
 
 namespace aidl {
 namespace google {
@@ -57,6 +62,13 @@ static const bool kBlockForWorkDurations = true;
 // TODO(b/188770301) Once the gating logic is implemented, reduce the sleep duration.
 static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
 
+// Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
+// hints are cancelled.
+static const std::chrono::milliseconds kHintTimeout = 2000ms;
+
+// We pass the previous N ModelInputs to the model, including the most recent ModelInput.
+constexpr uint32_t kNumHistoricalModelInputs = 3;
+
 AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
     : mHintManager(hintManager), mIsEnabled(false), mIsInitialized(false) {}
 
@@ -65,6 +77,7 @@ bool AdaptiveCpu::IsEnabled() const {
 }
 
 void AdaptiveCpu::HintReceived(bool enable) {
+    ATRACE_CALL();
     LOG(INFO) << "AdaptiveCpu received hint: enable=" << enable;
     if (enable) {
         StartThread();
@@ -74,11 +87,13 @@ void AdaptiveCpu::HintReceived(bool enable) {
 }
 
 void AdaptiveCpu::StartThread() {
+    ATRACE_CALL();
     std::lock_guard lock(mThreadCreationMutex);
     LOG(INFO) << "Starting AdaptiveCpu thread";
     mIsEnabled = true;
     if (!mLoopThread.joinable()) {
         mLoopThread = std::thread([&]() {
+            pthread_setname_np(pthread_self(), "AdaptiveCpu");
             LOG(INFO) << "Started AdaptiveCpu thread successfully";
             RunMainLoop();
         });
@@ -86,6 +101,7 @@ void AdaptiveCpu::StartThread() {
 }
 
 void AdaptiveCpu::SuspendThread() {
+    ATRACE_CALL();
     LOG(INFO) << "Stopping AdaptiveCpu thread";
     // This stops the thread from receiving work durations in ReportWorkDurations, which means the
     // thread blocks indefinitely.
@@ -94,12 +110,14 @@ void AdaptiveCpu::SuspendThread() {
 
 void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                                       std::chrono::nanoseconds targetDuration) {
+    ATRACE_CALL();
     if (!mIsEnabled) {
         return;
     }
     LOG(VERBOSE) << "AdaptiveCpu received " << workDurations.size()
                  << " work durations with target " << targetDuration.count() << "ns";
     {
+        ATRACE_NAME("lock");
         std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
         mWorkDurationBatches.emplace_back(workDurations, targetDuration);
     }
@@ -131,9 +149,11 @@ void AdaptiveCpu::DumpToFd(int fd) const {
 }
 
 std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
+    ATRACE_CALL();
     std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
 
     if (kBlockForWorkDurations) {
+        ATRACE_NAME("wait");
         mWorkDurationsAvailableCondition.wait(lock, [&] { return !mWorkDurationBatches.empty(); });
     }
 
@@ -143,6 +163,7 @@ std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
 }
 
 void AdaptiveCpu::RunMainLoop() {
+    ATRACE_CALL();
     if (!mIsInitialized) {
         if (!mCpuFrequencyReader.init()) {
             LOG(INFO) << "Failed to initialize CPU frequency reading";
@@ -152,9 +173,14 @@ void AdaptiveCpu::RunMainLoop() {
         mCpuLoadReader.init();
         mIsInitialized = true;
     }
+
+    std::deque<ModelInput> historicalModelInputs;
+    ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
     while (true) {
+        ATRACE_NAME("loop");
         std::vector<WorkDurationBatch> workDurationBatches = TakeWorkDurations();
 
+        ATRACE_BEGIN("compute");
         if (workDurationBatches.empty()) {
             continue;
         }
@@ -200,15 +226,54 @@ void AdaptiveCpu::RunMainLoop() {
             LOG(VERBOSE) << "cpu=" << cpuLoad.cpuId << ", idle=" << cpuLoad.idleTimeFraction;
         }
 
-        // TODO(b/187691504): Add a check configuration properties and exit the loop if necessary.
-        std::this_thread::sleep_for(kIterationSleepDuration);
+        ModelInput modelInput;
+        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, averageDuration, durationsCount,
+                             previousThrottleDecision)) {
+            break;
+        }
+        modelInput.LogToAtrace();
+        historicalModelInputs.push_back(modelInput);
+        if (historicalModelInputs.size() > kNumHistoricalModelInputs) {
+            historicalModelInputs.pop_front();
+        }
 
-        // TODO(b/188770301) Actually do the processing.
+        const ThrottleDecision throttleDecision = RunModel(historicalModelInputs);
+        LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
+        ATRACE_INT("AdaptiveCpu_throttleDecision", static_cast<uint32_t>(throttleDecision));
+
+        if (throttleDecision != previousThrottleDecision) {
+            ATRACE_NAME("sendHints");
+            for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
+                mHintManager->DoHint(hintName, kHintTimeout);
+            }
+            for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
+                mHintManager->EndHint(hintName);
+            }
+            previousThrottleDecision = throttleDecision;
+        }
+
+        ATRACE_END();  // compute
+        {
+            ATRACE_NAME("sleep");
+            std::this_thread::sleep_for(kIterationSleepDuration);
+        }
     }
     // If the loop exits due to an error, disable Adaptive CPU so no work is done on e.g.
     // TakeWorkDurations.
     mIsEnabled = false;
 }
+
+const std::unordered_map<ThrottleDecision, std::vector<std::string>>
+        AdaptiveCpu::kThrottleDecisionToHintNames = {
+                {ThrottleDecision::NO_THROTTLE, {}},
+                {ThrottleDecision::THROTTLE_60,
+                 {"LOW_POWER_LITTLE_CLUSTER_60", "LOW_POWER_MID_CLUSTER_60", "LOW_POWER_CPU_60"}},
+                {ThrottleDecision::THROTTLE_70,
+                 {"LOW_POWER_LITTLE_CLUSTER_70", "LOW_POWER_MID_CLUSTER_70", "LOW_POWER_CPU_70"}},
+                {ThrottleDecision::THROTTLE_80,
+                 {"LOW_POWER_LITTLE_CLUSTER_80", "LOW_POWER_MID_CLUSTER_80", "LOW_POWER_CPU_80"}},
+                {ThrottleDecision::THROTTLE_90,
+                 {"LOW_POWER_LITTLE_CLUSTER_90", "LOW_POWER_MID_CLUSTER_90", "LOW_POWER_CPU_90"}}};
 
 }  // namespace pixel
 }  // namespace impl

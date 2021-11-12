@@ -15,11 +15,13 @@
  */
 
 #define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "RealFilesystem.h"
 
 #include <android-base/logging.h>
 #include <dirent.h>
+#include <utils/Trace.h>
 
 #include <fstream>
 #include <istream>
@@ -32,6 +34,7 @@ namespace impl {
 namespace pixel {
 
 std::vector<std::string> RealFilesystem::listDirectory(const std::string &path) const {
+    ATRACE_CALL();
     // We can't use std::filesystem, see aosp/894015 & b/175635923.
     auto dir = std::unique_ptr<DIR, decltype(&closedir)>{opendir(path.c_str()), closedir};
     if (!dir) {
@@ -46,6 +49,7 @@ std::vector<std::string> RealFilesystem::listDirectory(const std::string &path) 
 }
 
 std::unique_ptr<std::istream> RealFilesystem::readFileStream(const std::string &path) const {
+    ATRACE_CALL();
     return std::make_unique<std::ifstream>(path);
 }
 
