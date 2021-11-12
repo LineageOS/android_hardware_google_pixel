@@ -15,11 +15,13 @@
  */
 
 #define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "CpuFrequencyReader.h"
 
 #include <android-base/logging.h>
 #include <inttypes.h>
+#include <utils/Trace.h>
 
 #include <fstream>
 #include <memory>
@@ -37,6 +39,7 @@ namespace impl {
 namespace pixel {
 
 bool CpuFrequencyReader::init() {
+    ATRACE_CALL();
     mCpuPolicyIds = readCpuPolicyIds();
     mPreviousCpuPolicyFrequencies.clear();
     return readCpuPolicyFrequencies(&mPreviousCpuPolicyFrequencies);
@@ -44,6 +47,7 @@ bool CpuFrequencyReader::init() {
 
 bool CpuFrequencyReader::getRecentCpuPolicyFrequencies(
         std::vector<CpuPolicyAverageFrequency> *result) {
+    ATRACE_CALL();
     std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> cpuPolicyFrequencies;
     if (!readCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
         return false;
@@ -82,6 +86,7 @@ CpuFrequencyReader::getPreviousCpuPolicyFrequencies() const {
 
 bool CpuFrequencyReader::readCpuPolicyFrequencies(
         std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> *result) {
+    ATRACE_CALL();
     for (const uint32_t cpuPolicyId : mCpuPolicyIds) {
         std::stringstream timeInStatePath;
         timeInStatePath << "/sys/devices/system/cpu/cpufreq/policy" << cpuPolicyId
@@ -113,6 +118,7 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
 }
 
 std::vector<uint32_t> CpuFrequencyReader::readCpuPolicyIds() const {
+    ATRACE_CALL();
     std::vector<uint32_t> cpuPolicyIds;
     const std::vector<std::string> entries = mFilesystem->listDirectory(kCpuPolicyDirectory.data());
     for (const auto &entry : entries) {
@@ -122,6 +128,9 @@ std::vector<uint32_t> CpuFrequencyReader::readCpuPolicyIds() const {
         }
         cpuPolicyIds.push_back(cpuPolicyId);
     }
+    // Sort the list, so that getRecentCpuPolicyFrequencies always returns frequencies sorted by
+    // policy ID.
+    std::sort(cpuPolicyIds.begin(), cpuPolicyIds.end());
     return cpuPolicyIds;
 }
 
