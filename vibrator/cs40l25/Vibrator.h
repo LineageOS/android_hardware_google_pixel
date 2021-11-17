@@ -101,9 +101,6 @@ class Vibrator : public BnVibrator {
         // Specifies piecewise-linear specifications to generate complex
         // waveforms.
         virtual bool setPwle(std::string value) = 0;
-        // Specifies the coefficient required for a ramp down when a waveform
-        // ends
-        virtual bool setPwleRampDown(uint32_t value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -203,7 +200,6 @@ class Vibrator : public BnVibrator {
     bool hasHapticAlsaDevice();
     bool enableHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card, int device);
     void createPwleMaxLevelLimitMap();
-    void setPwleRampDown();
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
