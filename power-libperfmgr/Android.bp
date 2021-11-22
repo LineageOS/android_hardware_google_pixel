@@ -43,6 +43,7 @@ cc_library {
         "adaptivecpu/CpuLoadReader.cpp",
         "adaptivecpu/Model.cpp",
         "adaptivecpu/RealFilesystem.cpp",
+        "adaptivecpu/WorkDurationProcessor.cpp",
     ],
     shared_libs: [
         "android.hardware.power-V2-ndk",
@@ -62,6 +63,7 @@ cc_test {
         "adaptivecpu/tests/CpuFrequencyReaderTest.cpp",
         "adaptivecpu/tests/CpuLoadReaderTest.cpp",
         "adaptivecpu/tests/ModelTest.cpp",
+        "adaptivecpu/tests/WorkDurationProcessorTest.cpp",
     ],
     static_libs: [
         "libadaptivecpu",
@@ -71,6 +73,7 @@ cc_test {
         "liblog",
         "libbase",
         "libcutils",
+        "android.hardware.power-V2-ndk",
     ],
 }
 

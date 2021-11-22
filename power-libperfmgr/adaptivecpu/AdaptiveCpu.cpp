@@ -38,18 +38,6 @@ namespace impl {
 namespace pixel {
 
 using std::chrono_literals::operator""ms;
-using std::chrono_literals::operator""ns;
-
-// The standard target duration, based on 60 FPS. Durations submitted with different targets are
-// normalized against this target. For example, a duration that was at 80% of its target will be
-// scaled to 0.8 * kNormalTargetDuration.
-static const std::chrono::nanoseconds kNormalTargetDuration = 16666666ns;
-
-// All durations shorter than this are ignored.
-static const std::chrono::nanoseconds kMinDuration = 0ns;
-
-// All durations longer than this are ignored.
-static const std::chrono::nanoseconds kMaxDuration = 600 * kNormalTargetDuration;
 
 // The sleep duration for each iteration. Currently set to a large value as a safeguard measure, so
 // we don't spin needlessly and waste energy. To experiment with the model, set to a smaller value,
@@ -115,53 +103,16 @@ void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurat
     if (!mIsEnabled) {
         return;
     }
-    LOG(VERBOSE) << "AdaptiveCpu received " << workDurations.size()
-                 << " work durations with target " << targetDuration.count() << "ns";
-    {
-        ATRACE_NAME("lock");
-        std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
-        mWorkDurationBatches.emplace_back(workDurations, targetDuration);
-    }
+    mWorkDurationProcessor.ReportWorkDurations(workDurations, targetDuration);
     mWorkDurationsAvailableCondition.notify_one();
 }
 
-void AdaptiveCpu::DumpToFd(int fd) const {
-    std::stringstream result;
-    result << "========== Begin Adaptive CPU stats ==========\n";
-    result << "Enabled: " << mIsEnabled << "\n";
-    result << "CPU frequencies per policy:\n";
-    const auto previousCpuPolicyFrequencies = mCpuFrequencyReader.getPreviousCpuPolicyFrequencies();
-    for (const auto &[policyId, cpuFrequencies] : previousCpuPolicyFrequencies) {
-        result << "- Policy=" << policyId << "\n";
-        for (const auto &[frequencyHz, time] : cpuFrequencies) {
-            result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
-        }
-    }
-    result << "CPU loads:\n";
-    const auto previousCpuTimes = mCpuLoadReader.getPreviousCpuTimes();
-    for (const auto &[cpuId, cpuTime] : previousCpuTimes) {
-        result << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
-               << "ms, totalTime=" << cpuTime.totalTimeMs << "ms\n";
-    }
-    result << "==========  End Adaptive CPU stats  ==========\n";
-    if (!::android::base::WriteStringToFd(result.str(), fd)) {
-        PLOG(ERROR) << "Failed to dump state to fd";
-    }
-}
-
-std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
+void AdaptiveCpu::WaitForEnabledAndWorkDurations() {
     ATRACE_CALL();
-    std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
-
-    {
-        // TODO(b/188770301) Once the gating logic is implemented, don't block indefinitely.
-        ATRACE_NAME("wait");
-        mWorkDurationsAvailableCondition.wait(lock, [&] { return !mWorkDurationBatches.empty(); });
-    }
-
-    std::vector<WorkDurationBatch> result;
-    mWorkDurationBatches.swap(result);
-    return result;
+    std::unique_lock<std::mutex> lock(mWaitMutex);
+    // TODO(b/188770301) Once the gating logic is implemented, don't block indefinitely.
+    mWorkDurationsAvailableCondition.wait(
+            lock, [&] { return mIsEnabled && mWorkDurationProcessor.HasWorkDurations(); });
 }
 
 void AdaptiveCpu::RunMainLoop() {
@@ -171,12 +122,9 @@ void AdaptiveCpu::RunMainLoop() {
     ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
     while (true) {
         ATRACE_NAME("loop");
-        std::vector<WorkDurationBatch> workDurationBatches = TakeWorkDurations();
+        WaitForEnabledAndWorkDurations();
 
         ATRACE_BEGIN("compute");
-        if (workDurationBatches.empty()) {
-            continue;
-        }
 
         if (!mIsInitialized) {
             if (!mCpuFrequencyReader.init()) {
@@ -187,27 +135,12 @@ void AdaptiveCpu::RunMainLoop() {
             mIsInitialized = true;
         }
 
-        std::chrono::nanoseconds durationsSum;
-        int durationsCount = 0;
-        for (const WorkDurationBatch &batch : workDurationBatches) {
-            for (const WorkDuration workDuration : batch.workDurations) {
-                std::chrono::nanoseconds duration(workDuration.durationNanos);
-
-                if (duration < kMinDuration || duration > kMaxDuration) {
-                    continue;
-                }
-                // Normalise the duration and add it to the total.
-                // kMaxDuration * kStandardTarget.count() fits comfortably within int64_t.
-                durationsSum +=
-                        duration * kNormalTargetDuration.count() / batch.targetDuration.count();
-                ++durationsCount;
-            }
+        const WorkDurationFeatures workDurationFeatures = mWorkDurationProcessor.GetFeatures();
+        LOG(VERBOSE) << "Got work durations: count=" << workDurationFeatures.numDurations
+                     << ", average=" << workDurationFeatures.averageDuration.count() << "ns";
+        if (workDurationFeatures.numDurations == 0) {
+            continue;
         }
-
-        std::chrono::nanoseconds averageDuration = durationsSum / durationsCount;
-
-        LOG(VERBOSE) << "AdaptiveCPU processing durations: count=" << durationsCount
-                     << " average=" << averageDuration.count() << "ns";
 
         std::vector<CpuPolicyAverageFrequency> cpuPolicyFrequencies;
         if (!mCpuFrequencyReader.getRecentCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
@@ -231,8 +164,8 @@ void AdaptiveCpu::RunMainLoop() {
         }
 
         ModelInput modelInput;
-        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, averageDuration, durationsCount,
-                             previousThrottleDecision)) {
+        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, workDurationFeatures.averageDuration,
+                             workDurationFeatures.numDurations, previousThrottleDecision)) {
             mIsEnabled = false;
             continue;
         }
@@ -262,6 +195,30 @@ void AdaptiveCpu::RunMainLoop() {
             ATRACE_NAME("sleep");
             std::this_thread::sleep_for(kIterationSleepDuration);
         }
+    }
+}
+
+void AdaptiveCpu::DumpToFd(int fd) const {
+    std::stringstream result;
+    result << "========== Begin Adaptive CPU stats ==========\n";
+    result << "Enabled: " << mIsEnabled << "\n";
+    result << "CPU frequencies per policy:\n";
+    const auto previousCpuPolicyFrequencies = mCpuFrequencyReader.getPreviousCpuPolicyFrequencies();
+    for (const auto &[policyId, cpuFrequencies] : previousCpuPolicyFrequencies) {
+        result << "- Policy=" << policyId << "\n";
+        for (const auto &[frequencyHz, time] : cpuFrequencies) {
+            result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
+        }
+    }
+    result << "CPU loads:\n";
+    const auto previousCpuTimes = mCpuLoadReader.getPreviousCpuTimes();
+    for (const auto &[cpuId, cpuTime] : previousCpuTimes) {
+        result << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
+               << "ms, totalTime=" << cpuTime.totalTimeMs << "ms\n";
+    }
+    result << "==========  End Adaptive CPU stats  ==========\n";
+    if (!::android::base::WriteStringToFd(result.str(), fd)) {
+        PLOG(ERROR) << "Failed to dump state to fd";
     }
 }
 
