@@ -37,8 +37,10 @@ TEST(ModelTest, ModelInput_Create) {
     const ModelInput expected{
             .cpuPolicyAverageFrequencyHz = {100, 101, 102},
             .cpuCoreIdleTimesPercentage = {0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0, 0.7},
-            .averageFrameTime = 16ns,
-            .numRenderedFrames = 100,
+            .workDurationFeatures = {.averageDuration = 1ns,
+                                     .maxDuration = 2ns,
+                                     .numMissedDeadlines = 3,
+                                     .numDurations = 4},
             .previousThrottleDecision = ThrottleDecision::THROTTLE_70,
     };
     ModelInput actual;
@@ -58,7 +60,13 @@ TEST(ModelTest, ModelInput_Create) {
                     {.cpuId = 6, .idleTimeFraction = 0.0},
                     {.cpuId = 5, .idleTimeFraction = 0.0},
             },
-            16ns, 100, ThrottleDecision::THROTTLE_70));
+            {
+                    .averageDuration = 1ns,
+                    .maxDuration = 2ns,
+                    .numMissedDeadlines = 3,
+                    .numDurations = 4,
+            },
+            ThrottleDecision::THROTTLE_70));
     ASSERT_EQ(actual, expected);
 }
 
@@ -79,7 +87,7 @@ TEST(ModelTest, ModelInput_Create_failsWithOutOfOrderFrquencies) {
                     {.cpuId = 6, .idleTimeFraction = 0.0},
                     {.cpuId = 5, .idleTimeFraction = 0.0},
             },
-            16ns, 100, ThrottleDecision::THROTTLE_70));
+            {}, ThrottleDecision::THROTTLE_70));
 }
 
 TEST(ModelTest, RunModel_randomInputs) {
@@ -100,8 +108,12 @@ TEST(ModelTest, RunModel_randomInputs) {
                          idleTimesDistribution(generator), idleTimesDistribution(generator),
                          idleTimesDistribution(generator), idleTimesDistribution(generator),
                          idleTimesDistribution(generator), idleTimesDistribution(generator)},
-                .averageFrameTime = std::chrono::nanoseconds(frameTimeDistribution(generator)),
-                .numRenderedFrames = numRenderedFramesDistribution(generator),
+                .workDurationFeatures =
+                        {.averageDuration =
+                                 std::chrono::nanoseconds(frameTimeDistribution(generator)),
+                         .maxDuration = std::chrono::nanoseconds(frameTimeDistribution(generator)),
+                         .numMissedDeadlines = numRenderedFramesDistribution(generator),
+                         .numDurations = numRenderedFramesDistribution(generator)},
                 .previousThrottleDecision =
                         static_cast<ThrottleDecision>(throttleDecisionDistribution(generator)),
         };

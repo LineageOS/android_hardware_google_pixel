@@ -62,25 +62,37 @@ WorkDurationFeatures WorkDurationProcessor::GetFeatures() {
         mWorkDurationBatches.swap(workDurationBatches);
     }
 
-    std::chrono::nanoseconds durationsSum;
+    std::chrono::nanoseconds durationsSum = 0ns;
+    std::chrono::nanoseconds maxDuration = 0ns;
+    uint32_t numMissedDeadlines = 0;
     uint32_t numDurations = 0;
     for (const WorkDurationBatch &batch : workDurationBatches) {
         for (const WorkDuration workDuration : batch.workDurations) {
             std::chrono::nanoseconds duration(workDuration.durationNanos);
-
             if (duration < kMinDuration || duration > kMaxDuration) {
                 continue;
             }
+
             // Normalise the duration and add it to the total.
             // kMaxDuration * kStandardTarget.count() fits comfortably within int64_t.
-            durationsSum +=
+            std::chrono::nanoseconds durationNormalized =
                     (duration * kNormalTargetDuration.count()) / batch.targetDuration.count();
+            durationsSum += durationNormalized;
+            maxDuration = std::max(maxDuration, durationNormalized);
+            if (duration > batch.targetDuration) {
+                ++numMissedDeadlines;
+            }
             ++numDurations;
         }
     }
 
     std::chrono::nanoseconds averageDuration = durationsSum / numDurations;
-    return {.averageDuration = averageDuration, .numDurations = numDurations};
+    return {
+            .averageDuration = averageDuration,
+            .maxDuration = maxDuration,
+            .numMissedDeadlines = numMissedDeadlines,
+            .numDurations = numDurations,
+    };
 }
 
 bool WorkDurationProcessor::HasWorkDurations() {

@@ -39,12 +39,14 @@ struct WorkDurationBatch {
 };
 
 struct WorkDurationFeatures {
-    const std::chrono::nanoseconds averageDuration;
-    const uint32_t numDurations;
-    // TODO(b/207366032): Add max duration & missed deadline features.
+    std::chrono::nanoseconds averageDuration;
+    std::chrono::nanoseconds maxDuration;
+    uint32_t numMissedDeadlines;
+    uint32_t numDurations;
 
     bool operator==(const WorkDurationFeatures &other) const {
-        return averageDuration == other.averageDuration && numDurations == other.numDurations;
+        return averageDuration == other.averageDuration && maxDuration == other.maxDuration &&
+               numMissedDeadlines == other.numMissedDeadlines && numDurations == other.numDurations;
     }
 };
 

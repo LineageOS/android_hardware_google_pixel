@@ -164,8 +164,8 @@ void AdaptiveCpu::RunMainLoop() {
         }
 
         ModelInput modelInput;
-        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, workDurationFeatures.averageDuration,
-                             workDurationFeatures.numDurations, previousThrottleDecision)) {
+        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, workDurationFeatures,
+                             previousThrottleDecision)) {
             mIsEnabled = false;
             continue;
         }

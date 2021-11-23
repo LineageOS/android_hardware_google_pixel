@@ -39,6 +39,8 @@ TEST(WorkDurationProcessorTest, GetFeatures) {
             kNormalTargetDuration);
 
     const WorkDurationFeatures expected = {.averageDuration = kNormalTargetDuration * 2,
+                                           .maxDuration = kNormalTargetDuration * 3,
+                                           .numMissedDeadlines = 1,
                                            .numDurations = 2};
     const WorkDurationFeatures actual = processor.GetFeatures();
     ASSERT_EQ(actual, expected);
@@ -58,6 +60,8 @@ TEST(WorkDurationProcessorTest, GetFeatures_multipleBatches) {
             kNormalTargetDuration);
 
     const WorkDurationFeatures expected = {.averageDuration = kNormalTargetDuration * 3,
+                                           .maxDuration = kNormalTargetDuration * 6,
+                                           .numMissedDeadlines = 3,
                                            .numDurations = 4};
     const WorkDurationFeatures actual = processor.GetFeatures();
     ASSERT_EQ(actual, expected);
@@ -72,6 +76,8 @@ TEST(WorkDurationProcessorTest, GetFeatures_scalesDifferentTargetDurations) {
             kNormalTargetDuration * 2);
 
     const WorkDurationFeatures expected = {.averageDuration = kNormalTargetDuration * 2,
+                                           .maxDuration = kNormalTargetDuration * 3,
+                                           .numMissedDeadlines = 1,
                                            .numDurations = 2};
     const WorkDurationFeatures actual = processor.GetFeatures();
     ASSERT_EQ(actual, expected);
@@ -79,7 +85,8 @@ TEST(WorkDurationProcessorTest, GetFeatures_scalesDifferentTargetDurations) {
 
 TEST(WorkDurationProcessorTest, GetFeatures_noFrames) {
     WorkDurationProcessor processor;
-    const WorkDurationFeatures expected = {.averageDuration = 0ns, .numDurations = 0};
+    const WorkDurationFeatures expected = {
+            .averageDuration = 0ns, .maxDuration = 0ns, .numMissedDeadlines = 0, .numDurations = 0};
     const WorkDurationFeatures actual = processor.GetFeatures();
     ASSERT_EQ(actual, expected);
 }
