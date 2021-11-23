@@ -15,9 +15,9 @@ on boot && property:vendor.all.modules.ready=1 && property:ro.boot.revision=EVT1
     chown system system /sys/bus/i2c/devices/i2c-cs40l26a-dual/default/f0_offset
     chown system system /sys/bus/i2c/devices/i2c-cs40l26a-dual/default/owt_free_space
 
-    enable vendor.vibrator.cs40l26-dual
+    enable vendor.vibrator.cs40l26-evt-dual
 
-service vendor.vibrator.cs40l26-dual /vendor/bin/hw/android.hardware.vibrator-service.cs40l26-specific-revision-dual
+service vendor.vibrator.cs40l26-evt-dual /vendor/bin/hw/android.hardware.vibrator-service.cs40l26-evt-dual
     class hal
     user system
     group system input
