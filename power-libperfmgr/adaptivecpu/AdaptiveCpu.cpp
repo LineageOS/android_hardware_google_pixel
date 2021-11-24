@@ -21,6 +21,7 @@
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <sys/resource.h>
 #include <utils/Trace.h>
 
 #include <chrono>
@@ -94,6 +95,11 @@ void AdaptiveCpu::StartThread() {
     if (!mLoopThread.joinable()) {
         mLoopThread = std::thread([&]() {
             pthread_setname_np(pthread_self(), "AdaptiveCpu");
+            // Parent threads may have higher priorities, so we reset to the default.
+            int ret = setpriority(PRIO_PROCESS, 0, 0);
+            if (ret != 0) {
+                PLOG(ERROR) << "setpriority on AdaptiveCpu thread failed: " << ret;
+            }
             LOG(INFO) << "Started AdaptiveCpu thread successfully";
             RunMainLoop();
         });
