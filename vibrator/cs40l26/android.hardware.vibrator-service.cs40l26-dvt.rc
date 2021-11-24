@@ -1,4 +1,4 @@
-on boot && property:vendor.all.modules.ready=1 && property:ro.boot.revision=EVT1.0
+on boot && property:vendor.all.modules.ready=1 && property:ro.boot.revision=DVT1.0
     wait /sys/bus/i2c/devices/i2c-cs40l26a/calibration/redc_cal_time_ms
 
     mkdir /mnt/vendor/persist/haptics 0770 system system
@@ -17,7 +17,7 @@ on boot && property:vendor.all.modules.ready=1 && property:ro.boot.revision=EVT1
 
     enable vendor.vibrator.cs40l26
 
-service vendor.vibrator.cs40l26 /vendor/bin/hw/android.hardware.vibrator-service.cs40l26-specific-revision
+service vendor.vibrator.cs40l26 /vendor/bin/hw/android.hardware.vibrator-service.cs40l26-dvt
     class hal
     user system
     group system input
