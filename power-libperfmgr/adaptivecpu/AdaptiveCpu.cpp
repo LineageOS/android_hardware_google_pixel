@@ -241,6 +241,8 @@ void AdaptiveCpu::DumpToFd(int fd) const {
 const std::unordered_map<ThrottleDecision, std::vector<std::string>>
         AdaptiveCpu::kThrottleDecisionToHintNames = {
                 {ThrottleDecision::NO_THROTTLE, {}},
+                {ThrottleDecision::THROTTLE_50,
+                 {"LOW_POWER_LITTLE_CLUSTER_50", "LOW_POWER_MID_CLUSTER_50", "LOW_POWER_CPU_50"}},
                 {ThrottleDecision::THROTTLE_60,
                  {"LOW_POWER_LITTLE_CLUSTER_60", "LOW_POWER_MID_CLUSTER_60", "LOW_POWER_CPU_60"}},
                 {ThrottleDecision::THROTTLE_70,

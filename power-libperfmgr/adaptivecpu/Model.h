@@ -40,10 +40,11 @@ constexpr uint32_t kNumCpuPolicies = 3;
 
 enum class ThrottleDecision {
     NO_THROTTLE = 0,
-    THROTTLE_60 = 1,
-    THROTTLE_70 = 2,
-    THROTTLE_80 = 3,
-    THROTTLE_90 = 4,
+    THROTTLE_50 = 1,
+    THROTTLE_60 = 2,
+    THROTTLE_70 = 3,
+    THROTTLE_80 = 4,
+    THROTTLE_90 = 5,
     FIRST = NO_THROTTLE,
     LAST = THROTTLE_90,
 };
