@@ -106,7 +106,10 @@ void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurat
     if (!mIsEnabled) {
         return;
     }
-    mWorkDurationProcessor.ReportWorkDurations(workDurations, targetDuration);
+    if (!mWorkDurationProcessor.ReportWorkDurations(workDurations, targetDuration)) {
+        mIsEnabled = false;
+        return;
+    }
     mWorkDurationsAvailableCondition.notify_one();
 }
 
