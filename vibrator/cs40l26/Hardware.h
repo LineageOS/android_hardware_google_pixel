@@ -39,13 +39,13 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setF0Offset(uint32_t value) override { return set(value, &mF0Offset); }
     bool setRedc(std::string value) override { return set(value, &mRedc); }
     bool setQ(std::string value) override { return set(value, &mQ); }
-    bool getEffectCount(uint32_t *value) override { return getStr(value, &mEffectCount); }
-    bool pollVibeState(std::string value, int32_t timeoutMs) override {
-        return pollStr(value, &mVibeState, timeoutMs);
+    bool getEffectCount(uint32_t *value) override { return get(value, &mEffectCount); }
+    bool pollVibeState(uint32_t value, int32_t timeoutMs) override {
+        return poll(value, &mVibeState, timeoutMs);
     }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
     bool getAvailablePwleSegments(uint32_t *value) override {
-        return getStr(value, &mAvailablePwleSegments);
+        return get(value, &mAvailablePwleSegments);
     }
     bool setPwle(std::string value) override { return set(value, &mPwle); }
     bool hasOwtFreeSpace() override { return has(mOwtFreeSpace); }
