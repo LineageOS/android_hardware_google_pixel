@@ -51,12 +51,6 @@ static const std::chrono::nanoseconds kMinDuration = 0ns;
 // All durations longer than this are ignored.
 static const std::chrono::nanoseconds kMaxDuration = 600 * kNormalTargetDuration;
 
-// Whether to block until work durations are available before running the model. We currently block
-// in order to avoid spinning needlessly and wasting energy. In the final version, the iteration
-// should be controlled by the model itself, so we may return an empty vector instead.
-// TODO(b/188770301) Once the gating logic is implemented, don't block indefinitely.
-static const bool kBlockForWorkDurations = true;
-
 // The sleep duration for each iteration. Currently set to a large value as a safeguard measure, so
 // we don't spin needlessly and waste energy. To experiment with the model, set to a smaller value,
 // e.g. around 25ms.
@@ -102,6 +96,7 @@ void AdaptiveCpu::StartThread() {
             }
             LOG(INFO) << "Started AdaptiveCpu thread successfully";
             RunMainLoop();
+            LOG(ERROR) << "AdaptiveCpu thread ended, this should never happen!";
         });
     }
 }
@@ -158,7 +153,8 @@ std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
     ATRACE_CALL();
     std::unique_lock<std::mutex> lock(mWorkDurationsMutex);
 
-    if (kBlockForWorkDurations) {
+    {
+        // TODO(b/188770301) Once the gating logic is implemented, don't block indefinitely.
         ATRACE_NAME("wait");
         mWorkDurationsAvailableCondition.wait(lock, [&] { return !mWorkDurationBatches.empty(); });
     }
@@ -170,15 +166,6 @@ std::vector<WorkDurationBatch> AdaptiveCpu::TakeWorkDurations() {
 
 void AdaptiveCpu::RunMainLoop() {
     ATRACE_CALL();
-    if (!mIsInitialized) {
-        if (!mCpuFrequencyReader.init()) {
-            LOG(INFO) << "Failed to initialize CPU frequency reading";
-            mIsEnabled = false;
-            return;
-        }
-        mCpuLoadReader.init();
-        mIsInitialized = true;
-    }
 
     std::deque<ModelInput> historicalModelInputs;
     ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
@@ -189,6 +176,15 @@ void AdaptiveCpu::RunMainLoop() {
         ATRACE_BEGIN("compute");
         if (workDurationBatches.empty()) {
             continue;
+        }
+
+        if (!mIsInitialized) {
+            if (!mCpuFrequencyReader.init()) {
+                mIsEnabled = false;
+                continue;
+            }
+            mCpuLoadReader.init();
+            mIsInitialized = true;
         }
 
         std::chrono::nanoseconds durationsSum;
@@ -215,7 +211,8 @@ void AdaptiveCpu::RunMainLoop() {
 
         std::vector<CpuPolicyAverageFrequency> cpuPolicyFrequencies;
         if (!mCpuFrequencyReader.getRecentCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
-            break;
+            mIsEnabled = false;
+            continue;
         }
         LOG(VERBOSE) << "Got CPU frequencies: " << cpuPolicyFrequencies.size();
         for (const auto &cpuPolicyFrequency : cpuPolicyFrequencies) {
@@ -225,7 +222,8 @@ void AdaptiveCpu::RunMainLoop() {
 
         std::vector<CpuLoad> cpuLoads;
         if (!mCpuLoadReader.getRecentCpuLoads(&cpuLoads)) {
-            break;
+            mIsEnabled = false;
+            continue;
         }
         LOG(VERBOSE) << "Got CPU loads: " << cpuLoads.size();
         for (const auto &cpuLoad : cpuLoads) {
@@ -235,7 +233,8 @@ void AdaptiveCpu::RunMainLoop() {
         ModelInput modelInput;
         if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, averageDuration, durationsCount,
                              previousThrottleDecision)) {
-            break;
+            mIsEnabled = false;
+            continue;
         }
         modelInput.LogToAtrace();
         historicalModelInputs.push_back(modelInput);
@@ -264,9 +263,6 @@ void AdaptiveCpu::RunMainLoop() {
             std::this_thread::sleep_for(kIterationSleepDuration);
         }
     }
-    // If the loop exits due to an error, disable Adaptive CPU so no work is done on e.g.
-    // TakeWorkDurations.
-    mIsEnabled = false;
 }
 
 const std::unordered_map<ThrottleDecision, std::vector<std::string>>
