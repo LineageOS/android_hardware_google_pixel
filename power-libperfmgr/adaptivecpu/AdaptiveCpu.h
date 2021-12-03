@@ -25,7 +25,7 @@
 #include <vector>
 
 #include "CpuFrequencyReader.h"
-#include "CpuLoadReader.h"
+#include "ICpuLoadReader.h"
 #include "Model.h"
 #include "WorkDurationProcessor.h"
 
@@ -79,7 +79,7 @@ class AdaptiveCpu {
 
     WorkDurationProcessor mWorkDurationProcessor;
     CpuFrequencyReader mCpuFrequencyReader;
-    CpuLoadReader mCpuLoadReader;
+    std::unique_ptr<ICpuLoadReader> mCpuLoadReader;
 
     std::shared_ptr<HintManager> mHintManager;
 

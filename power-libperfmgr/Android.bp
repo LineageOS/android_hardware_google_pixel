@@ -40,9 +40,11 @@ cc_library {
     srcs: [
         "adaptivecpu/AdaptiveCpu.cpp",
         "adaptivecpu/CpuFrequencyReader.cpp",
-        "adaptivecpu/CpuLoadReader.cpp",
+        "adaptivecpu/CpuLoadReaderProcStat.cpp",
+        "adaptivecpu/CpuLoadReaderSysDevices.cpp",
         "adaptivecpu/Model.cpp",
         "adaptivecpu/RealFilesystem.cpp",
+        "adaptivecpu/TimeSource.cpp",
         "adaptivecpu/WorkDurationProcessor.cpp",
     ],
     shared_libs: [
@@ -61,7 +63,8 @@ cc_test {
     vendor: true,
     srcs: [
         "adaptivecpu/tests/CpuFrequencyReaderTest.cpp",
-        "adaptivecpu/tests/CpuLoadReaderTest.cpp",
+        "adaptivecpu/tests/CpuLoadReaderSysDevicesTest.cpp",
+        "adaptivecpu/tests/CpuLoadReaderProcStatTest.cpp",
         "adaptivecpu/tests/ModelTest.cpp",
         "adaptivecpu/tests/WorkDurationProcessorTest.cpp",
     ],

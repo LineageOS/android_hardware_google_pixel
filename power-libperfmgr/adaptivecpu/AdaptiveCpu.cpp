@@ -29,6 +29,7 @@
 #include <deque>
 #include <numeric>
 
+#include "CpuLoadReaderSysDevices.h"
 #include "Model.h"
 
 namespace aidl {
@@ -55,7 +56,9 @@ constexpr std::string_view kIterationSleepDurationProperty(
 static const std::chrono::milliseconds kIterationSleepDurationDefault = 1000ms;
 static const std::chrono::milliseconds kIterationSleepDurationMin = 20ms;
 
-AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager) : mHintManager(hintManager) {}
+// TODO(b/207662659): Add config for changing between different reader types.
+AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
+    : mCpuLoadReader(std::make_unique<CpuLoadReaderSysDevices>()), mHintManager(hintManager) {}
 
 bool AdaptiveCpu::IsEnabled() const {
     return mIsEnabled;
@@ -150,7 +153,7 @@ void AdaptiveCpu::RunMainLoop() {
                 mIsEnabled = false;
                 continue;
             }
-            if (!mCpuLoadReader.Init()) {
+            if (!mCpuLoadReader->Init()) {
                 mIsEnabled = false;
                 continue;
             }
@@ -184,7 +187,7 @@ void AdaptiveCpu::RunMainLoop() {
             continue;
         }
 
-        if (!mCpuLoadReader.GetRecentCpuLoads(&modelInput.cpuCoreIdleTimesPercentage)) {
+        if (!mCpuLoadReader->GetRecentCpuLoads(&modelInput.cpuCoreIdleTimesPercentage)) {
             mIsEnabled = false;
             continue;
         }
@@ -230,7 +233,7 @@ void AdaptiveCpu::DumpToFd(int fd) const {
             result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
         }
     }
-    mCpuLoadReader.DumpToStream(result);
+    mCpuLoadReader->DumpToStream(result);
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";

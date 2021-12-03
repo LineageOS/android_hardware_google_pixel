@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+#include <chrono>
 #include <memory>
 #include <ostream>
 #include <vector>

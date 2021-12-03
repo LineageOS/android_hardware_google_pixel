@@ -16,11 +16,14 @@
  * limitations under the License.
  */
 
+#include <chrono>
 #include <map>
 
 #include "ICpuLoadReader.h"
 #include "IFilesystem.h"
+#include "ITimeSource.h"
 #include "RealFilesystem.h"
+#include "TimeSource.h"
 
 namespace aidl {
 namespace google {
@@ -30,27 +33,33 @@ namespace impl {
 namespace pixel {
 
 struct CpuTime {
-    uint64_t idleTimeMs;
-    uint64_t totalTimeMs;
+    std::chrono::microseconds idleTime;
+    std::chrono::microseconds totalTime;
 };
 
-class CpuLoadReader : public ICpuLoadReader {
+// Reads CPU idle stats from /sys/devices/system/cpu/cpuN/cpuidle.
+class CpuLoadReaderSysDevices : public ICpuLoadReader {
   public:
-    CpuLoadReader() : mFilesystem(std::make_unique<RealFilesystem>()) {}
-    CpuLoadReader(std::unique_ptr<IFilesystem> filesystem) : mFilesystem(std::move(filesystem)) {}
+    CpuLoadReaderSysDevices()
+        : mFilesystem(std::make_unique<RealFilesystem>()),
+          mTimeSource(std::make_unique<TimeSource>()) {}
+    CpuLoadReaderSysDevices(std::unique_ptr<IFilesystem> filesystem,
+                            std::unique_ptr<ITimeSource> timeSource)
+        : mFilesystem(std::move(filesystem)), mTimeSource(std::move(timeSource)) {}
 
     bool Init() override;
     bool GetRecentCpuLoads(std::array<double, NUM_CPU_CORES> *cpuCoreIdleTimesPercentage) override;
     void DumpToStream(std::stringstream &stream) const override;
 
   private:
-    std::map<uint32_t, CpuTime> mPreviousCpuTimes;
     const std::unique_ptr<IFilesystem> mFilesystem;
+    const std::unique_ptr<ITimeSource> mTimeSource;
 
-    std::map<uint32_t, CpuTime> ReadCpuTimes();
-    // Converts jiffies to milliseconds. Jiffies is the granularity the kernel reports times in,
-    // including the timings in CPU statistics.
-    static uint64_t JiffiesToMs(uint64_t jiffies);
+    std::array<CpuTime, NUM_CPU_CORES> mPreviousCpuTimes;
+    std::vector<std::string> mIdleStateNames;
+
+    std::array<CpuTime, NUM_CPU_CORES> ReadCpuTimes() const;
+    bool ReadIdleStateNames(std::vector<std::string> *result) const;
 };
 
 }  // namespace pixel

@@ -17,7 +17,7 @@
 #define LOG_TAG "powerhal-libperfmgr"
 #define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
-#include "CpuLoadReader.h"
+#include "CpuLoadReaderProcStat.h"
 
 #include <android-base/logging.h>
 #include <inttypes.h>
@@ -35,12 +35,12 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-bool CpuLoadReader::Init() {
+bool CpuLoadReaderProcStat::Init() {
     mPreviousCpuTimes = ReadCpuTimes();
     return true;
 }
 
-bool CpuLoadReader::GetRecentCpuLoads(
+bool CpuLoadReaderProcStat::GetRecentCpuLoads(
         std::array<double, NUM_CPU_CORES> *cpuCoreIdleTimesPercentage) {
     ATRACE_CALL();
     if (cpuCoreIdleTimesPercentage == nullptr) {
@@ -75,7 +75,7 @@ bool CpuLoadReader::GetRecentCpuLoads(
     return true;
 }
 
-std::map<uint32_t, CpuTime> CpuLoadReader::ReadCpuTimes() {
+std::map<uint32_t, CpuTime> CpuLoadReaderProcStat::ReadCpuTimes() {
     ATRACE_CALL();
     std::map<uint32_t, CpuTime> cpuTimes;
 
@@ -107,7 +107,7 @@ std::map<uint32_t, CpuTime> CpuLoadReader::ReadCpuTimes() {
     return cpuTimes;
 }
 
-void CpuLoadReader::DumpToStream(std::stringstream &stream) const {
+void CpuLoadReaderProcStat::DumpToStream(std::stringstream &stream) const {
     stream << "CPU loads from /proc/stat:\n";
     for (const auto &[cpuId, cpuTime] : mPreviousCpuTimes) {
         stream << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
@@ -115,7 +115,7 @@ void CpuLoadReader::DumpToStream(std::stringstream &stream) const {
     }
 }
 
-uint64_t CpuLoadReader::JiffiesToMs(uint64_t jiffies) {
+uint64_t CpuLoadReaderProcStat::JiffiesToMs(uint64_t jiffies) {
     return (jiffies * 1000) / sysconf(_SC_CLK_TCK);
 }
 
