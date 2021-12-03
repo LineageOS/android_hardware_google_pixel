@@ -29,10 +29,8 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies,
-                      const std::vector<CpuLoad> &cpuLoads,
-                      WorkDurationFeatures workDurationFeatures,
-                      ThrottleDecision previousThrottleDecision) {
+bool ModelInput::SetCpuFreqiencies(
+        const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies) {
     ATRACE_CALL();
     if (cpuPolicyAverageFrequencies.size() != cpuPolicyAverageFrequencyHz.size()) {
         LOG(ERROR) << "Received incorrect amount of CPU policy frequencies, expected "
@@ -50,22 +48,6 @@ bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAve
         previousPolicyId = cpuPolicyAverageFrequencies[i].policyId;
         cpuPolicyAverageFrequencyHz[i] = cpuPolicyAverageFrequencies[i].averageFrequencyHz;
     }
-
-    if (cpuLoads.size() != cpuCoreIdleTimesPercentage.size()) {
-        LOG(ERROR) << "Received incorrect amount of CPU loads, expected "
-                   << cpuCoreIdleTimesPercentage.size() << ", received " << cpuLoads.size();
-        return false;
-    }
-    for (const auto &cpuLoad : cpuLoads) {
-        if (cpuLoad.cpuId >= cpuCoreIdleTimesPercentage.size()) {
-            LOG(ERROR) << "Unrecognized CPU ID found when building ModelInput: " << cpuLoad.cpuId;
-            return false;
-        }
-        cpuCoreIdleTimesPercentage[cpuLoad.cpuId] = cpuLoad.idleTimeFraction;
-    }
-
-    this->workDurationFeatures = workDurationFeatures;
-    this->previousThrottleDecision = previousThrottleDecision;
     return true;
 }
 

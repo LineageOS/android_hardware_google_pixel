@@ -150,14 +150,21 @@ void AdaptiveCpu::RunMainLoop() {
                 mIsEnabled = false;
                 continue;
             }
-            mCpuLoadReader.init();
+            if (!mCpuLoadReader.Init()) {
+                mIsEnabled = false;
+                continue;
+            }
             mIsInitialized = true;
         }
 
-        const WorkDurationFeatures workDurationFeatures = mWorkDurationProcessor.GetFeatures();
-        LOG(VERBOSE) << "Got work durations: count=" << workDurationFeatures.numDurations
-                     << ", average=" << workDurationFeatures.averageDuration.count() << "ns";
-        if (workDurationFeatures.numDurations == 0) {
+        ModelInput modelInput;
+        modelInput.previousThrottleDecision = previousThrottleDecision;
+
+        modelInput.workDurationFeatures = mWorkDurationProcessor.GetFeatures();
+        LOG(VERBOSE) << "Got work durations: count=" << modelInput.workDurationFeatures.numDurations
+                     << ", average=" << modelInput.workDurationFeatures.averageDuration.count()
+                     << "ns";
+        if (modelInput.workDurationFeatures.numDurations == 0) {
             continue;
         }
 
@@ -171,23 +178,17 @@ void AdaptiveCpu::RunMainLoop() {
             LOG(VERBOSE) << "policy=" << cpuPolicyFrequency.policyId
                          << ", freq=" << cpuPolicyFrequency.averageFrequencyHz;
         }
-
-        std::vector<CpuLoad> cpuLoads;
-        if (!mCpuLoadReader.getRecentCpuLoads(&cpuLoads)) {
+        // TODO(mishaw): Move SetCpuFrequencies logic to CpuFrequencyReader.
+        if (!modelInput.SetCpuFreqiencies(cpuPolicyFrequencies)) {
             mIsEnabled = false;
             continue;
         }
-        LOG(VERBOSE) << "Got CPU loads: " << cpuLoads.size();
-        for (const auto &cpuLoad : cpuLoads) {
-            LOG(VERBOSE) << "cpu=" << cpuLoad.cpuId << ", idle=" << cpuLoad.idleTimeFraction;
-        }
 
-        ModelInput modelInput;
-        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, workDurationFeatures,
-                             previousThrottleDecision)) {
+        if (!mCpuLoadReader.GetRecentCpuLoads(&modelInput.cpuCoreIdleTimesPercentage)) {
             mIsEnabled = false;
             continue;
         }
+
         modelInput.LogToAtrace();
         historicalModelInputs.push_back(modelInput);
         if (historicalModelInputs.size() > kNumHistoricalModelInputs) {
@@ -229,12 +230,7 @@ void AdaptiveCpu::DumpToFd(int fd) const {
             result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
         }
     }
-    result << "CPU loads:\n";
-    const auto previousCpuTimes = mCpuLoadReader.getPreviousCpuTimes();
-    for (const auto &[cpuId, cpuTime] : previousCpuTimes) {
-        result << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
-               << "ms, totalTime=" << cpuTime.totalTimeMs << "ms\n";
-    }
+    mCpuLoadReader.DumpToStream(result);
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";

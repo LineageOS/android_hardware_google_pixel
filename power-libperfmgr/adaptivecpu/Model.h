@@ -25,7 +25,7 @@
 #include <vector>
 
 #include "CpuFrequencyReader.h"
-#include "CpuLoadReader.h"
+#include "ICpuLoadReader.h"
 #include "WorkDurationProcessor.h"
 
 namespace aidl {
@@ -36,7 +36,6 @@ namespace impl {
 namespace pixel {
 
 constexpr uint32_t kNumCpuPolicies = 3;
-constexpr uint32_t kNumCpuCores = 8;
 
 enum class ThrottleDecision {
     NO_THROTTLE = 0,
@@ -48,14 +47,12 @@ enum class ThrottleDecision {
 
 struct ModelInput {
     std::array<double, kNumCpuPolicies> cpuPolicyAverageFrequencyHz;
-    std::array<double, kNumCpuCores> cpuCoreIdleTimesPercentage;
+    std::array<double, NUM_CPU_CORES> cpuCoreIdleTimesPercentage;
     WorkDurationFeatures workDurationFeatures;
     ThrottleDecision previousThrottleDecision;
 
-    // Initialize `result`. cpuPolicyAverageFrequencies must be sorted by policyId.
-    bool Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies,
-              const std::vector<CpuLoad> &cpuLoads, WorkDurationFeatures workDurationFeatures,
-              ThrottleDecision previousThrottleDecision);
+    bool SetCpuFreqiencies(
+            const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies);
 
     void LogToAtrace() const;
 

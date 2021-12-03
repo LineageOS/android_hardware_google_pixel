@@ -32,11 +32,7 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-std::ostream &operator<<(std::ostream &stream, const CpuLoad &cpuLoad) {
-    return stream << "CpuLoad(" << cpuLoad.cpuId << ", " << cpuLoad.idleTimeFraction << ")";
-}
-
-TEST(CpuLoadReaderTest, getRecentCpuLoads) {
+TEST(CpuLoadReaderTest, GetRecentCpuLoads) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
             .Times(2)
@@ -56,16 +52,15 @@ TEST(CpuLoadReaderTest, getRecentCpuLoads) {
             });
 
     CpuLoadReader reader(std::move(filesystem));
-    reader.init();
+    reader.Init();
 
-    std::vector<CpuLoad> actualCpuLoads;
-    ASSERT_TRUE(reader.getRecentCpuLoads(&actualCpuLoads));
-    std::vector<CpuLoad> expectedCpuLoads(
-            {{.cpuId = 1, .idleTimeFraction = 0.5}, {.cpuId = 2, .idleTimeFraction = 0.25}});
-    ASSERT_EQ(actualCpuLoads, expectedCpuLoads);
+    std::array<double, NUM_CPU_CORES> actualPercentages;
+    ASSERT_TRUE(reader.GetRecentCpuLoads(&actualPercentages));
+    std::array<double, NUM_CPU_CORES> expectedPercentages({0, 0.5, 0.25, 0, 0, 0, 0, 0});
+    ASSERT_EQ(actualPercentages, expectedPercentages);
 }
 
-TEST(CpuLoadReaderTest, getRecentCpuLoads_failsWithMissingValues) {
+TEST(CpuLoadReaderTest, GetRecentCpuLoads_failsWithMissingValues) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
             .Times(2)
@@ -85,12 +80,12 @@ TEST(CpuLoadReaderTest, getRecentCpuLoads_failsWithMissingValues) {
             });
 
     CpuLoadReader reader(std::move(filesystem));
-    reader.init();
-    std::vector<CpuLoad> actualCpuLoads;
-    ASSERT_FALSE(reader.getRecentCpuLoads(&actualCpuLoads));
+    reader.Init();
+    std::array<double, NUM_CPU_CORES> actualPercentages;
+    ASSERT_FALSE(reader.GetRecentCpuLoads(&actualPercentages));
 }
 
-TEST(CpuLoadReaderTest, getRecentCpuLoads_failsWithEmptyFile) {
+TEST(CpuLoadReaderTest, GetRecentCpuLoads_failsWithEmptyFile) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
             .Times(2)
@@ -98,12 +93,12 @@ TEST(CpuLoadReaderTest, getRecentCpuLoads_failsWithEmptyFile) {
             .WillOnce([]() { return std::make_unique<std::istringstream>(""); });
 
     CpuLoadReader reader(std::move(filesystem));
-    reader.init();
-    std::vector<CpuLoad> actualCpuLoads;
-    ASSERT_FALSE(reader.getRecentCpuLoads(&actualCpuLoads));
+    reader.Init();
+    std::array<double, NUM_CPU_CORES> actualPercentages;
+    ASSERT_FALSE(reader.GetRecentCpuLoads(&actualPercentages));
 }
 
-TEST(CpuLoadReaderTest, getRecentCpuLoads_failsWithDifferentCpus) {
+TEST(CpuLoadReaderTest, GetRecentCpuLoads_failsWithDifferentCpus) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
             .Times(2)
@@ -123,9 +118,9 @@ TEST(CpuLoadReaderTest, getRecentCpuLoads_failsWithDifferentCpus) {
             });
 
     CpuLoadReader reader(std::move(filesystem));
-    reader.init();
-    std::vector<CpuLoad> actualCpuLoads;
-    ASSERT_FALSE(reader.getRecentCpuLoads(&actualCpuLoads));
+    reader.Init();
+    std::array<double, NUM_CPU_CORES> actualPercentages;
+    ASSERT_FALSE(reader.GetRecentCpuLoads(&actualPercentages));
 }
 
 }  // namespace pixel

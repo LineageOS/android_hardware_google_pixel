@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <utils/Trace.h>
 
+#include <array>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -34,17 +35,19 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-void CpuLoadReader::init() {
-    mPreviousCpuTimes = readCpuTimes();
+bool CpuLoadReader::Init() {
+    mPreviousCpuTimes = ReadCpuTimes();
+    return true;
 }
 
-bool CpuLoadReader::getRecentCpuLoads(std::vector<CpuLoad> *result) {
+bool CpuLoadReader::GetRecentCpuLoads(
+        std::array<double, NUM_CPU_CORES> *cpuCoreIdleTimesPercentage) {
     ATRACE_CALL();
-    if (result == nullptr) {
+    if (cpuCoreIdleTimesPercentage == nullptr) {
         LOG(ERROR) << "Got nullptr output in getRecentCpuLoads";
         return false;
     }
-    std::map<uint32_t, CpuTime> cpuTimes = readCpuTimes();
+    std::map<uint32_t, CpuTime> cpuTimes = ReadCpuTimes();
     if (cpuTimes.empty()) {
         LOG(ERROR) << "Failed to find any CPU times";
         return false;
@@ -62,18 +65,17 @@ bool CpuLoadReader::getRecentCpuLoads(std::vector<CpuLoad> *result) {
                        << ", total=" << recentTotalTimeMs;
             return false;
         }
-        const double idleTimeFraction = static_cast<double>(recentIdleTimeMs) / (recentTotalTimeMs);
-        result->push_back({.cpuId = cpuId, .idleTimeFraction = idleTimeFraction});
+        const double idleTimePercentage =
+                static_cast<double>(recentIdleTimeMs) / (recentTotalTimeMs);
+        LOG(VERBOSE) << "Read CPU idle time: cpuId=" << cpuId
+                     << ", idleTimePercentage=" << idleTimePercentage;
+        (*cpuCoreIdleTimesPercentage)[cpuId] = idleTimePercentage;
     }
     mPreviousCpuTimes = cpuTimes;
     return true;
 }
 
-std::map<uint32_t, CpuTime> CpuLoadReader::getPreviousCpuTimes() const {
-    return mPreviousCpuTimes;
-}
-
-std::map<uint32_t, CpuTime> CpuLoadReader::readCpuTimes() {
+std::map<uint32_t, CpuTime> CpuLoadReader::ReadCpuTimes() {
     ATRACE_CALL();
     std::map<uint32_t, CpuTime> cpuTimes;
 
@@ -98,14 +100,22 @@ std::map<uint32_t, CpuTime> CpuLoadReader::readCpuTimes() {
         uint64_t idleTimeJiffies = idle + ioWait;
         uint64_t totalTimeJiffies =
                 user + nice + system + irq + softIrq + steal + guest + guestNice + idleTimeJiffies;
-        cpuTimes[cpuId] = {.idleTimeMs = jiffiesToMs(idleTimeJiffies),
-                           .totalTimeMs = jiffiesToMs(totalTimeJiffies)};
+        cpuTimes[cpuId] = {.idleTimeMs = JiffiesToMs(idleTimeJiffies),
+                           .totalTimeMs = JiffiesToMs(totalTimeJiffies)};
     }
     ATRACE_END();
     return cpuTimes;
 }
 
-uint64_t CpuLoadReader::jiffiesToMs(uint64_t jiffies) {
+void CpuLoadReader::DumpToStream(std::stringstream &stream) const {
+    stream << "CPU loads from /proc/stat:\n";
+    for (const auto &[cpuId, cpuTime] : mPreviousCpuTimes) {
+        stream << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
+               << "ms, totalTime=" << cpuTime.totalTimeMs << "ms\n";
+    }
+}
+
+uint64_t CpuLoadReader::JiffiesToMs(uint64_t jiffies) {
     return (jiffies * 1000) / sysconf(_SC_CLK_TCK);
 }
 
