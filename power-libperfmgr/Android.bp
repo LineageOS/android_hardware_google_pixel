@@ -39,6 +39,7 @@ cc_library {
     vendor: true,
     srcs: [
         "adaptivecpu/AdaptiveCpu.cpp",
+        "adaptivecpu/AdaptiveCpuStats.cpp",
         "adaptivecpu/CpuFrequencyReader.cpp",
         "adaptivecpu/CpuLoadReaderProcStat.cpp",
         "adaptivecpu/CpuLoadReaderSysDevices.cpp",
@@ -62,6 +63,7 @@ cc_test {
     proprietary: true,
     vendor: true,
     srcs: [
+        "adaptivecpu/tests/AdaptiveCpuStatsTest.cpp",
         "adaptivecpu/tests/CpuFrequencyReaderTest.cpp",
         "adaptivecpu/tests/CpuLoadReaderSysDevicesTest.cpp",
         "adaptivecpu/tests/CpuLoadReaderProcStatTest.cpp",

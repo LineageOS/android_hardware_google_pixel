@@ -39,12 +39,6 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-using std::chrono_literals::operator""ms;
-
-// Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
-// hints are cancelled.
-static const std::chrono::milliseconds kHintTimeout = 2000ms;
-
 // We pass the previous N ModelInputs to the model, including the most recent ModelInput.
 constexpr uint32_t kNumHistoricalModelInputs = 3;
 
@@ -147,6 +141,7 @@ void AdaptiveCpu::RunMainLoop() {
         }
 
         ATRACE_BEGIN("compute");
+        mAdaptiveCpuStats.RegisterStartRun();
 
         if (!mIsInitialized) {
             if (!mCpuFrequencyReader.init()) {
@@ -205,7 +200,7 @@ void AdaptiveCpu::RunMainLoop() {
         if (throttleDecision != previousThrottleDecision) {
             ATRACE_NAME("sendHints");
             for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
-                mHintManager->DoHint(hintName, kHintTimeout);
+                mHintManager->DoHint(hintName, HINT_TIMEOUT);
             }
             for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
                 mHintManager->EndHint(hintName);
@@ -213,6 +208,8 @@ void AdaptiveCpu::RunMainLoop() {
             previousThrottleDecision = throttleDecision;
         }
 
+        mAdaptiveCpuStats.RegisterSuccessfulRun(previousThrottleDecision, throttleDecision,
+                                                modelInput.workDurationFeatures);
         ATRACE_END();  // compute
         {
             ATRACE_NAME("sleep");
@@ -234,6 +231,7 @@ void AdaptiveCpu::DumpToFd(int fd) const {
         }
     }
     mCpuLoadReader->DumpToStream(result);
+    mAdaptiveCpuStats.DumpToStream(result);
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";

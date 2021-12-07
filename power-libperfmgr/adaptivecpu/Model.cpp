@@ -78,6 +78,23 @@ ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs) {
 #include "models/model.inc"
 }
 
+std::string ThrottleString(ThrottleDecision throttleDecision) {
+    switch (throttleDecision) {
+        case ThrottleDecision::NO_THROTTLE:
+            return "NO_THROTTLE";
+        case ThrottleDecision::THROTTLE_60:
+            return "THROTTLE_60";
+        case ThrottleDecision::THROTTLE_70:
+            return "THROTTLE_70";
+        case ThrottleDecision::THROTTLE_80:
+            return "THROTTLE_80";
+        case ThrottleDecision::THROTTLE_90:
+            return "THROTTLE_90";
+        default:
+            return "unknown";
+    }
+}
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power

@@ -66,6 +66,8 @@ struct ModelInput {
 
 ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs);
 
+std::string ThrottleString(ThrottleDecision throttleDecision);
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
