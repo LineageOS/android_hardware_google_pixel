@@ -27,6 +27,7 @@
 #include "CpuFrequencyReader.h"
 #include "CpuLoadReader.h"
 #include "Model.h"
+#include "WorkDurationProcessor.h"
 
 namespace aidl {
 namespace google {
@@ -37,14 +38,6 @@ namespace pixel {
 
 using ::aidl::android::hardware::power::WorkDuration;
 using ::android::perfmgr::HintManager;
-
-struct WorkDurationBatch {
-    WorkDurationBatch(const std::vector<WorkDuration> &workDurations,
-                      std::chrono::nanoseconds targetDuration)
-        : workDurations(workDurations), targetDuration(targetDuration) {}
-    std::vector<WorkDuration> workDurations;
-    std::chrono::nanoseconds targetDuration;
-};
 
 // Applies CPU frequency hints infered by an ML model based on the recent CPU statistics and work
 // durations.
@@ -82,9 +75,9 @@ class AdaptiveCpu {
     // The main loop of Adaptive CPU, which runs in a separate thread.
     void RunMainLoop();
 
-    // Atomically clears the available work durations from mWorkDurations and returns them.
-    std::vector<WorkDurationBatch> TakeWorkDurations();
+    void WaitForEnabledAndWorkDurations();
 
+    WorkDurationProcessor mWorkDurationProcessor;
     CpuFrequencyReader mCpuFrequencyReader;
     CpuLoadReader mCpuLoadReader;
 
@@ -93,18 +86,14 @@ class AdaptiveCpu {
     // The thread in which work durations are processed.
     std::thread mLoopThread;
 
-    // For guarding access to mWorkDurations.
-    std::mutex mWorkDurationsMutex;
-
     // Guards against creating multiple threads in the case HintReceived(true) is called on separate
     // threads simultaneously.
     std::mutex mThreadCreationMutex;
+    // Used when waiting in WaitForEnabledAndWorkDurations().
+    std::mutex mWaitMutex;
 
     // A condition variable that will be notified when new work durations arrive.
     std::condition_variable mWorkDurationsAvailableCondition;
-
-    // The work durations waiting to be processed, ordered from least recent to most recent.
-    std::vector<WorkDurationBatch> mWorkDurationBatches;
 
     volatile bool mIsEnabled;
     bool mIsInitialized;
