@@ -75,8 +75,6 @@ static constexpr uint32_t MAX_TIME_MS = UINT32_MAX;
 static constexpr float AMP_ATTENUATE_STEP_SIZE = 0.125f;
 static constexpr float EFFECT_FREQUENCY_KHZ = 48.0f;
 
-static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
-
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 static constexpr int32_t COMPOSE_SIZE_MAX = 127;
 static constexpr int32_t COMPOSE_PWLE_SIZE_MAX_DEFAULT = 127;
@@ -103,6 +101,8 @@ static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
 static constexpr float PWLE_BW_MAP_SIZE =
     1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
+static constexpr float RAMP_DOWN_CONSTANT = 1048.576;
+static constexpr float RAMP_DOWN_TIME_MS = 50.0;
 
 static struct pcm_config haptic_nohost_config = {
     .channels = 1,
@@ -235,6 +235,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 
     createPwleMaxLevelLimitMap();
     mIsUnderExternalControl = false;
+    setPwleRampDown();
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -442,10 +443,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
         ALOGE("Device is under external control mode. Force to disable it to prevent chip hang "
               "problem.");
     }
-    if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
-        ALOGE("Previous vibration pending.");
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
+    mHwApi->setActivate(0);
 
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);
@@ -1150,6 +1148,22 @@ fail:
     pcm_close(*haptic_pcm);
     *haptic_pcm = NULL;
     return false;
+}
+
+void Vibrator::setPwleRampDown() {
+    // The formula for calculating the ramp down coefficient to be written into
+    // pwle_ramp_down is as follows:
+    //    Crd = 1048.576 / Trd
+    // where Trd is the desired ramp down time in seconds
+    // pwle_ramp_down accepts only 24 bit integers values
+
+    const float seconds = RAMP_DOWN_TIME_MS / 1000;
+    const auto ramp_down_coefficient = static_cast<uint32_t>(RAMP_DOWN_CONSTANT / seconds);
+
+    if (!mHwApi->setPwleRampDown(ramp_down_coefficient)) {
+        ALOGE("Failed to write \"%d\" to pwle_ramp_down (%d): %s", ramp_down_coefficient, errno,
+              strerror(errno));
+    }
 }
 
 }  // namespace vibrator
