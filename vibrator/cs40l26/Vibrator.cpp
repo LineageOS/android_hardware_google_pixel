@@ -60,6 +60,7 @@ static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 
 /* nsections is 8 bits. Need to preserve 1 section for the first delay before the first effect. */
 static constexpr int32_t COMPOSE_SIZE_MAX = 254;
+static constexpr int32_t COMPOSE_PWLE_SIZE_MAX_DEFAULT = 127;
 
 // Measured resonant frequency, f0_measured, is represented by Q10.14 fixed
 // point format on cs40l26 devices. The expression to calculate f0 is:
@@ -80,6 +81,8 @@ static constexpr float PWLE_LEVEL_MAX = 1.0;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
 static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
+static constexpr float PWLE_BW_MAP_SIZE =
+        1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 
 static struct pcm_config haptic_nohost_config = {
         .channels = 1,
@@ -679,39 +682,56 @@ ndk::ScopedAStatus Vibrator::getQFactor(float *qFactor) {
 }
 
 ndk::ScopedAStatus Vibrator::getFrequencyResolution(float *freqResolutionHz) {
-    *freqResolutionHz = PWLE_FREQUENCY_RESOLUTION_HZ;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        *freqResolutionHz = PWLE_FREQUENCY_RESOLUTION_HZ;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
-    *freqMinimumHz = PWLE_FREQUENCY_MIN_HZ;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        *freqMinimumHz = PWLE_FREQUENCY_MIN_HZ;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_return) {
     // TODO(b/170919640): complete implementation
-    int mapSize =
-            1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
-    std::vector<float> bandwidthAmplitudeMap(mapSize, 1.0);
-    *_aidl_return = bandwidthAmplitudeMap;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
+        std::vector<float> bandwidthAmplitudeMap(PWLE_BW_MAP_SIZE, 1.0);
+        *_aidl_return = bandwidthAmplitudeMap;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getPwlePrimitiveDurationMax(int32_t *durationMs) {
-    *durationMs = COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS;
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
+        *durationMs = COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS;
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getPwleCompositionSizeMax(int32_t *maxSize) {
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
-        uint32_t segments;
-        if (!mHwApi->getAvailablePwleSegments(&segments)) {
-            ALOGE("Failed to get availablePwleSegments (%d): %s", errno, strerror(errno));
-            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-        }
-        *maxSize = segments;
+        *maxSize = COMPOSE_PWLE_SIZE_MAX_DEFAULT;
         return ndk::ScopedAStatus::ok();
     } else {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
@@ -719,11 +739,17 @@ ndk::ScopedAStatus Vibrator::getPwleCompositionSizeMax(int32_t *maxSize) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported) {
-    *supported = {
-            Braking::NONE,
-            Braking::CLAB,
-    };
-    return ndk::ScopedAStatus::ok();
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
+        *supported = {
+                Braking::NONE,
+                Braking::CLAB,
+        };
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::setPwle(const std::string &pwleQueue) {
