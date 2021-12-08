@@ -31,7 +31,7 @@ namespace pixel {
 
 bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies,
                       const std::vector<CpuLoad> &cpuLoads,
-                      std::chrono::nanoseconds averageFrameTime, uint16_t numRenderedFrames,
+                      WorkDurationFeatures workDurationFeatures,
                       ThrottleDecision previousThrottleDecision) {
     ATRACE_CALL();
     if (cpuPolicyAverageFrequencies.size() != cpuPolicyAverageFrequencyHz.size()) {
@@ -64,8 +64,7 @@ bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAve
         cpuCoreIdleTimesPercentage[cpuLoad.cpuId] = cpuLoad.idleTimeFraction;
     }
 
-    this->averageFrameTime = averageFrameTime;
-    this->numRenderedFrames = numRenderedFrames;
+    this->workDurationFeatures = workDurationFeatures;
     this->previousThrottleDecision = previousThrottleDecision;
     return true;
 }
@@ -83,8 +82,12 @@ void ModelInput::LogToAtrace() const {
         ATRACE_INT((std::string("ModelInput_idle_") + std::to_string(i)).c_str(),
                    static_cast<int>(cpuCoreIdleTimesPercentage[i] * 100));
     }
-    ATRACE_INT("ModelInput_frameTimeNs", averageFrameTime.count());
-    ATRACE_INT("ModelInput_numFrames", numRenderedFrames);
+    ATRACE_INT("ModelInput_workDurations_averageDurationNs",
+               workDurationFeatures.averageDuration.count());
+    ATRACE_INT("ModelInput_workDurations_maxDurationNs", workDurationFeatures.maxDuration.count());
+    ATRACE_INT("ModelInput_workDurations_numMissedDeadlines",
+               workDurationFeatures.numMissedDeadlines);
+    ATRACE_INT("ModelInput_workDurations_numDurations", workDurationFeatures.numDurations);
     ATRACE_INT("ModelInput_prevThrottle", (int)previousThrottleDecision);
 }
 

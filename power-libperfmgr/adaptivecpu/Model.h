@@ -26,6 +26,7 @@
 
 #include "CpuFrequencyReader.h"
 #include "CpuLoadReader.h"
+#include "WorkDurationProcessor.h"
 
 namespace aidl {
 namespace google {
@@ -48,22 +49,20 @@ enum class ThrottleDecision {
 struct ModelInput {
     std::array<double, kNumCpuPolicies> cpuPolicyAverageFrequencyHz;
     std::array<double, kNumCpuCores> cpuCoreIdleTimesPercentage;
-    std::chrono::nanoseconds averageFrameTime;
-    uint16_t numRenderedFrames;
+    WorkDurationFeatures workDurationFeatures;
     ThrottleDecision previousThrottleDecision;
 
     // Initialize `result`. cpuPolicyAverageFrequencies must be sorted by policyId.
     bool Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies,
-              const std::vector<CpuLoad> &cpuLoads, std::chrono::nanoseconds averageFrameTime,
-              uint16_t numRenderedFrames, ThrottleDecision previousThrottleDecision);
+              const std::vector<CpuLoad> &cpuLoads, WorkDurationFeatures workDurationFeatures,
+              ThrottleDecision previousThrottleDecision);
 
     void LogToAtrace() const;
 
     bool operator==(const ModelInput &other) const {
         return cpuPolicyAverageFrequencyHz == other.cpuPolicyAverageFrequencyHz &&
                cpuCoreIdleTimesPercentage == other.cpuCoreIdleTimesPercentage &&
-               averageFrameTime == other.averageFrameTime &&
-               numRenderedFrames == other.numRenderedFrames &&
+               workDurationFeatures == other.workDurationFeatures &&
                previousThrottleDecision == other.previousThrottleDecision;
     }
 };
