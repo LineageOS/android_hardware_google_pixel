@@ -70,7 +70,7 @@ if (cpu_set_4_2 > 1.0) {
 if (cpu_set_4_2 < 0.0) {
     cpu_set_4_2 = 0.0;
 }
-double average_frame_time_2 = (modelInputs[2].averageFrameTime.count() / 1e9 - 0.0) / (0.02 - 0.0);
+double average_frame_time_2 = (modelInputs[2].workDurationFeatures.averageDuration.count() / 1e9 - 0.0) / (0.02 - 0.0);
 if (average_frame_time_2 > 1.0) {
     average_frame_time_2 = 1.0;
 }
