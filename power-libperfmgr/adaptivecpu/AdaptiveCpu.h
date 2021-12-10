@@ -95,8 +95,9 @@ class AdaptiveCpu {
     // A condition variable that will be notified when new work durations arrive.
     std::condition_variable mWorkDurationsAvailableCondition;
 
-    volatile bool mIsEnabled;
-    bool mIsInitialized;
+    volatile bool mIsEnabled = false;
+    bool mIsInitialized = false;
+    volatile bool mShouldReloadConfig = false;
 };
 
 }  // namespace pixel

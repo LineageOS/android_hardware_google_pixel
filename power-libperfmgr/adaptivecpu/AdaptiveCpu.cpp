@@ -21,6 +21,7 @@
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <sys/resource.h>
 #include <utils/Trace.h>
 
@@ -39,12 +40,6 @@ namespace pixel {
 
 using std::chrono_literals::operator""ms;
 
-// The sleep duration for each iteration. Currently set to a large value as a safeguard measure, so
-// we don't spin needlessly and waste energy. To experiment with the model, set to a smaller value,
-// e.g. around 25ms.
-// TODO(b/188770301) Once the gating logic is implemented, reduce the sleep duration.
-static const std::chrono::milliseconds kIterationSleepDuration = 1000ms;
-
 // Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
 // hints are cancelled.
 static const std::chrono::milliseconds kHintTimeout = 2000ms;
@@ -52,8 +47,15 @@ static const std::chrono::milliseconds kHintTimeout = 2000ms;
 // We pass the previous N ModelInputs to the model, including the most recent ModelInput.
 constexpr uint32_t kNumHistoricalModelInputs = 3;
 
-AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
-    : mHintManager(hintManager), mIsEnabled(false), mIsInitialized(false) {}
+// The sleep duration for each iteration.
+// N.B.: The model will typically be trained with this value set to 25ms. We set it to 1s as a
+// safety measure, but best performance will be seen at 25ms.
+constexpr std::string_view kIterationSleepDurationProperty(
+        "debug.adaptivecpu.iteration_sleep_duration_ms");
+static const std::chrono::milliseconds kIterationSleepDurationDefault = 1000ms;
+static const std::chrono::milliseconds kIterationSleepDurationMin = 20ms;
+
+AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager) : mHintManager(hintManager) {}
 
 bool AdaptiveCpu::IsEnabled() const {
     return mIsEnabled;
@@ -74,6 +76,7 @@ void AdaptiveCpu::StartThread() {
     std::lock_guard lock(mThreadCreationMutex);
     LOG(INFO) << "Starting AdaptiveCpu thread";
     mIsEnabled = true;
+    mShouldReloadConfig = true;
     if (!mLoopThread.joinable()) {
         mLoopThread = std::thread([&]() {
             pthread_setname_np(pthread_self(), "AdaptiveCpu");
@@ -118,11 +121,24 @@ void AdaptiveCpu::WaitForEnabledAndWorkDurations() {
 void AdaptiveCpu::RunMainLoop() {
     ATRACE_CALL();
 
+    std::chrono::milliseconds iterationSleepDuration = kIterationSleepDurationDefault;
+
     std::deque<ModelInput> historicalModelInputs;
     ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
     while (true) {
         ATRACE_NAME("loop");
         WaitForEnabledAndWorkDurations();
+
+        if (mShouldReloadConfig) {
+            iterationSleepDuration =
+                    std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
+                            kIterationSleepDurationProperty.data(),
+                            kIterationSleepDurationDefault.count()));
+            iterationSleepDuration = std::max(iterationSleepDuration, kIterationSleepDurationMin);
+            LOG(VERBOSE) << "Read property iterationSleepDuration="
+                         << iterationSleepDuration.count() << "ms";
+            mShouldReloadConfig = false;
+        }
 
         ATRACE_BEGIN("compute");
 
@@ -193,7 +209,7 @@ void AdaptiveCpu::RunMainLoop() {
         ATRACE_END();  // compute
         {
             ATRACE_NAME("sleep");
-            std::this_thread::sleep_for(kIterationSleepDuration);
+            std::this_thread::sleep_for(iterationSleepDuration);
         }
     }
 }
