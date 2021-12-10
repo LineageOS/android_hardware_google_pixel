@@ -80,7 +80,7 @@ class CpuFrequencyReader {
     bool readCpuPolicyFrequencies(
             std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> *result);
 
-    std::vector<uint32_t> readCpuPolicyIds() const;
+    bool readCpuPolicyIds(std::vector<uint32_t> *result) const;
 };
 
 }  // namespace pixel

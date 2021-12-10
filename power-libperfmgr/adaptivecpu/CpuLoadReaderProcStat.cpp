@@ -36,8 +36,8 @@ namespace impl {
 namespace pixel {
 
 bool CpuLoadReaderProcStat::Init() {
-    mPreviousCpuTimes = ReadCpuTimes();
-    return true;
+    mPreviousCpuTimes.clear();
+    return ReadCpuTimes(&mPreviousCpuTimes);
 }
 
 bool CpuLoadReaderProcStat::GetRecentCpuLoads(
@@ -47,7 +47,10 @@ bool CpuLoadReaderProcStat::GetRecentCpuLoads(
         LOG(ERROR) << "Got nullptr output in getRecentCpuLoads";
         return false;
     }
-    std::map<uint32_t, CpuTime> cpuTimes = ReadCpuTimes();
+    std::map<uint32_t, CpuTime> cpuTimes;
+    if (!ReadCpuTimes(&cpuTimes)) {
+        return false;
+    }
     if (cpuTimes.empty()) {
         LOG(ERROR) << "Failed to find any CPU times";
         return false;
@@ -75,11 +78,13 @@ bool CpuLoadReaderProcStat::GetRecentCpuLoads(
     return true;
 }
 
-std::map<uint32_t, CpuTime> CpuLoadReaderProcStat::ReadCpuTimes() {
+bool CpuLoadReaderProcStat::ReadCpuTimes(std::map<uint32_t, CpuTime> *result) {
     ATRACE_CALL();
-    std::map<uint32_t, CpuTime> cpuTimes;
 
-    std::unique_ptr<std::istream> file = mFilesystem->readFileStream("/proc/stat");
+    std::unique_ptr<std::istream> file;
+    if (!mFilesystem->readFileStream("/proc/stat", &file)) {
+        return false;
+    }
     std::string line;
     ATRACE_BEGIN("loop");
     while (std::getline(*file, line)) {
@@ -100,11 +105,11 @@ std::map<uint32_t, CpuTime> CpuLoadReaderProcStat::ReadCpuTimes() {
         uint64_t idleTimeJiffies = idle + ioWait;
         uint64_t totalTimeJiffies =
                 user + nice + system + irq + softIrq + steal + guest + guestNice + idleTimeJiffies;
-        cpuTimes[cpuId] = {.idleTimeMs = JiffiesToMs(idleTimeJiffies),
-                           .totalTimeMs = JiffiesToMs(totalTimeJiffies)};
+        (*result)[cpuId] = {.idleTimeMs = JiffiesToMs(idleTimeJiffies),
+                            .totalTimeMs = JiffiesToMs(totalTimeJiffies)};
     }
     ATRACE_END();
-    return cpuTimes;
+    return true;
 }
 
 void CpuLoadReaderProcStat::DumpToStream(std::stringstream &stream) const {

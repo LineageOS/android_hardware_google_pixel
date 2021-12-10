@@ -32,8 +32,9 @@ namespace pixel {
 class IFilesystem {
   public:
     virtual ~IFilesystem() {}
-    virtual std::vector<std::string> listDirectory(const std::string &path) const = 0;
-    virtual std::unique_ptr<std::istream> readFileStream(const std::string &path) const = 0;
+    virtual bool listDirectory(const std::string &path, std::vector<std::string> *result) const = 0;
+    virtual bool readFileStream(const std::string &path,
+                                std::unique_ptr<std::istream> *result) const = 0;
 };
 
 }  // namespace pixel

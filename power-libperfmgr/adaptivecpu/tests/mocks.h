@@ -29,9 +29,10 @@ namespace pixel {
 class MockFilesystem : public IFilesystem {
   public:
     ~MockFilesystem() override {}
-    MOCK_METHOD(std::vector<std::string>, listDirectory, (const std::string &path),
+    MOCK_METHOD(bool, listDirectory, (const std::string &path, std::vector<std::string> *result),
                 (const, override));
-    MOCK_METHOD(std::unique_ptr<std::istream>, readFileStream, (const std::string &path),
+    MOCK_METHOD(bool, readFileStream,
+                (const std::string &path, std::unique_ptr<std::istream> *result),
                 (const, override));
 };
 

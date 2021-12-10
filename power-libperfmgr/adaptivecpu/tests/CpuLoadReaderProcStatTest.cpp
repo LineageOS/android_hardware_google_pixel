@@ -34,21 +34,23 @@ namespace pixel {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
+    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
             .Times(2)
-            .WillOnce([]() {
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
                 ss << "bad line\n";
                 ss << "cpu1 100 0 0 50 0 0 0 0 0 0\n";
                 ss << "cpu2 200 0 0 50 0 0 0 0 0 0\n";
-                return std::make_unique<std::istringstream>(ss.str());
+                *result = std::make_unique<std::istringstream>(ss.str());
+                return true;
             })
-            .WillOnce([]() {
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
                 ss << "bad line\n";
                 ss << "cpu1 200 0 0 150 0 0 0 0 0 0\n";
                 ss << "cpu2 500 0 0 150 0 0 0 0 0 0\n";
-                return std::make_unique<std::istringstream>(ss.str());
+                *result = std::make_unique<std::istringstream>(ss.str());
+                return true;
             });
 
     CpuLoadReaderProcStat reader(std::move(filesystem));
@@ -62,21 +64,23 @@ TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads) {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithMissingValues) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
+    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
             .Times(2)
-            .WillOnce([]() {
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
                 ss << "bad line\n";
                 ss << "cpu1 100 0 0 50 0 0 0\n";
                 ss << "cpu2 200 0 0 50 0 0 0\n";
-                return std::make_unique<std::istringstream>(ss.str());
+                *result = std::make_unique<std::istringstream>(ss.str());
+                return true;
             })
-            .WillOnce([]() {
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
                 ss << "bad line\n";
                 ss << "cpu1 200 0 0 150 0 0 0\n";
                 ss << "cpu2 500 0 0 150 0 0 0\n";
-                return std::make_unique<std::istringstream>(ss.str());
+                *result = std::make_unique<std::istringstream>(ss.str());
+                return true;
             });
 
     CpuLoadReaderProcStat reader(std::move(filesystem));
@@ -87,10 +91,12 @@ TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithMissingValues) {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithEmptyFile) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
+    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
             .Times(2)
-            .WillOnce([]() { return std::make_unique<std::istringstream>(""); })
-            .WillOnce([]() { return std::make_unique<std::istringstream>(""); });
+            .WillRepeatedly([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("");
+                return true;
+            });
 
     CpuLoadReaderProcStat reader(std::move(filesystem));
     reader.Init();
@@ -100,21 +106,23 @@ TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithEmptyFile) {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithDifferentCpus) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat"))
+    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
             .Times(2)
-            .WillOnce([]() {
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
                 ss << "bad line\n";
                 ss << "cpu1 100 0 0 50 0 0 0 0 0 0\n";
                 ss << "cpu2 200 0 0 50 0 0 0 0 0 0\n";
-                return std::make_unique<std::istringstream>(ss.str());
+                *result = std::make_unique<std::istringstream>(ss.str());
+                return true;
             })
-            .WillOnce([]() {
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
                 ss << "bad line\n";
                 ss << "cpu1 200 0 0 150 0 0 0 0 0 0\n";
                 ss << "cpu3 500 0 0 150 0 0 0 0 0 0\n";
-                return std::make_unique<std::istringstream>(ss.str());
+                *result = std::make_unique<std::istringstream>(ss.str());
+                return true;
             });
 
     CpuLoadReaderProcStat reader(std::move(filesystem));

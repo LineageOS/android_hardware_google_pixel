@@ -58,7 +58,7 @@ class CpuLoadReaderSysDevices : public ICpuLoadReader {
     std::array<CpuTime, NUM_CPU_CORES> mPreviousCpuTimes;
     std::vector<std::string> mIdleStateNames;
 
-    std::array<CpuTime, NUM_CPU_CORES> ReadCpuTimes() const;
+    bool ReadCpuTimes(std::array<CpuTime, NUM_CPU_CORES> *result) const;
     bool ReadIdleStateNames(std::vector<std::string> *result) const;
 };
 

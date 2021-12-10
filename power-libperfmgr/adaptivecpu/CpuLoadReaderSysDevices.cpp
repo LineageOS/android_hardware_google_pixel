@@ -45,8 +45,7 @@ bool CpuLoadReaderSysDevices::Init() {
     if (!ReadIdleStateNames(&mIdleStateNames)) {
         return false;
     }
-    mPreviousCpuTimes = ReadCpuTimes();
-    return true;
+    return ReadCpuTimes(&mPreviousCpuTimes);
 }
 
 bool CpuLoadReaderSysDevices::GetRecentCpuLoads(
@@ -56,7 +55,10 @@ bool CpuLoadReaderSysDevices::GetRecentCpuLoads(
         LOG(ERROR) << "Got nullptr output in getRecentCpuLoads";
         return false;
     }
-    std::array<CpuTime, NUM_CPU_CORES> cpuTimes = ReadCpuTimes();
+    std::array<CpuTime, NUM_CPU_CORES> cpuTimes;
+    if (!ReadCpuTimes(&cpuTimes)) {
+        return false;
+    }
     if (cpuTimes.empty()) {
         LOG(ERROR) << "Failed to find any CPU times";
         return false;
@@ -87,9 +89,8 @@ void CpuLoadReaderSysDevices::DumpToStream(std::stringstream &stream) const {
     }
 }
 
-std::array<CpuTime, NUM_CPU_CORES> CpuLoadReaderSysDevices::ReadCpuTimes() const {
+bool CpuLoadReaderSysDevices::ReadCpuTimes(std::array<CpuTime, NUM_CPU_CORES> *result) const {
     ATRACE_CALL();
-    std::array<CpuTime, NUM_CPU_CORES> cpuTimes;
     const auto totalTime = mTimeSource->GetTime();
 
     for (size_t cpuId = 0; cpuId < NUM_CPU_CORES; cpuId++) {
@@ -98,30 +99,38 @@ std::array<CpuTime, NUM_CPU_CORES> CpuLoadReaderSysDevices::ReadCpuTimes() const
             std::stringstream cpuIdlePath;
             cpuIdlePath << "/sys/devices/system/cpu/"
                         << "cpu" << cpuId << "/cpuidle/" << idleStateName << "/time";
-            std::unique_ptr<std::istream> file = mFilesystem->readFileStream(cpuIdlePath.str());
+            std::unique_ptr<std::istream> file;
+            if (!mFilesystem->readFileStream(cpuIdlePath.str(), &file)) {
+                return false;
+            }
             // Times are reported in microseconds:
             // https://www.kernel.org/doc/Documentation/cpuidle/sysfs.txt
             std::string idleTimeUs(std::istreambuf_iterator<char>(*file), {});
             idleTime += std::chrono::microseconds(std::atoi(idleTimeUs.c_str()));
         }
-        cpuTimes[cpuId] = {
+        (*result)[cpuId] = {
                 .idleTime = idleTime,
                 .totalTime = std::chrono::duration_cast<std::chrono::microseconds>(totalTime),
         };
     }
 
-    return cpuTimes;
+    return true;
 }
 
 bool CpuLoadReaderSysDevices::ReadIdleStateNames(std::vector<std::string> *result) const {
-    const std::vector<std::string> idleStateNames =
-            mFilesystem->listDirectory("/sys/devices/system/cpu/cpu0/cpuidle");
+    std::vector<std::string> idleStateNames;
+    if (!mFilesystem->listDirectory("/sys/devices/system/cpu/cpu0/cpuidle", &idleStateNames)) {
+        return false;
+    }
     for (const auto &idleStateName : idleStateNames) {
         if (idleStateName.length() == 0 || idleStateName[0] == '.') {
             continue;
         }
-        const auto files = mFilesystem->listDirectory(
-                std::string("/sys/devices/system/cpu/cpu0/cpuidle/") + idleStateName);
+        std::vector<std::string> files;
+        if (!mFilesystem->listDirectory(
+                    std::string("/sys/devices/system/cpu/cpu0/cpuidle/") + idleStateName, &files)) {
+            return false;
+        }
         if (std::find(files.begin(), files.end(), "time") == files.end()) {
             continue;
         }

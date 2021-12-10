@@ -40,7 +40,10 @@ namespace pixel {
 
 bool CpuFrequencyReader::init() {
     ATRACE_CALL();
-    mCpuPolicyIds = readCpuPolicyIds();
+    mCpuPolicyIds.clear();
+    if (!readCpuPolicyIds(&mCpuPolicyIds)) {
+        return false;
+    }
     mPreviousCpuPolicyFrequencies.clear();
     return readCpuPolicyFrequencies(&mPreviousCpuPolicyFrequencies);
 }
@@ -91,8 +94,10 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
         std::stringstream timeInStatePath;
         timeInStatePath << "/sys/devices/system/cpu/cpufreq/policy" << cpuPolicyId
                         << "/stats/time_in_state";
-        std::unique_ptr<std::istream> timeInStateFile =
-                mFilesystem->readFileStream(timeInStatePath.str());
+        std::unique_ptr<std::istream> timeInStateFile;
+        if (!mFilesystem->readFileStream(timeInStatePath.str(), &timeInStateFile)) {
+            return false;
+        }
 
         std::map<uint64_t, std::chrono::milliseconds> cpuFrequencies;
         std::string timeInStateLine;
@@ -117,21 +122,23 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
     return true;
 }
 
-std::vector<uint32_t> CpuFrequencyReader::readCpuPolicyIds() const {
+bool CpuFrequencyReader::readCpuPolicyIds(std::vector<uint32_t> *result) const {
     ATRACE_CALL();
-    std::vector<uint32_t> cpuPolicyIds;
-    const std::vector<std::string> entries = mFilesystem->listDirectory(kCpuPolicyDirectory.data());
+    std::vector<std::string> entries;
+    if (!mFilesystem->listDirectory(kCpuPolicyDirectory.data(), &entries)) {
+        return false;
+    }
     for (const auto &entry : entries) {
         uint32_t cpuPolicyId;
         if (!sscanf(entry.c_str(), "policy%d", &cpuPolicyId)) {
             continue;
         }
-        cpuPolicyIds.push_back(cpuPolicyId);
+        result->push_back(cpuPolicyId);
     }
     // Sort the list, so that getRecentCpuPolicyFrequencies always returns frequencies sorted by
     // policy ID.
-    std::sort(cpuPolicyIds.begin(), cpuPolicyIds.end());
-    return cpuPolicyIds;
+    std::sort(result->begin(), result->end());
+    return true;
 }
 
 }  // namespace pixel

@@ -49,7 +49,7 @@ class CpuLoadReaderProcStat : public ICpuLoadReader {
     std::map<uint32_t, CpuTime> mPreviousCpuTimes;
     const std::unique_ptr<IFilesystem> mFilesystem;
 
-    std::map<uint32_t, CpuTime> ReadCpuTimes();
+    bool ReadCpuTimes(std::map<uint32_t, CpuTime> *result);
     // Converts jiffies to milliseconds. Jiffies is the granularity the kernel reports times in,
     // including the timings in CPU statistics.
     static uint64_t JiffiesToMs(uint64_t jiffies);

@@ -37,38 +37,74 @@ namespace pixel {
 TEST(CpuLoadReaderSysDevicesTest, GetRecentCpuLoads) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     std::unique_ptr<MockTimeSource> timeSource = std::make_unique<MockTimeSource>();
-    EXPECT_CALL(*filesystem, listDirectory(MatchesRegex("/sys/devices/system/cpu/cpu0/cpuidle")))
-            .WillOnce(Return(std::vector<std::string>{"foo", "bar", "baz"}));
+    EXPECT_CALL(*filesystem, listDirectory(MatchesRegex("/sys/devices/system/cpu/cpu0/cpuidle"), _))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"foo", "bar", "baz"};
+                return true;
+            });
     EXPECT_CALL(*filesystem,
-                listDirectory(MatchesRegex("/sys/devices/system/cpu/cpu0/cpuidle/(foo|bar)")))
+                listDirectory(MatchesRegex("/sys/devices/system/cpu/cpu0/cpuidle/(foo|bar)"), _))
             .Times(2)
-            .WillRepeatedly(Return(std::vector<std::string>{"abc", "time", "xyz"}));
+            .WillRepeatedly([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"abc", "time", "xyz"};
+                return true;
+            });
     EXPECT_CALL(*filesystem,
-                listDirectory(MatchesRegex("/sys/devices/system/cpu/cpu0/cpuidle/baz")))
-            .WillOnce(Return(std::vector<std::string>{"abc", "xyz"}));
+                listDirectory(MatchesRegex("/sys/devices/system/cpu/cpu0/cpuidle/baz"), _))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"abc", "xyz"};
+                return true;
+            });
 
-    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu0/cpuidle/foo/time"))
+    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu0/cpuidle/foo/time", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("100"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("200"))));
-    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu0/cpuidle/bar/time"))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("100");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("200");
+                return true;
+            });
+    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu0/cpuidle/bar/time", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("500"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("700"))));
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("500");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("700");
+                return true;
+            });
 
-    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu1/cpuidle/foo/time"))
+    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu1/cpuidle/foo/time", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1010"))));
-    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu1/cpuidle/bar/time"))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1010");
+                return true;
+            });
+    EXPECT_CALL(*filesystem, readFileStream("/sys/devices/system/cpu/cpu1/cpuidle/bar/time", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("50"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("70"))));
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("50");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("70");
+                return true;
+            });
 
-    EXPECT_CALL(
-            *filesystem,
-            readFileStream(MatchesRegex("/sys/devices/system/cpu/cpu[2-7]/cpuidle/(foo|bar)/time")))
-            .WillRepeatedly([]() { return std::make_unique<std::istringstream>("0"); });
+    EXPECT_CALL(*filesystem,
+                readFileStream(
+                        MatchesRegex("/sys/devices/system/cpu/cpu[2-7]/cpuidle/(foo|bar)/time"), _))
+            .WillRepeatedly([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("0");
+                return true;
+            });
 
     EXPECT_CALL(*timeSource, GetTime()).Times(2).WillOnce(Return(1ms)).WillOnce(Return(2ms));
 
