@@ -226,17 +226,26 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     uint32_t val = 0;
     char str[20] = {0x00};
     const char *inputEventName = std::getenv("INPUT_EVENT_NAME");
-    for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
-        fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
-        if (fd > 0) {
-            if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
-                ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 && strcmp(str, inputEventName) == 0) {
-                mInputFd.reset(fd);
-                ALOGI("Control %s through %s", inputEventName, inputEventPaths.gl_pathv[i]);
-                break;
+    for (uint8_t retry = 0; retry < 3; retry++) {
+        for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
+            fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
+            if (fd > 0) {
+                if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
+                    ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
+                    strcmp(str, inputEventName) == 0) {
+                    mInputFd.reset(fd);
+                    ALOGI("Control %s through %s", inputEventName, inputEventPaths.gl_pathv[i]);
+                    break;
+                }
+                close(fd);
             }
-            close(fd);
         }
+        if (mInputFd.ok()) {
+            break;
+        }
+
+        sleep(1);
+        ALOGW("Retry to search the input");
     }
     globfree(&inputEventPaths);
     if (!mInputFd.ok()) {
