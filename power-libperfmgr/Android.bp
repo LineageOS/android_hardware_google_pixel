@@ -46,7 +46,7 @@ cc_library {
         "adaptivecpu/WorkDurationProcessor.cpp",
     ],
     shared_libs: [
-        "android.hardware.power-V2-ndk",
+        "android.hardware.power-V3-ndk",
         "libbase",
         "liblog",
         "libperfmgr",
@@ -73,7 +73,7 @@ cc_test {
         "liblog",
         "libbase",
         "libcutils",
-        "android.hardware.power-V2-ndk",
+        "android.hardware.power-V3-ndk",
     ],
 }
 
@@ -92,7 +92,7 @@ cc_binary {
     vintf_fragments: ["aidl/android.hardware.power-service.pixel.xml"],
     vendor: true,
     shared_libs: [
-        "android.hardware.power-V2-ndk",
+        "android.hardware.power-V3-ndk",
         "libadaptivecpu",
         "libbase",
         "libcutils",
