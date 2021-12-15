@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-#include <gmock/gmock.h>
-
-#include "adaptivecpu/IFilesystem.h"
-#include "adaptivecpu/ITimeSource.h"
+#include "TimeSource.h"
 
 namespace aidl {
 namespace google {
@@ -26,21 +23,10 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-class MockFilesystem : public IFilesystem {
-  public:
-    ~MockFilesystem() override {}
-    MOCK_METHOD(bool, listDirectory, (const std::string &path, std::vector<std::string> *result),
-                (const, override));
-    MOCK_METHOD(bool, readFileStream,
-                (const std::string &path, std::unique_ptr<std::istream> *result),
-                (const, override));
-};
-
-class MockTimeSource : public ITimeSource {
-  public:
-    ~MockTimeSource() override {}
-    MOCK_METHOD(std::chrono::nanoseconds, GetTime, (), (const, override));
-};
+std::chrono::nanoseconds TimeSource::GetTime() const {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch());
+}
 
 }  // namespace pixel
 }  // namespace impl

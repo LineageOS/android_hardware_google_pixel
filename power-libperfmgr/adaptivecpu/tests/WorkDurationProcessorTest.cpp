@@ -32,11 +32,11 @@ static const std::chrono::nanoseconds kNormalTargetDuration = 16666666ns;
 
 TEST(WorkDurationProcessorTest, GetFeatures) {
     WorkDurationProcessor processor;
-    processor.ReportWorkDurations(
+    ASSERT_TRUE(processor.ReportWorkDurations(
             std::vector<WorkDuration>{
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count()},
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count() * 3}},
-            kNormalTargetDuration);
+            kNormalTargetDuration));
 
     const WorkDurationFeatures expected = {.averageDuration = kNormalTargetDuration * 2,
                                            .maxDuration = kNormalTargetDuration * 3,
@@ -48,16 +48,16 @@ TEST(WorkDurationProcessorTest, GetFeatures) {
 
 TEST(WorkDurationProcessorTest, GetFeatures_multipleBatches) {
     WorkDurationProcessor processor;
-    processor.ReportWorkDurations(
+    ASSERT_TRUE(processor.ReportWorkDurations(
             std::vector<WorkDuration>{
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count()},
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count() * 3}},
-            kNormalTargetDuration);
-    processor.ReportWorkDurations(
+            kNormalTargetDuration));
+    ASSERT_TRUE(processor.ReportWorkDurations(
             std::vector<WorkDuration>{
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count() * 6},
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count() * 2}},
-            kNormalTargetDuration);
+            kNormalTargetDuration));
 
     const WorkDurationFeatures expected = {.averageDuration = kNormalTargetDuration * 3,
                                            .maxDuration = kNormalTargetDuration * 6,
@@ -69,11 +69,11 @@ TEST(WorkDurationProcessorTest, GetFeatures_multipleBatches) {
 
 TEST(WorkDurationProcessorTest, GetFeatures_scalesDifferentTargetDurations) {
     WorkDurationProcessor processor;
-    processor.ReportWorkDurations(
+    ASSERT_TRUE(processor.ReportWorkDurations(
             std::vector<WorkDuration>{
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count() * 2},
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count() * 6}},
-            kNormalTargetDuration * 2);
+            kNormalTargetDuration * 2));
 
     const WorkDurationFeatures expected = {.averageDuration = kNormalTargetDuration * 2,
                                            .maxDuration = kNormalTargetDuration * 3,
@@ -94,13 +94,28 @@ TEST(WorkDurationProcessorTest, GetFeatures_noFrames) {
 TEST(WorkDurationProcessorTest, HasWorkDurations) {
     WorkDurationProcessor processor;
     ASSERT_FALSE(processor.HasWorkDurations());
-    processor.ReportWorkDurations(
+    ASSERT_TRUE(processor.ReportWorkDurations(
             std::vector<WorkDuration>{
                     {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count()}},
-            kNormalTargetDuration * 2);
+            kNormalTargetDuration * 2));
     ASSERT_TRUE(processor.HasWorkDurations());
     processor.GetFeatures();
     ASSERT_FALSE(processor.HasWorkDurations());
+}
+
+TEST(WorkDurationProcessorTest, GetFeatures_tooManyUnprocessedThenClears) {
+    WorkDurationProcessor processor;
+    for (int i = 0; i < 1000; i++) {
+        ASSERT_TRUE(processor.ReportWorkDurations(
+                std::vector<WorkDuration>{
+                        {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count()}},
+                kNormalTargetDuration));
+    }
+    ASSERT_FALSE(processor.ReportWorkDurations(
+            std::vector<WorkDuration>{
+                    {.timeStampNanos = 0, .durationNanos = kNormalTargetDuration.count()}},
+            kNormalTargetDuration));
+    ASSERT_EQ(processor.GetFeatures().numDurations, 0);
 }
 
 }  // namespace pixel

@@ -33,64 +33,28 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-TEST(ModelTest, ModelInput_Create) {
+TEST(ModelTest, ModelInput_SetCpuFreqiencies) {
     const ModelInput expected{
             .cpuPolicyAverageFrequencyHz = {100, 101, 102},
-            .cpuCoreIdleTimesPercentage = {0.0, 0.1, 0.0, 0.3, 0.0, 0.0, 0.0, 0.7},
-            .workDurationFeatures = {.averageDuration = 1ns,
-                                     .maxDuration = 2ns,
-                                     .numMissedDeadlines = 3,
-                                     .numDurations = 4},
-            .previousThrottleDecision = ThrottleDecision::THROTTLE_70,
     };
     ModelInput actual;
-    ASSERT_TRUE(actual.Init(
-            {
-                    {.policyId = 0, .averageFrequencyHz = 100},
-                    {.policyId = 4, .averageFrequencyHz = 101},
-                    {.policyId = 6, .averageFrequencyHz = 102},
-            },
-            {
-                    {.cpuId = 3, .idleTimeFraction = 0.3},
-                    {.cpuId = 0, .idleTimeFraction = 0.0},
-                    {.cpuId = 1, .idleTimeFraction = 0.1},
-                    {.cpuId = 7, .idleTimeFraction = 0.7},
-                    {.cpuId = 2, .idleTimeFraction = 0.0},
-                    {.cpuId = 4, .idleTimeFraction = 0.0},
-                    {.cpuId = 6, .idleTimeFraction = 0.0},
-                    {.cpuId = 5, .idleTimeFraction = 0.0},
-            },
-            {
-                    .averageDuration = 1ns,
-                    .maxDuration = 2ns,
-                    .numMissedDeadlines = 3,
-                    .numDurations = 4,
-            },
-            ThrottleDecision::THROTTLE_70));
+    ASSERT_TRUE(actual.SetCpuFreqiencies({
+            {.policyId = 0, .averageFrequencyHz = 100},
+            {.policyId = 4, .averageFrequencyHz = 101},
+            {.policyId = 6, .averageFrequencyHz = 102},
+    }));
     ASSERT_EQ(actual, expected);
 }
 
-TEST(ModelTest, ModelInput_Create_failsWithOutOfOrderFrquencies) {
-    ASSERT_FALSE(ModelInput().Init(
-            {
-                    {.policyId = 0, .averageFrequencyHz = 100},
-                    {.policyId = 6, .averageFrequencyHz = 102},
-                    {.policyId = 4, .averageFrequencyHz = 101},
-            },
-            {
-                    {.cpuId = 3, .idleTimeFraction = 0.3},
-                    {.cpuId = 0, .idleTimeFraction = 0.0},
-                    {.cpuId = 1, .idleTimeFraction = 0.1},
-                    {.cpuId = 7, .idleTimeFraction = 0.7},
-                    {.cpuId = 2, .idleTimeFraction = 0.0},
-                    {.cpuId = 4, .idleTimeFraction = 0.0},
-                    {.cpuId = 6, .idleTimeFraction = 0.0},
-                    {.cpuId = 5, .idleTimeFraction = 0.0},
-            },
-            {}, ThrottleDecision::THROTTLE_70));
+TEST(ModelTest, ModelInput_SetCpuFreqiencies_failsWithOutOfOrderFrquencies) {
+    ASSERT_FALSE(ModelInput().SetCpuFreqiencies({
+            {.policyId = 0, .averageFrequencyHz = 100},
+            {.policyId = 6, .averageFrequencyHz = 102},
+            {.policyId = 4, .averageFrequencyHz = 101},
+    }));
 }
 
-TEST(ModelTest, RunModel_randomInputs) {
+TEST(ModelTest, Run_randomInputs) {
     std::default_random_engine generator;
     std::uniform_real_distribution<double> frequencyDistribution(0, 1e6);
     std::uniform_real_distribution<double> idleTimesDistribution(0, 1);
@@ -122,7 +86,7 @@ TEST(ModelTest, RunModel_randomInputs) {
     for (int i = 0; i < 10; i++) {
         std::deque<ModelInput> modelInputs{randomModelInput(), randomModelInput(),
                                            randomModelInput()};
-        RunModel(modelInputs);
+        Model().Run(modelInputs);
     }
 }
 
