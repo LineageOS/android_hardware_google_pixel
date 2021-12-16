@@ -52,7 +52,7 @@ struct WorkDurationFeatures {
 
 class WorkDurationProcessor {
   public:
-    void ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
+    bool ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                              std::chrono::nanoseconds targetDuration);
 
     WorkDurationFeatures GetFeatures();

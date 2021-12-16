@@ -38,12 +38,17 @@ std::ostream &operator<<(std::ostream &stream, const CpuPolicyAverageFrequency &
 
 TEST(CpuFrequencyReaderTest, cpuPolicyIds) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
-            .WillOnce(Return(std::vector<std::string>(
-                    {"ignored1", "policy1", "ignored2", "policy5", "policy10", "policybad"})));
-    EXPECT_CALL(*filesystem, readFileStream(_)).WillRepeatedly([]() {
-        return std::make_unique<std::istringstream>("1 2\n3 4\n");
-    });
+    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"ignored1", "policy1",  "ignored2",
+                                                   "policy5",  "policy10", "policybad"};
+                return true;
+            });
+    EXPECT_CALL(*filesystem, readFileStream(_, _))
+            .WillRepeatedly([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1 2\n3 4\n");
+                return true;
+            });
 
     CpuFrequencyReader reader(std::move(filesystem));
     EXPECT_TRUE(reader.init());
@@ -55,18 +60,33 @@ TEST(CpuFrequencyReaderTest, cpuPolicyIds) {
 
 TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
-            .WillOnce(Return(std::vector<std::string>({"policy1", "policy2"})));
+    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"policy1", "policy2"};
+                return true;
+            });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 5\n2000 4"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 7\n2000 10"))));
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000 5\n2000 4");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000 7\n2000 10");
+                return true;
+            });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy2/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy2/stats/time_in_state", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1500 1\n2500 23"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1500 5\n2500 23"))));
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1500 1\n2500 23");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1500 5\n2500 23");
+                return true;
+            });
 
     CpuFrequencyReader reader(std::move(filesystem));
     EXPECT_TRUE(reader.init());
@@ -81,13 +101,22 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
 
 TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_frequenciesChange) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
-            .WillOnce(Return(std::vector<std::string>({"policy1"})));
+    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"policy1"};
+                return true;
+            });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 5\n2000 4"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 6\n2001 4"))));
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000 5\n2000 4");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000 6\n2001 4");
+                return true;
+            });
 
     CpuFrequencyReader reader(std::move(filesystem));
     EXPECT_TRUE(reader.init());
@@ -98,13 +127,22 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_frequenciesChange) {
 
 TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_badFormat) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq"))
-            .WillOnce(Return(std::vector<std::string>({"policy1"})));
+    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::vector<std::string>{"policy1"};
+                return true;
+            });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state"))
+                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
             .Times(2)
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 1"))))
-            .WillOnce(Return(ByMove(std::make_unique<std::istringstream>("1000 2\nfoo"))));
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000 1");
+                return true;
+            })
+            .WillOnce([](auto _path __attribute__((unused)), auto result) {
+                *result = std::make_unique<std::istringstream>("1000 2\nfoo");
+                return true;
+            });
 
     CpuFrequencyReader reader(std::move(filesystem));
     EXPECT_TRUE(reader.init());

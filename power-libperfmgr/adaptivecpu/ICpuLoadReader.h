@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * Copyright (C) 2021 The Android Open Source Project
  *
@@ -14,10 +16,8 @@
  * limitations under the License.
  */
 
-#include <gmock/gmock.h>
-
-#include "adaptivecpu/IFilesystem.h"
-#include "adaptivecpu/ITimeSource.h"
+#include <array>
+#include <sstream>
 
 namespace aidl {
 namespace google {
@@ -26,20 +26,19 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-class MockFilesystem : public IFilesystem {
-  public:
-    ~MockFilesystem() override {}
-    MOCK_METHOD(bool, listDirectory, (const std::string &path, std::vector<std::string> *result),
-                (const, override));
-    MOCK_METHOD(bool, readFileStream,
-                (const std::string &path, std::unique_ptr<std::istream> *result),
-                (const, override));
-};
+constexpr uint32_t NUM_CPU_CORES = 8;
 
-class MockTimeSource : public ITimeSource {
+class ICpuLoadReader {
   public:
-    ~MockTimeSource() override {}
-    MOCK_METHOD(std::chrono::nanoseconds, GetTime, (), (const, override));
+    // Initialize reading, must be done before calling other methods.
+    // Work is not done in constructor as it accesses files.
+    virtual bool Init() = 0;
+    // Get the load of each CPU, since the last time this method was called.
+    virtual bool GetRecentCpuLoads(
+            std::array<double, NUM_CPU_CORES> *cpuCoreIdleTimesPercentage) = 0;
+    // Dump internal state to a string stream. Used for dumpsys.
+    virtual void DumpToStream(std::stringstream &stream) const = 0;
+    virtual ~ICpuLoadReader() {}
 };
 
 }  // namespace pixel

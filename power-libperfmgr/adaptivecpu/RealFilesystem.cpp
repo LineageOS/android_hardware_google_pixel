@@ -33,24 +33,31 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-std::vector<std::string> RealFilesystem::listDirectory(const std::string &path) const {
+bool RealFilesystem::listDirectory(const std::string &path,
+                                   std::vector<std::string> *result) const {
     ATRACE_CALL();
     // We can't use std::filesystem, see aosp/894015 & b/175635923.
     auto dir = std::unique_ptr<DIR, decltype(&closedir)>{opendir(path.c_str()), closedir};
     if (!dir) {
         LOG(ERROR) << "Failed to open directory " << path;
+        return false;
     }
-    std::vector<std::string> entries;
     dirent *entry;
     while ((entry = readdir(&*dir)) != nullptr) {
-        entries.emplace_back(entry->d_name);
+        result->emplace_back(entry->d_name);
     }
-    return entries;
+    return true;
 }
 
-std::unique_ptr<std::istream> RealFilesystem::readFileStream(const std::string &path) const {
+bool RealFilesystem::readFileStream(const std::string &path,
+                                    std::unique_ptr<std::istream> *result) const {
     ATRACE_CALL();
-    return std::make_unique<std::ifstream>(path);
+    *result = std::make_unique<std::ifstream>(path);
+    if ((*result)->fail()) {
+        LOG(ERROR) << "Failed to read file stream: " << path;
+        return false;
+    }
+    return true;
 }
 
 }  // namespace pixel
