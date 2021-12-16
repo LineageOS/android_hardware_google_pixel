@@ -18,6 +18,7 @@
 
 #include <map>
 
+#include "ICpuLoadReader.h"
 #include "IFilesystem.h"
 #include "RealFilesystem.h"
 
@@ -28,44 +29,30 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-struct CpuLoad {
-    uint32_t cpuId;
-    double idleTimeFraction;
-
-    bool operator==(const CpuLoad &other) const {
-        return cpuId == other.cpuId && idleTimeFraction == other.idleTimeFraction;
-    }
-};
-
 struct CpuTime {
     uint64_t idleTimeMs;
     uint64_t totalTimeMs;
 };
 
-class CpuLoadReader {
+// Reads CPU idle stats from /proc/stat.
+class CpuLoadReaderProcStat : public ICpuLoadReader {
   public:
-    CpuLoadReader() : mFilesystem(std::make_unique<RealFilesystem>()) {}
-    CpuLoadReader(std::unique_ptr<IFilesystem> filesystem) : mFilesystem(std::move(filesystem)) {}
+    CpuLoadReaderProcStat() : mFilesystem(std::make_unique<RealFilesystem>()) {}
+    CpuLoadReaderProcStat(std::unique_ptr<IFilesystem> filesystem)
+        : mFilesystem(std::move(filesystem)) {}
 
-    // Initialize reading, must be done before calling other methods.
-    //
-    // Work is not done in constructor as it accesses files.
-    void init();
-
-    // Get the load of each CPU, since the last time this method was called.
-    bool getRecentCpuLoads(std::vector<CpuLoad> *result);
-
-    // Gets the last CPU times read, keyed by CPU ID. Used for dumping to bug reports.
-    std::map<uint32_t, CpuTime> getPreviousCpuTimes() const;
+    bool Init() override;
+    bool GetRecentCpuLoads(std::array<double, NUM_CPU_CORES> *cpuCoreIdleTimesPercentage) override;
+    void DumpToStream(std::stringstream &stream) const override;
 
   private:
     std::map<uint32_t, CpuTime> mPreviousCpuTimes;
     const std::unique_ptr<IFilesystem> mFilesystem;
 
-    std::map<uint32_t, CpuTime> readCpuTimes();
+    bool ReadCpuTimes(std::map<uint32_t, CpuTime> *result);
     // Converts jiffies to milliseconds. Jiffies is the granularity the kernel reports times in,
     // including the timings in CPU statistics.
-    static uint64_t jiffiesToMs(uint64_t jiffies);
+    static uint64_t JiffiesToMs(uint64_t jiffies);
 };
 
 }  // namespace pixel

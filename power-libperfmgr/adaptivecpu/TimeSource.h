@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * Copyright (C) 2021 The Android Open Source Project
  *
@@ -14,10 +16,7 @@
  * limitations under the License.
  */
 
-#include <gmock/gmock.h>
-
-#include "adaptivecpu/IFilesystem.h"
-#include "adaptivecpu/ITimeSource.h"
+#include "ITimeSource.h"
 
 namespace aidl {
 namespace google {
@@ -26,20 +25,10 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-class MockFilesystem : public IFilesystem {
+class TimeSource : public ITimeSource {
   public:
-    ~MockFilesystem() override {}
-    MOCK_METHOD(bool, listDirectory, (const std::string &path, std::vector<std::string> *result),
-                (const, override));
-    MOCK_METHOD(bool, readFileStream,
-                (const std::string &path, std::unique_ptr<std::istream> *result),
-                (const, override));
-};
-
-class MockTimeSource : public ITimeSource {
-  public:
-    ~MockTimeSource() override {}
-    MOCK_METHOD(std::chrono::nanoseconds, GetTime, (), (const, override));
+    ~TimeSource() override {}
+    std::chrono::nanoseconds GetTime() const override;
 };
 
 }  // namespace pixel

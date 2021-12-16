@@ -24,8 +24,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "AdaptiveCpuStats.h"
 #include "CpuFrequencyReader.h"
-#include "CpuLoadReader.h"
+#include "ICpuLoadReader.h"
 #include "Model.h"
 #include "WorkDurationProcessor.h"
 
@@ -36,8 +37,13 @@ namespace power {
 namespace impl {
 namespace pixel {
 
+using std::chrono_literals::operator""ms;
 using ::aidl::android::hardware::power::WorkDuration;
 using ::android::perfmgr::HintManager;
+
+// Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
+// hints are cancelled.
+static const std::chrono::milliseconds HINT_TIMEOUT = 2000ms;
 
 // Applies CPU frequency hints infered by an ML model based on the recent CPU statistics and work
 // durations.
@@ -77,9 +83,11 @@ class AdaptiveCpu {
 
     void WaitForEnabledAndWorkDurations();
 
+    Model mModel;
     WorkDurationProcessor mWorkDurationProcessor;
     CpuFrequencyReader mCpuFrequencyReader;
-    CpuLoadReader mCpuLoadReader;
+    std::unique_ptr<ICpuLoadReader> mCpuLoadReader;
+    AdaptiveCpuStats mAdaptiveCpuStats;
 
     std::shared_ptr<HintManager> mHintManager;
 
