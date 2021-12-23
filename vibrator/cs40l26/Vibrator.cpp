@@ -345,6 +345,25 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     mIsUnderExternalControl = false;
 
     mIsChirpEnabled = mHwCal->isChirpEnabled();
+
+    uint32_t capabilities;
+    mHwCal->getSupportedPrimitives(&capabilities);
+    std::vector<CompositePrimitive> defaultSupported = {
+            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
+            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
+            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
+            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
+            CompositePrimitive::LOW_TICK,
+    };
+    if (capabilities > 0) {
+        for (auto e : defaultSupported) {
+            if (capabilities & (1 << uint32_t(e))) {
+                mSupportedPrimitives.emplace_back(e);
+            }
+        }
+    } else {
+        mSupportedPrimitives = defaultSupported;
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -462,13 +481,7 @@ ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
-    *supported = {
-            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
-            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
-            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
-            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
-            CompositePrimitive::LOW_TICK,
-    };
+    *supported = mSupportedPrimitives;
     return ndk::ScopedAStatus::ok();
 }
 
