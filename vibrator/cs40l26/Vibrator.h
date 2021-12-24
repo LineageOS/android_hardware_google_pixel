@@ -88,6 +88,10 @@ class Vibrator : public BnVibrator {
         virtual bool getTickVolLevels(std::array<uint32_t, 2> *value) = 0;
         virtual bool getClickVolLevels(std::array<uint32_t, 2> *value) = 0;
         virtual bool getLongVolLevels(std::array<uint32_t, 2> *value) = 0;
+        // Checks if the chirp feature is enabled.
+        virtual bool isChirpEnabled() = 0;
+        // Obtains the supported primitive effects.
+        virtual bool getSupportedPrimitives(uint32_t *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -175,6 +179,8 @@ class Vibrator : public BnVibrator {
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
     float mLongEffectScale = 1.0;
+    bool mIsChirpEnabled;
+    std::vector<CompositePrimitive> mSupportedPrimitives;
 };
 
 }  // namespace vibrator

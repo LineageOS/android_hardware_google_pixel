@@ -118,6 +118,14 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         *value = V_LONG_DEFAULT;
         return true;
     }
+    bool isChirpEnabled() override {
+        bool value;
+        getProperty("chirp.enabled", &value, false);
+        return value;
+    }
+    bool getSupportedPrimitives(uint32_t *value) override {
+        return getProperty("supported_primitives", value, (uint32_t)0);
+    }
     void debug(int fd) override { HwCalBase::debug(fd); }
 };
 

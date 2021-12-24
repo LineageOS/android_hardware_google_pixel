@@ -343,6 +343,27 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     mIsUnderExternalControl = false;
+
+    mIsChirpEnabled = mHwCal->isChirpEnabled();
+
+    uint32_t capabilities;
+    mHwCal->getSupportedPrimitives(&capabilities);
+    std::vector<CompositePrimitive> defaultSupported = {
+            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
+            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
+            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
+            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
+            CompositePrimitive::LOW_TICK,
+    };
+    if (capabilities > 0) {
+        for (auto e : defaultSupported) {
+            if (capabilities & (1 << uint32_t(e))) {
+                mSupportedPrimitives.emplace_back(e);
+            }
+        }
+    } else {
+        mSupportedPrimitives = defaultSupported;
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -356,6 +377,10 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     }
     if (mHwApi->hasOwtFreeSpace()) {
         ret |= IVibrator::CAP_COMPOSE_EFFECTS;
+
+        if (mIsChirpEnabled) {
+            ret |= IVibrator::CAP_FREQUENCY_CONTROL | IVibrator::CAP_COMPOSE_PWLE_EFFECTS;
+        }
     }
     *_aidl_return = ret;
     return ndk::ScopedAStatus::ok();
@@ -456,13 +481,7 @@ ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
-    *supported = {
-            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
-            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
-            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
-            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
-            CompositePrimitive::LOW_TICK,
-    };
+    *supported = mSupportedPrimitives;
     return ndk::ScopedAStatus::ok();
 }
 
@@ -813,6 +832,11 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     ATRACE_NAME("Vibrator::composePwle");
     std::ostringstream pwleBuilder;
     std::string pwleQueue;
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if ((capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) == 0) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 
     if (composite.size() <= 0 || composite.size() > compositionSizeMax) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
