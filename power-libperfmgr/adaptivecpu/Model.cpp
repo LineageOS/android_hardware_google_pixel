@@ -31,6 +31,7 @@ namespace pixel {
 
 // Instead of throttling based on model output, choose a random throttle X% of the time. Must be
 // between 0 and 1 inclusive.
+// TODO(b/213160386): Move to AdaptiveCpuConfig.
 constexpr double kRandomThrottleDecisionProbability = 0;
 
 bool ModelInput::SetCpuFreqiencies(
