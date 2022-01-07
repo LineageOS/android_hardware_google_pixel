@@ -142,6 +142,9 @@ enum WaveformIndex : uint16_t {
     WAVEFORM_MAX_INDEX,
 };
 
+std::vector<CompositePrimitive> defaultSupportedPrimitives = {
+        ndk::enum_range<CompositePrimitive>().begin(), ndk::enum_range<CompositePrimitive>().end()};
+
 static int min(int x, int y) {
     return x < y ? x : y;
 }
@@ -346,23 +349,18 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 
     mIsChirpEnabled = mHwCal->isChirpEnabled();
 
-    uint32_t capabilities;
-    mHwCal->getSupportedPrimitives(&capabilities);
-    std::vector<CompositePrimitive> defaultSupported = {
-            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
-            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
-            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
-            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
-            CompositePrimitive::LOW_TICK,
-    };
-    if (capabilities > 0) {
-        for (auto e : defaultSupported) {
-            if (capabilities & (1 << uint32_t(e))) {
+    mHwCal->getSupportedPrimitives(&mSupportedPrimitivesBits);
+    if (mSupportedPrimitivesBits > 0) {
+        for (auto e : defaultSupportedPrimitives) {
+            if (mSupportedPrimitivesBits & (1 << uint32_t(e))) {
                 mSupportedPrimitives.emplace_back(e);
             }
         }
     } else {
-        mSupportedPrimitives = defaultSupported;
+        for (auto e : defaultSupportedPrimitives) {
+            mSupportedPrimitivesBits |= (1 << uint32_t(e));
+        }
+        mSupportedPrimitives = defaultSupportedPrimitives;
     }
 }
 
@@ -1173,6 +1171,11 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
 ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
                                                  uint32_t *outEffectIndex) {
     uint32_t effectIndex;
+    uint32_t primitiveBit = 1 << int32_t(primitive);
+    if ((primitiveBit & mSupportedPrimitivesBits) == 0x0) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
+
     switch (primitive) {
         case CompositePrimitive::NOOP:
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
