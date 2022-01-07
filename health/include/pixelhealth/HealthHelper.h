@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright (C) 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,36 +14,24 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_PIXEL_HEALTH_CHARGER_DETECT_H
-#define HARDWARE_GOOGLE_PIXEL_HEALTH_CHARGER_DETECT_H
+#ifndef HARDWARE_GOOGLE_PIXEL_HEALTH_HEALTHHELPER_H
+#define HARDWARE_GOOGLE_PIXEL_HEALTH_HEALTHHELPER_H
 
 #include <aidl/android/hardware/health/HealthInfo.h>
-#include <android-base/strings.h>
-#include <healthd/BatteryMonitor.h>
-
-using android::BatteryMonitor;
+#include <batteryservice/BatteryService.h>
 
 namespace hardware {
 namespace google {
 namespace pixel {
 namespace health {
 
-class ChargerDetect {
-  public:
-    // Deprecated. Use onlineUpdate(HealthInfo*)
-    static void onlineUpdate(struct android::BatteryProperties *props);
-    static void onlineUpdate(aidl::android::hardware::health::HealthInfo *health_info);
-    static void populateTcpmPsyName(std::string *tcpmPsyName);
-
-  private:
-    static int getPsyUsbType(const std::string &path, std::string *type);
-    static int readFromFile(const std::string &path, std::string *buf);
-    static int getIntField(const std::string &path);
-};
+// One-way conversion from BatteryProperties to AIDL HealthInfo
+aidl::android::hardware::health::HealthInfo ToHealthInfo(
+        const struct android::BatteryProperties *props);
 
 }  // namespace health
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware
 
-#endif
+#endif  // HARDWARE_GOOGLE_PIXEL_HEALTH_HEALTHHELPER_H
