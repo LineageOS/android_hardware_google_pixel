@@ -17,10 +17,11 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_HEALTH_BATTERYDEFENDER_H
 #define HARDWARE_GOOGLE_PIXEL_HEALTH_BATTERYDEFENDER_H
 
+#include <aidl/android/hardware/health/HealthInfo.h>
 #include <batteryservice/BatteryService.h>
-
 #include <stdbool.h>
 #include <time.h>
+
 #include <string>
 
 namespace hardware {
@@ -55,8 +56,10 @@ class BatteryDefender {
                     const int32_t timeToActivateSecs = DEFAULT_TIME_TO_ACTIVATE_SECONDS,
                     const int32_t timeToClearTimerSecs = DEFAULT_TIME_TO_CLEAR_SECONDS);
 
-    // This function shall be called periodically in HealthService
+    // Either of the update() function shall be called periodically in HealthService
+    // Deprecated. Use update(HealthInfo*)
     void update(struct android::BatteryProperties *props);
+    void update(aidl::android::hardware::health::HealthInfo *health_info);
 
     // Set wireless not supported if this is not a device with a wireless charger
     void setWirelessNotSupported(void);
@@ -145,7 +148,7 @@ class BatteryDefender {
 
     // Process state actions
     void stateMachine_runAction(const state_E state,
-                                const struct android::BatteryProperties *props);
+                                const aidl::android::hardware::health::HealthInfo &health_info);
 
     // Check state transitions
     state_E stateMachine_getNextState(const state_E state);
@@ -153,7 +156,7 @@ class BatteryDefender {
     // Process state entry actions
     void stateMachine_firstAction(const state_E state);
 
-    void updateDefenderProperties(struct android::BatteryProperties *props);
+    void updateDefenderProperties(aidl::android::hardware::health::HealthInfo *health_info);
     void clearStateData(void);
     void loadPersistentStorage(void);
     int64_t getTime(void);
