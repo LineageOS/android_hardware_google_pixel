@@ -180,6 +180,7 @@ class Vibrator : public BnVibrator {
     bool mIsUnderExternalControl;
     float mLongEffectScale = 1.0;
     bool mIsChirpEnabled;
+    uint32_t mSupportedPrimitivesBits = 0x0;
     std::vector<CompositePrimitive> mSupportedPrimitives;
 };
 
