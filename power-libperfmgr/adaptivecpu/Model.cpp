@@ -29,11 +29,6 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-// Instead of throttling based on model output, choose a random throttle X% of the time. Must be
-// between 0 and 1 inclusive.
-// TODO(b/213160386): Move to AdaptiveCpuConfig.
-constexpr double kRandomThrottleDecisionProbability = 0;
-
 bool ModelInput::SetCpuFreqiencies(
         const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies) {
     ATRACE_CALL();
@@ -78,10 +73,11 @@ void ModelInput::LogToAtrace() const {
     ATRACE_INT("ModelInput_prevThrottle", (int)previousThrottleDecision);
 }
 
-ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs) {
+ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,
+                            const AdaptiveCpuConfig &config) {
     ATRACE_CALL();
-    if (kRandomThrottleDecisionProbability > 0 &&
-        mShouldRandomThrottleDistribution(mGenerator) > kRandomThrottleDecisionProbability) {
+    if (config.randomThrottleDecisionProbability > 0 &&
+        mShouldRandomThrottleDistribution(mGenerator) > config.randomThrottleDecisionProbability) {
         const auto throttleDecision =
                 static_cast<ThrottleDecision>(mRandomThrottleDistribution(mGenerator));
         LOG(VERBOSE) << "Randomly overrided throttle decision: "

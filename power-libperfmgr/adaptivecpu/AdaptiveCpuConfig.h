@@ -35,6 +35,9 @@ struct AdaptiveCpuConfig {
     // Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU
     // throttling hints are cancelled.
     std::chrono::milliseconds hintTimeout;
+    // Instead of throttling based on model output, choose a random throttle X% of the time. Must be
+    // between 0 and 1 inclusive.
+    double randomThrottleDecisionProbability;
 
     bool operator==(const AdaptiveCpuConfig &other) const;
 };

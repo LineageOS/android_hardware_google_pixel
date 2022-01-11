@@ -31,14 +31,20 @@ using std::chrono_literals::operator""ms;
 TEST(AdaptiveCpuConfigTest, valid) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "25");
     android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "500");
-    const AdaptiveCpuConfig config{.iterationSleepDuration = 25ms, .hintTimeout = 500ms};
+    android::base::SetProperty("debug.adaptivecpu.random_throttle_decision_percent", "25");
+    const AdaptiveCpuConfig config{.iterationSleepDuration = 25ms,
+                                   .hintTimeout = 500ms,
+                                   .randomThrottleDecisionProbability = 0.25};
     ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(), config);
 }
 
 TEST(AdaptiveCpuConfigTest, defaultConfig) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "");
     android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "");
-    const AdaptiveCpuConfig config{.iterationSleepDuration = 1000ms, .hintTimeout = 2000ms};
+    android::base::SetProperty("debug.adaptivecpu.random_throttle_decision_percent", "");
+    const AdaptiveCpuConfig config{.iterationSleepDuration = 1000ms,
+                                   .hintTimeout = 2000ms,
+                                   .randomThrottleDecisionProbability = 0};
     ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(), config);
 }
 
@@ -50,6 +56,11 @@ TEST(AdaptiveCpuConfigTest, iterationSleepDuration_belowMin) {
 TEST(AdaptiveCpuConfigTest, iterationSleepDuration_negative) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "-100");
     ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties().iterationSleepDuration, 1000ms);
+}
+
+TEST(AdaptiveCpuConfigTest, randomThrottleDecisionProbability_float) {
+    android::base::SetProperty("debug.adaptivecpu.random_throttle_decision_percent", "0.5");
+    ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties().randomThrottleDecisionProbability, 0);
 }
 
 }  // namespace pixel

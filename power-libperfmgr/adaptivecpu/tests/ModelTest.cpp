@@ -86,7 +86,7 @@ TEST(ModelTest, Run_randomInputs) {
     for (int i = 0; i < 10; i++) {
         std::deque<ModelInput> modelInputs{randomModelInput(), randomModelInput(),
                                            randomModelInput()};
-        Model().Run(modelInputs);
+        Model().Run(modelInputs, AdaptiveCpuConfig::DEFAULT);
     }
 }
 
