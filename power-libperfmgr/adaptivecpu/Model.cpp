@@ -89,7 +89,8 @@ ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,
     return RunDecisionTree(modelInputs);
 }
 
-ThrottleDecision Model::RunDecisionTree(const std::deque<ModelInput> &modelInputs) {
+ThrottleDecision Model::RunDecisionTree(const std::deque<ModelInput> &modelInputs
+                                        __attribute__((unused))) {
     ATRACE_CALL();
 #include "models/model.inc"
 }
