@@ -185,7 +185,7 @@ void AdaptiveCpu::RunMainLoop() {
         if (throttleDecision != previousThrottleDecision) {
             ATRACE_NAME("sendHints");
             for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
-                mHintManager->DoHint(hintName, HINT_TIMEOUT);
+                mHintManager->DoHint(hintName, mConfig.hintTimeout);
             }
             for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
                 mHintManager->EndHint(hintName);
@@ -194,7 +194,7 @@ void AdaptiveCpu::RunMainLoop() {
         }
 
         mAdaptiveCpuStats.RegisterSuccessfulRun(previousThrottleDecision, throttleDecision,
-                                                modelInput.workDurationFeatures);
+                                                modelInput.workDurationFeatures, mConfig);
         ATRACE_END();  // compute
         {
             ATRACE_NAME("sleep");

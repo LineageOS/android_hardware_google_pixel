@@ -42,11 +42,6 @@ using std::chrono_literals::operator""ms;
 using ::aidl::android::hardware::power::WorkDuration;
 using ::android::perfmgr::HintManager;
 
-// Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
-// hints are cancelled.
-// TODO(b/213160386): Move to AdaptiveCpuConfig.
-static const std::chrono::milliseconds HINT_TIMEOUT = 2000ms;
-
 // Applies CPU frequency hints infered by an ML model based on the recent CPU statistics and work
 // durations.
 // This class's public members are not synchronised and should not be used from multiple threads,

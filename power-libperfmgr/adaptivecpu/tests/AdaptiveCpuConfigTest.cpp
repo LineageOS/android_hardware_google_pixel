@@ -30,14 +30,16 @@ using std::chrono_literals::operator""ms;
 
 TEST(AdaptiveCpuConfigTest, valid) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "25");
-    ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(),
-              AdaptiveCpuConfig{.iterationSleepDuration = 25ms});
+    android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "500");
+    const AdaptiveCpuConfig config{.iterationSleepDuration = 25ms, .hintTimeout = 500ms};
+    ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(), config);
 }
 
 TEST(AdaptiveCpuConfigTest, defaultConfig) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "");
-    ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(),
-              AdaptiveCpuConfig{.iterationSleepDuration = 1000ms});
+    android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "");
+    const AdaptiveCpuConfig config{.iterationSleepDuration = 1000ms, .hintTimeout = 2000ms};
+    ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(), config);
 }
 
 TEST(AdaptiveCpuConfigTest, iterationSleepDuration_belowMin) {

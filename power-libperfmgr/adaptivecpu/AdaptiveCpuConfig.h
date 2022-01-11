@@ -32,6 +32,9 @@ struct AdaptiveCpuConfig {
 
     // How long to sleep for between Adaptive CPU runs.
     std::chrono::milliseconds iterationSleepDuration;
+    // Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU
+    // throttling hints are cancelled.
+    std::chrono::milliseconds hintTimeout;
 
     bool operator==(const AdaptiveCpuConfig &other) const;
 };

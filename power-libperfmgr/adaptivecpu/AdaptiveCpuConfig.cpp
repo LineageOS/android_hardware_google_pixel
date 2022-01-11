@@ -37,11 +37,13 @@ using std::chrono_literals::operator""ms;
 constexpr std::string_view kIterationSleepDurationProperty(
         "debug.adaptivecpu.iteration_sleep_duration_ms");
 static const std::chrono::milliseconds kIterationSleepDurationMin = 20ms;
+constexpr std::string_view kHintTimeoutProperty("debug.adaptivecpu.hint_timeout_ms");
 
 const AdaptiveCpuConfig AdaptiveCpuConfig::DEFAULT{
         // N.B.: The model will typically be trained with this value set to 25ms. We set it to 1s as
         // a safety measure, but best performance will be seen at 25ms.
         .iterationSleepDuration = 1000ms,
+        .hintTimeout = 2000ms,
 };
 
 AdaptiveCpuConfig AdaptiveCpuConfig::ReadFromSystemProperties() {
@@ -50,18 +52,24 @@ AdaptiveCpuConfig AdaptiveCpuConfig::ReadFromSystemProperties() {
             ::android::base::GetUintProperty<uint32_t>(kIterationSleepDurationProperty.data(),
                                                        DEFAULT.iterationSleepDuration.count()));
     iterationSleepDuration = std::max(iterationSleepDuration, kIterationSleepDurationMin);
+    std::chrono::milliseconds hintTimeout =
+            std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
+                    kHintTimeoutProperty.data(), DEFAULT.hintTimeout.count()));
     return {
             .iterationSleepDuration = iterationSleepDuration,
+            .hintTimeout = hintTimeout,
     };
 }
 
 bool AdaptiveCpuConfig::operator==(const AdaptiveCpuConfig &other) const {
-    return iterationSleepDuration == other.iterationSleepDuration;
+    return iterationSleepDuration == other.iterationSleepDuration &&
+           hintTimeout == other.hintTimeout;
 }
 
 std::ostream &operator<<(std::ostream &stream, const AdaptiveCpuConfig &config) {
     stream << "AdaptiveCpuConfig(";
-    stream << "iterationSleepDuration=" << config.iterationSleepDuration.count() << "ms";
+    stream << "iterationSleepDuration=" << config.iterationSleepDuration.count() << "ms, ";
+    stream << "hintTimeout=" << config.hintTimeout.count() << "ms";
     stream << ")";
     return stream;
 }
