@@ -34,6 +34,8 @@ enum class MiscWriterActions : int32_t {
   kClearSotaFlag,
   kSetEnablePkvmFlag,
   kSetDisablePkvmFlag,
+  kSetWristOrientationFlag,
+  kClearWristOrientationFlag,
 
   kUnset = -1,
 };
@@ -47,6 +49,8 @@ class MiscWriter {
   static constexpr uint32_t kPkvmFlagOffsetInVendorSpace = 64;
   static constexpr char kEnablePkvmFlag[] = "enable-pkvm";
   static constexpr char kDisablePkvmFlag[] = "disable-pkvm";
+  static constexpr uint32_t kWristOrientationFlagOffsetInVendorSpace = 96;
+  static constexpr char kWristOrientationFlag[] = "wrist-orientation=";
 
   // Returns true of |size| bytes data starting from |offset| is fully inside the vendor space.
   static bool OffsetAndSizeInVendorSpace(size_t offset, size_t size);
@@ -56,6 +60,8 @@ class MiscWriter {
                                             std::string* err);
 
   explicit MiscWriter(const MiscWriterActions& action) : action_(action) {}
+  explicit MiscWriter(const MiscWriterActions &action, const char orientation)
+      : action_(action), orientation_(orientation) {}
 
   // Performs the stored MiscWriterActions. If |override_offset| is set, writes to the input offset
   // in the vendor space of /misc instead of the default offset.
@@ -63,6 +69,7 @@ class MiscWriter {
 
  private:
   MiscWriterActions action_{ MiscWriterActions::kUnset };
+  char orientation_{'0'};
 };
 
 }  // namespace pixel

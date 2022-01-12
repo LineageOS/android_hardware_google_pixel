@@ -44,6 +44,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --clear-sota         Clear the silent OTA flag\n";
   std::cerr << "  --set-enable-pkvm    Write the enable pKVM flag\n";
   std::cerr << "  --set-disable-pkvm   Write the disable pKVM flag\n";
+  std::cerr << "  --set-wrist-orientation <0-3> Write the wrist orientation flag\n";
+  std::cerr << "  --clear-wrist-orientation     Clear the wrist orientation flag\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -57,6 +59,8 @@ int main(int argc, char** argv) {
     { "clear-dark-theme", no_argument, nullptr, 0 },
     { "set-sota", no_argument, nullptr, 0 },
     { "clear-sota", no_argument, nullptr, 0 },
+    { "set-wrist-orientation", required_argument, nullptr, 0 },
+    { "clear-wrist-orientation", no_argument, nullptr, 0 },
     { "override-vendor-space-offset", required_argument, nullptr, 0 },
     { "set-enable-pkvm", no_argument, nullptr, 0 },
     { "set-disable-pkvm", no_argument, nullptr, 0 },
@@ -70,6 +74,7 @@ int main(int argc, char** argv) {
     { "clear-sota", MiscWriterActions::kClearSotaFlag },
     { "set-enable-pkvm", MiscWriterActions::kSetEnablePkvmFlag },
     { "set-disable-pkvm", MiscWriterActions::kSetDisablePkvmFlag },
+    { "clear-wrist-orientation", MiscWriterActions::kClearWristOrientationFlag },
   };
 
   std::unique_ptr<MiscWriter> misc_writer;
@@ -91,6 +96,22 @@ int main(int argc, char** argv) {
         return Usage(argv[0]);
       }
       override_offset = offset;
+    } else if (option_name == "set-wrist-orientation"s) {
+      int orientation;
+      if (!android::base::ParseInt(optarg, &orientation)) {
+        LOG(ERROR) << "Failed to parse the orientation: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (orientation < 0 || orientation > 3) {
+        LOG(ERROR) << "Orientation out of range: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kSetWristOrientationFlag,
+                                                     '0' + orientation);
     } else if (auto iter = action_map.find(option_name); iter != action_map.end()) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";
