@@ -77,7 +77,7 @@ ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,
                             const AdaptiveCpuConfig &config) {
     ATRACE_CALL();
     if (config.randomThrottleDecisionProbability > 0 &&
-        mShouldRandomThrottleDistribution(mGenerator) > config.randomThrottleDecisionProbability) {
+        mShouldRandomThrottleDistribution(mGenerator) < config.randomThrottleDecisionProbability) {
         const auto throttleDecision =
                 static_cast<ThrottleDecision>(mRandomThrottleDistribution(mGenerator));
         LOG(VERBOSE) << "Randomly overrided throttle decision: "
