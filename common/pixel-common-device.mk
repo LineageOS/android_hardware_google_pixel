@@ -22,3 +22,6 @@ BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
 # Pixel Experience
 PRODUCT_PACKAGES_DEBUG += wifi_sniffer
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
+
+PRODUCT_PACKAGES_DEBUG += wifi_perf_diag
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_perf_diag
