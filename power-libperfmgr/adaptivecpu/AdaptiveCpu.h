@@ -26,8 +26,7 @@
 
 #include "AdaptiveCpuConfig.h"
 #include "AdaptiveCpuStats.h"
-#include "CpuFrequencyReader.h"
-#include "ICpuLoadReader.h"
+#include "KernelCpuFeatureReader.h"
 #include "Model.h"
 #include "WorkDurationProcessor.h"
 
@@ -82,8 +81,7 @@ class AdaptiveCpu {
 
     Model mModel;
     WorkDurationProcessor mWorkDurationProcessor;
-    CpuFrequencyReader mCpuFrequencyReader;
-    std::unique_ptr<ICpuLoadReader> mCpuLoadReader;
+    KernelCpuFeatureReader mKernelCpuFeatureReader;
     AdaptiveCpuStats mAdaptiveCpuStats;
     const TimeSource mTimeSource;
 

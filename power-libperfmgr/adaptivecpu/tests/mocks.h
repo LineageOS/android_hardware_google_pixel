@@ -40,6 +40,7 @@ class MockTimeSource : public ITimeSource {
   public:
     ~MockTimeSource() override {}
     MOCK_METHOD(std::chrono::nanoseconds, GetTime, (), (const, override));
+    MOCK_METHOD(std::chrono::nanoseconds, GetKernelTime, (), (const, override));
 };
 
 }  // namespace pixel
