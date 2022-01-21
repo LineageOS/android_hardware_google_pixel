@@ -21,12 +21,13 @@
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <android-base/stringprintf.h>
+#include <inttypes.h>
 #include <json/reader.h>
 #include <json/value.h>
 #include <utils/Trace.h>
 
-#include <inttypes.h>
 #include <algorithm>
 #include <set>
 
@@ -41,6 +42,8 @@ constexpr std::chrono::milliseconds kMilliSecondZero = std::chrono::milliseconds
 constexpr std::chrono::steady_clock::time_point kTimePointMax =
         std::chrono::steady_clock::time_point::max();
 }  // namespace
+
+constexpr char kPowerHalTruncateProp[] = "vendor.powerhal.truncate";
 
 bool HintManager::ValidateHint(const std::string& hint_type) const {
     if (nm_.get() == nullptr) {
@@ -422,6 +425,15 @@ std::vector<std::unique_ptr<Node>> HintManager::ParseNodes(
                      << reset << std::noboolalpha;
 
         if (is_file) {
+            bool truncate = android::base::GetBoolProperty(kPowerHalTruncateProp, true);
+            if (nodes[i]["Truncate"].empty() || !nodes[i]["Truncate"].isBool()) {
+                LOG(INFO) << "Failed to read Node[" << i << "]'s Truncate, set to 'true'";
+            } else {
+                truncate = nodes[i]["Truncate"].asBool();
+            }
+            LOG(VERBOSE) << "Node[" << i << "]'s Truncate: " << std::boolalpha << truncate
+                         << std::noboolalpha;
+
             bool hold_fd = false;
             if (nodes[i]["HoldFd"].empty() || !nodes[i]["HoldFd"].isBool()) {
                 LOG(INFO) << "Failed to read Node[" << i
@@ -433,8 +445,8 @@ std::vector<std::unique_ptr<Node>> HintManager::ParseNodes(
                          << hold_fd << std::noboolalpha;
 
             nodes_parsed.emplace_back(std::make_unique<FileNode>(
-                name, path, values_parsed,
-                static_cast<std::size_t>(default_index), reset, hold_fd));
+                    name, path, values_parsed, static_cast<std::size_t>(default_index), reset,
+                    truncate, hold_fd));
         } else {
             nodes_parsed.emplace_back(std::make_unique<PropertyNode>(
                 name, path, values_parsed,
