@@ -67,8 +67,7 @@ TEST(FileNodeTest, DumpToFdTest) {
     TemporaryFile dumptf;
     t.DumpToFd(dumptf.fd);
     fsync(dumptf.fd);
-    std::string buf(
-        android::base::StringPrintf("test_dump\t%s\t1\tvalue1\n", tf.path));
+    std::string buf(android::base::StringPrintf("test_dump\t%s\t1\tvalue1\t0\t1\n", tf.path));
     _VerifyPathValue(dumptf.path, buf);
 }
 
