@@ -26,7 +26,3 @@ BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
 
 PRODUCT_PACKAGES_DEBUG += wifi_perf_diag
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_perf_diag
-
-# Enable whole-program R8 Java optimizations for SystemUI, but also
-# allow explicit overriding for testing and development.
-SYSTEMUI_OPTIMIZE_JAVA ?= true
