@@ -62,7 +62,8 @@ bool HintManager::IsHintSupported(const std::string& hint_type) const {
 }
 
 bool HintManager::IsHintEnabled(const std::string &hint_type) const {
-    return actions_.at(hint_type).enabled;
+    std::lock_guard<std::mutex> lock(actions_.at(hint_type).hint_lock);
+    return actions_.at(hint_type).mask_requesters.empty();
 }
 
 bool HintManager::InitHintStatus(const std::unique_ptr<HintManager> &hm) {
@@ -88,7 +89,7 @@ bool HintManager::InitHintStatus(const std::unique_ptr<HintManager> &hm) {
 }
 
 void HintManager::DoHintStatus(const std::string &hint_type, std::chrono::milliseconds timeout_ms) {
-    std::lock_guard<std::mutex> lock(actions_.at(hint_type).status->mutex);
+    std::lock_guard<std::mutex> lock(actions_.at(hint_type).hint_lock);
     actions_.at(hint_type).status->stats.count.fetch_add(1);
     auto now = std::chrono::steady_clock::now();
     ATRACE_INT(hint_type.c_str(), (timeout_ms == kMilliSecondZero) ? std::numeric_limits<int>::max()
@@ -106,7 +107,7 @@ void HintManager::DoHintStatus(const std::string &hint_type, std::chrono::millis
 }
 
 void HintManager::EndHintStatus(const std::string &hint_type) {
-    std::lock_guard<std::mutex> lock(actions_.at(hint_type).status->mutex);
+    std::lock_guard<std::mutex> lock(actions_.at(hint_type).hint_lock);
     // Update HintStats if the hint ends earlier than expected end_time
     auto now = std::chrono::steady_clock::now();
     ATRACE_INT(hint_type.c_str(), 0);
@@ -123,7 +124,6 @@ void HintManager::DoHintAction(const std::string &hint_type) {
     for (auto &action : actions_.at(hint_type).hint_actions) {
         switch (action.type) {
             case HintActionType::DoHint:
-                // TODO: add parse logic to prevent circular hints.
                 DoHint(action.value);
                 break;
             case HintActionType::EndHint:
@@ -133,7 +133,8 @@ void HintManager::DoHintAction(const std::string &hint_type) {
                 if (actions_.find(action.value) == actions_.end()) {
                     LOG(ERROR) << "Failed to find " << action.value << " action";
                 } else {
-                    actions_.at(action.value).enabled = false;
+                    std::lock_guard<std::mutex> lock(actions_.at(hint_type).hint_lock);
+                    actions_.at(action.value).mask_requesters.insert(hint_type);
                 }
                 break;
             default:
@@ -149,7 +150,8 @@ void HintManager::EndHintAction(const std::string &hint_type) {
     for (auto &action : actions_.at(hint_type).hint_actions) {
         if (action.type == HintActionType::MaskHint &&
             actions_.find(action.value) != actions_.end()) {
-            actions_.at(action.value).enabled = true;
+            std::lock_guard<std::mutex> lock(actions_.at(hint_type).hint_lock);
+            actions_.at(action.value).mask_requesters.erase(hint_type);
         }
     }
 }
@@ -209,6 +211,7 @@ std::vector<std::string> HintManager::GetHints() const {
 HintStats HintManager::GetHintStats(const std::string &hint_type) const {
     HintStats hint_stats;
     if (ValidateHint(hint_type)) {
+        std::lock_guard<std::mutex> lock(actions_.at(hint_type).hint_lock);
         hint_stats.count =
                 actions_.at(hint_type).status->stats.count.load(std::memory_order_relaxed);
         hint_stats.duration_ms =
