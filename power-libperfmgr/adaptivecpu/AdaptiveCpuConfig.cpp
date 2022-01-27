@@ -34,6 +34,7 @@ namespace impl {
 namespace pixel {
 
 using std::chrono_literals::operator""ms;
+using std::chrono_literals::operator""min;
 
 constexpr std::string_view kIterationSleepDurationProperty(
         "debug.adaptivecpu.iteration_sleep_duration_ms");
@@ -42,6 +43,7 @@ constexpr std::string_view kHintTimeoutProperty("debug.adaptivecpu.hint_timeout_
 // "percent" as range is 0-100, while the in-memory is "probability" as range is 0-1.
 constexpr std::string_view kRandomThrottleDecisionPercentProperty(
         "debug.adaptivecpu.random_throttle_decision_percent");
+constexpr std::string_view kEnabledHintTimeoutProperty("debug.adaptivecpu.enabled_hint_timeout_ms");
 
 const AdaptiveCpuConfig AdaptiveCpuConfig::DEFAULT{
         // N.B.: The model will typically be trained with this value set to 25ms. We set it to 1s as
@@ -49,6 +51,7 @@ const AdaptiveCpuConfig AdaptiveCpuConfig::DEFAULT{
         .iterationSleepDuration = 1000ms,
         .hintTimeout = 2000ms,
         .randomThrottleDecisionProbability = 0,
+        .enabledHintTimeout = 120min,
 };
 
 AdaptiveCpuConfig AdaptiveCpuConfig::ReadFromSystemProperties() {
@@ -70,24 +73,31 @@ AdaptiveCpuConfig AdaptiveCpuConfig::ReadFromSystemProperties() {
                      << randomThrottleDecisionProbability;
         randomThrottleDecisionProbability = DEFAULT.randomThrottleDecisionProbability;
     }
+    std::chrono::milliseconds enabledHintTimeout =
+            std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
+                    kEnabledHintTimeoutProperty.data(), DEFAULT.enabledHintTimeout.count()));
     return {
             .iterationSleepDuration = iterationSleepDuration,
             .hintTimeout = hintTimeout,
             .randomThrottleDecisionProbability = randomThrottleDecisionProbability,
+            .enabledHintTimeout = enabledHintTimeout,
     };
 }
 
 bool AdaptiveCpuConfig::operator==(const AdaptiveCpuConfig &other) const {
     return iterationSleepDuration == other.iterationSleepDuration &&
            hintTimeout == other.hintTimeout &&
-           randomThrottleDecisionProbability == other.randomThrottleDecisionProbability;
+           randomThrottleDecisionProbability == other.randomThrottleDecisionProbability &&
+           enabledHintTimeout == other.enabledHintTimeout;
 }
 
 std::ostream &operator<<(std::ostream &stream, const AdaptiveCpuConfig &config) {
     stream << "AdaptiveCpuConfig(";
     stream << "iterationSleepDuration=" << config.iterationSleepDuration.count() << "ms, ";
     stream << "hintTimeout=" << config.hintTimeout.count() << "ms, ";
-    stream << "randomThrottleDecisionProbability=" << config.randomThrottleDecisionProbability;
+    stream << "randomThrottleDecisionProbability=" << config.randomThrottleDecisionProbability
+           << ", ";
+    stream << "enabledHintTimeout=" << config.enabledHintTimeout.count() << "ms";
     stream << ")";
     return stream;
 }

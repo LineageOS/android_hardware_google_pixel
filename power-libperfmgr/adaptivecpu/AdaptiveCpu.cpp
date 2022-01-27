@@ -66,6 +66,7 @@ void AdaptiveCpu::StartThread() {
     LOG(INFO) << "Starting AdaptiveCpu thread";
     mIsEnabled = true;
     mShouldReloadConfig = true;
+    mLastEnabledHintTime = mTimeSource.GetTime();
     if (!mLoopThread.joinable()) {
         mLoopThread = std::thread([&]() {
             pthread_setname_np(pthread_self(), "AdaptiveCpu");
@@ -118,6 +119,13 @@ void AdaptiveCpu::RunMainLoop() {
     while (true) {
         ATRACE_NAME("loop");
         WaitForEnabledAndWorkDurations();
+
+        if (mLastEnabledHintTime + mConfig.enabledHintTimeout < mTimeSource.GetTime()) {
+            LOG(INFO) << "Adaptive CPU hint timed out, last enabled time="
+                      << mLastEnabledHintTime.count() << "ns";
+            mIsEnabled = false;
+            continue;
+        }
 
         if (mShouldReloadConfig) {
             mConfig = AdaptiveCpuConfig::ReadFromSystemProperties();
@@ -207,6 +215,7 @@ void AdaptiveCpu::DumpToFd(int fd) const {
     std::stringstream result;
     result << "========== Begin Adaptive CPU stats ==========\n";
     result << "Enabled: " << mIsEnabled << "\n";
+    result << "Config: " << mConfig << "\n";
     result << "CPU frequencies per policy:\n";
     const auto previousCpuPolicyFrequencies = mCpuFrequencyReader.getPreviousCpuPolicyFrequencies();
     for (const auto &[policyId, cpuFrequencies] : previousCpuPolicyFrequencies) {

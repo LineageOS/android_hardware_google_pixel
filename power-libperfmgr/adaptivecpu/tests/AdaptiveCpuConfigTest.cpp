@@ -27,14 +27,19 @@ namespace impl {
 namespace pixel {
 
 using std::chrono_literals::operator""ms;
+using std::chrono_literals::operator""min;
 
 TEST(AdaptiveCpuConfigTest, valid) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "25");
     android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "500");
     android::base::SetProperty("debug.adaptivecpu.random_throttle_decision_percent", "25");
-    const AdaptiveCpuConfig config{.iterationSleepDuration = 25ms,
-                                   .hintTimeout = 500ms,
-                                   .randomThrottleDecisionProbability = 0.25};
+    android::base::SetProperty("debug.adaptivecpu.enabled_hint_timeout_ms", "1000");
+    const AdaptiveCpuConfig config{
+            .iterationSleepDuration = 25ms,
+            .hintTimeout = 500ms,
+            .randomThrottleDecisionProbability = 0.25,
+            .enabledHintTimeout = 1000ms,
+    };
     ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(), config);
 }
 
@@ -42,9 +47,13 @@ TEST(AdaptiveCpuConfigTest, defaultConfig) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "");
     android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "");
     android::base::SetProperty("debug.adaptivecpu.random_throttle_decision_percent", "");
-    const AdaptiveCpuConfig config{.iterationSleepDuration = 1000ms,
-                                   .hintTimeout = 2000ms,
-                                   .randomThrottleDecisionProbability = 0};
+    android::base::SetProperty("debug.adaptivecpu.enabled_hint_timeout_ms", "");
+    const AdaptiveCpuConfig config{
+            .iterationSleepDuration = 1000ms,
+            .hintTimeout = 2000ms,
+            .randomThrottleDecisionProbability = 0,
+            .enabledHintTimeout = 120min,
+    };
     ASSERT_EQ(AdaptiveCpuConfig::ReadFromSystemProperties(), config);
 }
 

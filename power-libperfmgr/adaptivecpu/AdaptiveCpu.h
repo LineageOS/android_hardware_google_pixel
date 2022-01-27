@@ -85,6 +85,7 @@ class AdaptiveCpu {
     CpuFrequencyReader mCpuFrequencyReader;
     std::unique_ptr<ICpuLoadReader> mCpuLoadReader;
     AdaptiveCpuStats mAdaptiveCpuStats;
+    const TimeSource mTimeSource;
 
     std::shared_ptr<HintManager> mHintManager;
 
@@ -103,6 +104,7 @@ class AdaptiveCpu {
     volatile bool mIsEnabled = false;
     bool mIsInitialized = false;
     volatile bool mShouldReloadConfig = false;
+    std::chrono::nanoseconds mLastEnabledHintTime;
     AdaptiveCpuConfig mConfig = AdaptiveCpuConfig::DEFAULT;
 };
 

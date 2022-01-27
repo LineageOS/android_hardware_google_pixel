@@ -38,6 +38,9 @@ struct AdaptiveCpuConfig {
     // Instead of throttling based on model output, choose a random throttle X% of the time. Must be
     // between 0 and 1 inclusive.
     double randomThrottleDecisionProbability;
+    // Setting AdaptiveCpu to enabled only lasts this long. For a continuous run, AdaptiveCpu needs
+    // to receive the enabled hint more frequently than this value.
+    std::chrono::milliseconds enabledHintTimeout;
 
     bool operator==(const AdaptiveCpuConfig &other) const;
 };
