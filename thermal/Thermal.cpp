@@ -599,6 +599,15 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 }
             }
             {
+                dump_buf << "getCachedTemperatures:" << std::endl;
+                const auto &sensor_status_map = thermal_helper_.GetSensorStatusMap();
+                for (const auto &sensor_status_pair : sensor_status_map) {
+                    dump_buf << " Name: " << sensor_status_pair.first
+                             << " CachedValue: " << sensor_status_pair.second.thermal_cached.temp
+                             << std::endl;
+                }
+            }
+            {
                 dump_buf << "getTemperatureThresholds:" << std::endl;
                 hidl_vec<TemperatureThreshold> temperatures;
                 if (!thermal_helper_.fillTemperatureThresholds(false, TemperatureType_2_0::SKIN,
