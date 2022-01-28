@@ -221,12 +221,7 @@ HintStats HintManager::GetHintStats(const std::string &hint_type) const {
 }
 
 void HintManager::DumpToFd(int fd) {
-    std::string header(
-        "========== Begin perfmgr nodes ==========\n"
-        "Node Name\t"
-        "Node Path\t"
-        "Current Index\t"
-        "Current Value\n");
+    std::string header("========== Begin perfmgr nodes ==========\n");
     if (!android::base::WriteStringToFd(header, fd)) {
         LOG(ERROR) << "Failed to dump fd: " << fd;
     }

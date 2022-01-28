@@ -114,9 +114,16 @@ void FileNode::DumpToFd(int fd) const {
         LOG(ERROR) << "Failed to read node path: " << node_path_;
     }
     node_value = android::base::Trim(node_value);
-    std::string buf(android::base::StringPrintf("%s\t%s\t%zu\t%s\t%d\t%d\n", name_.c_str(),
-                                                node_path_.c_str(), current_val_index_,
-                                                node_value.c_str(), hold_fd_, truncate_));
+    std::string buf(
+            android::base::StringPrintf("Node Name\t"
+                                        "Node Path\t"
+                                        "Current Index\t"
+                                        "Current Value\t"
+                                        "Hold FD\t"
+                                        "Truncate\n"
+                                        "%s\t%s\t%zu\t%s\t%d\t%d\n",
+                                        name_.c_str(), node_path_.c_str(), current_val_index_,
+                                        node_value.c_str(), hold_fd_, truncate_));
     if (!android::base::WriteStringToFd(buf, fd)) {
         LOG(ERROR) << "Failed to dump fd: " << fd;
     }
