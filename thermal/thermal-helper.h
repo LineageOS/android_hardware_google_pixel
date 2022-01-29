@@ -1,30 +1,17 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2018 The Android Open Source Project
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- * *    * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *     * Neither the name of The Linux Foundation nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #pragma once
@@ -76,6 +63,11 @@ using CdevRequestStatus = std::unordered_map<std::string, int>;
 // Get thermal_zone type
 bool getThermalZoneTypeById(int tz_id, std::string *);
 
+struct ThermalSample {
+    float temp;
+    boot_clock::time_point timestamp;
+};
+
 struct SensorStatus {
     ThrottlingSeverity severity;
     ThrottlingSeverity prev_hot_severity;
@@ -84,6 +76,7 @@ struct SensorStatus {
     boot_clock::time_point last_update_time;
     std::unordered_map<std::string, int> pid_request_map;
     std::unordered_map<std::string, int> hard_limit_request_map;
+    ThermalSample thermal_cached;
     float err_integral;
     float prev_err;
 };
@@ -111,9 +104,9 @@ class ThermalHelper {
     explicit ThermalHelper(const NotificationCallback &cb);
     ~ThermalHelper() = default;
 
-    bool fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) const;
+    bool fillTemperatures(hidl_vec<Temperature_1_0> *temperatures);
     bool fillCurrentTemperatures(bool filterType, bool filterCallback, TemperatureType_2_0 type,
-                                 hidl_vec<Temperature_2_0> *temperatures) const;
+                                 hidl_vec<Temperature_2_0> *temperatures);
     bool fillTemperatureThresholds(bool filterType, TemperatureType_2_0 type,
                                    hidl_vec<TemperatureThreshold> *thresholds) const;
     bool fillCurrentCoolingDevices(bool filterType, CoolingType type,
@@ -127,12 +120,11 @@ class ThermalHelper {
     bool isInitializedOk() const { return is_initialized_; }
 
     // Read the temperature of a single sensor.
-    bool readTemperature(std::string_view sensor_name, Temperature_1_0 *out,
-                         bool is_virtual_sensor = false) const;
+    bool readTemperature(std::string_view sensor_name, Temperature_1_0 *out);
     bool readTemperature(
             std::string_view sensor_name, Temperature_2_0 *out,
             std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr,
-            bool is_virtual_sensor = false) const;
+            const bool force_sysfs = false);
     bool readTemperatureThreshold(std::string_view sensor_name, TemperatureThreshold *out) const;
     // Read the value of a single cooling device.
     bool readCoolingDevice(std::string_view cooling_device, CoolingDevice_2_0 *out) const;
@@ -189,8 +181,8 @@ class ThermalHelper {
         const ThrottlingArray &hot_hysteresis, const ThrottlingArray &cold_hysteresis,
         ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
         float value) const;
-    bool checkVirtualSensor(std::string_view sensor_name, std::string *temp) const;
-
+    // Read temperature data according to thermal sensor's info
+    bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs);
     // Return the target state of PID algorithm
     size_t getTargetStateOfPID(const SensorInfo &sensor_info, const SensorStatus &sensor_status);
     // Return the power budget which is computed by PID algorithm
