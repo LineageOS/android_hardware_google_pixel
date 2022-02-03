@@ -34,6 +34,8 @@ class MockFilesystem : public IFilesystem {
     MOCK_METHOD(bool, ReadFileStream,
                 (const std::string &path, std::unique_ptr<std::istream> *result),
                 (const, override));
+    MOCK_METHOD(bool, ResetFileStream, (const std::unique_ptr<std::istream> &fileStream),
+                (const, override));
 };
 
 class MockTimeSource : public ITimeSource {

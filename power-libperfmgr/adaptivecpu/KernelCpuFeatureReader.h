@@ -65,8 +65,12 @@ class KernelCpuFeatureReader {
   private:
     const std::unique_ptr<IFilesystem> mFilesystem;
     const std::unique_ptr<ITimeSource> mTimeSource;
+    // We only open the stats file once and reuse the file descriptor. We find this reduces
+    // ReadStats runtime by 2x.
+    std::unique_ptr<std::istream> mStatsFile;
     std::array<acpu_stats, NUM_CPU_CORES> mPreviousStats;
     std::chrono::nanoseconds mPreviousReadTime;
+    bool OpenStatsFile(std::unique_ptr<std::istream> *file);
     bool ReadStats(std::array<acpu_stats, NUM_CPU_CORES> *stats,
                    std::chrono::nanoseconds *readTime);
 };

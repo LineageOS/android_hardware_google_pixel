@@ -36,6 +36,9 @@ constexpr size_t kReadBufferSize = sizeof(acpu_stats) * NUM_CPU_CORES;
 
 bool KernelCpuFeatureReader::Init() {
     ATRACE_CALL();
+    if (!OpenStatsFile(&mStatsFile)) {
+        return false;
+    }
     return ReadStats(&mPreviousStats, &mPreviousReadTime);
 }
 
@@ -83,24 +86,27 @@ bool KernelCpuFeatureReader::GetRecentCpuFeatures(
     return true;
 }
 
+bool KernelCpuFeatureReader::OpenStatsFile(std::unique_ptr<std::istream> *file) {
+    ATRACE_CALL();
+    return mFilesystem->ReadFileStream(kKernelFilePath.data(), file);
+}
+
 bool KernelCpuFeatureReader::ReadStats(std::array<acpu_stats, NUM_CPU_CORES> *stats,
                                        std::chrono::nanoseconds *readTime) {
     ATRACE_CALL();
     *readTime = mTimeSource->GetKernelTime();
-
-    std::unique_ptr<std::istream> file;
-    if (!mFilesystem->ReadFileStream(kKernelFilePath.data(), &file)) {
+    if (!mFilesystem->ResetFileStream(mStatsFile)) {
         return false;
     }
     char buffer[kReadBufferSize];
     {
         ATRACE_NAME("read");
-        if (!file->read(buffer, kReadBufferSize).good()) {
+        if (!mStatsFile->read(buffer, kReadBufferSize).good()) {
             LOG(ERROR) << "Failed to read stats file";
             return false;
         }
     }
-    const size_t bytesRead = file->gcount();
+    const size_t bytesRead = mStatsFile->gcount();
     if (bytesRead != kReadBufferSize) {
         LOG(ERROR) << "Didn't read full data: expected=" << kReadBufferSize
                    << ", actual=" << bytesRead;

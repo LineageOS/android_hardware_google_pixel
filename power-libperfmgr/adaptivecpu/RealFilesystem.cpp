@@ -60,6 +60,14 @@ bool RealFilesystem::ReadFileStream(const std::string &path,
     return true;
 }
 
+bool RealFilesystem::ResetFileStream(const std::unique_ptr<std::istream> &fileStream) const {
+    if (fileStream->seekg(0).bad()) {
+        LOG(ERROR) << "Failed to reset file stream";
+        return false;
+    }
+    return true;
+}
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
