@@ -42,7 +42,8 @@ TEST(AdaptiveCpuStatsTest, singleRun) {
 
     AdaptiveCpuStats stats(std::move(timeSource));
     stats.RegisterStartRun();
-    stats.RegisterSuccessfulRun(ThrottleDecision::NO_THROTTLE, ThrottleDecision::THROTTLE_60, {});
+    stats.RegisterSuccessfulRun(ThrottleDecision::NO_THROTTLE, ThrottleDecision::THROTTLE_60, {},
+                                AdaptiveCpuConfig::DEFAULT);
 
     std::stringstream stream;
     stats.DumpToStream(stream);
@@ -72,16 +73,20 @@ TEST(AdaptiveCpuStatsTest, multipleRuns) {
     stats.RegisterStartRun();
     stats.RegisterSuccessfulRun(ThrottleDecision::NO_THROTTLE, ThrottleDecision::THROTTLE_60,
                                 // Ignored, as this is the first call.
-                                {.numDurations = 100000, .numMissedDeadlines = 123});
+                                {.numDurations = 100000, .numMissedDeadlines = 123},
+                                AdaptiveCpuConfig::DEFAULT);
     stats.RegisterStartRun();
     stats.RegisterSuccessfulRun(ThrottleDecision::THROTTLE_60, ThrottleDecision::THROTTLE_70,
-                                {.numDurations = 100, .numMissedDeadlines = 10});
+                                {.numDurations = 100, .numMissedDeadlines = 10},
+                                AdaptiveCpuConfig::DEFAULT);
     stats.RegisterStartRun();
     stats.RegisterSuccessfulRun(ThrottleDecision::THROTTLE_70, ThrottleDecision::THROTTLE_60,
-                                {.numDurations = 50, .numMissedDeadlines = 1});
+                                {.numDurations = 50, .numMissedDeadlines = 1},
+                                AdaptiveCpuConfig::DEFAULT);
     stats.RegisterStartRun();
     stats.RegisterSuccessfulRun(ThrottleDecision::THROTTLE_60, ThrottleDecision::THROTTLE_80,
-                                {.numDurations = 200, .numMissedDeadlines = 20});
+                                {.numDurations = 200, .numMissedDeadlines = 20},
+                                AdaptiveCpuConfig::DEFAULT);
 
     std::stringstream stream;
     stats.DumpToStream(stream);
@@ -108,7 +113,8 @@ TEST(AdaptiveCpuStatsTest, failedRun) {
     AdaptiveCpuStats stats(std::move(timeSource));
     stats.RegisterStartRun();
     stats.RegisterStartRun();
-    stats.RegisterSuccessfulRun(ThrottleDecision::NO_THROTTLE, ThrottleDecision::THROTTLE_60, {});
+    stats.RegisterSuccessfulRun(ThrottleDecision::NO_THROTTLE, ThrottleDecision::THROTTLE_60, {},
+                                AdaptiveCpuConfig::DEFAULT);
 
     std::stringstream stream;
     stats.DumpToStream(stream);

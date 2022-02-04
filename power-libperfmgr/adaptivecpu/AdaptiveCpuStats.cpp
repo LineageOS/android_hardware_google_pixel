@@ -43,7 +43,8 @@ void AdaptiveCpuStats::RegisterStartRun() {
 
 void AdaptiveCpuStats::RegisterSuccessfulRun(ThrottleDecision previousThrottleDecision,
                                              ThrottleDecision throttleDecision,
-                                             WorkDurationFeatures workDurationFeatures) {
+                                             WorkDurationFeatures workDurationFeatures,
+                                             const AdaptiveCpuConfig &config) {
     ATRACE_CALL();
     mNumSuccessfulRuns++;
     mNumThrottles[throttleDecision]++;
@@ -53,7 +54,7 @@ void AdaptiveCpuStats::RegisterSuccessfulRun(ThrottleDecision previousThrottleDe
     if (mLastRunSuccessTime != 0ns) {
         mThrottleDurations[previousThrottleDecision] +=
                 std::min(runSuccessTime - mLastRunSuccessTime,
-                         std::chrono::duration_cast<std::chrono::nanoseconds>(HINT_TIMEOUT));
+                         std::chrono::duration_cast<std::chrono::nanoseconds>(config.hintTimeout));
         mNumDurations[previousThrottleDecision] += workDurationFeatures.numDurations;
         mNumMissedDeadlines[previousThrottleDecision] += workDurationFeatures.numMissedDeadlines;
     }

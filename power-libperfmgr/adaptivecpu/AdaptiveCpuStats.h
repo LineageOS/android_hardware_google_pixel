@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "AdaptiveCpuConfig.h"
 #include "ITimeSource.h"
 #include "Model.h"
 #include "TimeSource.h"
@@ -39,7 +40,8 @@ class AdaptiveCpuStats {
     void RegisterStartRun();
     void RegisterSuccessfulRun(ThrottleDecision previousThrottleDecision,
                                ThrottleDecision throttleDecision,
-                               WorkDurationFeatures workDurationFeatures);
+                               WorkDurationFeatures workDurationFeatures,
+                               const AdaptiveCpuConfig &config);
     void DumpToStream(std::stringstream &stream) const;
 
   private:
