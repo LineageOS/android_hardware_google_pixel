@@ -25,6 +25,7 @@
 #include <random>
 #include <vector>
 
+#include "AdaptiveCpuConfig.h"
 #include "CpuFrequencyReader.h"
 #include "ICpuLoadReader.h"
 #include "WorkDurationProcessor.h"
@@ -74,7 +75,8 @@ class Model {
         : mShouldRandomThrottleDistribution(0, 1),
           mRandomThrottleDistribution(static_cast<uint32_t>(ThrottleDecision::FIRST),
                                       static_cast<uint32_t>(ThrottleDecision::LAST)) {}
-    ThrottleDecision Run(const std::deque<ModelInput> &modelInputs);
+    ThrottleDecision Run(const std::deque<ModelInput> &modelInputs,
+                         const AdaptiveCpuConfig &config);
 
   private:
     std::default_random_engine mGenerator;

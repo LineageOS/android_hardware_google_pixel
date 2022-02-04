@@ -39,6 +39,7 @@ cc_library {
     vendor: true,
     srcs: [
         "adaptivecpu/AdaptiveCpu.cpp",
+        "adaptivecpu/AdaptiveCpuConfig.cpp",
         "adaptivecpu/AdaptiveCpuStats.cpp",
         "adaptivecpu/CpuFrequencyReader.cpp",
         "adaptivecpu/CpuLoadReaderProcStat.cpp",
@@ -63,22 +64,23 @@ cc_test {
     proprietary: true,
     vendor: true,
     srcs: [
+        "adaptivecpu/tests/AdaptiveCpuConfigTest.cpp",
         "adaptivecpu/tests/AdaptiveCpuStatsTest.cpp",
         "adaptivecpu/tests/CpuFrequencyReaderTest.cpp",
-        "adaptivecpu/tests/CpuLoadReaderSysDevicesTest.cpp",
         "adaptivecpu/tests/CpuLoadReaderProcStatTest.cpp",
+        "adaptivecpu/tests/CpuLoadReaderSysDevicesTest.cpp",
         "adaptivecpu/tests/ModelTest.cpp",
         "adaptivecpu/tests/WorkDurationProcessorTest.cpp",
     ],
     static_libs: [
         "libadaptivecpu",
         "libgmock",
+        "android.hardware.power-V3-ndk",
     ],
     shared_libs: [
         "liblog",
         "libbase",
         "libcutils",
-        "android.hardware.power-V3-ndk",
     ],
 }
 

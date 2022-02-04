@@ -39,6 +39,7 @@ constexpr std::chrono::nanoseconds kMaxDuration = 600 * kNormalTargetDuration;
 // If we haven't processed a lot of batches, stop accepting new ones. In cases where the processing
 // thread has crashed, but the reporting thread is still reporting, this prevents consuming large
 // amounts of memory.
+// TODO(b/213160386): Move to AdaptiveCpuConfig.
 constexpr size_t kMaxUnprocessedBatches = 1000;
 
 namespace aidl {
