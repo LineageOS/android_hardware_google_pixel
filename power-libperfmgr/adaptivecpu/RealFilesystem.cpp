@@ -33,7 +33,7 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-bool RealFilesystem::listDirectory(const std::string &path,
+bool RealFilesystem::ListDirectory(const std::string &path,
                                    std::vector<std::string> *result) const {
     ATRACE_CALL();
     // We can't use std::filesystem, see aosp/894015 & b/175635923.
@@ -49,7 +49,7 @@ bool RealFilesystem::listDirectory(const std::string &path,
     return true;
 }
 
-bool RealFilesystem::readFileStream(const std::string &path,
+bool RealFilesystem::ReadFileStream(const std::string &path,
                                     std::unique_ptr<std::istream> *result) const {
     ATRACE_CALL();
     *result = std::make_unique<std::ifstream>(path);

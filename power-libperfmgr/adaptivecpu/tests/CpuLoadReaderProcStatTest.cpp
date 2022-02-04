@@ -34,7 +34,7 @@ namespace pixel {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/stat", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
@@ -64,7 +64,7 @@ TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads) {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithMissingValues) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/stat", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;
@@ -91,7 +91,7 @@ TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithMissingValues) {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithEmptyFile) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/stat", _))
             .Times(2)
             .WillRepeatedly([](auto _path __attribute__((unused)), auto result) {
                 *result = std::make_unique<std::istringstream>("");
@@ -106,7 +106,7 @@ TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithEmptyFile) {
 
 TEST(CpuLoadReaderProcStatTest, GetRecentCpuLoads_failsWithDifferentCpus) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, readFileStream("/proc/stat", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/stat", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 std::stringstream ss;

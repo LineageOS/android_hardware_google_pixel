@@ -100,7 +100,7 @@ bool CpuLoadReaderSysDevices::ReadCpuTimes(std::array<CpuTime, NUM_CPU_CORES> *r
             cpuIdlePath << "/sys/devices/system/cpu/"
                         << "cpu" << cpuId << "/cpuidle/" << idleStateName << "/time";
             std::unique_ptr<std::istream> file;
-            if (!mFilesystem->readFileStream(cpuIdlePath.str(), &file)) {
+            if (!mFilesystem->ReadFileStream(cpuIdlePath.str(), &file)) {
                 return false;
             }
             // Times are reported in microseconds:
@@ -119,7 +119,7 @@ bool CpuLoadReaderSysDevices::ReadCpuTimes(std::array<CpuTime, NUM_CPU_CORES> *r
 
 bool CpuLoadReaderSysDevices::ReadIdleStateNames(std::vector<std::string> *result) const {
     std::vector<std::string> idleStateNames;
-    if (!mFilesystem->listDirectory("/sys/devices/system/cpu/cpu0/cpuidle", &idleStateNames)) {
+    if (!mFilesystem->ListDirectory("/sys/devices/system/cpu/cpu0/cpuidle", &idleStateNames)) {
         return false;
     }
     for (const auto &idleStateName : idleStateNames) {
@@ -127,7 +127,7 @@ bool CpuLoadReaderSysDevices::ReadIdleStateNames(std::vector<std::string> *resul
             continue;
         }
         std::vector<std::string> files;
-        if (!mFilesystem->listDirectory(
+        if (!mFilesystem->ListDirectory(
                     std::string("/sys/devices/system/cpu/cpu0/cpuidle/") + idleStateName, &files)) {
             return false;
         }

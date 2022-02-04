@@ -89,7 +89,7 @@ bool KernelCpuFeatureReader::ReadStats(std::array<acpu_stats, NUM_CPU_CORES> *st
     *readTime = mTimeSource->GetKernelTime();
 
     std::unique_ptr<std::istream> file;
-    if (!mFilesystem->readFileStream(kKernelFilePath.data(), &file)) {
+    if (!mFilesystem->ReadFileStream(kKernelFilePath.data(), &file)) {
         return false;
     }
     char buffer[kReadBufferSize];

@@ -38,35 +38,35 @@ std::ostream &operator<<(std::ostream &stream, const CpuPolicyAverageFrequency &
 
 TEST(CpuFrequencyReaderTest, cpuPolicyIds) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+    EXPECT_CALL(*filesystem, ListDirectory("/sys/devices/system/cpu/cpufreq", _))
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::vector<std::string>{"ignored1", "policy1",  "ignored2",
                                                    "policy5",  "policy10", "policybad"};
                 return true;
             });
-    EXPECT_CALL(*filesystem, readFileStream(_, _))
+    EXPECT_CALL(*filesystem, ReadFileStream(_, _))
             .WillRepeatedly([](auto _path __attribute__((unused)), auto result) {
                 *result = std::make_unique<std::istringstream>("1 2\n3 4\n");
                 return true;
             });
 
     CpuFrequencyReader reader(std::move(filesystem));
-    EXPECT_TRUE(reader.init());
+    EXPECT_TRUE(reader.Init());
 
     std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> expected = {
             {1, {{1, 20ms}, {3, 40ms}}}, {5, {{1, 20ms}, {3, 40ms}}}, {10, {{1, 20ms}, {3, 40ms}}}};
-    EXPECT_EQ(reader.getPreviousCpuPolicyFrequencies(), expected);
+    EXPECT_EQ(reader.GetPreviousCpuPolicyFrequencies(), expected);
 }
 
 TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+    EXPECT_CALL(*filesystem, ListDirectory("/sys/devices/system/cpu/cpufreq", _))
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::vector<std::string>{"policy1", "policy2"};
                 return true;
             });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
+                ReadFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::make_unique<std::istringstream>("1000 5\n2000 4");
@@ -77,7 +77,7 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
                 return true;
             });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy2/stats/time_in_state", _))
+                ReadFileStream("/sys/devices/system/cpu/cpufreq/policy2/stats/time_in_state", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::make_unique<std::istringstream>("1500 1\n2500 23");
@@ -89,10 +89,10 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
             });
 
     CpuFrequencyReader reader(std::move(filesystem));
-    EXPECT_TRUE(reader.init());
+    EXPECT_TRUE(reader.Init());
 
     std::vector<CpuPolicyAverageFrequency> actual;
-    EXPECT_TRUE(reader.getRecentCpuPolicyFrequencies(&actual));
+    EXPECT_TRUE(reader.GetRecentCpuPolicyFrequencies(&actual));
     EXPECT_EQ(actual, std::vector<CpuPolicyAverageFrequency>({
                               {.policyId = 1, .averageFrequencyHz = 1750},
                               {.policyId = 2, .averageFrequencyHz = 1500},
@@ -101,13 +101,13 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies) {
 
 TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_frequenciesChange) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+    EXPECT_CALL(*filesystem, ListDirectory("/sys/devices/system/cpu/cpufreq", _))
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::vector<std::string>{"policy1"};
                 return true;
             });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
+                ReadFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::make_unique<std::istringstream>("1000 5\n2000 4");
@@ -119,21 +119,21 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_frequenciesChange) {
             });
 
     CpuFrequencyReader reader(std::move(filesystem));
-    EXPECT_TRUE(reader.init());
+    EXPECT_TRUE(reader.Init());
 
     std::vector<CpuPolicyAverageFrequency> actual;
-    EXPECT_FALSE(reader.getRecentCpuPolicyFrequencies(&actual));
+    EXPECT_FALSE(reader.GetRecentCpuPolicyFrequencies(&actual));
 }
 
 TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_badFormat) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
-    EXPECT_CALL(*filesystem, listDirectory("/sys/devices/system/cpu/cpufreq", _))
+    EXPECT_CALL(*filesystem, ListDirectory("/sys/devices/system/cpu/cpufreq", _))
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::vector<std::string>{"policy1"};
                 return true;
             });
     EXPECT_CALL(*filesystem,
-                readFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
+                ReadFileStream("/sys/devices/system/cpu/cpufreq/policy1/stats/time_in_state", _))
             .Times(2)
             .WillOnce([](auto _path __attribute__((unused)), auto result) {
                 *result = std::make_unique<std::istringstream>("1000 1");
@@ -145,10 +145,10 @@ TEST(CpuFrequencyReaderTest, getRecentCpuPolicyFrequencies_badFormat) {
             });
 
     CpuFrequencyReader reader(std::move(filesystem));
-    EXPECT_TRUE(reader.init());
+    EXPECT_TRUE(reader.Init());
 
     std::vector<CpuPolicyAverageFrequency> actual;
-    EXPECT_FALSE(reader.getRecentCpuPolicyFrequencies(&actual));
+    EXPECT_FALSE(reader.GetRecentCpuPolicyFrequencies(&actual));
 }
 
 }  // namespace pixel

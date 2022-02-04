@@ -41,7 +41,7 @@ TEST(KernelCpuFeatureReaderTest, valid) {
             .WillOnce(Return(100ns))
             .WillOnce(Return(200ns));
 
-    EXPECT_CALL(*filesystem, readFileStream("/proc/vendor_sched/acpu_stats", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/vendor_sched/acpu_stats", _))
             .Times(2)
             .WillOnce([](auto path __attribute__((unused)), auto result) {
                 std::array<acpu_stats, NUM_CPU_CORES> acpuStats{{
@@ -94,7 +94,7 @@ TEST(KernelCpuFeatureReaderTest, noFile) {
     std::unique_ptr<MockTimeSource> timeSource = std::make_unique<MockTimeSource>();
 
     EXPECT_CALL(*timeSource, GetKernelTime()).WillOnce(Return(100ns));
-    EXPECT_CALL(*filesystem, readFileStream("/proc/vendor_sched/acpu_stats", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/vendor_sched/acpu_stats", _))
             .WillOnce(Return(false));
 
     KernelCpuFeatureReader reader(std::move(filesystem), std::move(timeSource));
@@ -110,7 +110,7 @@ TEST(KernelCpuFeatureReaderTest, frequencies_negativeDiff) {
             .WillOnce(Return(100ns))
             .WillOnce(Return(200ns));
 
-    EXPECT_CALL(*filesystem, readFileStream("/proc/vendor_sched/acpu_stats", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/vendor_sched/acpu_stats", _))
             .Times(2)
             .WillOnce([](auto path __attribute__((unused)), auto result) {
                 std::array<acpu_stats, NUM_CPU_CORES> acpuStats{{
@@ -149,7 +149,7 @@ TEST(KernelCpuFeatureReaderTest, idleTimes_negativeDiff) {
             .WillOnce(Return(100ns))
             .WillOnce(Return(200ns));
 
-    EXPECT_CALL(*filesystem, readFileStream("/proc/vendor_sched/acpu_stats", _))
+    EXPECT_CALL(*filesystem, ReadFileStream("/proc/vendor_sched/acpu_stats", _))
             .Times(2)
             .WillOnce([](auto path __attribute__((unused)), auto result) {
                 std::array<acpu_stats, NUM_CPU_CORES> acpuStats{{
