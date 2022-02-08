@@ -29,6 +29,7 @@ class TimeSource : public ITimeSource {
   public:
     ~TimeSource() override {}
     std::chrono::nanoseconds GetTime() const override;
+    std::chrono::nanoseconds GetKernelTime() const override;
 };
 
 }  // namespace pixel

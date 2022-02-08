@@ -30,6 +30,7 @@ class ITimeSource {
   public:
     virtual ~ITimeSource() {}
     virtual std::chrono::nanoseconds GetTime() const = 0;
+    virtual std::chrono::nanoseconds GetKernelTime() const = 0;
 };
 
 }  // namespace pixel

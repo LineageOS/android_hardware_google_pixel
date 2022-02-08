@@ -29,10 +29,12 @@ namespace pixel {
 class MockFilesystem : public IFilesystem {
   public:
     ~MockFilesystem() override {}
-    MOCK_METHOD(bool, listDirectory, (const std::string &path, std::vector<std::string> *result),
+    MOCK_METHOD(bool, ListDirectory, (const std::string &path, std::vector<std::string> *result),
                 (const, override));
-    MOCK_METHOD(bool, readFileStream,
+    MOCK_METHOD(bool, ReadFileStream,
                 (const std::string &path, std::unique_ptr<std::istream> *result),
+                (const, override));
+    MOCK_METHOD(bool, ResetFileStream, (const std::unique_ptr<std::istream> &fileStream),
                 (const, override));
 };
 
@@ -40,6 +42,7 @@ class MockTimeSource : public ITimeSource {
   public:
     ~MockTimeSource() override {}
     MOCK_METHOD(std::chrono::nanoseconds, GetTime, (), (const, override));
+    MOCK_METHOD(std::chrono::nanoseconds, GetKernelTime, (), (const, override));
 };
 
 }  // namespace pixel

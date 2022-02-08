@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <ostream>
+
 #include "AdaptiveCpuConfig.h"
 #include "ITimeSource.h"
 #include "Model.h"
@@ -42,7 +44,7 @@ class AdaptiveCpuStats {
                                ThrottleDecision throttleDecision,
                                WorkDurationFeatures workDurationFeatures,
                                const AdaptiveCpuConfig &config);
-    void DumpToStream(std::stringstream &stream) const;
+    void DumpToStream(std::ostream &stream) const;
 
   private:
     const std::unique_ptr<ITimeSource> mTimeSource;

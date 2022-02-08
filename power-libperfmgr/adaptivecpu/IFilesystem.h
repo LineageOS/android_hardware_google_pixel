@@ -32,9 +32,13 @@ namespace pixel {
 class IFilesystem {
   public:
     virtual ~IFilesystem() {}
-    virtual bool listDirectory(const std::string &path, std::vector<std::string> *result) const = 0;
-    virtual bool readFileStream(const std::string &path,
+    virtual bool ListDirectory(const std::string &path, std::vector<std::string> *result) const = 0;
+    virtual bool ReadFileStream(const std::string &path,
                                 std::unique_ptr<std::istream> *result) const = 0;
+    // Resets the file stream, so that the next read will read from the beginning.
+    // This function exists in IFilesystem rather than using istream::seekg directly. This is
+    // so we can mock this function in tests, allowing us to return different data on reset.
+    virtual bool ResetFileStream(const std::unique_ptr<std::istream> &fileStream) const = 0;
 };
 
 }  // namespace pixel
