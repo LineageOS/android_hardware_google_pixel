@@ -61,7 +61,7 @@ void AdaptiveCpuStats::RegisterSuccessfulRun(ThrottleDecision previousThrottleDe
     mLastRunSuccessTime = runSuccessTime;
 }
 
-void AdaptiveCpuStats::DumpToStream(std::stringstream &stream) const {
+void AdaptiveCpuStats::DumpToStream(std::ostream &stream) const {
     stream << "Stats:\n";
     stream << "- Successful runs / total runs: " << mNumSuccessfulRuns << " / " << mNumStartedRuns
            << "\n";

@@ -19,14 +19,14 @@
 #include <array>
 #include <sstream>
 
+#include "Model.h"
+
 namespace aidl {
 namespace google {
 namespace hardware {
 namespace power {
 namespace impl {
 namespace pixel {
-
-constexpr uint32_t NUM_CPU_CORES = 8;
 
 class ICpuLoadReader {
   public:

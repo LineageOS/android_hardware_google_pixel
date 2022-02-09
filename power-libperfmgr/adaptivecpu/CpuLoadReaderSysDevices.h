@@ -22,6 +22,7 @@
 #include "ICpuLoadReader.h"
 #include "IFilesystem.h"
 #include "ITimeSource.h"
+#include "Model.h"
 #include "RealFilesystem.h"
 #include "TimeSource.h"
 

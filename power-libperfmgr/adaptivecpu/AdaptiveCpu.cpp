@@ -43,8 +43,7 @@ namespace pixel {
 constexpr uint32_t kNumHistoricalModelInputs = 3;
 
 // TODO(b/207662659): Add config for changing between different reader types.
-AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager)
-    : mCpuLoadReader(std::make_unique<CpuLoadReaderSysDevices>()), mHintManager(hintManager) {}
+AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager) : mHintManager(hintManager) {}
 
 bool AdaptiveCpu::IsEnabled() const {
     return mIsEnabled;
@@ -137,11 +136,7 @@ void AdaptiveCpu::RunMainLoop() {
         mAdaptiveCpuStats.RegisterStartRun();
 
         if (!mIsInitialized) {
-            if (!mCpuFrequencyReader.init()) {
-                mIsEnabled = false;
-                continue;
-            }
-            if (!mCpuLoadReader->Init()) {
+            if (!mKernelCpuFeatureReader.Init()) {
                 mIsEnabled = false;
                 continue;
             }
@@ -159,23 +154,8 @@ void AdaptiveCpu::RunMainLoop() {
             continue;
         }
 
-        std::vector<CpuPolicyAverageFrequency> cpuPolicyFrequencies;
-        if (!mCpuFrequencyReader.getRecentCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
-            mIsEnabled = false;
-            continue;
-        }
-        LOG(VERBOSE) << "Got CPU frequencies: " << cpuPolicyFrequencies.size();
-        for (const auto &cpuPolicyFrequency : cpuPolicyFrequencies) {
-            LOG(VERBOSE) << "policy=" << cpuPolicyFrequency.policyId
-                         << ", freq=" << cpuPolicyFrequency.averageFrequencyHz;
-        }
-        // TODO(mishaw): Move SetCpuFrequencies logic to CpuFrequencyReader.
-        if (!modelInput.SetCpuFreqiencies(cpuPolicyFrequencies)) {
-            mIsEnabled = false;
-            continue;
-        }
-
-        if (!mCpuLoadReader->GetRecentCpuLoads(&modelInput.cpuCoreIdleTimesPercentage)) {
+        if (!mKernelCpuFeatureReader.GetRecentCpuFeatures(&modelInput.cpuPolicyAverageFrequencyHz,
+                                                          &modelInput.cpuCoreIdleTimesPercentage)) {
             mIsEnabled = false;
             continue;
         }
@@ -216,15 +196,7 @@ void AdaptiveCpu::DumpToFd(int fd) const {
     result << "========== Begin Adaptive CPU stats ==========\n";
     result << "Enabled: " << mIsEnabled << "\n";
     result << "Config: " << mConfig << "\n";
-    result << "CPU frequencies per policy:\n";
-    const auto previousCpuPolicyFrequencies = mCpuFrequencyReader.getPreviousCpuPolicyFrequencies();
-    for (const auto &[policyId, cpuFrequencies] : previousCpuPolicyFrequencies) {
-        result << "- Policy=" << policyId << "\n";
-        for (const auto &[frequencyHz, time] : cpuFrequencies) {
-            result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
-        }
-    }
-    mCpuLoadReader->DumpToStream(result);
+    mKernelCpuFeatureReader.DumpToStream(result);
     mAdaptiveCpuStats.DumpToStream(result);
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {

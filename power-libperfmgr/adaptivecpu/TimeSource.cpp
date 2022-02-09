@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
+
 #include "TimeSource.h"
+
+#include <utils/Trace.h>
 
 namespace aidl {
 namespace google {
@@ -24,8 +28,16 @@ namespace impl {
 namespace pixel {
 
 std::chrono::nanoseconds TimeSource::GetTime() const {
+    ATRACE_CALL();
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch());
+}
+
+std::chrono::nanoseconds TimeSource::GetKernelTime() const {
+    ATRACE_CALL();
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return std::chrono::nanoseconds(ts.tv_sec * 1000000000UL + ts.tv_nsec);
 }
 
 }  // namespace pixel

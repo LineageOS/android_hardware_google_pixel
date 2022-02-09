@@ -38,21 +38,21 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-bool CpuFrequencyReader::init() {
+bool CpuFrequencyReader::Init() {
     ATRACE_CALL();
     mCpuPolicyIds.clear();
-    if (!readCpuPolicyIds(&mCpuPolicyIds)) {
+    if (!ReadCpuPolicyIds(&mCpuPolicyIds)) {
         return false;
     }
     mPreviousCpuPolicyFrequencies.clear();
-    return readCpuPolicyFrequencies(&mPreviousCpuPolicyFrequencies);
+    return ReadCpuPolicyFrequencies(&mPreviousCpuPolicyFrequencies);
 }
 
-bool CpuFrequencyReader::getRecentCpuPolicyFrequencies(
+bool CpuFrequencyReader::GetRecentCpuPolicyFrequencies(
         std::vector<CpuPolicyAverageFrequency> *result) {
     ATRACE_CALL();
     std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> cpuPolicyFrequencies;
-    if (!readCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
+    if (!ReadCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
         return false;
     }
     for (const auto &[policyId, cpuFrequencies] : cpuPolicyFrequencies) {
@@ -83,11 +83,11 @@ bool CpuFrequencyReader::getRecentCpuPolicyFrequencies(
 }
 
 std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>>
-CpuFrequencyReader::getPreviousCpuPolicyFrequencies() const {
+CpuFrequencyReader::GetPreviousCpuPolicyFrequencies() const {
     return mPreviousCpuPolicyFrequencies;
 }
 
-bool CpuFrequencyReader::readCpuPolicyFrequencies(
+bool CpuFrequencyReader::ReadCpuPolicyFrequencies(
         std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> *result) {
     ATRACE_CALL();
     for (const uint32_t cpuPolicyId : mCpuPolicyIds) {
@@ -95,7 +95,7 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
         timeInStatePath << "/sys/devices/system/cpu/cpufreq/policy" << cpuPolicyId
                         << "/stats/time_in_state";
         std::unique_ptr<std::istream> timeInStateFile;
-        if (!mFilesystem->readFileStream(timeInStatePath.str(), &timeInStateFile)) {
+        if (!mFilesystem->ReadFileStream(timeInStatePath.str(), &timeInStateFile)) {
             return false;
         }
 
@@ -122,10 +122,10 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
     return true;
 }
 
-bool CpuFrequencyReader::readCpuPolicyIds(std::vector<uint32_t> *result) const {
+bool CpuFrequencyReader::ReadCpuPolicyIds(std::vector<uint32_t> *result) const {
     ATRACE_CALL();
     std::vector<std::string> entries;
-    if (!mFilesystem->listDirectory(kCpuPolicyDirectory.data(), &entries)) {
+    if (!mFilesystem->ListDirectory(kCpuPolicyDirectory.data(), &entries)) {
         return false;
     }
     for (const auto &entry : entries) {

@@ -27,7 +27,6 @@
 
 #include "AdaptiveCpuConfig.h"
 #include "CpuFrequencyReader.h"
-#include "ICpuLoadReader.h"
 #include "WorkDurationProcessor.h"
 
 namespace aidl {
@@ -37,7 +36,11 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-constexpr uint32_t kNumCpuPolicies = 3;
+// Currently Adaptive CPU is targeted to only raven/oriole, so we can hardcode the CPU architecture.
+// If we extend to other architectures, this will have to vary per-device or be dynamically loaded.
+constexpr uint32_t NUM_CPU_CORES = 8;
+constexpr uint32_t NUM_CPU_POLICIES = 3;
+constexpr std::array<uint32_t, NUM_CPU_POLICIES> CPU_POLICY_INDICES{0, 4, 6};
 
 enum class ThrottleDecision {
     NO_THROTTLE = 0,
@@ -51,7 +54,7 @@ enum class ThrottleDecision {
 };
 
 struct ModelInput {
-    std::array<double, kNumCpuPolicies> cpuPolicyAverageFrequencyHz;
+    std::array<double, NUM_CPU_POLICIES> cpuPolicyAverageFrequencyHz;
     std::array<double, NUM_CPU_CORES> cpuCoreIdleTimesPercentage;
     WorkDurationFeatures workDurationFeatures;
     ThrottleDecision previousThrottleDecision;

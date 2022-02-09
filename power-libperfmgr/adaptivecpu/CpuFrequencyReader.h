@@ -50,17 +50,17 @@ class CpuFrequencyReader {
     // Initialize reading, must be done before calling other methods.
     // Work is not done in constructor as it accesses files.
     // Returns true on success.
-    bool init();
+    bool Init();
 
     // Gets the average frequency each CPU policy was using, since this method was last called.
     // Results are returned sorted by policyId.
     // Returns true on success.
-    bool getRecentCpuPolicyFrequencies(std::vector<CpuPolicyAverageFrequency> *result);
+    bool GetRecentCpuPolicyFrequencies(std::vector<CpuPolicyAverageFrequency> *result);
 
     // The most recently read frequencies for each CPU policy. See readCpuPolicyFrequencies for type
     // explanation. Used for dumping to bug reports.
     std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>>
-    getPreviousCpuPolicyFrequencies() const;
+    GetPreviousCpuPolicyFrequencies() const;
 
   private:
     // CPU policy IDs read from /sys. Initialized in #init(). Sorted ascending.
@@ -77,10 +77,10 @@ class CpuFrequencyReader {
     // - The inner map's value is the time the policy has been running at that frequency, aggregated
     //   since boot.
     // Returns true on success.
-    bool readCpuPolicyFrequencies(
+    bool ReadCpuPolicyFrequencies(
             std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> *result);
 
-    bool readCpuPolicyIds(std::vector<uint32_t> *result) const;
+    bool ReadCpuPolicyIds(std::vector<uint32_t> *result) const;
 };
 
 }  // namespace pixel
