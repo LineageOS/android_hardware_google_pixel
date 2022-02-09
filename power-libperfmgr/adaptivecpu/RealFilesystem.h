@@ -32,9 +32,10 @@ namespace pixel {
 class RealFilesystem : public IFilesystem {
   public:
     virtual ~RealFilesystem() {}
-    bool listDirectory(const std::string &path, std::vector<std::string> *result) const override;
-    bool readFileStream(const std::string &path,
+    bool ListDirectory(const std::string &path, std::vector<std::string> *result) const override;
+    bool ReadFileStream(const std::string &path,
                         std::unique_ptr<std::istream> *result) const override;
+    bool ResetFileStream(const std::unique_ptr<std::istream> &fileStream) const override;
 };
 
 }  // namespace pixel
