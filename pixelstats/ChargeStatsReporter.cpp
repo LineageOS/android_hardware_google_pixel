@@ -59,7 +59,7 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
                                  ChargeStats::kAdapterCapabilities4FieldNumber,
                                  ChargeStats::kReceiverState0FieldNumber,
                                  ChargeStats::kReceiverState1FieldNumber,
-                                 ChargeStats::kBatteryCapacityFieldNumber};
+                                 ChargeStats::kChargeCapacityFieldNumber};
     const int32_t chg_fields_size = std::size(charge_stats_fields);
     static_assert(chg_fields_size == 15, "Unexpected charge stats fields size");
     const int32_t wlc_fields_size = 7;
