@@ -145,6 +145,12 @@ enum WaveformIndex : uint16_t {
 std::vector<CompositePrimitive> defaultSupportedPrimitives = {
         ndk::enum_range<CompositePrimitive>().begin(), ndk::enum_range<CompositePrimitive>().end()};
 
+enum vibe_state {
+    VIBE_STATE_STOPPED = 0,
+    VIBE_STATE_HAPTIC,
+    VIBE_STATE_ASP,
+};
+
 static int min(int x, int y) {
     return x < y ? x : y;
 }
@@ -1316,10 +1322,10 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
-    if (!mHwApi->pollVibeState("Vibe state: Haptic\n", POLLING_TIMEOUT)) {
+    if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGE("Fail to get state \"Haptic\"");
     }
-    mHwApi->pollVibeState("Vibe state: Stopped\n");
+    mHwApi->pollVibeState(VIBE_STATE_STOPPED);
 
     if (callback) {
         auto ret = callback->onComplete();
