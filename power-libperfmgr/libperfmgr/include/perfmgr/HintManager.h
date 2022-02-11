@@ -131,6 +131,10 @@ class HintManager {
     // Start thread loop
     bool Start();
 
+    // Singleton
+    static std::shared_ptr<HintManager> GetInstance();
+    static std::shared_ptr<HintManager> Reload(bool start);
+
   protected:
     static std::vector<std::unique_ptr<Node>> ParseNodes(
         const std::string& json_doc);
@@ -141,6 +145,8 @@ class HintManager {
   private:
     HintManager(HintManager const&) = delete;
     void operator=(HintManager const&) = delete;
+    static std::shared_ptr<HintManager> mInstance;
+
     bool ValidateHint(const std::string& hint_type) const;
     // Helper function to update the HintStatus when DoHint
     void DoHintStatus(const std::string &hint_type, std::chrono::milliseconds timeout_ms);
