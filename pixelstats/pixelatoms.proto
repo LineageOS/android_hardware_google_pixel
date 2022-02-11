@@ -160,7 +160,7 @@ message ChargeStats {
     optional int32 receiver_state1 = 15;
 
     /* AACR feature to record capacity */
-    optional int32 battery_capacity = 16;
+    optional int32 charge_capacity = 16;
 }
 
 /* A message containing stats from each charge voltage tier. */
