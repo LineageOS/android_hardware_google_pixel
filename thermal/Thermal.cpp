@@ -263,10 +263,13 @@ void Thermal::sendThermalChangedCallback(const Temperature_2_0 &t) {
                            [&](const CallbackSetting &c) {
                                if (!c.is_filter_type || t.type == c.type) {
                                    Return<void> ret = c.callback->notifyThrottling(t);
-                                   return !ret.isOk();
+                                   if (!ret.isOk()) {
+                                       LOG(ERROR) << "a Thermal callback is dead, removed from "
+                                                     "callback list.";
+                                       return true;
+                                   }
+                                   return false;
                                }
-                               LOG(ERROR)
-                                   << "a Thermal callback is dead, removed from callback list.";
                                return false;
                            }),
             callbacks_.end());
