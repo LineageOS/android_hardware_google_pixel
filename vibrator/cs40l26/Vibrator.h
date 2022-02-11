@@ -47,10 +47,9 @@ class Vibrator : public BnVibrator {
         virtual bool setQ(std::string value) = 0;
         // Reports the number of effect waveforms loaded in firmware.
         virtual bool getEffectCount(uint32_t *value) = 0;
-        // Blocks until vibrator reaches desired state
-        // ("Vibe state: Haptic" means enabled).
-        // ("Vibe state: Stopped" means disabled).
-        virtual bool pollVibeState(std::string value, int32_t timeoutMs = -1) = 0;
+        // Blocks until timeout or vibrator reaches desired state
+        // (2 = ASP enabled, 1 = haptic enabled, 0 = disabled).
+        virtual bool pollVibeState(uint32_t value, int32_t timeoutMs = -1) = 0;
         // Enables/disables closed-loop active braking.
         virtual bool setClabEnable(bool value) = 0;
         // Reports the number of available PWLE segments.
