@@ -14,20 +14,26 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <string_view>
+#define ATRACE_TAG (ATRACE_TAG_THERMAL | ATRACE_TAG_HAL)
+
+#include "thermal_files.h"
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
-#include "thermal_files.h"
+#include <utils/Trace.h>
+
+#include <algorithm>
+#include <string_view>
 
 namespace android {
 namespace hardware {
 namespace thermal {
 namespace V2_0 {
 namespace implementation {
+
+using android::base::StringPrintf;
 
 std::string ThermalFiles::getThermalFilePath(std::string_view thermal_name) const {
     auto sensor_itr = thermal_name_to_path_map_.find(thermal_name.data());
@@ -45,6 +51,8 @@ bool ThermalFiles::readThermalFile(std::string_view thermal_name, std::string *d
     std::string sensor_reading;
     std::string file_path = getThermalFilePath(std::string_view(thermal_name));
     *data = "";
+
+    ATRACE_NAME(StringPrintf("ThermalFiles::readThermalFile - %s", thermal_name.data()).c_str());
     if (file_path.empty()) {
         PLOG(WARNING) << "Failed to find " << thermal_name << "'s path";
         return false;
@@ -64,6 +72,7 @@ bool ThermalFiles::writeCdevFile(std::string_view cdev_name, std::string_view da
     std::string file_path =
             getThermalFilePath(android::base::StringPrintf("%s_%s", cdev_name.data(), "w"));
 
+    ATRACE_NAME(StringPrintf("ThermalFiles::writeCdevFile - %s", cdev_name.data()).c_str());
     if (!android::base::WriteStringToFile(data.data(), file_path)) {
         PLOG(WARNING) << "Failed to write cdev: " << cdev_name << " to " << data.data();
         return false;
