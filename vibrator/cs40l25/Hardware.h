@@ -48,7 +48,6 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         open("device/clab_enable", &mClabEnable);
         open("device/available_pwle_segments", &mAvailablePwleSegments);
         open("device/pwle", &mPwle);
-        open("device/pwle_ramp_down", &mPwleRampDown);
     }
 
     bool setF0(uint32_t value) override { return set(value, &mF0); }
@@ -77,7 +76,6 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool getAvailablePwleSegments(uint32_t *value) override { return get(value, &mAvailablePwleSegments); }
     bool hasPwle() override { return has(mPwle); }
     bool setPwle(std::string value) override { return set(value, &mPwle); }
-    bool setPwleRampDown(uint32_t value) override { return set(value, &mPwleRampDown); }
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
@@ -103,7 +101,6 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mClabEnable;
     std::ifstream mAvailablePwleSegments;
     std::ofstream mPwle;
-    std::ofstream mPwleRampDown;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
