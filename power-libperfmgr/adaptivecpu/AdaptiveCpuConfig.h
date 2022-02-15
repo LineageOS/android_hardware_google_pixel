@@ -19,6 +19,8 @@
 #include <chrono>
 #include <iostream>
 
+#include "ThrottleDecision.h"
+
 namespace aidl {
 namespace google {
 namespace hardware {
@@ -27,7 +29,7 @@ namespace impl {
 namespace pixel {
 
 struct AdaptiveCpuConfig {
-    static AdaptiveCpuConfig ReadFromSystemProperties();
+    static bool ReadFromSystemProperties(AdaptiveCpuConfig *output);
     static const AdaptiveCpuConfig DEFAULT;
 
     // How long to sleep for between Adaptive CPU runs.
@@ -38,6 +40,7 @@ struct AdaptiveCpuConfig {
     // Instead of throttling based on model output, choose a random throttle X% of the time. Must be
     // between 0 and 1 inclusive.
     double randomThrottleDecisionProbability;
+    std::vector<ThrottleDecision> randomThrottleOptions;
     // Setting AdaptiveCpu to enabled only lasts this long. For a continuous run, AdaptiveCpu needs
     // to receive the enabled hint more frequently than this value.
     std::chrono::milliseconds enabledHintTimeout;
