@@ -1,5 +1,3 @@
-#pragma once
-
 /*
  * Copyright (C) 2021 The Android Open Source Project
  *
@@ -16,17 +14,19 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <inttypes.h>
 
 #include <array>
 #include <chrono>
 #include <deque>
-#include <map>
 #include <random>
 #include <vector>
 
 #include "AdaptiveCpuConfig.h"
 #include "CpuFrequencyReader.h"
+#include "ThrottleDecision.h"
 #include "WorkDurationProcessor.h"
 
 namespace aidl {
@@ -41,17 +41,6 @@ namespace pixel {
 constexpr uint32_t NUM_CPU_CORES = 8;
 constexpr uint32_t NUM_CPU_POLICIES = 3;
 constexpr std::array<uint32_t, NUM_CPU_POLICIES> CPU_POLICY_INDICES{0, 4, 6};
-
-enum class ThrottleDecision {
-    NO_THROTTLE = 0,
-    THROTTLE_50 = 1,
-    THROTTLE_60 = 2,
-    THROTTLE_70 = 3,
-    THROTTLE_80 = 4,
-    THROTTLE_90 = 5,
-    FIRST = NO_THROTTLE,
-    LAST = THROTTLE_90,
-};
 
 struct ModelInput {
     std::array<double, NUM_CPU_POLICIES> cpuPolicyAverageFrequencyHz;
@@ -88,8 +77,6 @@ class Model {
 
     ThrottleDecision RunDecisionTree(const std::deque<ModelInput> &modelInputs);
 };
-
-std::string ThrottleString(ThrottleDecision throttleDecision);
 
 }  // namespace pixel
 }  // namespace impl
