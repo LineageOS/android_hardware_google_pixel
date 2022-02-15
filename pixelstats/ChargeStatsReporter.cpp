@@ -58,9 +58,10 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
                                  ChargeStats::kAdapterCapabilities3FieldNumber,
                                  ChargeStats::kAdapterCapabilities4FieldNumber,
                                  ChargeStats::kReceiverState0FieldNumber,
-                                 ChargeStats::kReceiverState1FieldNumber};
+                                 ChargeStats::kReceiverState1FieldNumber,
+                                 ChargeStats::kChargeCapacityFieldNumber};
     const int32_t chg_fields_size = std::size(charge_stats_fields);
-    static_assert(chg_fields_size == 14, "Unexpected charge stats fields size");
+    static_assert(chg_fields_size == 15, "Unexpected charge stats fields size");
     const int32_t wlc_fields_size = 7;
     std::vector<VendorAtomValue> values(chg_fields_size);
     VendorAtomValue val;
@@ -68,7 +69,13 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
     int32_t pca_ac[2] = {0}, pca_rs[5] = {0};
 
     ALOGD("processing %s", line.c_str());
-    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
+    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d %d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
+               &tmp[5], &tmp[6], &tmp[14]) == 8) {
+        /* Age Adjusted Charge Rate (AACR) logs an additional battery capacity in order to determine
+         * the charge curve needed to minimize battery cycle life degradation, while also minimizing
+         * impact to the user.
+         */
+    } else if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
                &tmp[5], &tmp[6]) != 7) {
         ALOGE("Couldn't process %s", line.c_str());
         return;

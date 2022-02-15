@@ -28,13 +28,19 @@ using std::chrono_literals::operator""ns;
 // The standard target duration, based on 60 FPS. Durations submitted with different targets are
 // normalized against this target. For example, a duration that was at 80% of its target will be
 // scaled to 0.8 * kNormalTargetDuration.
-static const std::chrono::nanoseconds kNormalTargetDuration = 16666666ns;
+constexpr std::chrono::nanoseconds kNormalTargetDuration = 16666666ns;
 
 // All durations shorter than this are ignored.
-static const std::chrono::nanoseconds kMinDuration = 0ns;
+constexpr std::chrono::nanoseconds kMinDuration = 0ns;
 
 // All durations longer than this are ignored.
-static const std::chrono::nanoseconds kMaxDuration = 600 * kNormalTargetDuration;
+constexpr std::chrono::nanoseconds kMaxDuration = 600 * kNormalTargetDuration;
+
+// If we haven't processed a lot of batches, stop accepting new ones. In cases where the processing
+// thread has crashed, but the reporting thread is still reporting, this prevents consuming large
+// amounts of memory.
+// TODO(b/213160386): Move to AdaptiveCpuConfig.
+constexpr size_t kMaxUnprocessedBatches = 1000;
 
 namespace aidl {
 namespace google {
@@ -43,13 +49,19 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-void WorkDurationProcessor::ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
+bool WorkDurationProcessor::ReportWorkDurations(const std::vector<WorkDuration> &workDurations,
                                                 std::chrono::nanoseconds targetDuration) {
     ATRACE_CALL();
     LOG(VERBOSE) << "Received " << workDurations.size() << " work durations with target "
                  << targetDuration.count() << "ns";
     std::unique_lock<std::mutex> lock(mMutex);
+    if (mWorkDurationBatches.size() >= kMaxUnprocessedBatches) {
+        LOG(ERROR) << "Adaptive CPU isn't processing work durations fast enough";
+        mWorkDurationBatches.clear();
+        return false;
+    }
     mWorkDurationBatches.emplace_back(workDurations, targetDuration);
+    return true;
 }
 
 WorkDurationFeatures WorkDurationProcessor::GetFeatures() {

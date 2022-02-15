@@ -1,7 +1,8 @@
 PRODUCT_COPY_FILES += \
       hardware/google/pixel/common/init.pixel.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.pixel.rc
 
-BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common/vendor
+SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common/system_ext
 
 # Write flags to the vendor space in /misc partition.
 PRODUCT_PACKAGES += \
@@ -22,3 +23,10 @@ BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
 # Pixel Experience
 PRODUCT_PACKAGES_DEBUG += wifi_sniffer
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
+
+PRODUCT_PACKAGES_DEBUG += wifi_perf_diag
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_perf_diag
+
+# Enable whole-program R8 Java optimizations for SystemUI, but also
+# allow explicit overriding for testing and development.
+SYSTEMUI_OPTIMIZE_JAVA ?= true

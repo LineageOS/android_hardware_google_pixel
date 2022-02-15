@@ -29,6 +29,7 @@
 #include <deque>
 #include <numeric>
 
+#include "CpuLoadReaderSysDevices.h"
 #include "Model.h"
 
 namespace aidl {
@@ -38,23 +39,10 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-using std::chrono_literals::operator""ms;
-
-// Timeout applied to hints. If Adaptive CPU doesn't receive any frames in this time, CPU throttling
-// hints are cancelled.
-static const std::chrono::milliseconds kHintTimeout = 2000ms;
-
 // We pass the previous N ModelInputs to the model, including the most recent ModelInput.
 constexpr uint32_t kNumHistoricalModelInputs = 3;
 
-// The sleep duration for each iteration.
-// N.B.: The model will typically be trained with this value set to 25ms. We set it to 1s as a
-// safety measure, but best performance will be seen at 25ms.
-constexpr std::string_view kIterationSleepDurationProperty(
-        "debug.adaptivecpu.iteration_sleep_duration_ms");
-static const std::chrono::milliseconds kIterationSleepDurationDefault = 1000ms;
-static const std::chrono::milliseconds kIterationSleepDurationMin = 20ms;
-
+// TODO(b/207662659): Add config for changing between different reader types.
 AdaptiveCpu::AdaptiveCpu(std::shared_ptr<HintManager> hintManager) : mHintManager(hintManager) {}
 
 bool AdaptiveCpu::IsEnabled() const {
@@ -77,6 +65,7 @@ void AdaptiveCpu::StartThread() {
     LOG(INFO) << "Starting AdaptiveCpu thread";
     mIsEnabled = true;
     mShouldReloadConfig = true;
+    mLastEnabledHintTime = mTimeSource.GetTime();
     if (!mLoopThread.joinable()) {
         mLoopThread = std::thread([&]() {
             pthread_setname_np(pthread_self(), "AdaptiveCpu");
@@ -106,7 +95,10 @@ void AdaptiveCpu::ReportWorkDurations(const std::vector<WorkDuration> &workDurat
     if (!mIsEnabled) {
         return;
     }
-    mWorkDurationProcessor.ReportWorkDurations(workDurations, targetDuration);
+    if (!mWorkDurationProcessor.ReportWorkDurations(workDurations, targetDuration)) {
+        mIsEnabled = false;
+        return;
+    }
     mWorkDurationsAvailableCondition.notify_one();
 }
 
@@ -121,84 +113,67 @@ void AdaptiveCpu::WaitForEnabledAndWorkDurations() {
 void AdaptiveCpu::RunMainLoop() {
     ATRACE_CALL();
 
-    std::chrono::milliseconds iterationSleepDuration = kIterationSleepDurationDefault;
-
     std::deque<ModelInput> historicalModelInputs;
     ThrottleDecision previousThrottleDecision = ThrottleDecision::NO_THROTTLE;
     while (true) {
         ATRACE_NAME("loop");
         WaitForEnabledAndWorkDurations();
 
+        if (mLastEnabledHintTime + mConfig.enabledHintTimeout < mTimeSource.GetTime()) {
+            LOG(INFO) << "Adaptive CPU hint timed out, last enabled time="
+                      << mLastEnabledHintTime.count() << "ns";
+            mIsEnabled = false;
+            continue;
+        }
+
         if (mShouldReloadConfig) {
-            iterationSleepDuration =
-                    std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
-                            kIterationSleepDurationProperty.data(),
-                            kIterationSleepDurationDefault.count()));
-            iterationSleepDuration = std::max(iterationSleepDuration, kIterationSleepDurationMin);
-            LOG(VERBOSE) << "Read property iterationSleepDuration="
-                         << iterationSleepDuration.count() << "ms";
+            mConfig = AdaptiveCpuConfig::ReadFromSystemProperties();
+            LOG(INFO) << "Read config: " << mConfig;
             mShouldReloadConfig = false;
         }
 
         ATRACE_BEGIN("compute");
+        mAdaptiveCpuStats.RegisterStartRun();
 
         if (!mIsInitialized) {
-            if (!mCpuFrequencyReader.init()) {
+            if (!mKernelCpuFeatureReader.Init()) {
                 mIsEnabled = false;
                 continue;
             }
-            mCpuLoadReader.init();
             mIsInitialized = true;
         }
 
-        const WorkDurationFeatures workDurationFeatures = mWorkDurationProcessor.GetFeatures();
-        LOG(VERBOSE) << "Got work durations: count=" << workDurationFeatures.numDurations
-                     << ", average=" << workDurationFeatures.averageDuration.count() << "ns";
-        if (workDurationFeatures.numDurations == 0) {
-            continue;
-        }
-
-        std::vector<CpuPolicyAverageFrequency> cpuPolicyFrequencies;
-        if (!mCpuFrequencyReader.getRecentCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
-            mIsEnabled = false;
-            continue;
-        }
-        LOG(VERBOSE) << "Got CPU frequencies: " << cpuPolicyFrequencies.size();
-        for (const auto &cpuPolicyFrequency : cpuPolicyFrequencies) {
-            LOG(VERBOSE) << "policy=" << cpuPolicyFrequency.policyId
-                         << ", freq=" << cpuPolicyFrequency.averageFrequencyHz;
-        }
-
-        std::vector<CpuLoad> cpuLoads;
-        if (!mCpuLoadReader.getRecentCpuLoads(&cpuLoads)) {
-            mIsEnabled = false;
-            continue;
-        }
-        LOG(VERBOSE) << "Got CPU loads: " << cpuLoads.size();
-        for (const auto &cpuLoad : cpuLoads) {
-            LOG(VERBOSE) << "cpu=" << cpuLoad.cpuId << ", idle=" << cpuLoad.idleTimeFraction;
-        }
-
         ModelInput modelInput;
-        if (!modelInput.Init(cpuPolicyFrequencies, cpuLoads, workDurationFeatures,
-                             previousThrottleDecision)) {
+        modelInput.previousThrottleDecision = previousThrottleDecision;
+
+        modelInput.workDurationFeatures = mWorkDurationProcessor.GetFeatures();
+        LOG(VERBOSE) << "Got work durations: count=" << modelInput.workDurationFeatures.numDurations
+                     << ", average=" << modelInput.workDurationFeatures.averageDuration.count()
+                     << "ns";
+        if (modelInput.workDurationFeatures.numDurations == 0) {
+            continue;
+        }
+
+        if (!mKernelCpuFeatureReader.GetRecentCpuFeatures(&modelInput.cpuPolicyAverageFrequencyHz,
+                                                          &modelInput.cpuCoreIdleTimesPercentage)) {
             mIsEnabled = false;
             continue;
         }
+
         modelInput.LogToAtrace();
         historicalModelInputs.push_back(modelInput);
         if (historicalModelInputs.size() > kNumHistoricalModelInputs) {
             historicalModelInputs.pop_front();
         }
 
-        const ThrottleDecision throttleDecision = RunModel(historicalModelInputs);
+        const ThrottleDecision throttleDecision = mModel.Run(historicalModelInputs, mConfig);
         LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
         ATRACE_INT("AdaptiveCpu_throttleDecision", static_cast<uint32_t>(throttleDecision));
 
         if (throttleDecision != previousThrottleDecision) {
             ATRACE_NAME("sendHints");
             for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
-                mHintManager->DoHint(hintName, kHintTimeout);
+                mHintManager->DoHint(hintName, mConfig.hintTimeout);
             }
             for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
                 mHintManager->EndHint(hintName);
@@ -206,10 +181,12 @@ void AdaptiveCpu::RunMainLoop() {
             previousThrottleDecision = throttleDecision;
         }
 
+        mAdaptiveCpuStats.RegisterSuccessfulRun(previousThrottleDecision, throttleDecision,
+                                                modelInput.workDurationFeatures, mConfig);
         ATRACE_END();  // compute
         {
             ATRACE_NAME("sleep");
-            std::this_thread::sleep_for(iterationSleepDuration);
+            std::this_thread::sleep_for(mConfig.iterationSleepDuration);
         }
     }
 }
@@ -218,20 +195,9 @@ void AdaptiveCpu::DumpToFd(int fd) const {
     std::stringstream result;
     result << "========== Begin Adaptive CPU stats ==========\n";
     result << "Enabled: " << mIsEnabled << "\n";
-    result << "CPU frequencies per policy:\n";
-    const auto previousCpuPolicyFrequencies = mCpuFrequencyReader.getPreviousCpuPolicyFrequencies();
-    for (const auto &[policyId, cpuFrequencies] : previousCpuPolicyFrequencies) {
-        result << "- Policy=" << policyId << "\n";
-        for (const auto &[frequencyHz, time] : cpuFrequencies) {
-            result << "  - frequency=" << frequencyHz << "Hz, time=" << time.count() << "ms\n";
-        }
-    }
-    result << "CPU loads:\n";
-    const auto previousCpuTimes = mCpuLoadReader.getPreviousCpuTimes();
-    for (const auto &[cpuId, cpuTime] : previousCpuTimes) {
-        result << "- CPU=" << cpuId << ", idleTime=" << cpuTime.idleTimeMs
-               << "ms, totalTime=" << cpuTime.totalTimeMs << "ms\n";
-    }
+    result << "Config: " << mConfig << "\n";
+    mKernelCpuFeatureReader.DumpToStream(result);
+    mAdaptiveCpuStats.DumpToStream(result);
     result << "==========  End Adaptive CPU stats  ==========\n";
     if (!::android::base::WriteStringToFd(result.str(), fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";
@@ -241,6 +207,8 @@ void AdaptiveCpu::DumpToFd(int fd) const {
 const std::unordered_map<ThrottleDecision, std::vector<std::string>>
         AdaptiveCpu::kThrottleDecisionToHintNames = {
                 {ThrottleDecision::NO_THROTTLE, {}},
+                {ThrottleDecision::THROTTLE_50,
+                 {"LOW_POWER_LITTLE_CLUSTER_50", "LOW_POWER_MID_CLUSTER_50", "LOW_POWER_CPU_50"}},
                 {ThrottleDecision::THROTTLE_60,
                  {"LOW_POWER_LITTLE_CLUSTER_60", "LOW_POWER_MID_CLUSTER_60", "LOW_POWER_CPU_60"}},
                 {ThrottleDecision::THROTTLE_70,

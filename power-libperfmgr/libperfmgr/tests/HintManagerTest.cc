@@ -106,6 +106,16 @@ constexpr char kJSON_RAW[] = R"(
             "Value": "LAUNCH"
         },
         {
+            "PowerHint": "MASK_LAUNCH_INTERACTION_MODE",
+            "Type": "MaskHint",
+            "Value": "LAUNCH"
+        },
+        {
+            "PowerHint": "MASK_LAUNCH_INTERACTION_MODE",
+            "Type": "MaskHint",
+            "Value": "INTERACTION"
+        },
+        {
             "PowerHint": "END_LAUNCH_MODE",
             "Type": "EndHint",
             "Value": "LAUNCH"
@@ -131,12 +141,12 @@ class HintManagerTest : public ::testing::Test, public HintManager {
         std::unique_ptr<TemporaryFile> tf = std::make_unique<TemporaryFile>();
         nodes_.emplace_back(new FileNode(
             "n0", tf->path, {{"n0_value0"}, {"n0_value1"}, {"n0_value2"}}, 2,
-            false));
+            false, false));
         files_.emplace_back(std::move(tf));
         tf = std::make_unique<TemporaryFile>();
         nodes_.emplace_back(new FileNode(
             "n1", tf->path, {{"n1_value0"}, {"n1_value1"}, {"n1_value2"}}, 2,
-            true));
+            true, true));
         files_.emplace_back(std::move(tf));
         nodes_.emplace_back(new PropertyNode(
             "n2", prop_, {{"n2_value0"}, {"n2_value1"}, {"n2_value2"}}, 2,
@@ -247,40 +257,6 @@ TEST_F(HintManagerTest, HintSupportedTest) {
     EXPECT_TRUE(hm.IsHintSupported("INTERACTION"));
     EXPECT_TRUE(hm.IsHintSupported("LAUNCH"));
     EXPECT_FALSE(hm.IsHintSupported("NO_SUCH_HINT"));
-}
-
-// Test DumpToFd
-TEST_F(HintManagerTest, DumpToFdTest) {
-    auto hm = std::make_unique<HintManager>(nm_, actions_);
-    EXPECT_TRUE(InitHintStatus(hm));
-    TemporaryFile dumptf;
-    hm->DumpToFd(dumptf.fd);
-    fsync(dumptf.fd);
-    std::ostringstream dump_buf;
-    dump_buf << "========== Begin perfmgr nodes ==========\nNode Name\tNode "
-                "Path\tCurrent Index\tCurrent Value\nn0\t"
-             << files_[0]->path << "\t2\t\nn1\t" << files_[1]->path
-             << "\t2\t\nn2\tvendor.pwhal.mode\t2\t\n==========  End perfmgr "
-                "nodes  ==========\n========== Begin perfmgr stats ==========\n"
-                "Hint Name\tCounts\tDuration\nINTERACTION\t0\t0\nLAUNCH\t0\t0\n"
-                "==========  End perfmgr stats  ==========\n";
-    _VerifyPathValue(dumptf.path, dump_buf.str());
-    TemporaryFile dumptf_started;
-    EXPECT_TRUE(hm->Start());
-    std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
-    EXPECT_TRUE(hm->IsRunning());
-    hm->DumpToFd(dumptf_started.fd);
-    fsync(dumptf_started.fd);
-    dump_buf.str("");
-    dump_buf.clear();
-    dump_buf << "========== Begin perfmgr nodes ==========\nNode Name\tNode "
-                "Path\tCurrent Index\tCurrent Value\nn0\t"
-             << files_[0]->path << "\t2\t\nn1\t" << files_[1]->path
-             << "\t2\tn1_value2\nn2\tvendor.pwhal.mode\t2\tn2_value2\n========="
-                "=  End perfmgr nodes  ==========\n========== Begin perfmgr "
-                "stats ==========\nHint Name\tCounts\tDuration\nINTERACTION\t0\t"
-                "0\nLAUNCH\t0\t0\n==========  End perfmgr stats  ==========\n";
-    _VerifyPathValue(dumptf_started.path, dump_buf.str());
 }
 
 // Test hint/cancel/expire with dummy actions
@@ -514,7 +490,7 @@ TEST_F(HintManagerTest, ParseActionsTest) {
     std::vector<std::unique_ptr<Node>> nodes =
         HintManager::ParseNodes(json_doc_);
     std::unordered_map<std::string, Hint> actions = HintManager::ParseActions(json_doc_, nodes);
-    EXPECT_EQ(5u, actions.size());
+    EXPECT_EQ(6u, actions.size());
 
     EXPECT_EQ(2u, actions["INTERACTION"].node_actions.size());
     EXPECT_EQ(1u, actions["INTERACTION"].node_actions[0].node_index);
@@ -546,15 +522,23 @@ TEST_F(HintManagerTest, ParseActionsTest) {
 
     EXPECT_EQ(1u, actions["MASK_LAUNCH_MODE"].hint_actions.size());
     EXPECT_EQ(HintActionType::MaskHint, actions["MASK_LAUNCH_MODE"].hint_actions[0].type);
-    EXPECT_TRUE("LAUNCH" == actions["MASK_LAUNCH_MODE"].hint_actions[0].value);
+    EXPECT_EQ("LAUNCH", actions["MASK_LAUNCH_MODE"].hint_actions[0].value);
+
+    EXPECT_EQ(2u, actions["MASK_LAUNCH_INTERACTION_MODE"].hint_actions.size());
+    EXPECT_EQ(HintActionType::MaskHint,
+              actions["MASK_LAUNCH_INTERACTION_MODE"].hint_actions[0].type);
+    EXPECT_EQ("LAUNCH", actions["MASK_LAUNCH_INTERACTION_MODE"].hint_actions[0].value);
+    EXPECT_EQ(HintActionType::MaskHint,
+              actions["MASK_LAUNCH_INTERACTION_MODE"].hint_actions[1].type);
+    EXPECT_EQ("INTERACTION", actions["MASK_LAUNCH_INTERACTION_MODE"].hint_actions[1].value);
 
     EXPECT_EQ(1u, actions["DO_LAUNCH_MODE"].hint_actions.size());
     EXPECT_EQ(HintActionType::DoHint, actions["DO_LAUNCH_MODE"].hint_actions[0].type);
-    EXPECT_TRUE("LAUNCH" == actions["DO_LAUNCH_MODE"].hint_actions[0].value);
+    EXPECT_EQ("LAUNCH", actions["DO_LAUNCH_MODE"].hint_actions[0].value);
 
     EXPECT_EQ(1u, actions["END_LAUNCH_MODE"].hint_actions.size());
     EXPECT_EQ(HintActionType::EndHint, actions["END_LAUNCH_MODE"].hint_actions[0].type);
-    EXPECT_TRUE("LAUNCH" == actions["END_LAUNCH_MODE"].hint_actions[0].value);
+    EXPECT_EQ("LAUNCH", actions["END_LAUNCH_MODE"].hint_actions[0].value);
 }
 
 // Test parsing actions with duplicate File node
@@ -671,6 +655,21 @@ TEST_F(HintManagerTest, GetFromJSONTest) {
     _VerifyPathValue(files_[0 + 2]->path, "1134000");
     _VerifyPathValue(files_[1 + 2]->path, "1512000");
     _VerifyPropertyValue(prop_, "HIGH");
+
+    // Mask LAUNCH
+    EXPECT_TRUE(hm->DoHint("MASK_LAUNCH_MODE"));
+    EXPECT_FALSE(hm->IsHintEnabled("LAUNCH"));
+    // Mask LAUNCH and INTERACTION
+    EXPECT_TRUE(hm->DoHint("MASK_LAUNCH_INTERACTION_MODE"));
+    EXPECT_FALSE(hm->IsHintEnabled("LAUNCH"));
+    EXPECT_FALSE(hm->IsHintEnabled("INTERACTION"));
+    // End Mask LAUNCH and INTERACTION
+    EXPECT_TRUE(hm->EndHint("MASK_LAUNCH_INTERACTION_MODE"));
+    EXPECT_FALSE(hm->IsHintEnabled("LAUNCH"));
+    EXPECT_TRUE(hm->IsHintEnabled("INTERACTION"));
+    // End Mask LAUNCH
+    EXPECT_TRUE(hm->EndHint("MASK_LAUNCH_MODE"));
+    EXPECT_TRUE(hm->IsHintEnabled("LAUNCH"));
 }
 
 }  // namespace perfmgr

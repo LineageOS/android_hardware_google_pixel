@@ -38,18 +38,21 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-bool CpuFrequencyReader::init() {
+bool CpuFrequencyReader::Init() {
     ATRACE_CALL();
-    mCpuPolicyIds = readCpuPolicyIds();
+    mCpuPolicyIds.clear();
+    if (!ReadCpuPolicyIds(&mCpuPolicyIds)) {
+        return false;
+    }
     mPreviousCpuPolicyFrequencies.clear();
-    return readCpuPolicyFrequencies(&mPreviousCpuPolicyFrequencies);
+    return ReadCpuPolicyFrequencies(&mPreviousCpuPolicyFrequencies);
 }
 
-bool CpuFrequencyReader::getRecentCpuPolicyFrequencies(
+bool CpuFrequencyReader::GetRecentCpuPolicyFrequencies(
         std::vector<CpuPolicyAverageFrequency> *result) {
     ATRACE_CALL();
     std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> cpuPolicyFrequencies;
-    if (!readCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
+    if (!ReadCpuPolicyFrequencies(&cpuPolicyFrequencies)) {
         return false;
     }
     for (const auto &[policyId, cpuFrequencies] : cpuPolicyFrequencies) {
@@ -80,19 +83,21 @@ bool CpuFrequencyReader::getRecentCpuPolicyFrequencies(
 }
 
 std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>>
-CpuFrequencyReader::getPreviousCpuPolicyFrequencies() const {
+CpuFrequencyReader::GetPreviousCpuPolicyFrequencies() const {
     return mPreviousCpuPolicyFrequencies;
 }
 
-bool CpuFrequencyReader::readCpuPolicyFrequencies(
+bool CpuFrequencyReader::ReadCpuPolicyFrequencies(
         std::map<uint32_t, std::map<uint64_t, std::chrono::milliseconds>> *result) {
     ATRACE_CALL();
     for (const uint32_t cpuPolicyId : mCpuPolicyIds) {
         std::stringstream timeInStatePath;
         timeInStatePath << "/sys/devices/system/cpu/cpufreq/policy" << cpuPolicyId
                         << "/stats/time_in_state";
-        std::unique_ptr<std::istream> timeInStateFile =
-                mFilesystem->readFileStream(timeInStatePath.str());
+        std::unique_ptr<std::istream> timeInStateFile;
+        if (!mFilesystem->ReadFileStream(timeInStatePath.str(), &timeInStateFile)) {
+            return false;
+        }
 
         std::map<uint64_t, std::chrono::milliseconds> cpuFrequencies;
         std::string timeInStateLine;
@@ -117,21 +122,23 @@ bool CpuFrequencyReader::readCpuPolicyFrequencies(
     return true;
 }
 
-std::vector<uint32_t> CpuFrequencyReader::readCpuPolicyIds() const {
+bool CpuFrequencyReader::ReadCpuPolicyIds(std::vector<uint32_t> *result) const {
     ATRACE_CALL();
-    std::vector<uint32_t> cpuPolicyIds;
-    const std::vector<std::string> entries = mFilesystem->listDirectory(kCpuPolicyDirectory.data());
+    std::vector<std::string> entries;
+    if (!mFilesystem->ListDirectory(kCpuPolicyDirectory.data(), &entries)) {
+        return false;
+    }
     for (const auto &entry : entries) {
         uint32_t cpuPolicyId;
         if (!sscanf(entry.c_str(), "policy%d", &cpuPolicyId)) {
             continue;
         }
-        cpuPolicyIds.push_back(cpuPolicyId);
+        result->push_back(cpuPolicyId);
     }
     // Sort the list, so that getRecentCpuPolicyFrequencies always returns frequencies sorted by
     // policy ID.
-    std::sort(cpuPolicyIds.begin(), cpuPolicyIds.end());
-    return cpuPolicyIds;
+    std::sort(result->begin(), result->end());
+    return true;
 }
 
 }  // namespace pixel

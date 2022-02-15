@@ -142,6 +142,15 @@ enum WaveformIndex : uint16_t {
     WAVEFORM_MAX_INDEX,
 };
 
+std::vector<CompositePrimitive> defaultSupportedPrimitives = {
+        ndk::enum_range<CompositePrimitive>().begin(), ndk::enum_range<CompositePrimitive>().end()};
+
+enum vibe_state {
+    VIBE_STATE_STOPPED = 0,
+    VIBE_STATE_HAPTIC,
+    VIBE_STATE_ASP,
+};
+
 static int min(int x, int y) {
     return x < y ? x : y;
 }
@@ -226,17 +235,26 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     uint32_t val = 0;
     char str[20] = {0x00};
     const char *inputEventName = std::getenv("INPUT_EVENT_NAME");
-    for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
-        fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
-        if (fd > 0) {
-            if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
-                ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 && strcmp(str, inputEventName) == 0) {
-                mInputFd.reset(fd);
-                ALOGI("Control %s through %s", inputEventName, inputEventPaths.gl_pathv[i]);
-                break;
+    for (uint8_t retry = 0; retry < 3; retry++) {
+        for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
+            fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
+            if (fd > 0) {
+                if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
+                    ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
+                    strcmp(str, inputEventName) == 0) {
+                    mInputFd.reset(fd);
+                    ALOGI("Control %s through %s", inputEventName, inputEventPaths.gl_pathv[i]);
+                    break;
+                }
+                close(fd);
             }
-            close(fd);
         }
+        if (mInputFd.ok()) {
+            break;
+        }
+
+        sleep(1);
+        ALOGW("Retry to search the input");
     }
     globfree(&inputEventPaths);
     if (!mInputFd.ok()) {
@@ -334,6 +352,22 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     mIsUnderExternalControl = false;
+
+    mIsChirpEnabled = mHwCal->isChirpEnabled();
+
+    mHwCal->getSupportedPrimitives(&mSupportedPrimitivesBits);
+    if (mSupportedPrimitivesBits > 0) {
+        for (auto e : defaultSupportedPrimitives) {
+            if (mSupportedPrimitivesBits & (1 << uint32_t(e))) {
+                mSupportedPrimitives.emplace_back(e);
+            }
+        }
+    } else {
+        for (auto e : defaultSupportedPrimitives) {
+            mSupportedPrimitivesBits |= (1 << uint32_t(e));
+        }
+        mSupportedPrimitives = defaultSupportedPrimitives;
+    }
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -347,6 +381,10 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     }
     if (mHwApi->hasOwtFreeSpace()) {
         ret |= IVibrator::CAP_COMPOSE_EFFECTS;
+
+        if (mIsChirpEnabled) {
+            ret |= IVibrator::CAP_FREQUENCY_CONTROL | IVibrator::CAP_COMPOSE_PWLE_EFFECTS;
+        }
     }
     *_aidl_return = ret;
     return ndk::ScopedAStatus::ok();
@@ -447,13 +485,7 @@ ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
-    *supported = {
-            CompositePrimitive::NOOP,       CompositePrimitive::CLICK,
-            CompositePrimitive::THUD,       CompositePrimitive::SPIN,
-            CompositePrimitive::QUICK_RISE, CompositePrimitive::SLOW_RISE,
-            CompositePrimitive::QUICK_FALL, CompositePrimitive::LIGHT_TICK,
-            CompositePrimitive::LOW_TICK,
-    };
+    *supported = mSupportedPrimitives;
     return ndk::ScopedAStatus::ok();
 }
 
@@ -804,6 +836,11 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     ATRACE_NAME("Vibrator::composePwle");
     std::ostringstream pwleBuilder;
     std::string pwleQueue;
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if ((capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) == 0) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 
     if (composite.size() <= 0 || composite.size() > compositionSizeMax) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -1140,6 +1177,11 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
 ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
                                                  uint32_t *outEffectIndex) {
     uint32_t effectIndex;
+    uint32_t primitiveBit = 1 << int32_t(primitive);
+    if ((primitiveBit & mSupportedPrimitivesBits) == 0x0) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
+
     switch (primitive) {
         case CompositePrimitive::NOOP:
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -1280,10 +1322,10 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
-    if (!mHwApi->pollVibeState("Vibe state: Haptic\n", POLLING_TIMEOUT)) {
+    if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGE("Fail to get state \"Haptic\"");
     }
-    mHwApi->pollVibeState("Vibe state: Stopped\n");
+    mHwApi->pollVibeState(VIBE_STATE_STOPPED);
 
     if (callback) {
         auto ret = callback->onComplete();

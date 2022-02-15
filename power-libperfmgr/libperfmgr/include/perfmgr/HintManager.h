@@ -17,11 +17,14 @@
 #ifndef ANDROID_LIBPERFMGR_HINTMANAGER_H_
 #define ANDROID_LIBPERFMGR_HINTMANAGER_H_
 
+#include <android-base/thread_annotations.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -47,7 +50,6 @@ struct HintStatus {
           end_time(std::chrono::steady_clock::time_point::min()) {}
     std::chrono::steady_clock::time_point start_time;
     std::chrono::steady_clock::time_point end_time;
-    std::mutex mutex;
     struct HintStatsInternal {
         HintStatsInternal() : count(0), duration_ms(0) {}
         std::atomic<uint32_t> count;
@@ -64,13 +66,17 @@ struct HintAction {
 };
 
 struct Hint {
-    Hint() : enabled(true) {}
+    Hint() {}
+    Hint(const Hint &obj)
+        : node_actions(obj.node_actions),
+          hint_actions(obj.hint_actions),
+          mask_requesters(obj.mask_requesters),
+          status(obj.status) {}
     std::vector<NodeAction> node_actions;
     std::vector<HintAction> hint_actions;
-    // No locking for `enabled' flag
-    // There should not be multiple writers
-    bool enabled;
-    std::shared_ptr<HintStatus> status;
+    mutable std::mutex hint_lock;
+    std::set<std::string> mask_requesters GUARDED_BY(hint_lock);
+    std::shared_ptr<HintStatus> status GUARDED_BY(hint_lock);
 };
 
 // HintManager is the external interface of the library to be used by PowerHAL

@@ -29,10 +29,8 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies,
-                      const std::vector<CpuLoad> &cpuLoads,
-                      WorkDurationFeatures workDurationFeatures,
-                      ThrottleDecision previousThrottleDecision) {
+bool ModelInput::SetCpuFreqiencies(
+        const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies) {
     ATRACE_CALL();
     if (cpuPolicyAverageFrequencies.size() != cpuPolicyAverageFrequencyHz.size()) {
         LOG(ERROR) << "Received incorrect amount of CPU policy frequencies, expected "
@@ -50,22 +48,6 @@ bool ModelInput::Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAve
         previousPolicyId = cpuPolicyAverageFrequencies[i].policyId;
         cpuPolicyAverageFrequencyHz[i] = cpuPolicyAverageFrequencies[i].averageFrequencyHz;
     }
-
-    if (cpuLoads.size() != cpuCoreIdleTimesPercentage.size()) {
-        LOG(ERROR) << "Received incorrect amount of CPU loads, expected "
-                   << cpuCoreIdleTimesPercentage.size() << ", received " << cpuLoads.size();
-        return false;
-    }
-    for (const auto &cpuLoad : cpuLoads) {
-        if (cpuLoad.cpuId >= cpuCoreIdleTimesPercentage.size()) {
-            LOG(ERROR) << "Unrecognized CPU ID found when building ModelInput: " << cpuLoad.cpuId;
-            return false;
-        }
-        cpuCoreIdleTimesPercentage[cpuLoad.cpuId] = cpuLoad.idleTimeFraction;
-    }
-
-    this->workDurationFeatures = workDurationFeatures;
-    this->previousThrottleDecision = previousThrottleDecision;
     return true;
 }
 
@@ -91,9 +73,43 @@ void ModelInput::LogToAtrace() const {
     ATRACE_INT("ModelInput_prevThrottle", (int)previousThrottleDecision);
 }
 
-ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs) {
+ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,
+                            const AdaptiveCpuConfig &config) {
+    ATRACE_CALL();
+    if (config.randomThrottleDecisionProbability > 0 &&
+        mShouldRandomThrottleDistribution(mGenerator) < config.randomThrottleDecisionProbability) {
+        const auto throttleDecision =
+                static_cast<ThrottleDecision>(mRandomThrottleDistribution(mGenerator));
+        LOG(VERBOSE) << "Randomly overrided throttle decision: "
+                     << static_cast<uint32_t>(throttleDecision);
+        ATRACE_INT("AdaptiveCpu_randomThrottleDecision", static_cast<uint32_t>(throttleDecision));
+        return throttleDecision;
+    }
+    ATRACE_INT("AdaptiveCpu_randomThrottleDecision", -1);
+    return RunDecisionTree(modelInputs);
+}
+
+ThrottleDecision Model::RunDecisionTree(const std::deque<ModelInput> &modelInputs
+                                        __attribute__((unused))) {
     ATRACE_CALL();
 #include "models/model.inc"
+}
+
+std::string ThrottleString(ThrottleDecision throttleDecision) {
+    switch (throttleDecision) {
+        case ThrottleDecision::NO_THROTTLE:
+            return "NO_THROTTLE";
+        case ThrottleDecision::THROTTLE_60:
+            return "THROTTLE_60";
+        case ThrottleDecision::THROTTLE_70:
+            return "THROTTLE_70";
+        case ThrottleDecision::THROTTLE_80:
+            return "THROTTLE_80";
+        case ThrottleDecision::THROTTLE_90:
+            return "THROTTLE_90";
+        default:
+            return "unknown";
+    }
 }
 
 }  // namespace pixel

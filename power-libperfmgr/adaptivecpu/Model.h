@@ -22,10 +22,11 @@
 #include <chrono>
 #include <deque>
 #include <map>
+#include <random>
 #include <vector>
 
+#include "AdaptiveCpuConfig.h"
 #include "CpuFrequencyReader.h"
-#include "CpuLoadReader.h"
 #include "WorkDurationProcessor.h"
 
 namespace aidl {
@@ -35,27 +36,31 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-constexpr uint32_t kNumCpuPolicies = 3;
-constexpr uint32_t kNumCpuCores = 8;
+// Currently Adaptive CPU is targeted to only raven/oriole, so we can hardcode the CPU architecture.
+// If we extend to other architectures, this will have to vary per-device or be dynamically loaded.
+constexpr uint32_t NUM_CPU_CORES = 8;
+constexpr uint32_t NUM_CPU_POLICIES = 3;
+constexpr std::array<uint32_t, NUM_CPU_POLICIES> CPU_POLICY_INDICES{0, 4, 6};
 
 enum class ThrottleDecision {
     NO_THROTTLE = 0,
-    THROTTLE_60 = 1,
-    THROTTLE_70 = 2,
-    THROTTLE_80 = 3,
-    THROTTLE_90 = 4
+    THROTTLE_50 = 1,
+    THROTTLE_60 = 2,
+    THROTTLE_70 = 3,
+    THROTTLE_80 = 4,
+    THROTTLE_90 = 5,
+    FIRST = NO_THROTTLE,
+    LAST = THROTTLE_90,
 };
 
 struct ModelInput {
-    std::array<double, kNumCpuPolicies> cpuPolicyAverageFrequencyHz;
-    std::array<double, kNumCpuCores> cpuCoreIdleTimesPercentage;
+    std::array<double, NUM_CPU_POLICIES> cpuPolicyAverageFrequencyHz;
+    std::array<double, NUM_CPU_CORES> cpuCoreIdleTimesPercentage;
     WorkDurationFeatures workDurationFeatures;
     ThrottleDecision previousThrottleDecision;
 
-    // Initialize `result`. cpuPolicyAverageFrequencies must be sorted by policyId.
-    bool Init(const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies,
-              const std::vector<CpuLoad> &cpuLoads, WorkDurationFeatures workDurationFeatures,
-              ThrottleDecision previousThrottleDecision);
+    bool SetCpuFreqiencies(
+            const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies);
 
     void LogToAtrace() const;
 
@@ -67,7 +72,24 @@ struct ModelInput {
     }
 };
 
-ThrottleDecision RunModel(const std::deque<ModelInput> &modelInputs);
+class Model {
+  public:
+    Model()
+        : mShouldRandomThrottleDistribution(0, 1),
+          mRandomThrottleDistribution(static_cast<uint32_t>(ThrottleDecision::FIRST),
+                                      static_cast<uint32_t>(ThrottleDecision::LAST)) {}
+    ThrottleDecision Run(const std::deque<ModelInput> &modelInputs,
+                         const AdaptiveCpuConfig &config);
+
+  private:
+    std::default_random_engine mGenerator;
+    std::uniform_real_distribution<double> mShouldRandomThrottleDistribution;
+    std::uniform_int_distribution<uint32_t> mRandomThrottleDistribution;
+
+    ThrottleDecision RunDecisionTree(const std::deque<ModelInput> &modelInputs);
+};
+
+std::string ThrottleString(ThrottleDecision throttleDecision);
 
 }  // namespace pixel
 }  // namespace impl

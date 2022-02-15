@@ -16,7 +16,8 @@
 
 #include <gmock/gmock.h>
 
-#include "adaptivecpu/CpuFrequencyReader.h"
+#include "adaptivecpu/IFilesystem.h"
+#include "adaptivecpu/ITimeSource.h"
 
 namespace aidl {
 namespace google {
@@ -28,10 +29,20 @@ namespace pixel {
 class MockFilesystem : public IFilesystem {
   public:
     ~MockFilesystem() override {}
-    MOCK_METHOD(std::vector<std::string>, listDirectory, (const std::string &path),
+    MOCK_METHOD(bool, ListDirectory, (const std::string &path, std::vector<std::string> *result),
                 (const, override));
-    MOCK_METHOD(std::unique_ptr<std::istream>, readFileStream, (const std::string &path),
+    MOCK_METHOD(bool, ReadFileStream,
+                (const std::string &path, std::unique_ptr<std::istream> *result),
                 (const, override));
+    MOCK_METHOD(bool, ResetFileStream, (const std::unique_ptr<std::istream> &fileStream),
+                (const, override));
+};
+
+class MockTimeSource : public ITimeSource {
+  public:
+    ~MockTimeSource() override {}
+    MOCK_METHOD(std::chrono::nanoseconds, GetTime, (), (const, override));
+    MOCK_METHOD(std::chrono::nanoseconds, GetKernelTime, (), (const, override));
 };
 
 }  // namespace pixel

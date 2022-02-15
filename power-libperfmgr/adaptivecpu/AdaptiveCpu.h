@@ -24,8 +24,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "CpuFrequencyReader.h"
-#include "CpuLoadReader.h"
+#include "AdaptiveCpuConfig.h"
+#include "AdaptiveCpuStats.h"
+#include "KernelCpuFeatureReader.h"
 #include "Model.h"
 #include "WorkDurationProcessor.h"
 
@@ -36,6 +37,7 @@ namespace power {
 namespace impl {
 namespace pixel {
 
+using std::chrono_literals::operator""ms;
 using ::aidl::android::hardware::power::WorkDuration;
 using ::android::perfmgr::HintManager;
 
@@ -77,9 +79,11 @@ class AdaptiveCpu {
 
     void WaitForEnabledAndWorkDurations();
 
+    Model mModel;
     WorkDurationProcessor mWorkDurationProcessor;
-    CpuFrequencyReader mCpuFrequencyReader;
-    CpuLoadReader mCpuLoadReader;
+    KernelCpuFeatureReader mKernelCpuFeatureReader;
+    AdaptiveCpuStats mAdaptiveCpuStats;
+    const TimeSource mTimeSource;
 
     std::shared_ptr<HintManager> mHintManager;
 
@@ -98,6 +102,8 @@ class AdaptiveCpu {
     volatile bool mIsEnabled = false;
     bool mIsInitialized = false;
     volatile bool mShouldReloadConfig = false;
+    std::chrono::nanoseconds mLastEnabledHintTime;
+    AdaptiveCpuConfig mConfig = AdaptiveCpuConfig::DEFAULT;
 };
 
 }  // namespace pixel

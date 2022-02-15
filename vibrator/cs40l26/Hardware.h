@@ -39,13 +39,13 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setF0Offset(uint32_t value) override { return set(value, &mF0Offset); }
     bool setRedc(std::string value) override { return set(value, &mRedc); }
     bool setQ(std::string value) override { return set(value, &mQ); }
-    bool getEffectCount(uint32_t *value) override { return getStr(value, &mEffectCount); }
-    bool pollVibeState(std::string value, int32_t timeoutMs) override {
-        return pollStr(value, &mVibeState, timeoutMs);
+    bool getEffectCount(uint32_t *value) override { return get(value, &mEffectCount); }
+    bool pollVibeState(uint32_t value, int32_t timeoutMs) override {
+        return poll(value, &mVibeState, timeoutMs);
     }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
     bool getAvailablePwleSegments(uint32_t *value) override {
-        return getStr(value, &mAvailablePwleSegments);
+        return get(value, &mAvailablePwleSegments);
     }
     bool setPwle(std::string value) override { return set(value, &mPwle); }
     bool hasOwtFreeSpace() override { return has(mOwtFreeSpace); }
@@ -117,6 +117,14 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         }
         *value = V_LONG_DEFAULT;
         return true;
+    }
+    bool isChirpEnabled() override {
+        bool value;
+        getProperty("chirp.enabled", &value, false);
+        return value;
+    }
+    bool getSupportedPrimitives(uint32_t *value) override {
+        return getProperty("supported_primitives", value, (uint32_t)0);
     }
     void debug(int fd) override { HwCalBase::debug(fd); }
 };

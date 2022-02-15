@@ -47,10 +47,9 @@ class Vibrator : public BnVibrator {
         virtual bool setQ(std::string value) = 0;
         // Reports the number of effect waveforms loaded in firmware.
         virtual bool getEffectCount(uint32_t *value) = 0;
-        // Blocks until vibrator reaches desired state
-        // ("Vibe state: Haptic" means enabled).
-        // ("Vibe state: Stopped" means disabled).
-        virtual bool pollVibeState(std::string value, int32_t timeoutMs = -1) = 0;
+        // Blocks until timeout or vibrator reaches desired state
+        // (2 = ASP enabled, 1 = haptic enabled, 0 = disabled).
+        virtual bool pollVibeState(uint32_t value, int32_t timeoutMs = -1) = 0;
         // Enables/disables closed-loop active braking.
         virtual bool setClabEnable(bool value) = 0;
         // Reports the number of available PWLE segments.
@@ -88,6 +87,10 @@ class Vibrator : public BnVibrator {
         virtual bool getTickVolLevels(std::array<uint32_t, 2> *value) = 0;
         virtual bool getClickVolLevels(std::array<uint32_t, 2> *value) = 0;
         virtual bool getLongVolLevels(std::array<uint32_t, 2> *value) = 0;
+        // Checks if the chirp feature is enabled.
+        virtual bool isChirpEnabled() = 0;
+        // Obtains the supported primitive effects.
+        virtual bool getSupportedPrimitives(uint32_t *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -175,6 +178,9 @@ class Vibrator : public BnVibrator {
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
     float mLongEffectScale = 1.0;
+    bool mIsChirpEnabled;
+    uint32_t mSupportedPrimitivesBits = 0x0;
+    std::vector<CompositePrimitive> mSupportedPrimitives;
 };
 
 }  // namespace vibrator
