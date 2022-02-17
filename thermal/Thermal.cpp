@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-#include <cerrno>
-#include <mutex>
-#include <string>
+#define ATRACE_TAG (ATRACE_TAG_THERMAL | ATRACE_TAG_HAL)
+
+#include "Thermal.h"
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <hidl/HidlTransportSupport.h>
+#include <utils/Trace.h>
 
-#include "Thermal.h"
+#include <cerrno>
+#include <mutex>
+#include <string>
+
 #include "thermal-helper.h"
 
 namespace android {
@@ -173,6 +177,7 @@ Return<void> Thermal::registerThermalChangedCallback(const sp<IThermalChangedCal
     ThermalStatus status;
     hidl_vec<Temperature_2_0> temperatures;
 
+    ATRACE_CALL();
     if (callback == nullptr) {
         status.code = ThermalStatusCode::FAILURE;
         status.debugMessage = "Invalid nullptr callback";
@@ -251,8 +256,8 @@ Return<void> Thermal::unregisterThermalChangedCallback(
 }
 
 void Thermal::sendThermalChangedCallback(const Temperature_2_0 &t) {
+    ATRACE_CALL();
     std::lock_guard<std::mutex> _lock(thermal_callback_mutex_);
-
     LOG(VERBOSE) << "Sending notification: "
                  << " Type: " << android::hardware::thermal::V2_0::toString(t.type)
                  << " Name: " << t.name << " CurrentValue: " << t.value << " ThrottlingStatus: "
