@@ -86,6 +86,7 @@ cc_test {
         "libbase",
         "libcutils",
     ],
+    test_suites: ["device-tests"],
 }
 
 // Deprecated, do not use

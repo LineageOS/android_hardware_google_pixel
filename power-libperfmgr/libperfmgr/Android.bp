@@ -70,7 +70,8 @@ cc_test {
         "tests/PropertyNodeTest.cc",
         "tests/NodeLooperThreadTest.cc",
         "tests/HintManagerTest.cc",
-    ]
+    ],
+    test_suites: ["device-tests"],
 }
 
 cc_binary {
