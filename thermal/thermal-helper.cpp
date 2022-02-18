@@ -13,12 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#define ATRACE_TAG (ATRACE_TAG_THERMAL | ATRACE_TAG_HAL)
 
-#include <iterator>
-#include <set>
-#include <sstream>
-#include <thread>
-#include <vector>
+#include "thermal-helper.h"
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
@@ -27,8 +24,13 @@
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
 #include <hidl/HidlTransportSupport.h>
+#include <utils/Trace.h>
 
-#include "thermal-helper.h"
+#include <iterator>
+#include <set>
+#include <sstream>
+#include <thread>
+#include <vector>
 
 namespace android {
 namespace hardware {
@@ -557,6 +559,7 @@ float ThermalHelper::pidPowerCalculator(const Temperature_2_0 &temp, const Senso
     float p = 0, i = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
 
+    ATRACE_CALL();
     LOG(VERBOSE) << "PID target state=" << target_state;
     if (!target_state || (sensor_status->severity == ThrottlingSeverity::NONE)) {
         sensor_status->err_integral = 0;
@@ -608,6 +611,7 @@ bool ThermalHelper::requestCdevByPower(std::string_view sensor_name, SensorStatu
     float total_weight = 0, cdev_power_budget;
     size_t j;
 
+    ATRACE_CALL();
     for (const auto &binded_cdev_info_pair : sensor_info.throttling_info->binded_cdev_info_map) {
         if (!std::isnan(binded_cdev_info_pair.second.cdev_weight_for_pid[target_state])) {
             total_weight += binded_cdev_info_pair.second.cdev_weight_for_pid[target_state];
@@ -643,6 +647,7 @@ bool ThermalHelper::requestCdevByPower(std::string_view sensor_name, SensorStatu
 
 void ThermalHelper::requestCdevBySeverity(std::string_view sensor_name, SensorStatus *sensor_status,
                                           const SensorInfo &sensor_info) {
+    ATRACE_CALL();
     for (auto const &binded_cdev_info_pair : sensor_info.throttling_info->binded_cdev_info_map) {
         sensor_status->hard_limit_request_map.at(binded_cdev_info_pair.first) =
                 binded_cdev_info_pair.second
@@ -658,6 +663,7 @@ void ThermalHelper::computeCoolingDevicesRequest(
         const SensorStatus &sensor_status, std::vector<std::string> *cooling_devices_to_update) {
     int release_step = 0;
 
+    ATRACE_CALL();
     std::unique_lock<std::shared_mutex> _lock(cdev_status_map_mutex_);
     for (auto &cdev_request_pair : cdev_status_map_) {
         if (!cdev_request_pair.second.count(sensor_name.data())) {
@@ -1071,6 +1077,7 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
     std::string log_buf;
     boot_clock::time_point now = boot_clock::now();
 
+    ATRACE_NAME(StringPrintf("ThermalHelper::readThermalSensor - %s", sensor_name.data()).c_str());
     if (!(sensor_info_map_.count(sensor_name.data()) &&
           sensor_status_map_.count(sensor_name.data()))) {
         return false;
@@ -1163,6 +1170,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
     boot_clock::time_point now = boot_clock::now();
     auto min_sleep_ms = std::chrono::milliseconds::max();
 
+    ATRACE_CALL();
     for (auto &name_status_pair : sensor_status_map_) {
         bool force_update = false;
         bool force_sysfs = false;
@@ -1176,6 +1184,10 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         if (!sensor_info.is_monitor) {
             continue;
         }
+
+        ATRACE_NAME(StringPrintf("ThermalHelper::thermalWatcherCallbackFunc - %s",
+                                 name_status_pair.first.data())
+                            .c_str());
 
         std::chrono::milliseconds time_elapsed_ms = std::chrono::milliseconds::zero();
         auto sleep_ms = (sensor_status.severity != ThrottlingSeverity::NONE)
@@ -1366,8 +1378,8 @@ void ThermalHelper::updateSupportedPowerHints() {
 }
 
 void ThermalHelper::sendPowerExtHint(const Temperature_2_0 &t) {
+    ATRACE_CALL();
     std::lock_guard<std::shared_mutex> lock(sensor_status_map_mutex_);
-
     ThrottlingSeverity prev_hint_severity;
     prev_hint_severity = sensor_status_map_.at(t.name).prev_hint_severity;
     ThrottlingSeverity current_hint_severity = supported_powerhint_map_[t.name][t.throttlingStatus];

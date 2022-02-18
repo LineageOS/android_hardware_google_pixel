@@ -25,6 +25,9 @@
 #include <android/binder_manager.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 #include <pixelstats/MmMetricsReporter.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <utils/Log.h>
 
 #define SZ_4K 0x00001000
@@ -91,12 +94,62 @@ const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kCmaStatu
         {"latency_high", CmaStatusExt::kCmaAllocLatencyHighFieldNumber, false},
 };
 
+static bool file_exists(const char *path) {
+    struct stat sbuf;
+
+    return (stat(path, &sbuf) == 0);
+}
+
+bool MmMetricsReporter::checkKernelMMMetricSupport() {
+    const char *const require_all[] = {
+            kVmstatPath,
+            kGpuTotalPages,
+            kPixelStatMm,
+    };
+    const char *const require_one[] = {
+            kIonTotalPoolsPath,
+            kIonTotalPoolsPathForLegacy,
+    };
+
+    for (auto &path : require_all) {
+        if (!file_exists(path)) {
+            ALOGI("MM Metrics not supported - no %s.", path);
+            return false;
+        }
+    }
+
+    std::string err_msg;
+    for (auto &path : require_one) {
+        if (file_exists(path)) {
+            err_msg.clear();
+            break;
+        }
+        err_msg += path;
+        err_msg += ", ";
+    }
+
+    if (!err_msg.empty()) {
+        err_msg.pop_back();  // remove last space
+        err_msg.pop_back();  // remove last comma
+        ALOGI("MM Metrics not supported - no IonTotalPools path.");
+        return false;
+    }
+    return true;
+}
+
+static bool checkUserBuild() {
+    return android::base::GetProperty("ro.build.type", "") == "user";
+}
+
 MmMetricsReporter::MmMetricsReporter()
     : kVmstatPath("/proc/vmstat"),
       kIonTotalPoolsPath("/sys/kernel/dma_heap/total_pools_kb"),
       kIonTotalPoolsPathForLegacy("/sys/kernel/ion/total_pools_kb"),
       kGpuTotalPages("/sys/kernel/pixel_stat/gpu/mem/total_page_count"),
-      kPixelStatMm("/sys/kernel/pixel_stat/mm") {}
+      kPixelStatMm("/sys/kernel/pixel_stat/mm") {
+    is_user_build_ = checkUserBuild();
+    ker_mm_metrics_support_ = checkKernelMMMetricSupport();
+}
 
 bool MmMetricsReporter::ReadFileToUint(const char *const path, uint64_t *val) {
     std::string file_contents;
@@ -249,10 +302,7 @@ void MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics
 }
 
 void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &stats_client) {
-    // Currently, we collect these metrics and report this atom only for userdebug_or_eng
-    // We only grant permissions to access sysfs for userdebug_or_eng.
-    // Add a check to avoid unnecessary access.
-    if (android::base::GetProperty("ro.build.type", "") == "user")
+    if (!MmMetricsSupported())
         return;
 
     std::map<std::string, uint64_t> vmstat = readVmStat(kVmstatPath);
@@ -287,10 +337,7 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
 }
 
 void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stats_client) {
-    // Currently, we collect these metrics and report this atom only for userdebug_or_eng
-    // We only grant permissions to access sysfs for userdebug_or_eng.
-    // Add a check to avoid unnecessary access.
-    if (android::base::GetProperty("ro.build.type", "") == "user")
+    if (!MmMetricsSupported())
         return;
 
     std::map<std::string, uint64_t> vmstat = readVmStat(kVmstatPath);
@@ -511,6 +558,9 @@ void MmMetricsReporter::reportCmaStatusAtom(
  * to collect the CMA metrics from kPixelStatMm/cma/<cma_type> and upload them.
  */
 void MmMetricsReporter::logCmaStatus(const std::shared_ptr<IStats> &stats_client) {
+    if (!CmaMetricsSupported())
+        return;
+
     std::string cma_root = android::base::StringPrintf("%s/cma", kPixelStatMm);
     std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir(cma_root.c_str()), closedir);
     if (!dir)

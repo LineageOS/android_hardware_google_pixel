@@ -62,6 +62,21 @@ class MmMetricsReporter {
     static const std::vector<MmMetricsInfo> kCmaStatusInfo;
     static const std::vector<MmMetricsInfo> kCmaStatusExtInfo;
 
+    bool checkKernelMMMetricSupport();
+
+    bool MmMetricsSupported() {
+        // Currently, we collect these metrics and report this atom only for userdebug_or_eng
+        // We only grant permissions to access sysfs for userdebug_or_eng.
+        // Add a check to avoid unnecessary access.
+        // In addition, we need to check the kernel MM metrics support.
+        return !is_user_build_ && ker_mm_metrics_support_;
+    }
+
+    bool CmaMetricsSupported() {
+        // For CMA metric
+        return ker_mm_metrics_support_;
+    }
+
     bool ReadFileToUint(const char *const path, uint64_t *val);
     bool reportVendorAtom(const std::shared_ptr<IStats> &stats_client, int atom_id,
                           const std::vector<VendorAtomValue> &values, const std::string &atom_name);
@@ -103,6 +118,8 @@ class MmMetricsReporter {
     int kcompactd_pid_ = -1;
     uint64_t prev_kswapd_stime_ = 0;
     uint64_t prev_kcompactd_stime_ = 0;
+    bool is_user_build_;
+    bool ker_mm_metrics_support_;
 };
 
 }  // namespace pixel
