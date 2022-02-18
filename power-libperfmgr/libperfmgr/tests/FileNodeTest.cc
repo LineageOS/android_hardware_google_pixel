@@ -67,7 +67,15 @@ TEST(FileNodeTest, DumpToFdTest) {
     TemporaryFile dumptf;
     t.DumpToFd(dumptf.fd);
     fsync(dumptf.fd);
-    std::string buf(android::base::StringPrintf("test_dump\t%s\t1\tvalue1\t0\t1\n", tf.path));
+    std::string buf(android::base::StringPrintf(
+            "Node Name\t"
+            "Node Path\t"
+            "Current Index\t"
+            "Current Value\t"
+            "Hold FD\t"
+            "Truncate\n"
+            "%s\t%s\t%zu\t%s\t%d\t%d\n",
+            "test_dump", tf.path, static_cast<size_t>(1), "value1", 0, 1));
     _VerifyPathValue(dumptf.path, buf);
 }
 
