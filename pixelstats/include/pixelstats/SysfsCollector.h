@@ -41,6 +41,7 @@ class SysfsCollector {
         const char *const SlowioUnmapCntPath;
         const char *const SlowioSyncCntPath;
         const char *const CycleCountBinsPath;
+        const char *const BatterySwellingPath;
         const char *const ImpedancePath;
         const char *const CodecPath;
         const char *const Codec1Path;
@@ -88,6 +89,7 @@ class SysfsCollector {
     void logBootStats(const std::shared_ptr<IStats> &stats_client);
     void logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client);
     void logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client);
+    void logBatterySwelling(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
