@@ -226,37 +226,42 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     uint32_t calVer;
 
     glob_t inputEventPaths;
-    if (glob("/dev/input/event*", 0, nullptr, &inputEventPaths)) {
-        ALOGE("Fail to get input event paths (%d): %s", errno, strerror(errno));
-        return;
-    }
-
     int fd = -1;
+    int ret;
     uint32_t val = 0;
     char str[20] = {0x00};
     const char *inputEventName = std::getenv("INPUT_EVENT_NAME");
-    for (uint8_t retry = 0; retry < 3; retry++) {
-        for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
-            fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
-            if (fd > 0) {
-                if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
-                    ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
-                    strcmp(str, inputEventName) == 0) {
-                    mInputFd.reset(fd);
-                    ALOGI("Control %s through %s", inputEventName, inputEventPaths.gl_pathv[i]);
-                    break;
+    for (uint8_t retry = 0; retry < 10; retry++) {
+        ret = glob("/dev/input/event*", 0, nullptr, &inputEventPaths);
+        if (ret) {
+            ALOGE("Fail to get input event paths (%d): %s", errno, strerror(errno));
+        } else {
+            for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
+                fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
+                if (fd > 0) {
+                    if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
+                        ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
+                        strcmp(str, inputEventName) == 0) {
+                        mInputFd.reset(fd);
+                        ALOGI("Control %s through %s", inputEventName, inputEventPaths.gl_pathv[i]);
+                        break;
+                    }
+                    close(fd);
                 }
-                close(fd);
             }
+        }
+
+        if (ret == 0) {
+            globfree(&inputEventPaths);
         }
         if (mInputFd.ok()) {
             break;
         }
 
         sleep(1);
-        ALOGW("Retry to search the input");
+        ALOGW("Retry #%d to search in %zu input devices.", retry, inputEventPaths.gl_pathc);
     }
-    globfree(&inputEventPaths);
+
     if (!mInputFd.ok()) {
         ALOGE("Fail to get an input event with name %s", inputEventName);
         return;
