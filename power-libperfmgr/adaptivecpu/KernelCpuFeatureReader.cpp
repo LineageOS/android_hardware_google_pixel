@@ -58,10 +58,10 @@ bool KernelCpuFeatureReader::GetRecentCpuFeatures(
         // So, we only read the first CPU in each policy.
         const size_t statsIdx = CPU_POLICY_INDICES[i];
         if (stats[statsIdx].weighted_sum_freq < mPreviousStats[statsIdx].weighted_sum_freq) {
-            LOG(ERROR) << "New weighted_sum_freq is less than old: new="
-                       << stats[statsIdx].weighted_sum_freq
-                       << ", old=" << mPreviousStats[statsIdx].weighted_sum_freq;
-            return false;
+            LOG(WARNING) << "New weighted_sum_freq is less than old: new="
+                         << stats[statsIdx].weighted_sum_freq
+                         << ", old=" << mPreviousStats[statsIdx].weighted_sum_freq;
+            mPreviousStats[statsIdx].weighted_sum_freq = stats[statsIdx].weighted_sum_freq;
         }
         (*cpuPolicyAverageFrequencyHz)[i] =
                 static_cast<double>(stats[statsIdx].weighted_sum_freq -
@@ -70,10 +70,10 @@ bool KernelCpuFeatureReader::GetRecentCpuFeatures(
     }
     for (size_t i = 0; i < NUM_CPU_CORES; i++) {
         if (stats[i].total_idle_time_ns < mPreviousStats[i].total_idle_time_ns) {
-            LOG(ERROR) << "New total_idle_time_ns is less than old: new="
-                       << stats[i].total_idle_time_ns
-                       << ", old=" << mPreviousStats[i].total_idle_time_ns;
-            return false;
+            LOG(WARNING) << "New total_idle_time_ns is less than old: new="
+                         << stats[i].total_idle_time_ns
+                         << ", old=" << mPreviousStats[i].total_idle_time_ns;
+            mPreviousStats[i].total_idle_time_ns = stats[i].total_idle_time_ns;
         }
         (*cpuCoreIdleTimesPercentage)[i] =
                 static_cast<double>(stats[i].total_idle_time_ns -
