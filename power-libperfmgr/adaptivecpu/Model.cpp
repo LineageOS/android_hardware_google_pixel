@@ -79,7 +79,7 @@ ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,
     if (config.randomThrottleDecisionProbability > 0 &&
         mShouldRandomThrottleDistribution(mGenerator) < config.randomThrottleDecisionProbability) {
         std::uniform_int_distribution<uint32_t> optionDistribution(
-                0, config.randomThrottleOptions.size());
+                0, config.randomThrottleOptions.size() - 1);
         const ThrottleDecision throttleDecision =
                 config.randomThrottleOptions[optionDistribution(mGenerator)];
         LOG(VERBOSE) << "Randomly overrided throttle decision: "
