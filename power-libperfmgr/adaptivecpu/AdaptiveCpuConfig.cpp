@@ -90,6 +90,7 @@ bool AdaptiveCpuConfig::ReadFromSystemProperties(AdaptiveCpuConfig *output) {
     const std::string randomThrottleOptionsStr =
             ::android::base::GetProperty(kRandomThrottleOptionsProperty.data(),
                                          FormatThrottleDecisions(DEFAULT.randomThrottleOptions));
+    output->randomThrottleOptions.clear();
     if (!ParseThrottleDecisions(randomThrottleOptionsStr, &output->randomThrottleOptions)) {
         return false;
     }
