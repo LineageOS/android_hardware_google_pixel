@@ -29,6 +29,17 @@ namespace pixel {
 using std::chrono_literals::operator""ms;
 using std::chrono_literals::operator""min;
 
+class AdaptiveCpuConfigTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "");
+        android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "");
+        android::base::SetProperty("debug.adaptivecpu.random_throttle_decision_percent", "");
+        android::base::SetProperty("debug.adaptivecpu.random_throttle_options", "");
+        android::base::SetProperty("debug.adaptivecpu.enabled_hint_timeout_ms", "");
+    }
+};
+
 TEST(AdaptiveCpuConfigTest, valid) {
     android::base::SetProperty("debug.adaptivecpu.iteration_sleep_duration_ms", "25");
     android::base::SetProperty("debug.adaptivecpu.hint_timeout_ms", "500");
@@ -87,7 +98,7 @@ TEST(AdaptiveCpuConfigTest, randomThrottleDecisionProbability_tooBig) {
 }
 
 TEST(AdaptiveCpuConfigTest, randomThrottleOptions_invalidThrottle) {
-    android::base::SetProperty("debug.adaptivecpu.random_throttle_options", "0,1,2,20");
+    android::base::SetProperty("debug.adaptivecpu.random_throttle_options", "0,1,2,9");
     AdaptiveCpuConfig actualConfig;
     ASSERT_FALSE(AdaptiveCpuConfig::ReadFromSystemProperties(&actualConfig));
 }
