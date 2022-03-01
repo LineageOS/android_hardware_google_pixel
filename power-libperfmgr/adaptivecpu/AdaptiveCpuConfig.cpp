@@ -132,9 +132,18 @@ bool ParseThrottleDecisions(const std::string &input, std::vector<ThrottleDecisi
             return false;
         }
         uint32_t throttleDecisionInt;
-        if (std::sscanf(throttleDecisionStr.c_str(), "%" PRIu32, &throttleDecisionInt) != 1) {
+        int scanEnd;
+        if (std::sscanf(throttleDecisionStr.c_str(), "%" PRIu32 "%n", &throttleDecisionInt,
+                        &scanEnd) != 1 ||
+            scanEnd != throttleDecisionStr.size()) {
             LOG(ERROR) << "Failed to parse as int: str=" << throttleDecisionStr
-                       << ", input=" << input;
+                       << ", input=" << input << ", scanEnd=" << scanEnd;
+            return false;
+        }
+        if (throttleDecisionInt < static_cast<uint32_t>(ThrottleDecision::FIRST) ||
+            throttleDecisionInt > static_cast<uint32_t>(ThrottleDecision::LAST)) {
+            LOG(ERROR) << "Failed to parse throttle decision: throttleDecision="
+                       << throttleDecisionInt << ", input=" << input;
             return false;
         }
         output->push_back(static_cast<ThrottleDecision>(throttleDecisionInt));
