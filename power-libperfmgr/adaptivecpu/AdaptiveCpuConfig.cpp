@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "powerhal-libperfmgr"
+#define LOG_TAG "powerhal-adaptivecpu"
 #define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "AdaptiveCpuConfig.h"
@@ -24,6 +24,8 @@
 #include <inttypes.h>
 #include <utils/Trace.h>
 
+#include <sstream>
+#include <string>
 #include <string_view>
 
 namespace aidl {
@@ -43,7 +45,12 @@ constexpr std::string_view kHintTimeoutProperty("debug.adaptivecpu.hint_timeout_
 // "percent" as range is 0-100, while the in-memory is "probability" as range is 0-1.
 constexpr std::string_view kRandomThrottleDecisionPercentProperty(
         "debug.adaptivecpu.random_throttle_decision_percent");
+constexpr std::string_view kRandomThrottleOptionsProperty(
+        "debug.adaptivecpu.random_throttle_options");
 constexpr std::string_view kEnabledHintTimeoutProperty("debug.adaptivecpu.enabled_hint_timeout_ms");
+
+bool ParseThrottleDecisions(const std::string &input, std::vector<ThrottleDecision> *output);
+std::string FormatThrottleDecisions(const std::vector<ThrottleDecision> &throttleDecisions);
 
 const AdaptiveCpuConfig AdaptiveCpuConfig::DEFAULT{
         // N.B.: The model will typically be trained with this value set to 25ms. We set it to 1s as
@@ -51,44 +58,56 @@ const AdaptiveCpuConfig AdaptiveCpuConfig::DEFAULT{
         .iterationSleepDuration = 1000ms,
         .hintTimeout = 2000ms,
         .randomThrottleDecisionProbability = 0,
+        .randomThrottleOptions = {ThrottleDecision::NO_THROTTLE, ThrottleDecision::THROTTLE_50,
+                                  ThrottleDecision::THROTTLE_60, ThrottleDecision::THROTTLE_70,
+                                  ThrottleDecision::THROTTLE_80, ThrottleDecision::THROTTLE_90},
         .enabledHintTimeout = 120min,
 };
 
-AdaptiveCpuConfig AdaptiveCpuConfig::ReadFromSystemProperties() {
+bool AdaptiveCpuConfig::ReadFromSystemProperties(AdaptiveCpuConfig *output) {
     ATRACE_CALL();
-    std::chrono::milliseconds iterationSleepDuration = std::chrono::milliseconds(
+
+    output->iterationSleepDuration = std::chrono::milliseconds(
             ::android::base::GetUintProperty<uint32_t>(kIterationSleepDurationProperty.data(),
                                                        DEFAULT.iterationSleepDuration.count()));
-    iterationSleepDuration = std::max(iterationSleepDuration, kIterationSleepDurationMin);
-    std::chrono::milliseconds hintTimeout =
-            std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
-                    kHintTimeoutProperty.data(), DEFAULT.hintTimeout.count()));
-    double randomThrottleDecisionProbability =
+    output->iterationSleepDuration =
+            std::max(output->iterationSleepDuration, kIterationSleepDurationMin);
+
+    output->hintTimeout = std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
+            kHintTimeoutProperty.data(), DEFAULT.hintTimeout.count()));
+
+    output->randomThrottleDecisionProbability =
             static_cast<double>(::android::base::GetUintProperty<uint32_t>(
                     kRandomThrottleDecisionPercentProperty.data(),
                     DEFAULT.randomThrottleDecisionProbability * 100)) /
             100;
-    if (randomThrottleDecisionProbability > 1.0) {
-        LOG(WARNING) << "Received bad value for " << kRandomThrottleDecisionPercentProperty << ": "
-                     << randomThrottleDecisionProbability;
-        randomThrottleDecisionProbability = DEFAULT.randomThrottleDecisionProbability;
+    if (output->randomThrottleDecisionProbability > 1.0) {
+        LOG(ERROR) << "Received bad value for " << kRandomThrottleDecisionPercentProperty << ": "
+                   << output->randomThrottleDecisionProbability;
+        return false;
     }
-    std::chrono::milliseconds enabledHintTimeout =
+
+    const std::string randomThrottleOptionsStr =
+            ::android::base::GetProperty(kRandomThrottleOptionsProperty.data(),
+                                         FormatThrottleDecisions(DEFAULT.randomThrottleOptions));
+    output->randomThrottleOptions.clear();
+    if (!ParseThrottleDecisions(randomThrottleOptionsStr, &output->randomThrottleOptions)) {
+        return false;
+    }
+
+    output->enabledHintTimeout =
             std::chrono::milliseconds(::android::base::GetUintProperty<uint32_t>(
                     kEnabledHintTimeoutProperty.data(), DEFAULT.enabledHintTimeout.count()));
-    return {
-            .iterationSleepDuration = iterationSleepDuration,
-            .hintTimeout = hintTimeout,
-            .randomThrottleDecisionProbability = randomThrottleDecisionProbability,
-            .enabledHintTimeout = enabledHintTimeout,
-    };
+
+    return true;
 }
 
 bool AdaptiveCpuConfig::operator==(const AdaptiveCpuConfig &other) const {
     return iterationSleepDuration == other.iterationSleepDuration &&
            hintTimeout == other.hintTimeout &&
            randomThrottleDecisionProbability == other.randomThrottleDecisionProbability &&
-           enabledHintTimeout == other.enabledHintTimeout;
+           enabledHintTimeout == other.enabledHintTimeout &&
+           randomThrottleOptions == other.randomThrottleOptions;
 }
 
 std::ostream &operator<<(std::ostream &stream, const AdaptiveCpuConfig &config) {
@@ -97,9 +116,54 @@ std::ostream &operator<<(std::ostream &stream, const AdaptiveCpuConfig &config) 
     stream << "hintTimeout=" << config.hintTimeout.count() << "ms, ";
     stream << "randomThrottleDecisionProbability=" << config.randomThrottleDecisionProbability
            << ", ";
-    stream << "enabledHintTimeout=" << config.enabledHintTimeout.count() << "ms";
+    stream << "enabledHintTimeout=" << config.enabledHintTimeout.count() << "ms, ";
+    stream << "randomThrottleOptions=[" << FormatThrottleDecisions(config.randomThrottleOptions)
+           << "]";
     stream << ")";
     return stream;
+}
+
+bool ParseThrottleDecisions(const std::string &input, std::vector<ThrottleDecision> *output) {
+    std::stringstream ss(input);
+    while (ss.good()) {
+        std::string throttleDecisionStr;
+        if (std::getline(ss, throttleDecisionStr, ',').fail()) {
+            LOG(ERROR) << "Failed to getline on throttle decisions string: " << input;
+            return false;
+        }
+        uint32_t throttleDecisionInt;
+        int scanEnd;
+        if (std::sscanf(throttleDecisionStr.c_str(), "%" PRIu32 "%n", &throttleDecisionInt,
+                        &scanEnd) != 1 ||
+            scanEnd != throttleDecisionStr.size()) {
+            LOG(ERROR) << "Failed to parse as int: str=" << throttleDecisionStr
+                       << ", input=" << input << ", scanEnd=" << scanEnd;
+            return false;
+        }
+        if (throttleDecisionInt < static_cast<uint32_t>(ThrottleDecision::FIRST) ||
+            throttleDecisionInt > static_cast<uint32_t>(ThrottleDecision::LAST)) {
+            LOG(ERROR) << "Failed to parse throttle decision: throttleDecision="
+                       << throttleDecisionInt << ", input=" << input;
+            return false;
+        }
+        output->push_back(static_cast<ThrottleDecision>(throttleDecisionInt));
+    }
+    if (output->empty()) {
+        LOG(ERROR) << "Failed to find any throttle decisions, must have at least one: " << input;
+        return false;
+    }
+    return true;
+}
+
+std::string FormatThrottleDecisions(const std::vector<ThrottleDecision> &throttleDecisions) {
+    std::stringstream ss;
+    for (size_t i = 0; i < throttleDecisions.size(); i++) {
+        ss << static_cast<uint32_t>(throttleDecisions[i]);
+        if (i < throttleDecisions.size() - 1) {
+            ss << ",";
+        }
+    }
+    return ss.str();
 }
 
 }  // namespace pixel
