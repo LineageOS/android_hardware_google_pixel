@@ -47,6 +47,7 @@ cc_library {
         "adaptivecpu/KernelCpuFeatureReader.cpp",
         "adaptivecpu/Model.cpp",
         "adaptivecpu/RealFilesystem.cpp",
+        "adaptivecpu/ThrottleDecision.cpp",
         "adaptivecpu/TimeSource.cpp",
         "adaptivecpu/WorkDurationProcessor.cpp",
     ],

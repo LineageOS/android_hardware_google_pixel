@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "powerhal-libperfmgr"
+#define LOG_TAG "powerhal-adaptivecpu"
 #define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "AdaptiveCpu.h"
@@ -127,7 +127,10 @@ void AdaptiveCpu::RunMainLoop() {
         }
 
         if (mShouldReloadConfig) {
-            mConfig = AdaptiveCpuConfig::ReadFromSystemProperties();
+            if (!AdaptiveCpuConfig::ReadFromSystemProperties(&mConfig)) {
+                mIsEnabled = false;
+                continue;
+            }
             LOG(INFO) << "Read config: " << mConfig;
             mShouldReloadConfig = false;
         }
@@ -172,10 +175,11 @@ void AdaptiveCpu::RunMainLoop() {
 
         if (throttleDecision != previousThrottleDecision) {
             ATRACE_NAME("sendHints");
-            for (const auto &hintName : kThrottleDecisionToHintNames.at(throttleDecision)) {
+            for (const auto &hintName : THROTTLE_DECISION_TO_HINT_NAMES.at(throttleDecision)) {
                 mHintManager->DoHint(hintName, mConfig.hintTimeout);
             }
-            for (const auto &hintName : kThrottleDecisionToHintNames.at(previousThrottleDecision)) {
+            for (const auto &hintName :
+                 THROTTLE_DECISION_TO_HINT_NAMES.at(previousThrottleDecision)) {
                 mHintManager->EndHint(hintName);
             }
             previousThrottleDecision = throttleDecision;
@@ -203,20 +207,6 @@ void AdaptiveCpu::DumpToFd(int fd) const {
         PLOG(ERROR) << "Failed to dump state to fd";
     }
 }
-
-const std::unordered_map<ThrottleDecision, std::vector<std::string>>
-        AdaptiveCpu::kThrottleDecisionToHintNames = {
-                {ThrottleDecision::NO_THROTTLE, {}},
-                {ThrottleDecision::THROTTLE_50,
-                 {"LOW_POWER_LITTLE_CLUSTER_50", "LOW_POWER_MID_CLUSTER_50", "LOW_POWER_CPU_50"}},
-                {ThrottleDecision::THROTTLE_60,
-                 {"LOW_POWER_LITTLE_CLUSTER_60", "LOW_POWER_MID_CLUSTER_60", "LOW_POWER_CPU_60"}},
-                {ThrottleDecision::THROTTLE_70,
-                 {"LOW_POWER_LITTLE_CLUSTER_70", "LOW_POWER_MID_CLUSTER_70", "LOW_POWER_CPU_70"}},
-                {ThrottleDecision::THROTTLE_80,
-                 {"LOW_POWER_LITTLE_CLUSTER_80", "LOW_POWER_MID_CLUSTER_80", "LOW_POWER_CPU_80"}},
-                {ThrottleDecision::THROTTLE_90,
-                 {"LOW_POWER_LITTLE_CLUSTER_90", "LOW_POWER_MID_CLUSTER_90", "LOW_POWER_CPU_90"}}};
 
 }  // namespace pixel
 }  // namespace impl

@@ -17,14 +17,16 @@
 #include <gtest/gtest.h>
 
 #include <random>
+#include <set>
 
 #include "adaptivecpu/Model.h"
 #include "mocks.h"
 
+using std::chrono_literals::operator""ns;
 using testing::_;
 using testing::ByMove;
 using testing::Return;
-using std::chrono_literals::operator""ns;
+using testing::UnorderedElementsAre;
 
 namespace aidl {
 namespace google {
@@ -88,6 +90,32 @@ TEST(ModelTest, Run_randomInputs) {
                                            randomModelInput()};
         Model().Run(modelInputs, AdaptiveCpuConfig::DEFAULT);
     }
+}
+
+TEST(ModelTest, Run_randomThrottling) {
+    ModelInput modelInput{
+            .cpuPolicyAverageFrequencyHz = {0, 0, 0},
+            .cpuCoreIdleTimesPercentage = {0, 0, 0, 0, 0, 0, 0, 0},
+            .workDurationFeatures = {.averageDuration = 0ns,
+                                     .maxDuration = 0ns,
+                                     .numMissedDeadlines = 0,
+                                     .numDurations = 0},
+            .previousThrottleDecision = ThrottleDecision::NO_THROTTLE,
+    };
+    std::deque<ModelInput> modelInputs{modelInput, modelInput, modelInput};
+
+    AdaptiveCpuConfig config = AdaptiveCpuConfig::DEFAULT;
+    config.randomThrottleOptions = {ThrottleDecision::THROTTLE_70, ThrottleDecision::THROTTLE_80};
+    config.randomThrottleDecisionProbability = 1;
+
+    std::set<ThrottleDecision> actualThrottleDecisions;
+    Model model;
+    for (int i = 0; i < 100; i++) {
+        ThrottleDecision throttleDecision = model.Run(modelInputs, config);
+        actualThrottleDecisions.insert(throttleDecision);
+    }
+    ASSERT_THAT(actualThrottleDecisions,
+                UnorderedElementsAre(ThrottleDecision::THROTTLE_70, ThrottleDecision::THROTTLE_80));
 }
 
 }  // namespace pixel

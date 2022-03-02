@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "powerhal-libperfmgr"
+#define LOG_TAG "powerhal-adaptivecpu"
 #define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
 
 #include "Model.h"
@@ -78,8 +78,10 @@ ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,
     ATRACE_CALL();
     if (config.randomThrottleDecisionProbability > 0 &&
         mShouldRandomThrottleDistribution(mGenerator) < config.randomThrottleDecisionProbability) {
-        const auto throttleDecision =
-                static_cast<ThrottleDecision>(mRandomThrottleDistribution(mGenerator));
+        std::uniform_int_distribution<uint32_t> optionDistribution(
+                0, config.randomThrottleOptions.size() - 1);
+        const ThrottleDecision throttleDecision =
+                config.randomThrottleOptions[optionDistribution(mGenerator)];
         LOG(VERBOSE) << "Randomly overrided throttle decision: "
                      << static_cast<uint32_t>(throttleDecision);
         ATRACE_INT("AdaptiveCpu_randomThrottleDecision", static_cast<uint32_t>(throttleDecision));
@@ -93,23 +95,6 @@ ThrottleDecision Model::RunDecisionTree(const std::deque<ModelInput> &modelInput
                                         __attribute__((unused))) {
     ATRACE_CALL();
 #include "models/model.inc"
-}
-
-std::string ThrottleString(ThrottleDecision throttleDecision) {
-    switch (throttleDecision) {
-        case ThrottleDecision::NO_THROTTLE:
-            return "NO_THROTTLE";
-        case ThrottleDecision::THROTTLE_60:
-            return "THROTTLE_60";
-        case ThrottleDecision::THROTTLE_70:
-            return "THROTTLE_70";
-        case ThrottleDecision::THROTTLE_80:
-            return "THROTTLE_80";
-        case ThrottleDecision::THROTTLE_90:
-            return "THROTTLE_90";
-        default:
-            return "unknown";
-    }
 }
 
 }  // namespace pixel
