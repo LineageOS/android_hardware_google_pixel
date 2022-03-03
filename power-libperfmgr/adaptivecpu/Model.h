@@ -26,6 +26,7 @@
 
 #include "AdaptiveCpuConfig.h"
 #include "CpuFrequencyReader.h"
+#include "Device.h"
 #include "ThrottleDecision.h"
 #include "WorkDurationProcessor.h"
 
@@ -47,6 +48,7 @@ struct ModelInput {
     std::array<double, NUM_CPU_CORES> cpuCoreIdleTimesPercentage;
     WorkDurationFeatures workDurationFeatures;
     ThrottleDecision previousThrottleDecision;
+    Device device;
 
     bool SetCpuFreqiencies(
             const std::vector<CpuPolicyAverageFrequency> &cpuPolicyAverageFrequencies);
