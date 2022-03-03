@@ -26,6 +26,7 @@
 
 #include "AdaptiveCpuConfig.h"
 #include "AdaptiveCpuStats.h"
+#include "Device.h"
 #include "KernelCpuFeatureReader.h"
 #include "Model.h"
 #include "WorkDurationProcessor.h"
@@ -100,6 +101,7 @@ class AdaptiveCpu {
     bool mIsInitialized = false;
     volatile bool mShouldReloadConfig = false;
     std::chrono::nanoseconds mLastEnabledHintTime;
+    Device mDevice;
     AdaptiveCpuConfig mConfig = AdaptiveCpuConfig::DEFAULT;
 };
 

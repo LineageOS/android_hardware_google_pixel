@@ -71,6 +71,7 @@ void ModelInput::LogToAtrace() const {
                workDurationFeatures.numMissedDeadlines);
     ATRACE_INT("ModelInput_workDurations_numDurations", workDurationFeatures.numDurations);
     ATRACE_INT("ModelInput_prevThrottle", (int)previousThrottleDecision);
+    ATRACE_INT("ModelInput_device", static_cast<int>(device));
 }
 
 ThrottleDecision Model::Run(const std::deque<ModelInput> &modelInputs,

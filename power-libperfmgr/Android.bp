@@ -44,6 +44,7 @@ cc_library {
         "adaptivecpu/CpuFrequencyReader.cpp",
         "adaptivecpu/CpuLoadReaderProcStat.cpp",
         "adaptivecpu/CpuLoadReaderSysDevices.cpp",
+        "adaptivecpu/Device.cpp",
         "adaptivecpu/KernelCpuFeatureReader.cpp",
         "adaptivecpu/Model.cpp",
         "adaptivecpu/RealFilesystem.cpp",
