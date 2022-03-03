@@ -61,6 +61,10 @@ class Vibrator : public BnVibrator {
         virtual bool hasOwtFreeSpace() = 0;
         // Reports the available OWT bytes.
         virtual bool getOwtFreeSpace(uint32_t *value) = 0;
+        // Enables/Disables F0 compensation enable status
+        virtual bool setF0CompEnable(bool value) = 0;
+        // Enables/Disables Redc compensation enable status
+        virtual bool setRedcCompEnable(bool value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
