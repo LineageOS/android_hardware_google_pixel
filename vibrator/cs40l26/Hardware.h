@@ -33,6 +33,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         open("default/vibe_state", &mVibeState);
         open("default/num_waves", &mEffectCount);
         open("default/owt_free_space", &mOwtFreeSpace);
+        open("default/f0_comp_enable", &mF0CompEnable);
+        open("default/redc_comp_enable", &mRedcCompEnable);
     }
 
     bool setF0(std::string value) override { return set(value, &mF0); }
@@ -50,6 +52,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setPwle(std::string value) override { return set(value, &mPwle); }
     bool hasOwtFreeSpace() override { return has(mOwtFreeSpace); }
     bool getOwtFreeSpace(uint32_t *value) override { return get(value, &mOwtFreeSpace); }
+    bool setF0CompEnable(bool value) override { return set(value, &mF0CompEnable); }
+    bool setRedcCompEnable(bool value) override { return set(value, &mRedcCompEnable); }
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
@@ -63,6 +67,8 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ifstream mAvailablePwleSegments;
     std::ofstream mPwle;
     std::ifstream mOwtFreeSpace;
+    std::ofstream mF0CompEnable;
+    std::ofstream mRedcCompEnable;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
