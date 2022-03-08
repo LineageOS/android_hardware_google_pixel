@@ -55,7 +55,6 @@ class HwApiTest : public Test {
             "device/num_waves",
             "device/available_pwle_segments",
             "device/pwle",
-            "device/pwle_ramp_down",
     };
 
   public:
@@ -320,8 +319,6 @@ INSTANTIATE_TEST_CASE_P(
                                          &Vibrator::HwApi::setGpioRiseIndex),
                 SetUint32Test::MakeParam("device/gpio1_rise_dig_scale",
                                          &Vibrator::HwApi::setGpioRiseScale),
-                SetUint32Test::MakeParam("device/pwle_ramp_down",
-                                         &Vibrator::HwApi::setPwleRampDown),
         }),
         SetUint32Test::PrintParam);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2021 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <aidl/android/hardware/vibrator/BnVibrator.h>
+#include <android-base/unique_fd.h>
 #include <tinyalsa/asoundlib.h>
 
 #include <array>
@@ -35,72 +36,32 @@ class Vibrator : public BnVibrator {
         virtual ~HwApi() = default;
         // Stores the LRA resonant frequency to be used for PWLE playback
         // and click compensation.
-        virtual bool setF0(uint32_t value) = 0;
+        virtual bool setF0(std::string value) = 0;
         // Stores the frequency offset for long vibrations.
         virtual bool setF0Offset(uint32_t value) = 0;
         // Stores the LRA series resistance to be used for click
         // compensation.
-        virtual bool setRedc(uint32_t value) = 0;
+        virtual bool setRedc(std::string value) = 0;
         // Stores the LRA Q factor to be used for Q-dependent waveform
         // selection.
-        virtual bool setQ(uint32_t value) = 0;
-        // Activates/deactivates the vibrator for durations specified by
-        // setDuration().
-        virtual bool setActivate(bool value) = 0;
-        // Specifies the vibration duration in milliseconds.
-        virtual bool setDuration(uint32_t value) = 0;
+        virtual bool setQ(std::string value) = 0;
         // Reports the number of effect waveforms loaded in firmware.
         virtual bool getEffectCount(uint32_t *value) = 0;
-        // Reports the duration of the waveform selected by
-        // setEffectIndex(), measured in 48-kHz periods.
-        virtual bool getEffectDuration(uint32_t *value) = 0;
-        // Selects the waveform associated with vibration calls from
-        // the Android vibrator HAL.
-        virtual bool setEffectIndex(uint32_t value) = 0;
-        // Specifies an array of waveforms, delays, and repetition markers to
-        // generate complex waveforms.
-        virtual bool setEffectQueue(std::string value) = 0;
-        // Reports whether setEffectScale() is supported.
-        virtual bool hasEffectScale() = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // waveforms triggered in response to vibration calls from the
-        // Android vibrator HAL.
-        virtual bool setEffectScale(uint32_t value) = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // any output waveform (additive to all other set*Scale()
-        // controls).
-        virtual bool setGlobalScale(uint32_t value) = 0;
-        // Specifies the active state of the vibrator
-        // (true = enabled, false = disabled).
-        virtual bool setState(bool value) = 0;
-        // Reports whether getAspEnable()/setAspEnable() is supported.
-        virtual bool hasAspEnable() = 0;
-        // Enables/disables ASP playback.
-        virtual bool getAspEnable(bool *value) = 0;
-        // Reports enabled/disabled state of ASP playback.
-        virtual bool setAspEnable(bool value) = 0;
-        // Selects the waveform associated with a GPIO1 falling edge.
-        virtual bool setGpioFallIndex(uint32_t value) = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // waveforms triggered in response to a GPIO1 falling edge.
-        virtual bool setGpioFallScale(uint32_t value) = 0;
-        // Selects the waveform associated with a GPIO1 rising edge.
-        virtual bool setGpioRiseIndex(uint32_t value) = 0;
-        // Indicates the number of 0.125-dB steps of attenuation to apply to
-        // waveforms triggered in response to a GPIO1 rising edge.
-        virtual bool setGpioRiseScale(uint32_t value) = 0;
         // Blocks until vibrator reaches desired state
-        // (true = enabled, false = disabled).
-        virtual bool pollVibeState(bool value) = 0;
+        // ("Vibe state: Haptic" means enabled).
+        // ("Vibe state: Stopped" means disabled).
+        virtual bool pollVibeState(std::string value, int32_t timeoutMs = -1) = 0;
         // Enables/disables closed-loop active braking.
         virtual bool setClabEnable(bool value) = 0;
         // Reports the number of available PWLE segments.
         virtual bool getAvailablePwleSegments(uint32_t *value) = 0;
-        // Reports whether piecewise-linear envelope for waveforms is supported.
-        virtual bool hasPwle() = 0;
         // Specifies piecewise-linear specifications to generate complex
         // waveforms.
         virtual bool setPwle(std::string value) = 0;
+        // Reports whether getOwtFreeSpace() is supported.
+        virtual bool hasOwtFreeSpace() = 0;
+        // Reports the available OWT bytes.
+        virtual bool getOwtFreeSpace(uint32_t *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -113,23 +74,24 @@ class Vibrator : public BnVibrator {
         virtual bool getVersion(uint32_t *value) = 0;
         // Obtains the LRA resonant frequency to be used for PWLE playback
         // and click compensation.
-        virtual bool getF0(uint32_t *value) = 0;
+        virtual bool getF0(std::string *value) = 0;
         // Obtains the LRA series resistance to be used for click
         // compensation.
-        virtual bool getRedc(uint32_t *value) = 0;
+        virtual bool getRedc(std::string *value) = 0;
         // Obtains the LRA Q factor to be used for Q-dependent waveform
         // selection.
-        virtual bool getQ(uint32_t *value) = 0;
+        virtual bool getQ(std::string *value) = 0;
         // Obtains frequency shift for long vibrations.
         virtual bool getLongFrequencyShift(int32_t *value) = 0;
-        // Obtains the discreet voltage levels to be applied for the various
-        // waveforms, in units of 1%.
-        virtual bool getVolLevels(std::array<uint32_t, 6> *value) = 0;
         // Obtains the v0/v1(min/max) voltage levels to be applied for
         // tick/click/long in units of 1%.
         virtual bool getTickVolLevels(std::array<uint32_t, 2> *value) = 0;
         virtual bool getClickVolLevels(std::array<uint32_t, 2> *value) = 0;
         virtual bool getLongVolLevels(std::array<uint32_t, 2> *value) = 0;
+        // Checks if the chirp feature is enabled.
+        virtual bool isChirpEnabled() = 0;
+        // Obtains the supported primitive effects.
+        virtual bool getSupportedPrimitives(uint32_t *value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -182,15 +144,15 @@ class Vibrator : public BnVibrator {
                                         uint32_t *outVolLevel);
     // 'compound' effects are those composed by stringing multiple 'simple' effects
     ndk::ScopedAStatus getCompoundDetails(Effect effect, EffectStrength strength,
-                                          uint32_t *outTimeMs, uint32_t *outVolLevel,
-                                          std::string *outEffectQueue);
+                                          uint32_t *outTimeMs, struct dspmem_chunk *outCh);
     ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, uint32_t *outEffectIndex);
-    ndk::ScopedAStatus setEffectQueue(const std::string &effectQueue);
+    ndk::ScopedAStatus uploadOwtEffect(uint8_t *owtData, uint32_t num_bytes,
+                                       uint32_t *outEffectIndex);
     ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *outTimeMs);
     ndk::ScopedAStatus performEffect(uint32_t effectIndex, uint32_t volLevel,
-                                     const std::string *effectQueue,
+                                     struct dspmem_chunk *ch,
                                      const std::shared_ptr<IVibratorCallback> &callback);
     ndk::ScopedAStatus setPwle(const std::string &pwleQueue);
     bool isUnderExternalControl();
@@ -199,7 +161,6 @@ class Vibrator : public BnVibrator {
     bool findHapticAlsaDevice(int *card, int *device);
     bool hasHapticAlsaDevice();
     bool enableHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card, int device);
-    void createPwleMaxLevelLimitMap();
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
@@ -210,11 +171,17 @@ class Vibrator : public BnVibrator {
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
     int32_t compositionSizeMax;
+    ::android::base::unique_fd mInputFd;
+    int8_t mActiveId{-1};
     struct pcm *mHapticPcm;
     int mCard;
     int mDevice;
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
+    float mLongEffectScale = 1.0;
+    bool mIsChirpEnabled;
+    uint32_t mSupportedPrimitivesBits = 0x0;
+    std::vector<CompositePrimitive> mSupportedPrimitives;
 };
 
 }  // namespace vibrator
