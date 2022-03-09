@@ -79,6 +79,7 @@ message Atom {
 
       BatteryHealthStatus battery_health_status = 105037;
       BatteryHealthUsage battery_health_usage = 105038;
+      F2fsSmartIdleMaintEnabledStateChanged f2fs_smart_idle_maint_enabled_state_changed = 105039;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1095,4 +1096,13 @@ message BatteryHealthUsage {
 
   // Time (s) accumulated only during discharge at the given thresholds.
   optional int32 discharge_time_secs = 5;
+}
+
+/*
+ * A Value of F2FS smart idle maintenance feature enabled
+ */
+message F2fsSmartIdleMaintEnabledStateChanged {
+    optional string reverse_domain_name = 1;
+    /* Smart idle maint is enabled */
+    optional bool enabled = 2;
 }
