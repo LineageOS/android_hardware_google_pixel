@@ -800,7 +800,6 @@ ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported
     if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
         *supported = {
                 Braking::NONE,
-                Braking::CLAB,
         };
         return ndk::ScopedAStatus::ok();
     } else {
@@ -886,6 +885,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                                          const std::shared_ptr<IVibratorCallback> &callback) {
     ATRACE_NAME("Vibrator::composePwle");
     int32_t capabilities;
+
     Vibrator::getCapabilities(&capabilities);
     if ((capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) == 0) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
@@ -894,6 +894,11 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     if (composite.empty() || composite.size() > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
+
+    std::vector<Braking> supported;
+    Vibrator::getSupportedBraking(&supported);
+    bool isClabSupported =
+            std::find(supported.begin(), supported.end(), Braking::CLAB) != supported.end();
 
     int segmentIdx = 0;
     uint32_t totalDuration = 0;
@@ -964,7 +969,10 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 auto braking = e.get<PrimitivePwle::braking>();
                 if (braking.braking > Braking::CLAB) {
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+                } else if (!isClabSupported && (braking.braking == Braking::CLAB)) {
+                    return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
+
                 if (braking.duration > COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) {
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
