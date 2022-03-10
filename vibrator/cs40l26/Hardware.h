@@ -45,11 +45,6 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool pollVibeState(uint32_t value, int32_t timeoutMs) override {
         return poll(value, &mVibeState, timeoutMs);
     }
-    bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
-    bool getAvailablePwleSegments(uint32_t *value) override {
-        return get(value, &mAvailablePwleSegments);
-    }
-    bool setPwle(std::string value) override { return set(value, &mPwle); }
     bool hasOwtFreeSpace() override { return has(mOwtFreeSpace); }
     bool getOwtFreeSpace(uint32_t *value) override { return get(value, &mOwtFreeSpace); }
     bool setF0CompEnable(bool value) override { return set(value, &mF0CompEnable); }
@@ -63,9 +58,6 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mQ;
     std::ifstream mEffectCount;
     std::ifstream mVibeState;
-    std::ofstream mClabEnable;
-    std::ifstream mAvailablePwleSegments;
-    std::ofstream mPwle;
     std::ifstream mOwtFreeSpace;
     std::ofstream mF0CompEnable;
     std::ofstream mRedcCompEnable;
