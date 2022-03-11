@@ -39,7 +39,13 @@ using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::ChargeStats;
 using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
+#define DURATION_FILTER_SECS 15
+
 ChargeStatsReporter::ChargeStatsReporter() {}
+
+int64_t ChargeStatsReporter::getTimeSecs(void) {
+    return nanoseconds_to_seconds(systemTime(SYSTEM_TIME_BOOTTIME));
+}
 
 void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats_client,
                                             const std::string line, const std::string wline_at,
@@ -69,14 +75,14 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
     int32_t pca_ac[2] = {0}, pca_rs[5] = {0};
 
     ALOGD("processing %s", line.c_str());
-    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d %d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
-               &tmp[5], &tmp[6], &tmp[14]) == 8) {
+    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d %d", &tmp[0], &tmp[1], &tmp[2], &tmp[3],
+               &tmp[4], &tmp[5], &tmp[6], &tmp[14]) == 8) {
         /* Age Adjusted Charge Rate (AACR) logs an additional battery capacity in order to determine
          * the charge curve needed to minimize battery cycle life degradation, while also minimizing
          * impact to the user.
          */
-    } else if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
-               &tmp[5], &tmp[6]) != 7) {
+    } else if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3],
+                      &tmp[4], &tmp[5], &tmp[6]) != 7) {
         ALOGE("Couldn't process %s", line.c_str());
         return;
     }
@@ -198,6 +204,29 @@ void ChargeStatsReporter::ReportVoltageTierStats(const std::shared_ptr<IStats> &
         ALOGE("Unable to report VoltageTierStats to Stats service");
 }
 
+/**
+ * b/223664185
+ * Adds a rolling window filter to charge stats. If the time has expired, there will be a new log
+ * event.
+ *
+ * This helps ensure that we throttle stats even if there is an intermittent disconnect, while still
+ * retaining some stats on the disconnect.
+ */
+bool ChargeStatsReporter::shouldReportEvent(void) {
+    const int64_t current_time = getTimeSecs();
+    if (current_time == 0) {
+        ALOGE("Current boot time is zero!");
+        return false;
+    }
+
+    if (log_event_time_secs_ == 0 || log_event_time_secs_ + DURATION_FILTER_SECS < current_time) {
+        log_event_time_secs_ = current_time;
+        return true;
+    }
+
+    return false;
+}
+
 void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
                                          const std::string &path) {
     std::string file_contents, line, wfile_contents, wline_at, wline_ac, pca_file_contents,
@@ -220,6 +249,11 @@ void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_cl
 
     if (!WriteStringToFile(std::to_string(0), path.c_str())) {
         ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
+    }
+
+    if (!shouldReportEvent()) {
+        ALOGW("Too many log events; event ignored.");
+        return;
     }
 
     if (has_pca) {
