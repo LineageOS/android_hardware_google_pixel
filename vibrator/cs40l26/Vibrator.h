@@ -50,13 +50,6 @@ class Vibrator : public BnVibrator {
         // Blocks until timeout or vibrator reaches desired state
         // (2 = ASP enabled, 1 = haptic enabled, 0 = disabled).
         virtual bool pollVibeState(uint32_t value, int32_t timeoutMs = -1) = 0;
-        // Enables/disables closed-loop active braking.
-        virtual bool setClabEnable(bool value) = 0;
-        // Reports the number of available PWLE segments.
-        virtual bool getAvailablePwleSegments(uint32_t *value) = 0;
-        // Specifies piecewise-linear specifications to generate complex
-        // waveforms.
-        virtual bool setPwle(std::string value) = 0;
         // Reports whether getOwtFreeSpace() is supported.
         virtual bool hasOwtFreeSpace() = 0;
         // Reports the available OWT bytes.
@@ -173,7 +166,6 @@ class Vibrator : public BnVibrator {
     std::array<uint32_t, 2> mLongEffectVol;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
-    int32_t compositionSizeMax;
     ::android::base::unique_fd mInputFd;
     int8_t mActiveId{-1};
     struct pcm *mHapticPcm;
