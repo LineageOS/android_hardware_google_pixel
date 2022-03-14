@@ -143,11 +143,13 @@ void AdaptiveCpu::RunMainLoop() {
                 mIsEnabled = false;
                 continue;
             }
+            mDevice = ReadDevice();
             mIsInitialized = true;
         }
 
         ModelInput modelInput;
         modelInput.previousThrottleDecision = previousThrottleDecision;
+        modelInput.device = mDevice;
 
         modelInput.workDurationFeatures = mWorkDurationProcessor.GetFeatures();
         LOG(VERBOSE) << "Got work durations: count=" << modelInput.workDurationFeatures.numDurations
