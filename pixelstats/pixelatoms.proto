@@ -397,6 +397,16 @@ message BatteryEEPROM {
     optional int32 min_ibatt = 19;
     /* Field used to verify the integrity of the EEPROM data */
     optional int32 checksum = 20;
+
+    /* Extend data for P21 */
+    /* Temperature compensation information */
+    optional int32 tempco = 21;
+    /* Learned characterization related to the voltage gauge */
+    optional int32 rcomp0 = 22;
+    /* For time to monitor the life of cell */
+    optional int32 timer_h = 23;
+    /* The full capacity of the battery learning at the end of every charge cycle */
+    optional int32 full_rep = 24;
 }
 
 /* A message containing an exceptional event from citadel. */
