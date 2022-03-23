@@ -121,7 +121,7 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
         values[charge_stats_fields[i] - kVendorAtomOffset] = val;
     }
 
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+    VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kChargeStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
@@ -190,7 +190,7 @@ void ChargeStatsReporter::ReportVoltageTierStats(const std::shared_ptr<IStats> &
         values[voltage_tier_stats_fields[i] - kVendorAtomOffset] = val;
     }
 
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+    VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kVoltageTierStats,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
