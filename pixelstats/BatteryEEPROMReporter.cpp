@@ -185,7 +185,7 @@ void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_cli
     val.set<VendorAtomValue::intValue>(hist.checksum);
     values[BatteryEEPROM::kChecksumFieldNumber - kVendorAtomOffset] = val;
 
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+    VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kBatteryEeprom,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
