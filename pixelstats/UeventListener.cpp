@@ -275,7 +275,7 @@ void UeventListener::ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_c
     values[PdVidPid::kPidFieldNumber - kVendorAtomOffset] = tmp;
 
     // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+    VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kPdVidPid,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
