@@ -174,7 +174,7 @@ bool MmMetricsReporter::reportVendorAtom(const std::shared_ptr<IStats> &stats_cl
                                          const std::vector<VendorAtomValue> &values,
                                          const std::string &atom_name) {
     // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+    VendorAtom event = {.reverseDomainName = "",
                         .atomId = atom_id,
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
