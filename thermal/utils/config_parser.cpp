@@ -378,19 +378,19 @@ std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view con
         float multiplier = sensors[i]["Multiplier"].asFloat();
         LOG(INFO) << "Sensor[" << name << "]'s Multiplier: " << multiplier;
 
-        std::chrono::milliseconds polling_delay;
-        if (sensors[i]["PollingDelay"].empty()) {
-            polling_delay = kUeventPollTimeoutMs;
-        } else {
-            polling_delay = std::chrono::milliseconds(getIntFromValue(sensors[i]["PollingDelay"]));
+        std::chrono::milliseconds polling_delay = kUeventPollTimeoutMs;
+        if (!sensors[i]["PollingDelay"].empty()) {
+            const auto value = getIntFromValue(sensors[i]["PollingDelay"]);
+            polling_delay = (value > 0) ? std::chrono::milliseconds(value)
+                                        : std::chrono::milliseconds::max();
         }
         LOG(INFO) << "Sensor[" << name << "]'s Polling delay: " << polling_delay.count();
 
-        std::chrono::milliseconds passive_delay;
-        if (sensors[i]["PassiveDelay"].empty()) {
-            passive_delay = kMinPollIntervalMs;
-        } else {
-            passive_delay = std::chrono::milliseconds(getIntFromValue(sensors[i]["PassiveDelay"]));
+        std::chrono::milliseconds passive_delay = kMinPollIntervalMs;
+        if (!sensors[i]["PassiveDelay"].empty()) {
+            const auto value = getIntFromValue(sensors[i]["PassiveDelay"]);
+            passive_delay = (value > 0) ? std::chrono::milliseconds(value)
+                                        : std::chrono::milliseconds::max();
         }
         LOG(INFO) << "Sensor[" << name << "]'s Passive delay: " << passive_delay.count();
 
