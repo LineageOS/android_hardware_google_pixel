@@ -213,12 +213,13 @@ class Vibrator : public BnVibrator {
     std::array<uint32_t, 2> mLongEffectVol;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
-    int32_t compositionSizeMax;
+    int32_t mCompositionSizeMax;
     struct pcm *mHapticPcm;
     int mCard;
     int mDevice;
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
+    float mResonantFrequency;
 };
 
 }  // namespace vibrator
