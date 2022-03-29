@@ -86,9 +86,9 @@ static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
 static constexpr float CS40L26_PWLE_LEVEL_MIX = -1.0;
 static constexpr float CS40L26_PWLE_LEVEL_MAX = 0.9995118;
-static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
-static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
-static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
+static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 1.00;
+static constexpr float PWLE_FREQUENCY_MIN_HZ = 1.00;
+static constexpr float PWLE_FREQUENCY_MAX_HZ = 1000.00;
 static constexpr float PWLE_BW_MAP_SIZE =
         1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 
@@ -298,16 +298,33 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }; /* 11+3 waveforms. The duration must < UINT16_MAX */
 
     uint8_t effectIndex = 0;
-
-    for (effectIndex = 0; effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX; effectIndex++) {
-        mFfEffects[effectIndex] = {
-                .type = FF_PERIODIC,
-                .id = -1,
-                .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
-                .u.periodic.waveform = FF_CUSTOM,
-                .u.periodic.custom_data = new int16_t[2]{RAM_WVFRM_BANK, effectIndex},
-                .u.periodic.custom_len = FF_CUSTOM_DATA_LEN,
-        };
+    const uint8_t owtPlaceholder[] = {0x00, 0x00, 0x01, 0x00, 0x00, 0x5F,
+                                      0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
+    const uint8_t owtPlaceholderLength = sizeof(owtPlaceholder);
+    for (effectIndex = 0; effectIndex < WAVEFORM_MAX_INDEX; effectIndex++) {
+        if (effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX) {
+            mFfEffects[effectIndex] = {
+                    .type = FF_PERIODIC,
+                    .id = -1,
+                    .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
+                    .u.periodic.waveform = FF_CUSTOM,
+                    .u.periodic.custom_data = new int16_t[2]{RAM_WVFRM_BANK, effectIndex},
+                    .u.periodic.custom_len = FF_CUSTOM_DATA_LEN,
+            };
+        } else {
+            /* Initiate placeholders for OWT effects. */
+            mFfEffects[effectIndex] = {
+                    .type = FF_PERIODIC,
+                    .id = -1,
+                    .replay.length = 0,
+                    .u.periodic.waveform = FF_CUSTOM,
+                    .u.periodic.custom_data = nullptr,
+                    .u.periodic.custom_len = owtPlaceholderLength / sizeof(int16_t),
+            };
+            mFfEffects[effectIndex].u.periodic.custom_data = new int16_t[]{0x0000};
+            memcpy(mFfEffects[effectIndex].u.periodic.custom_data, owtPlaceholder,
+                   owtPlaceholderLength);
+        }
 
         while (true) {
             if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[effectIndex]) < 0) {
@@ -326,22 +343,9 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
             break;
         }
     }
-    if (effectIndex != WAVEFORM_MAX_PHYSICAL_INDEX) {
+    if (effectIndex != WAVEFORM_MAX_INDEX) {
         ALOGE("Incomplete effect initialization!");
         return;
-    }
-
-    /* Initiate placeholders for OWT effects. */
-    for (effectIndex = WAVEFORM_MAX_PHYSICAL_INDEX; effectIndex < WAVEFORM_MAX_INDEX;
-         effectIndex++) {
-        mFfEffects[effectIndex] = {
-                .type = FF_PERIODIC,
-                .id = -1,
-                .replay.length = 0,
-                .u.periodic.waveform = FF_CUSTOM,
-                .u.periodic.custom_data = nullptr,
-                .u.periodic.custom_len = 0,
-        };
     }
 
     if (mHwCal->getF0(&caldata)) {
@@ -613,11 +617,12 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
 
 ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
-    if (effectIndex > WAVEFORM_MAX_INDEX) {
+    if (effectIndex >= WAVEFORM_MAX_INDEX) {
+        ALOGE("Invalid waveform index %d", effectIndex);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
-        ALOGE("Previous vibration pending.");
+        ALOGE("Previous vibration pending: prev: %d, curr: %d", mActiveId, effectIndex);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
@@ -1308,14 +1313,6 @@ ndk::ScopedAStatus Vibrator::uploadOwtEffect(uint8_t *owtData, uint32_t numBytes
     bool isPwle = (*reinterpret_cast<uint16_t *>(owtData) != 0x0000);
     WaveformIndex targetId = isPwle ? WAVEFORM_PWLE : WAVEFORM_COMPOSE;
 
-    /* Erase the created OWT waveform. */
-    bool isCreated = (mFfEffects[targetId].id != -1);
-    if (isCreated && ioctl(mInputFd, EVIOCRMFF, mFfEffects[targetId].id) < 0) {
-        ALOGW("Failed to erase effect %d(%d) (%d): %s", targetId, mFfEffects[targetId].id, errno,
-              strerror(errno));
-        mFfEffects[targetId].id = -1;
-    }
-
     uint32_t freeBytes;
     mHwApi->getOwtFreeSpace(&freeBytes);
     if (numBytes > freeBytes) {
@@ -1323,9 +1320,7 @@ ndk::ScopedAStatus Vibrator::uploadOwtEffect(uint8_t *owtData, uint32_t numBytes
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
-    /* Create a new OWT waveform to update the PWLE or composite effect. */
-    mFfEffects[targetId].id = -1;                              /* New Effect */
-    mFfEffects[targetId].u.periodic.custom_len = numBytes / 2; /* # of 16-bit elements */
+    mFfEffects[targetId].u.periodic.custom_len = numBytes / sizeof(uint16_t);
     delete[](mFfEffects[targetId].u.periodic.custom_data);
     mFfEffects[targetId].u.periodic.custom_data =
             new int16_t[mFfEffects[targetId].u.periodic.custom_len]{0x0000};
@@ -1335,9 +1330,40 @@ ndk::ScopedAStatus Vibrator::uploadOwtEffect(uint8_t *owtData, uint32_t numBytes
     }
     memcpy(mFfEffects[targetId].u.periodic.custom_data, owtData, numBytes);
 
-    if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[targetId]) < 0) {
-        ALOGE("Failed to upload effect %d (%d): %s", targetId, errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    /*
+     * Erase the created OWT waveform. If no error, the HAL, ff-core and haptics driver effect lists
+     * are properly aligned. Hence, proceed to add a new effect to play. If failed, scanarios are as
+     * follows:
+     * 1. ENOMEM 12 Out of memory:
+     *    Driver effect list is empty while HAL and ff-cores' are not.
+     *    Effect editing can add the OWT effect to driver while keep the original effect ID.
+     * 2. EACCES 13 Permission denied:
+     *    Effect was created by others or previous HAL instance (HAL got restarted).
+     *    No way to erase old effects managed by ff-core and need reboot.
+     */
+    bool isCreated = (mFfEffects[targetId].id != -1);
+    if (isCreated && ioctl(mInputFd, EVIOCRMFF, targetId) < 0) {
+        ALOGW("Failed to erase effect %d(%d) (%d): %s", targetId, mFfEffects[targetId].id, errno,
+              strerror(errno));
+        mFfEffects[targetId].id = targetId;
+
+        /* Edit the current effect to see if we can make effect lists aligned. */
+        if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[targetId]) < 0) {
+            /* If it is EINVAL 22 Invalid argument, the owner is not the current HAL instance. */
+            ALOGE("Failed to upload effect %d (%d): %s", targetId, errno, strerror(errno));
+            delete[](mFfEffects[targetId].u.periodic.custom_data);
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        } else {
+            ALOGV("Successful to overwrite effect %d.", targetId);
+        }
+    } else {
+        /* Create a new OWT waveform to update the PWLE or composite effect. */
+        mFfEffects[targetId].id = -1;
+        if (ioctl(mInputFd, EVIOCSFF, &mFfEffects[targetId]) < 0) {
+            ALOGE("Failed to upload effect %d (%d): %s", targetId, errno, strerror(errno));
+            delete[](mFfEffects[targetId].u.periodic.custom_data);
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+        }
     }
 
     *outEffectIndex = mFfEffects[targetId].id;
