@@ -86,9 +86,9 @@ static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
 static constexpr float CS40L26_PWLE_LEVEL_MIX = -1.0;
 static constexpr float CS40L26_PWLE_LEVEL_MAX = 0.9995118;
-static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 0.25;
-static constexpr float PWLE_FREQUENCY_MIN_HZ = 0.25;
-static constexpr float PWLE_FREQUENCY_MAX_HZ = 1023.75;
+static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 1.00;
+static constexpr float PWLE_FREQUENCY_MIN_HZ = 1.00;
+static constexpr float PWLE_FREQUENCY_MAX_HZ = 1000.00;
 static constexpr float PWLE_BW_MAP_SIZE =
         1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 
