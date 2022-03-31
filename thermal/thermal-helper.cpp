@@ -1114,7 +1114,7 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                                    &sensor_reading, force_sysfs)) {
                 return false;
             }
-            log_buf.append(StringPrintf("(%s: %0.2f degC)",
+            log_buf.append(StringPrintf("(%s: %0.2f)",
                                         sensor_info.virtual_sensor_info->linked_sensors[i].c_str(),
                                         sensor_reading));
             if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
@@ -1271,9 +1271,9 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         }
 
         if (sensor_status.severity != ThrottlingSeverity::NONE) {
-            LOG(INFO) << temp.name << ": " << temp.value << " degC";
+            LOG(INFO) << temp.name << ": " << temp.value;
         } else {
-            LOG(VERBOSE) << temp.name << ": " << temp.value << " degC";
+            LOG(VERBOSE) << temp.name << ": " << temp.value;
         }
 
         // Start PID computation
