@@ -321,7 +321,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
                     .u.periodic.custom_data = nullptr,
                     .u.periodic.custom_len = owtPlaceholderLength / sizeof(int16_t),
             };
-            mFfEffects[effectIndex].u.periodic.custom_data = new int16_t[]{0x0000};
+            mFfEffects[effectIndex].u.periodic.custom_data =
+                    new int16_t[mFfEffects[effectIndex].u.periodic.custom_len]{0x0000};
             memcpy(mFfEffects[effectIndex].u.periodic.custom_data, owtPlaceholder,
                    owtPlaceholderLength);
         }
