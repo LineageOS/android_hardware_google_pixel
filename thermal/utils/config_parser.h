@@ -129,9 +129,12 @@ struct PowerRailInfo {
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
 };
 
-std::unordered_map<std::string, SensorInfo> ParseSensorInfo(std::string_view config_path);
-std::unordered_map<std::string, CdevInfo> ParseCoolingDevice(std::string_view config_path);
-std::unordered_map<std::string, PowerRailInfo> ParsePowerRailInfo(std::string_view config_path);
+bool ParseSensorInfo(std::string_view config_path,
+                     std::unordered_map<std::string, SensorInfo> *sensors_parsed);
+bool ParseCoolingDevice(std::string_view config_path,
+                        std::unordered_map<std::string, CdevInfo> *cooling_device_parsed);
+bool ParsePowerRailInfo(std::string_view config_path,
+                        std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
 
 }  // namespace implementation
 }  // namespace V2_0
