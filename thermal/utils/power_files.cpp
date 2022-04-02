@@ -106,6 +106,10 @@ bool PowerFiles::registerPowerRailsToWatch(std::string_view sensor_name, std::st
                 for (int j = 0; j < power_rail_info.power_sample_count; j++) {
                     power_history[i].emplace(power_sample);
                 }
+            } else {
+                LOG(ERROR) << "Could not find power rail "
+                           << power_rail_info.virtual_power_rail_info->linked_power_rails[i];
+                return false;
             }
         }
     } else {
@@ -114,6 +118,9 @@ bool PowerFiles::registerPowerRailsToWatch(std::string_view sensor_name, std::st
             for (int j = 0; j < power_rail_info.power_sample_count; j++) {
                 power_history[0].emplace(power_sample);
             }
+        } else {
+            LOG(ERROR) << "Could not find power rail " << power_rail_info.rail;
+            return false;
         }
     }
 
@@ -237,10 +244,14 @@ bool PowerFiles::updateEnergyValues(void) {
 bool PowerFiles::getAveragePower(std::string_view power_rail,
                                  std::queue<PowerSample> *power_history, bool power_sample_update,
                                  float *avg_power) {
-    const auto curr_sample = energy_info_map_.at(power_rail.data());
     bool ret = true;
-
     const auto last_sample = power_history->front();
+
+    if (!energy_info_map_.count(power_rail.data())) {
+        LOG(ERROR) << " Could not find power rail " << power_rail.data();
+        return false;
+    }
+    const auto curr_sample = energy_info_map_.at(power_rail.data());
     const auto duration = curr_sample.duration - last_sample.duration;
     const auto deltaEnergy = curr_sample.energy_counter - last_sample.energy_counter;
 
