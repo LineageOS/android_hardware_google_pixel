@@ -203,6 +203,15 @@ bool ParseSensorInfo(std::string_view config_path,
         LOG(INFO) << "Sensor[" << name << "]'s SendPowerHint: " << std::boolalpha << send_powerhint
                   << std::noboolalpha;
 
+        bool is_hidden = false;
+        if (sensors[i]["Hidden"].empty() || !sensors[i]["Hidden"].isBool()) {
+            LOG(INFO) << "Failed to read Sensor[" << name << "]'s Hidden, set to 'false'";
+        } else if (sensors[i]["Hidden"].asBool()) {
+            is_hidden = true;
+        }
+        LOG(INFO) << "Sensor[" << name << "]'s Hidden: " << std::boolalpha << is_hidden
+                  << std::noboolalpha;
+
         std::array<float, kThrottlingSeverityCount> hot_thresholds;
         hot_thresholds.fill(NAN);
         std::array<float, kThrottlingSeverityCount> cold_thresholds;
@@ -700,8 +709,14 @@ bool ParseSensorInfo(std::string_view config_path,
             };
         }
 
-        bool is_monitor = (send_cb | send_powerhint | support_pid | support_hard_limit);
-        LOG(INFO) << "Sensor[" << name << "]'s Monitor: " << std::boolalpha << is_monitor;
+        if (is_hidden && send_cb) {
+            LOG(ERROR) << "is_hidden and send_cb cannot be enabled together";
+            sensors_parsed->clear();
+            return false;
+        }
+
+        bool is_watch = (send_cb | send_powerhint | support_pid | support_hard_limit);
+        LOG(INFO) << "Sensor[" << name << "]'s is_watch: " << std::boolalpha << is_watch;
 
         std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
         if (is_virtual_sensor) {
@@ -727,7 +742,8 @@ bool ParseSensorInfo(std::string_view config_path,
                 .time_resolution = time_resolution,
                 .send_cb = send_cb,
                 .send_powerhint = send_powerhint,
-                .is_monitor = is_monitor,
+                .is_watch = is_watch,
+                .is_hidden = is_hidden,
                 .virtual_sensor_info = std::move(virtual_sensor_info),
                 .throttling_info = std::move(throttling_info),
         };
