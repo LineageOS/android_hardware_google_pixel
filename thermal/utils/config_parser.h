@@ -110,7 +110,8 @@ struct SensorInfo {
     std::chrono::milliseconds time_resolution;
     bool send_cb;
     bool send_powerhint;
-    bool is_monitor;
+    bool is_watch;
+    bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::unique_ptr<ThrottlingInfo> throttling_info;
 };
