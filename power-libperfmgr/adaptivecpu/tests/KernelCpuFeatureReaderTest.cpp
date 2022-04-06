@@ -107,7 +107,7 @@ TEST(KernelCpuFeatureReaderTest, noFile) {
     ASSERT_FALSE(reader.Init());
 }
 
-TEST(KernelCpuFeatureReaderTest, frequencies_negativeDiff) {
+TEST(KernelCpuFeatureReaderTest, frequencies_capsNegativeDiff) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     std::unique_ptr<MockTimeSource> timeSource = std::make_unique<MockTimeSource>();
 
@@ -149,11 +149,13 @@ TEST(KernelCpuFeatureReaderTest, frequencies_negativeDiff) {
 
     std::array<double, NUM_CPU_POLICIES> cpuPolicyAverageFrequencyHz;
     std::array<double, NUM_CPU_CORES> cpuCoreIdleTimesPercentage;
-    ASSERT_FALSE(
+    ASSERT_TRUE(
             reader.GetRecentCpuFeatures(&cpuPolicyAverageFrequencyHz, &cpuCoreIdleTimesPercentage));
+    std::array<double, NUM_CPU_POLICIES> expectedFrequencies{{0}};
+    ASSERT_EQ(cpuPolicyAverageFrequencyHz, expectedFrequencies);
 }
 
-TEST(KernelCpuFeatureReaderTest, idleTimes_negativeDiff) {
+TEST(KernelCpuFeatureReaderTest, idleTimes_capsNegativeDiff) {
     std::unique_ptr<MockFilesystem> filesystem = std::make_unique<MockFilesystem>();
     std::unique_ptr<MockTimeSource> timeSource = std::make_unique<MockTimeSource>();
 
@@ -195,8 +197,10 @@ TEST(KernelCpuFeatureReaderTest, idleTimes_negativeDiff) {
 
     std::array<double, NUM_CPU_POLICIES> cpuPolicyAverageFrequencyHz;
     std::array<double, NUM_CPU_CORES> cpuCoreIdleTimesPercentage;
-    ASSERT_FALSE(
+    ASSERT_TRUE(
             reader.GetRecentCpuFeatures(&cpuPolicyAverageFrequencyHz, &cpuCoreIdleTimesPercentage));
+    std::array<double, NUM_CPU_CORES> expectedIdleTimes{{0}};
+    ASSERT_EQ(cpuCoreIdleTimesPercentage, expectedIdleTimes);
 }
 
 }  // namespace pixel

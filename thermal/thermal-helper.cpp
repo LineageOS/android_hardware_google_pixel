@@ -274,13 +274,26 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
     const std::string config_path =
             "/vendor/etc/" +
             android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data());
-    cooling_device_info_map_ = ParseCoolingDevice(config_path);
-    sensor_info_map_ = ParseSensorInfo(config_path);
-    power_rail_info_map_ = ParsePowerRailInfo(config_path);
+    bool thermal_throttling_disabled =
+            android::base::GetBoolProperty(kThermalDisabledProperty.data(), false);
+
+    is_initialized_ = ParseCoolingDevice(config_path, &cooling_device_info_map_) &&
+                      ParseSensorInfo(config_path, &sensor_info_map_) &&
+                      ParsePowerRailInfo(config_path, &power_rail_info_map_);
+
+    if (thermal_throttling_disabled) {
+        return;
+    }
+
+    if (!is_initialized_) {
+        LOG(FATAL) << "Failed to parse thermal configs";
+    }
+
     auto tz_map = parseThermalPathMap(kSensorPrefix.data());
     auto cdev_map = parseThermalPathMap(kCoolingDevicePrefix.data());
 
     is_initialized_ = initializeSensorMap(tz_map) && initializeCoolingDevices(cdev_map);
+
     if (!is_initialized_) {
         LOG(FATAL) << "ThermalHAL could not be initialized properly.";
     }
@@ -297,12 +310,10 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                 .prev_err = NAN,
         };
 
-        bool invalid_binded_cdev = false;
         for (auto &binded_cdev_pair :
              name_status_pair.second.throttling_info->binded_cdev_info_map) {
             if (!cooling_device_info_map_.count(binded_cdev_pair.first)) {
-                invalid_binded_cdev = true;
-                LOG(ERROR) << "Could not find " << binded_cdev_pair.first
+                LOG(FATAL) << "Could not find " << binded_cdev_pair.first
                            << " in cooling device info map";
             }
 
@@ -343,43 +354,24 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                 if (!power_files_.registerPowerRailsToWatch(
                             name_status_pair.first, binded_cdev_pair.first, binded_cdev_pair.second,
                             cdev_info, power_rail_info)) {
-                    invalid_binded_cdev = true;
-                    LOG(ERROR) << "Could not find " << binded_cdev_pair.first
+                    LOG(FATAL) << "Could not register " << binded_cdev_pair.first
                                << "'s power energy source: " << binded_cdev_pair.second.power_rail;
                 }
             }
         }
 
-        if (invalid_binded_cdev) {
-            name_status_pair.second.throttling_info->binded_cdev_info_map.clear();
-            sensor_status_map_[name_status_pair.first].hard_limit_request_map.clear();
-            sensor_status_map_[name_status_pair.first].pid_request_map.clear();
-        }
-
         if (name_status_pair.second.virtual_sensor_info != nullptr &&
-            name_status_pair.second.is_monitor) {
+            !name_status_pair.second.virtual_sensor_info->trigger_sensor.empty() &&
+            name_status_pair.second.is_watch) {
             if (sensor_info_map_.count(
                         name_status_pair.second.virtual_sensor_info->trigger_sensor)) {
                 sensor_info_map_[name_status_pair.second.virtual_sensor_info->trigger_sensor]
-                        .is_monitor = true;
+                        .is_watch = true;
             } else {
-                LOG(FATAL) << name_status_pair.first << " does not have trigger sensor: "
+                LOG(FATAL) << "Could not find " << name_status_pair.first << "'s trigger sensor: "
                            << name_status_pair.second.virtual_sensor_info->trigger_sensor;
             }
         }
-    }
-
-    const bool thermal_throttling_disabled =
-            android::base::GetBoolProperty(kThermalDisabledProperty.data(), false);
-
-    if (thermal_throttling_disabled) {
-        LOG(INFO) << kThermalDisabledProperty.data() << " is true";
-        for (const auto &cdev_pair : cooling_device_info_map_) {
-            if (cooling_devices_.writeCdevFile(cdev_pair.first, std::to_string(0))) {
-                LOG(INFO) << "Successfully clear cdev " << cdev_pair.first << " to 0";
-            }
-        }
-        return;
     }
 
     const bool thermal_genl_enabled =
@@ -489,7 +481,7 @@ bool ThermalHelper::readTemperature(
     std::pair<ThrottlingSeverity, ThrottlingSeverity> status =
         std::make_pair(ThrottlingSeverity::NONE, ThrottlingSeverity::NONE);
     // Only update status if the thermal sensor is being monitored
-    if (sensor_info.is_monitor) {
+    if (sensor_info.is_watch) {
         ThrottlingSeverity prev_hot_severity, prev_cold_severity;
         {
             // reader lock, readTemperature will be called in Binder call and the watcher thread.
@@ -813,7 +805,7 @@ bool ThermalHelper::initializeCoolingDevices(
         std::string cooling_device_name = cooling_device_info_pair.first;
         if (!path_map.count(cooling_device_name)) {
             LOG(ERROR) << "Could not find " << cooling_device_name << " in sysfs";
-            continue;
+            return false;
         }
         // Add cooling device path for thermalHAL to get current state
         std::string_view path = path_map.at(cooling_device_name);
@@ -827,7 +819,7 @@ bool ThermalHelper::initializeCoolingDevices(
         if (!cooling_devices_.addThermalFile(cooling_device_name, read_path)) {
             LOG(ERROR) << "Could not add " << cooling_device_name
                        << " read path to cooling device map";
-            continue;
+            return false;
         }
 
         std::string state2power_path = android::base::StringPrintf(
@@ -871,6 +863,7 @@ bool ThermalHelper::initializeCoolingDevices(
                            << cooling_device_info_pair.second.state2power.size()
                            << ", number should be " << cooling_device_info_pair.second.max_state + 1
                            << " (max_state + 1)";
+                return false;
             }
         }
 
@@ -888,12 +881,8 @@ bool ThermalHelper::initializeCoolingDevices(
         if (!cooling_devices_.addThermalFile(cooling_device_name, write_path)) {
             LOG(ERROR) << "Could not add " << cooling_device_name
                        << " write path to cooling device map";
-            continue;
+            return false;
         }
-    }
-
-    if (cooling_device_info_map_.size() * 2 != cooling_devices_.getNumThermalFiles()) {
-        LOG(ERROR) << "Some cooling device can not be initialized";
     }
     return true;
 }
@@ -907,7 +896,7 @@ void ThermalHelper::initializeTrip(const std::unordered_map<std::string, std::st
                                    std::set<std::string> *monitored_sensors,
                                    bool thermal_genl_enabled) {
     for (auto &sensor_info : sensor_info_map_) {
-        if (!sensor_info.second.is_monitor || (sensor_info.second.virtual_sensor_info != nullptr)) {
+        if (!sensor_info.second.is_watch || (sensor_info.second.virtual_sensor_info != nullptr)) {
             continue;
         }
 
@@ -984,6 +973,10 @@ bool ThermalHelper::fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) {
     for (const auto &name_info_pair : sensor_info_map_) {
         Temperature_1_0 temp;
 
+        if (name_info_pair.second.is_hidden) {
+            continue;
+        }
+
         if (readTemperature(name_info_pair.first, &temp)) {
             (*temperatures)[current_index] = temp;
         } else {
@@ -1002,6 +995,11 @@ bool ThermalHelper::fillCurrentTemperatures(bool filterType, bool filterCallback
     std::vector<Temperature_2_0> ret;
     for (const auto &name_info_pair : sensor_info_map_) {
         Temperature_2_0 temp;
+
+        if (name_info_pair.second.is_hidden) {
+            continue;
+        }
+
         if (filterType && name_info_pair.second.type != type) {
             continue;
         }
@@ -1024,6 +1022,11 @@ bool ThermalHelper::fillTemperatureThresholds(bool filterType, TemperatureType_2
     std::vector<TemperatureThreshold> ret;
     for (const auto &name_info_pair : sensor_info_map_) {
         TemperatureThreshold temp;
+
+        if (name_info_pair.second.is_hidden) {
+            continue;
+        }
+
         if (filterType && name_info_pair.second.type != type) {
             continue;
         }
@@ -1114,7 +1117,7 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                                    &sensor_reading, force_sysfs)) {
                 return false;
             }
-            log_buf.append(StringPrintf("(%s: %0.2f degC)",
+            log_buf.append(StringPrintf("(%s: %0.2f)",
                                         sensor_info.virtual_sensor_info->linked_sensors[i].c_str(),
                                         sensor_reading));
             if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
@@ -1181,7 +1184,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
 
         // Only handle the sensors in allow list
-        if (!sensor_info.is_monitor) {
+        if (!sensor_info.send_cb) {
             continue;
         }
 
@@ -1271,9 +1274,9 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         }
 
         if (sensor_status.severity != ThrottlingSeverity::NONE) {
-            LOG(INFO) << temp.name << ": " << temp.value << " degC";
+            LOG(INFO) << temp.name << ": " << temp.value;
         } else {
-            LOG(VERBOSE) << temp.name << ": " << temp.value << " degC";
+            LOG(VERBOSE) << temp.name << ": " << temp.value;
         }
 
         // Start PID computation
