@@ -968,8 +968,7 @@ void ThermalHelper::initializeTrip(const std::unordered_map<std::string, std::st
 }
 
 bool ThermalHelper::fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) {
-    temperatures->resize(sensor_info_map_.size());
-    int current_index = 0;
+    std::vector<Temperature_1_0> ret;
     for (const auto &name_info_pair : sensor_info_map_) {
         Temperature_1_0 temp;
 
@@ -978,15 +977,15 @@ bool ThermalHelper::fillTemperatures(hidl_vec<Temperature_1_0> *temperatures) {
         }
 
         if (readTemperature(name_info_pair.first, &temp)) {
-            (*temperatures)[current_index] = temp;
+            ret.emplace_back(std::move(temp));
         } else {
             LOG(ERROR) << __func__
                        << ": error reading temperature for sensor: " << name_info_pair.first;
-            return false;
         }
-        ++current_index;
     }
-    return current_index > 0;
+    *temperatures = ret;
+
+    return ret.size() > 0;
 }
 
 bool ThermalHelper::fillCurrentTemperatures(bool filterType, bool filterCallback,
