@@ -1183,7 +1183,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
 
         // Only handle the sensors in allow list
-        if (!sensor_info.send_cb) {
+        if (!sensor_info.is_watch) {
             continue;
         }
 
