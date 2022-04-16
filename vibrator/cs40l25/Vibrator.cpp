@@ -75,6 +75,8 @@ static constexpr uint32_t MAX_TIME_MS = UINT32_MAX;
 static constexpr float AMP_ATTENUATE_STEP_SIZE = 0.125f;
 static constexpr float EFFECT_FREQUENCY_KHZ = 48.0f;
 
+static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
+
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 static constexpr int32_t COMPOSE_SIZE_MAX = 127;
 static constexpr int32_t COMPOSE_PWLE_SIZE_LIMIT = 82;
@@ -205,6 +207,11 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 
     if (mHwCal->getF0(&caldata)) {
         mHwApi->setF0(caldata);
+        mResonantFrequency = static_cast<float>(caldata) / (1 << Q14_BIT_SHIFT);
+    } else {
+        ALOGE("Failed to get resonant frequency (%d): %s, using default resonant HZ: %f", errno,
+              strerror(errno), RESONANT_FREQUENCY_DEFAULT);
+        mResonantFrequency = RESONANT_FREQUENCY_DEFAULT;
     }
     if (mHwCal->getRedc(&caldata)) {
         mHwApi->setRedc(caldata);
@@ -263,12 +270,6 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         mCompositionSizeMax = COMPOSE_PWLE_SIZE_LIMIT;
     }
 
-    if (!(getResonantFrequency(&mResonantFrequency).isOk())) {
-        ALOGE("Failed to get resonant frequency, using default resonant HZ: %f",
-              RESONANT_FREQUENCY_DEFAULT);
-        mResonantFrequency = RESONANT_FREQUENCY_DEFAULT;
-    }
-
     createPwleMaxLevelLimitMap();
     mIsUnderExternalControl = false;
     setPwleRampDown();
@@ -300,6 +301,7 @@ ndk::ScopedAStatus Vibrator::off() {
         ALOGE("Failed to turn vibrator off (%d): %s", errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
+    mActiveId = -1;
     return ndk::ScopedAStatus::ok();
 }
 
@@ -479,11 +481,16 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
         ALOGE("Device is under external control mode. Force to disable it to prevent chip hang "
               "problem.");
     }
-    mHwApi->setActivate(0);
+    if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
+        ALOGE("Previous vibration pending: prev: %d, curr: %d", mActiveId, effectIndex);
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
 
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);
     mHwApi->setActivate(1);
+
+    mActiveId = effectIndex;
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
 
@@ -559,13 +566,7 @@ ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t id) {
 }
 
 ndk::ScopedAStatus Vibrator::getResonantFrequency(float *resonantFreqHz) {
-    uint32_t caldata;
-    if (!mHwCal->getF0(&caldata)) {
-        ALOGE("Failed to get resonant frequency (%d): %s", errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
-    *resonantFreqHz = static_cast<float>(caldata) / (1 << Q14_BIT_SHIFT);
-    mResonantFrequency = *resonantFreqHz;
+    *resonantFreqHz = mResonantFrequency;
 
     return ndk::ScopedAStatus::ok();
 }
