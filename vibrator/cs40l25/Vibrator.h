@@ -220,6 +220,7 @@ class Vibrator : public BnVibrator {
     bool mHasHapticAlsaDevice;
     bool mIsUnderExternalControl;
     float mResonantFrequency;
+    int8_t mActiveId{-1};
 };
 
 }  // namespace vibrator
