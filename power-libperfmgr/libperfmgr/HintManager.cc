@@ -44,6 +44,9 @@ constexpr std::chrono::steady_clock::time_point kTimePointMax =
 }  // namespace
 
 constexpr char kPowerHalTruncateProp[] = "vendor.powerhal.truncate";
+constexpr std::string_view kConfigDebugPathProperty("vendor.powerhal.config.debug");
+constexpr std::string_view kConfigProperty("vendor.powerhal.config");
+constexpr std::string_view kConfigDefaultFileName("powerhint.json");
 
 bool HintManager::ValidateHint(const std::string& hint_type) const {
     if (nm_.get() == nullptr) {
@@ -260,6 +263,34 @@ bool HintManager::Start() {
     return nm_->Start();
 }
 
+std::shared_ptr<HintManager> HintManager::mInstance = nullptr;
+
+std::shared_ptr<HintManager> HintManager::Reload(bool start) {
+    std::string config_path = "/vendor/etc/";
+    if (android::base::GetBoolProperty(kConfigDebugPathProperty.data(), false)) {
+        config_path = "/data/vendor/etc/";
+        LOG(WARNING) << "Pixel Power HAL AIDL Service is using debug config from: " << config_path;
+    }
+    config_path.append(
+            android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data()));
+
+    LOG(INFO) << "Pixel Power HAL AIDL Service with Extension is starting with config: "
+              << config_path;
+    // Reload and start the HintManager
+    mInstance = HintManager::GetFromJSON(config_path, start);
+    if (!mInstance) {
+        LOG(FATAL) << "Invalid config: " << config_path;
+    }
+    return mInstance;
+}
+
+std::shared_ptr<HintManager> HintManager::GetInstance() {
+    if (!mInstance) {
+        mInstance = HintManager::Reload(false);
+    }
+    return mInstance;
+}
+
 std::unique_ptr<HintManager> HintManager::GetFromJSON(
     const std::string& config_path, bool start) {
     std::string json_doc;
@@ -274,6 +305,11 @@ std::unique_ptr<HintManager> HintManager::GetFromJSON(
         LOG(ERROR) << "Failed to parse Nodes section from " << config_path;
         return nullptr;
     }
+    std::vector<std::shared_ptr<AdpfConfig>> adpfs = HintManager::ParseAdpfConfigs(json_doc);
+    if (adpfs.empty()) {
+        LOG(INFO) << "No AdpfConfig section in the " << config_path;
+    }
+
     std::unordered_map<std::string, Hint> actions = HintManager::ParseActions(json_doc, nodes);
 
     if (actions.empty()) {
@@ -282,8 +318,7 @@ std::unique_ptr<HintManager> HintManager::GetFromJSON(
     }
 
     sp<NodeLooperThread> nm = new NodeLooperThread(std::move(nodes));
-    std::unique_ptr<HintManager> hm =
-        std::make_unique<HintManager>(std::move(nm), actions);
+    std::unique_ptr<HintManager> hm = std::make_unique<HintManager>(std::move(nm), actions, adpfs);
 
     if (!HintManager::InitHintStatus(hm)) {
         LOG(ERROR) << "Failed to initialize hint status";
@@ -577,6 +612,236 @@ std::unordered_map<std::string, Hint> HintManager::ParseActions(
     }
 
     return actions_parsed;
+}
+
+std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
+        const std::string &json_doc) {
+    // function starts
+    bool pidOn;
+    double pidPOver;
+    double pidPUnder;
+    double pidI;
+    double pidDOver;
+    double pidDUnder;
+    int64_t pidIInit;
+    int64_t pidIHighLimit;
+    int64_t pidILowLimit;
+    bool adpfUclamp;
+    uint32_t uclampMinHighLimit;
+    uint32_t uclampMinLowLimit;
+    uint32_t uclampMinGranularity;
+    uint64_t samplingWindowP;
+    uint64_t samplingWindowI;
+    uint64_t samplingWindowD;
+    double staleTimeFactor;
+    uint64_t reportingRate;
+    bool earlyBoostOn;
+    double earlyBoostTimeFactor;
+    double targetTimeFactor;
+    std::vector<std::shared_ptr<AdpfConfig>> adpfs_parsed;
+    std::set<std::string> name_parsed;
+    Json::Value root;
+    Json::CharReaderBuilder builder;
+    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    std::string errorMessage;
+    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
+        return adpfs_parsed;
+    }
+    Json::Value adpfs = root["AdpfConfig"];
+    for (Json::Value::ArrayIndex i = 0; i < adpfs.size(); ++i) {
+        std::string name = adpfs[i]["Name"].asString();
+        LOG(VERBOSE) << "AdpfConfig[" << i << "]'s Name: " << name;
+        if (name.empty()) {
+            LOG(ERROR) << "Failed to read "
+                       << "AdpfConfig[" << i << "]'s Name";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        auto result = name_parsed.insert(name);
+        if (!result.second) {
+            LOG(ERROR) << "Duplicate AdpfConfig[" << i << "]'s Name";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+
+        if (adpfs[i]["PID_On"].empty() || !adpfs[i]["PID_On"].isBool()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_On]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidOn = adpfs[i]["PID_On"].asBool();
+
+        if (adpfs[i]["PID_Po"].empty() || !adpfs[i]["PID_Po"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Po]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidPOver = adpfs[i]["PID_Po"].asDouble();
+
+        if (adpfs[i]["PID_Pu"].empty() || !adpfs[i]["PID_Pu"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Pu]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidPUnder = adpfs[i]["PID_Pu"].asDouble();
+
+        if (adpfs[i]["PID_I"].empty() || !adpfs[i]["PID_I"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidI = adpfs[i]["PID_I"].asDouble();
+
+        if (adpfs[i]["PID_I_Init"].empty() || !adpfs[i]["PID_I_Init"].isInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I_Init]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidIInit = adpfs[i]["PID_I_Init"].asInt64();
+
+        if (adpfs[i]["PID_I_High"].empty() || !adpfs[i]["PID_I_High"].isInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I_High]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidIHighLimit = adpfs[i]["PID_I_High"].asInt64();
+
+        if (adpfs[i]["PID_I_Low"].empty() || !adpfs[i]["PID_I_Low"].isInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I_Low]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidILowLimit = adpfs[i]["PID_I_Low"].asInt64();
+
+        if (adpfs[i]["PID_Do"].empty() || !adpfs[i]["PID_Do"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Do]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidDOver = adpfs[i]["PID_Do"].asDouble();
+
+        if (adpfs[i]["PID_Du"].empty() || !adpfs[i]["PID_Du"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Du]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        pidDUnder = adpfs[i]["PID_Du"].asDouble();
+
+        if (adpfs[i]["UclampMin_On"].empty() || !adpfs[i]["UclampMin_On"].isBool()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_On]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        adpfUclamp = adpfs[i]["UclampMin_On"].asBool();
+
+        if (adpfs[i]["UclampMin_Granularity"].empty() ||
+            !adpfs[i]["UclampMin_Granularity"].isUInt()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name
+                       << "][UclampMin_Granularity]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        uclampMinGranularity = adpfs[i]["UclampMin_Granularity"].asUInt();
+
+        if (adpfs[i]["UclampMin_High"].empty() || !adpfs[i]["UclampMin_High"].isUInt()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_High]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        uclampMinHighLimit = adpfs[i]["UclampMin_High"].asUInt();
+
+        if (adpfs[i]["UclampMin_Low"].empty() || !adpfs[i]["UclampMin_Low"].isUInt()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_Low]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        uclampMinLowLimit = adpfs[i]["UclampMin_Low"].asUInt();
+
+        if (adpfs[i]["SamplingWindow_P"].empty() || !adpfs[i]["SamplingWindow_P"].isUInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][SamplingWindow_P]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        samplingWindowP = adpfs[i]["SamplingWindow_P"].asUInt64();
+
+        if (adpfs[i]["SamplingWindow_I"].empty() || !adpfs[i]["SamplingWindow_I"].isUInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][SamplingWindow_I]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        samplingWindowI = adpfs[i]["SamplingWindow_I"].asUInt64();
+
+        if (adpfs[i]["SamplingWindow_D"].empty() || !adpfs[i]["SamplingWindow_D"].isUInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][SamplingWindow_D]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        samplingWindowD = adpfs[i]["SamplingWindow_D"].asUInt64();
+
+        if (adpfs[i]["StaleTimeFactor"].empty() || !adpfs[i]["StaleTimeFactor"].isUInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][StaleTimeFactor]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        staleTimeFactor = adpfs[i]["StaleTimeFactor"].asDouble();
+
+        if (adpfs[i]["ReportingRateLimitNs"].empty() ||
+            !adpfs[i]["ReportingRateLimitNs"].isInt64()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name
+                       << "][ReportingRateLimitNs]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        reportingRate = adpfs[i]["ReportingRateLimitNs"].asInt64();
+
+        if (adpfs[i]["EarlyBoost_On"].empty() || !adpfs[i]["EarlyBoost_On"].isBool()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][EarlyBoost_On]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        earlyBoostOn = adpfs[i]["EarlyBoost_On"].asBool();
+
+        if (adpfs[i]["EarlyBoost_TimeFactor"].empty() ||
+            !adpfs[i]["EarlyBoost_TimeFactor"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name
+                       << "][EarlyBoost_TimeFactor]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        earlyBoostTimeFactor = adpfs[i]["EarlyBoost_TimeFactor"].asDouble();
+
+        if (adpfs[i]["TargetTimeFactor"].empty() || !adpfs[i]["TargetTimeFactor"].isDouble()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][TargetTimeFactor]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        targetTimeFactor = adpfs[i]["TargetTimeFactor"].asDouble();
+
+        adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
+                name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
+                pidDOver, pidDUnder, adpfUclamp, uclampMinGranularity, uclampMinHighLimit,
+                uclampMinLowLimit, samplingWindowP, samplingWindowI, samplingWindowD, reportingRate,
+                earlyBoostOn, earlyBoostTimeFactor, targetTimeFactor, staleTimeFactor));
+    }
+    LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
+    return adpfs_parsed;
+}
+
+std::shared_ptr<AdpfConfig> HintManager::GetAdpfProfile() const {
+    if (adpfs_.empty())
+        return nullptr;
+    return adpfs_[adpf_index_];
+}
+
+bool HintManager::SetAdpfProfile(const std::string &profile_name) {
+    for (std::size_t i = 0; i < adpfs_.size(); ++i) {
+        if (adpfs_[i]->mName == profile_name) {
+            adpf_index_ = i;
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace perfmgr

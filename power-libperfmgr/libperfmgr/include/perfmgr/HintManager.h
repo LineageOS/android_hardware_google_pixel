@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "perfmgr/AdpfConfig.h"
 #include "perfmgr/NodeLooperThread.h"
 
 namespace android {
@@ -85,8 +86,9 @@ struct Hint {
 // PowerHint to the set of actions that are performed for that PowerHint.
 class HintManager {
   public:
-    HintManager(sp<NodeLooperThread> nm, const std::unordered_map<std::string, Hint> &actions)
-        : nm_(std::move(nm)), actions_(actions) {}
+    HintManager(sp<NodeLooperThread> nm, const std::unordered_map<std::string, Hint> &actions,
+                const std::vector<std::shared_ptr<AdpfConfig>> &adpfs)
+        : nm_(std::move(nm)), actions_(actions), adpfs_(adpfs), adpf_index_(0) {}
     ~HintManager() {
         if (nm_.get() != nullptr) nm_->Stop();
     }
@@ -115,6 +117,12 @@ class HintManager {
     // Query if given hint enabled.
     bool IsHintEnabled(const std::string &hint_type) const;
 
+    // set ADPF config by profile name.
+    bool SetAdpfProfile(const std::string &profile_name);
+
+    // get current ADPF.
+    std::shared_ptr<AdpfConfig> GetAdpfProfile() const;
+
     // Static method to construct HintManager from the JSON config file.
     static std::unique_ptr<HintManager> GetFromJSON(
         const std::string& config_path, bool start = true);
@@ -131,16 +139,23 @@ class HintManager {
     // Start thread loop
     bool Start();
 
+    // Singleton
+    static std::shared_ptr<HintManager> GetInstance();
+    static std::shared_ptr<HintManager> Reload(bool start);
+
   protected:
     static std::vector<std::unique_ptr<Node>> ParseNodes(
         const std::string& json_doc);
     static std::unordered_map<std::string, Hint> ParseActions(
             const std::string &json_doc, const std::vector<std::unique_ptr<Node>> &nodes);
+    static std::vector<std::shared_ptr<AdpfConfig>> ParseAdpfConfigs(const std::string &json_doc);
     static bool InitHintStatus(const std::unique_ptr<HintManager> &hm);
 
   private:
     HintManager(HintManager const&) = delete;
     void operator=(HintManager const&) = delete;
+    static std::shared_ptr<HintManager> mInstance;
+
     bool ValidateHint(const std::string& hint_type) const;
     // Helper function to update the HintStatus when DoHint
     void DoHintStatus(const std::string &hint_type, std::chrono::milliseconds timeout_ms);
@@ -152,6 +167,8 @@ class HintManager {
     void EndHintAction(const std::string &hint_type);
     sp<NodeLooperThread> nm_;
     std::unordered_map<std::string, Hint> actions_;
+    std::vector<std::shared_ptr<AdpfConfig>> adpfs_;
+    uint32_t adpf_index_;
 };
 
 }  // namespace perfmgr
