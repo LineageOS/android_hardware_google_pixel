@@ -22,10 +22,15 @@
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <cutils/klog.h>
+#include <dirent.h>
 #include <pixelhealth/BatteryDefender.h>
 #include <pixelhealth/HealthHelper.h>
+#include <stdio.h>
+#include <sys/types.h>
 #include <time.h>
 #include <utils/Timers.h>
+
+#include <unordered_map>
 
 using aidl::android::hardware::health::BatteryHealth;
 using aidl::android::hardware::health::HealthInfo;
@@ -39,13 +44,14 @@ BatteryDefender::BatteryDefender(const std::string pathWirelessPresent,
                                  const std::string pathChargeLevelStart,
                                  const std::string pathChargeLevelStop,
                                  const int32_t timeToActivateSecs,
-                                 const int32_t timeToClearTimerSecs)
+                                 const int32_t timeToClearTimerSecs, const bool useTypeC)
 
     : mPathWirelessPresent(pathWirelessPresent),
       kPathChargeLevelStart(pathChargeLevelStart),
       kPathChargeLevelStop(pathChargeLevelStop),
       kTimeToActivateSecs(timeToActivateSecs),
-      kTimeToClearTimerSecs(timeToClearTimerSecs) {
+      kTimeToClearTimerSecs(timeToClearTimerSecs),
+      kUseTypeC(useTypeC) {
     mTimePreviousSecs = getTime();
 }
 
@@ -160,11 +166,51 @@ void BatteryDefender::writeChargeLevelsToFile(const int vendorStart, const int v
     }
 }
 
+bool BatteryDefender::isTypeCSink(const std::string &path) {
+    std::string buffer;
+
+    if (!android::base::ReadFileToString(path, &buffer)) {
+        LOG(ERROR) << "Failed to read " << path;
+    }
+
+    return (buffer.find("[sink]") != std::string::npos);
+}
+
+bool BatteryDefender::isWiredPresent(void) {
+    // Default to USB "present" if type C is not used.
+    if (!kUseTypeC) {
+        return readFileToInt(kPathUSBChargerPresent) != 0;
+    }
+
+    DIR *dp = opendir(kTypeCPath.c_str());
+    if (dp == NULL) {
+        LOG(ERROR) << "Failed to read " << kTypeCPath;
+        return false;
+    }
+
+    struct dirent *ep;
+    std::unordered_map<std::string, bool> names;
+    while ((ep = readdir(dp))) {
+        if (ep->d_type == DT_LNK) {
+            if (std::string::npos != std::string(ep->d_name).find("-partner")) {
+                std::string portName = std::strtok(ep->d_name, "-");
+                std::string path = kTypeCPath + portName + "/power_role";
+                if (isTypeCSink(path)) {
+                    return true;
+                }
+            }
+        }
+    }
+    closedir(dp);
+
+    return false;
+}
+
 bool BatteryDefender::isChargePowerAvailable(void) {
     // USB presence is an indicator of power availability
-    const bool chargerPresentWired = readFileToInt(kPathUSBChargerPresent) != 0;
+    const bool chargerPresentWired = isWiredPresent();
     const bool chargerPresentWireless = readFileToInt(mPathWirelessPresent) != 0;
-    mIsUsbPresent = chargerPresentWired;
+    mIsWiredPresent = chargerPresentWired;
     mIsWirelessPresent = chargerPresentWireless;
 
     return chargerPresentWired || chargerPresentWireless;
@@ -363,7 +409,7 @@ void BatteryDefender::updateDefenderProperties(
      */
     if (health_info->chargerUsbOnline == false && health_info->chargerAcOnline == false) {
         /* Override if the USB is connected and a battery defender is active */
-        if (mIsUsbPresent && health_info->batteryHealth == BatteryHealth::OVERHEAT) {
+        if (mIsWiredPresent && health_info->batteryHealth == BatteryHealth::OVERHEAT) {
             if (mWasAcOnline) {
                 health_info->chargerAcOnline = true;
             }
