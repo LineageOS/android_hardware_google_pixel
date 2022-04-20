@@ -44,6 +44,9 @@ constexpr std::chrono::steady_clock::time_point kTimePointMax =
 }  // namespace
 
 constexpr char kPowerHalTruncateProp[] = "vendor.powerhal.truncate";
+constexpr std::string_view kConfigDebugPathProperty("vendor.powerhal.config.debug");
+constexpr std::string_view kConfigProperty("vendor.powerhal.config");
+constexpr std::string_view kConfigDefaultFileName("powerhint.json");
 
 bool HintManager::ValidateHint(const std::string& hint_type) const {
     if (nm_.get() == nullptr) {
@@ -258,6 +261,34 @@ void HintManager::DumpToFd(int fd) {
 
 bool HintManager::Start() {
     return nm_->Start();
+}
+
+std::shared_ptr<HintManager> HintManager::mInstance = nullptr;
+
+std::shared_ptr<HintManager> HintManager::Reload(bool start) {
+    std::string config_path = "/vendor/etc/";
+    if (android::base::GetBoolProperty(kConfigDebugPathProperty.data(), false)) {
+        config_path = "/data/vendor/etc/";
+        LOG(WARNING) << "Pixel Power HAL AIDL Service is using debug config from: " << config_path;
+    }
+    config_path.append(
+            android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data()));
+
+    LOG(INFO) << "Pixel Power HAL AIDL Service with Extension is starting with config: "
+              << config_path;
+    // Reload and start the HintManager
+    mInstance = HintManager::GetFromJSON(config_path, start);
+    if (!mInstance) {
+        LOG(FATAL) << "Invalid config: " << config_path;
+    }
+    return mInstance;
+}
+
+std::shared_ptr<HintManager> HintManager::GetInstance() {
+    if (!mInstance) {
+        mInstance = HintManager::Reload(false);
+    }
+    return mInstance;
 }
 
 std::unique_ptr<HintManager> HintManager::GetFromJSON(
