@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "thermal_info.h"
+
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
-#include <cmath>
-#include <unordered_set>
-
 #include <json/reader.h>
 #include <json/value.h>
 
-#include "config_parser.h"
+#include <cmath>
+#include <unordered_set>
 
 namespace android {
 namespace hardware {
@@ -429,9 +429,10 @@ bool ParseSensorInfo(std::string_view config_path,
         }
 
         float vr_threshold = NAN;
-        vr_threshold = getFloatFromValue(sensors[i]["VrThreshold"]);
-        LOG(INFO) << "Sensor[" << name << "]'s VrThreshold: " << vr_threshold;
-
+        if (!sensors[i]["VrThreshold"].empty()) {
+            vr_threshold = getFloatFromValue(sensors[i]["VrThreshold"]);
+            LOG(INFO) << "Sensor[" << name << "]'s VrThreshold: " << vr_threshold;
+        }
         float multiplier = sensors[i]["Multiplier"].asFloat();
         LOG(INFO) << "Sensor[" << name << "]'s Multiplier: " << multiplier;
 
@@ -479,6 +480,7 @@ bool ParseSensorInfo(std::string_view config_path,
         s_power.fill(NAN);
         std::array<float, kThrottlingSeverityCount> i_cutoff;
         i_cutoff.fill(NAN);
+        float err_integral_default = 0.0;
 
         // Parse PID parameters
         if (!sensors[i]["PIDInfo"].empty()) {
@@ -557,6 +559,10 @@ bool ParseSensorInfo(std::string_view config_path,
                 sensors_parsed->clear();
                 return false;
             }
+            LOG(INFO) << "Start to parse"
+                      << " Sensor[" << name << "]'s E_Integral_Default";
+            err_integral_default = getFloatFromValue(sensors[i]["PIDInfo"]["E_Integral_Default"]);
+            LOG(INFO) << "Sensor[" << name << "]'s E_Integral_Default: " << err_integral_default;
             // Confirm we have at least one valid PID combination
             bool valid_pid_combination = false;
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
@@ -592,6 +598,8 @@ bool ParseSensorInfo(std::string_view config_path,
             cdev_weight_for_pid.fill(NAN);
             CdevArray cdev_ceiling;
             cdev_ceiling.fill(std::numeric_limits<int>::max());
+            int max_release_step = std::numeric_limits<int>::max();
+            int max_throttle_step = std::numeric_limits<int>::max();
             if (support_pid) {
                 if (!values[j]["CdevWeightForPID"].empty()) {
                     LOG(INFO) << "Sensor[" << name << "]: Star to parse " << cdev_name
@@ -611,6 +619,30 @@ bool ParseSensorInfo(std::string_view config_path,
                         LOG(ERROR) << "Failed to parse CdevCeiling";
                         sensors_parsed->clear();
                         return false;
+                    }
+                }
+                if (!values[j]["MaxReleaseStep"].empty()) {
+                    max_release_step = getIntFromValue(values[j]["MaxReleaseStep"]);
+                    if (max_release_step < 0) {
+                        LOG(ERROR) << "Sensor[" << name << "]'s " << cdev_name
+                                   << " MaxReleaseStep: " << max_release_step;
+                        sensors_parsed->clear();
+                        return false;
+                    } else {
+                        LOG(INFO) << "Sensor[" << name << "]'s " << cdev_name
+                                  << " MaxReleaseStep: " << max_release_step;
+                    }
+                }
+                if (!values[j]["MaxThrottleStep"].empty()) {
+                    max_throttle_step = getIntFromValue(values[j]["MaxThrottleStep"]);
+                    if (max_throttle_step < 0) {
+                        LOG(ERROR) << "Sensor[" << name << "]'s " << cdev_name
+                                   << " MaxThrottleStep: " << max_throttle_step;
+                        sensors_parsed->clear();
+                        return false;
+                    } else {
+                        LOG(INFO) << "Sensor[" << name << "]'s " << cdev_name
+                                  << " MaxThrottleStep: " << max_throttle_step;
                     }
                 }
             }
@@ -675,7 +707,6 @@ bool ParseSensorInfo(std::string_view config_path,
                         sensors_parsed->clear();
                         return false;
                     }
-
                     if (values[j]["ReleaseLogic"].asString() == "INCREASE") {
                         release_logic = ReleaseLogic::INCREASE;
                         LOG(INFO) << "Release logic: INCREASE";
@@ -704,6 +735,8 @@ bool ParseSensorInfo(std::string_view config_path,
                     .throttling_with_power_link = throttling_with_power_link,
                     .cdev_weight_for_pid = cdev_weight_for_pid,
                     .cdev_ceiling = cdev_ceiling,
+                    .max_release_step = max_release_step,
+                    .max_throttle_step = max_throttle_step,
                     .cdev_floor_with_power_link = cdev_floor_with_power_link,
                     .power_rail = power_rail,
             };
@@ -724,9 +757,9 @@ bool ParseSensorInfo(std::string_view config_path,
                                                             trigger_sensor, formula});
         }
 
-        std::unique_ptr<ThrottlingInfo> throttling_info(
+        std::shared_ptr<ThrottlingInfo> throttling_info(
                 new ThrottlingInfo{k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power,
-                                   s_power, i_cutoff, binded_cdev_info_map});
+                                   s_power, i_cutoff, err_integral_default, binded_cdev_info_map});
 
         (*sensors_parsed)[name] = {
                 .type = sensor_type,
@@ -767,7 +800,7 @@ bool ParseCoolingDevice(std::string_view config_path,
     std::string errorMessage;
 
     if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config";
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
         return false;
     }
 
@@ -820,7 +853,7 @@ bool ParseCoolingDevice(std::string_view config_path,
             }
         } else {
             LOG(INFO) << "CoolingDevice[" << i << "]'s Name: " << name
-                      << " does not support Power2State";
+                      << " does not support State2Power";
         }
 
         const std::string &power_rail = cooling_devices[i]["PowerRail"].asString();
@@ -851,7 +884,7 @@ bool ParsePowerRailInfo(std::string_view config_path,
     std::string errorMessage;
 
     if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config";
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
         return false;
     }
 
@@ -916,6 +949,13 @@ bool ParsePowerRailInfo(std::string_view config_path,
                 }
             } else {
                 LOG(ERROR) << "PowerRails[" << name << "] has no coefficient for VirtualRail";
+                power_rails_parsed->clear();
+                return false;
+            }
+
+            if (linked_power_rails.size() != coefficients.size()) {
+                LOG(ERROR) << "PowerRails[" << name
+                           << "]'s combination size is not matched with coefficient size";
                 power_rails_parsed->clear();
                 return false;
             }

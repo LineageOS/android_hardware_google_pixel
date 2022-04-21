@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <android/hardware/thermal/2.0/IThermal.h>
+
 #include <string>
 #include <unordered_map>
-
-#include <android/hardware/thermal/2.0/IThermal.h>
 
 namespace android {
 namespace hardware {
@@ -32,7 +32,7 @@ using CoolingType_2_0 = ::android::hardware::thermal::V2_0::CoolingType;
 using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
 using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 constexpr size_t kThrottlingSeverityCount = std::distance(
-    hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
+        hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
 using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
 using CdevArray = std::array<int, static_cast<size_t>(kThrottlingSeverityCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
@@ -75,6 +75,8 @@ struct BindedCdevInfo {
     ReleaseLogic release_logic;
     ThrottlingArray cdev_weight_for_pid;
     CdevArray cdev_ceiling;
+    int max_release_step;
+    int max_throttle_step;
     CdevArray cdev_floor_with_power_link;
     std::string power_rail;
     // The flag for activate release logic when power is higher than power threshold
@@ -93,6 +95,7 @@ struct ThrottlingInfo {
     ThrottlingArray min_alloc_power;
     ThrottlingArray s_power;
     ThrottlingArray i_cutoff;
+    float err_integral_default;
     std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
 };
 
@@ -113,7 +116,7 @@ struct SensorInfo {
     bool is_watch;
     bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
-    std::unique_ptr<ThrottlingInfo> throttling_info;
+    std::shared_ptr<ThrottlingInfo> throttling_info;
 };
 
 struct CdevInfo {
@@ -123,6 +126,7 @@ struct CdevInfo {
     std::vector<float> state2power;
     int max_state;
 };
+
 struct PowerRailInfo {
     std::string rail;
     int power_sample_count;
