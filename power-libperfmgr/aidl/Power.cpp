@@ -18,15 +18,15 @@
 
 #include "Power.h"
 
-#include <mutex>
-
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
-
+#include <perfmgr/HintManager.h>
 #include <utils/Log.h>
+
+#include <mutex>
 
 #include "PowerHintSession.h"
 #include "PowerSessionManager.h"
@@ -40,38 +40,33 @@ namespace impl {
 namespace pixel {
 
 using ::aidl::google::hardware::power::impl::pixel::PowerHintSession;
+using ::android::perfmgr::HintManager;
 
 constexpr char kPowerHalStateProp[] = "vendor.powerhal.state";
 constexpr char kPowerHalAudioProp[] = "vendor.powerhal.audio";
 constexpr char kPowerHalRenderingProp[] = "vendor.powerhal.rendering";
-constexpr char kPowerHalAdpfRateProp[] = "vendor.powerhal.adpf.rate";
-constexpr int64_t kPowerHalAdpfRateDefault = -1;
 
-Power::Power(std::shared_ptr<HintManager> hm, std::shared_ptr<DisplayLowPower> dlpw,
-             std::shared_ptr<AdaptiveCpu> adaptiveCpu)
-    : mHintManager(hm),
-      mDisplayLowPower(dlpw),
+Power::Power(std::shared_ptr<DisplayLowPower> dlpw, std::shared_ptr<AdaptiveCpu> adaptiveCpu)
+    : mDisplayLowPower(dlpw),
       mAdaptiveCpu(adaptiveCpu),
       mInteractionHandler(nullptr),
       mVRModeOn(false),
-      mSustainedPerfModeOn(false),
-      mAdpfRateNs(
-              ::android::base::GetIntProperty(kPowerHalAdpfRateProp, kPowerHalAdpfRateDefault)) {
-    mInteractionHandler = std::make_unique<InteractionHandler>(mHintManager);
+      mSustainedPerfModeOn(false) {
+    mInteractionHandler = std::make_unique<InteractionHandler>();
     mInteractionHandler->Init();
 
     std::string state = ::android::base::GetProperty(kPowerHalStateProp, "");
     if (state == "SUSTAINED_PERFORMANCE") {
         LOG(INFO) << "Initialize with SUSTAINED_PERFORMANCE on";
-        mHintManager->DoHint("SUSTAINED_PERFORMANCE");
+        HintManager::GetInstance()->DoHint("SUSTAINED_PERFORMANCE");
         mSustainedPerfModeOn = true;
     } else if (state == "VR") {
         LOG(INFO) << "Initialize with VR on";
-        mHintManager->DoHint(state);
+        HintManager::GetInstance()->DoHint(state);
         mVRModeOn = true;
     } else if (state == "VR_SUSTAINED_PERFORMANCE") {
         LOG(INFO) << "Initialize with SUSTAINED_PERFORMANCE and VR on";
-        mHintManager->DoHint("VR_SUSTAINED_PERFORMANCE");
+        HintManager::GetInstance()->DoHint("VR_SUSTAINED_PERFORMANCE");
         mSustainedPerfModeOn = true;
         mVRModeOn = true;
     } else {
@@ -81,17 +76,14 @@ Power::Power(std::shared_ptr<HintManager> hm, std::shared_ptr<DisplayLowPower> d
     state = ::android::base::GetProperty(kPowerHalAudioProp, "");
     if (state == "AUDIO_STREAMING_LOW_LATENCY") {
         LOG(INFO) << "Initialize with AUDIO_LOW_LATENCY on";
-        mHintManager->DoHint(state);
+        HintManager::GetInstance()->DoHint(state);
     }
 
     state = ::android::base::GetProperty(kPowerHalRenderingProp, "");
     if (state == "EXPENSIVE_RENDERING") {
         LOG(INFO) << "Initialize with EXPENSIVE_RENDERING on";
-        mHintManager->DoHint("EXPENSIVE_RENDERING");
+        HintManager::GetInstance()->DoHint("EXPENSIVE_RENDERING");
     }
-
-    // Now start to take powerhint
-    LOG(INFO) << "PowerHAL ready to take hints, Adpf update rate: " << mAdpfRateNs;
 }
 
 ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
@@ -101,25 +93,25 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
         case Mode::LOW_POWER:
             mDisplayLowPower->SetDisplayLowPower(enabled);
             if (enabled) {
-                mHintManager->DoHint(toString(type));
+                HintManager::GetInstance()->DoHint(toString(type));
             } else {
-                mHintManager->EndHint(toString(type));
+                HintManager::GetInstance()->EndHint(toString(type));
             }
             break;
         case Mode::SUSTAINED_PERFORMANCE:
             if (enabled && !mSustainedPerfModeOn) {
                 if (!mVRModeOn) {  // Sustained mode only.
-                    mHintManager->DoHint("SUSTAINED_PERFORMANCE");
+                    HintManager::GetInstance()->DoHint("SUSTAINED_PERFORMANCE");
                 } else {  // Sustained + VR mode.
-                    mHintManager->EndHint("VR");
-                    mHintManager->DoHint("VR_SUSTAINED_PERFORMANCE");
+                    HintManager::GetInstance()->EndHint("VR");
+                    HintManager::GetInstance()->DoHint("VR_SUSTAINED_PERFORMANCE");
                 }
                 mSustainedPerfModeOn = true;
             } else if (!enabled && mSustainedPerfModeOn) {
-                mHintManager->EndHint("VR_SUSTAINED_PERFORMANCE");
-                mHintManager->EndHint("SUSTAINED_PERFORMANCE");
+                HintManager::GetInstance()->EndHint("VR_SUSTAINED_PERFORMANCE");
+                HintManager::GetInstance()->EndHint("SUSTAINED_PERFORMANCE");
                 if (mVRModeOn) {  // Switch back to VR Mode.
-                    mHintManager->DoHint("VR");
+                    HintManager::GetInstance()->DoHint("VR");
                 }
                 mSustainedPerfModeOn = false;
             }
@@ -127,17 +119,17 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
         case Mode::VR:
             if (enabled && !mVRModeOn) {
                 if (!mSustainedPerfModeOn) {  // VR mode only.
-                    mHintManager->DoHint("VR");
+                    HintManager::GetInstance()->DoHint("VR");
                 } else {  // Sustained + VR mode.
-                    mHintManager->EndHint("SUSTAINED_PERFORMANCE");
-                    mHintManager->DoHint("VR_SUSTAINED_PERFORMANCE");
+                    HintManager::GetInstance()->EndHint("SUSTAINED_PERFORMANCE");
+                    HintManager::GetInstance()->DoHint("VR_SUSTAINED_PERFORMANCE");
                 }
                 mVRModeOn = true;
             } else if (!enabled && mVRModeOn) {
-                mHintManager->EndHint("VR_SUSTAINED_PERFORMANCE");
-                mHintManager->EndHint("VR");
+                HintManager::GetInstance()->EndHint("VR_SUSTAINED_PERFORMANCE");
+                HintManager::GetInstance()->EndHint("VR");
                 if (mSustainedPerfModeOn) {  // Switch back to sustained Mode.
-                    mHintManager->DoHint("SUSTAINED_PERFORMANCE");
+                    HintManager::GetInstance()->DoHint("SUSTAINED_PERFORMANCE");
                 }
                 mVRModeOn = false;
             }
@@ -173,9 +165,9 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
             [[fallthrough]];
         default:
             if (enabled) {
-                mHintManager->DoHint(toString(type));
+                HintManager::GetInstance()->DoHint(toString(type));
             } else {
-                mHintManager->EndHint(toString(type));
+                HintManager::GetInstance()->EndHint(toString(type));
             }
             break;
     }
@@ -184,7 +176,7 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
 }
 
 ndk::ScopedAStatus Power::isModeSupported(Mode type, bool *_aidl_return) {
-    bool supported = mHintManager->IsHintSupported(toString(type));
+    bool supported = HintManager::GetInstance()->IsHintSupported(toString(type));
     // LOW_POWER handled insides PowerHAL specifically
     if (type == Mode::LOW_POWER) {
         supported = true;
@@ -218,11 +210,12 @@ ndk::ScopedAStatus Power::setBoost(Boost type, int32_t durationMs) {
                 break;
             }
             if (durationMs > 0) {
-                mHintManager->DoHint(toString(type), std::chrono::milliseconds(durationMs));
+                HintManager::GetInstance()->DoHint(toString(type),
+                                                   std::chrono::milliseconds(durationMs));
             } else if (durationMs == 0) {
-                mHintManager->DoHint(toString(type));
+                HintManager::GetInstance()->DoHint(toString(type));
             } else {
-                mHintManager->EndHint(toString(type));
+                HintManager::GetInstance()->EndHint(toString(type));
             }
             break;
     }
@@ -231,7 +224,7 @@ ndk::ScopedAStatus Power::setBoost(Boost type, int32_t durationMs) {
 }
 
 ndk::ScopedAStatus Power::isBoostSupported(Boost type, bool *_aidl_return) {
-    bool supported = mHintManager->IsHintSupported(toString(type));
+    bool supported = HintManager::GetInstance()->IsHintSupported(toString(type));
     LOG(INFO) << "Power boost " << toString(type) << " isBoostSupported: " << supported;
     *_aidl_return = supported;
     return ndk::ScopedAStatus::ok();
@@ -246,10 +239,10 @@ binder_status_t Power::dump(int fd, const char **, uint32_t) {
             "HintManager Running: %s\n"
             "VRMode: %s\n"
             "SustainedPerformanceMode: %s\n",
-            boolToString(mHintManager->IsRunning()), boolToString(mVRModeOn),
+            boolToString(HintManager::GetInstance()->IsRunning()), boolToString(mVRModeOn),
             boolToString(mSustainedPerfModeOn)));
     // Dump nodes through libperfmgr
-    mHintManager->DumpToFd(fd);
+    HintManager::GetInstance()->DumpToFd(fd);
     mAdaptiveCpu->DumpToFd(fd);
     if (!::android::base::WriteStringToFd(buf, fd)) {
         PLOG(ERROR) << "Failed to dump state to fd";
@@ -262,7 +255,8 @@ ndk::ScopedAStatus Power::createHintSession(int32_t tgid, int32_t uid,
                                             const std::vector<int32_t> &threadIds,
                                             int64_t durationNanos,
                                             std::shared_ptr<IPowerHintSession> *_aidl_return) {
-    if (mAdpfRateNs <= 0) {
+    if (!HintManager::GetInstance()->GetAdpfProfile() ||
+        HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs <= 0) {
         *_aidl_return = nullptr;
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
@@ -272,14 +266,16 @@ ndk::ScopedAStatus Power::createHintSession(int32_t tgid, int32_t uid,
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     std::shared_ptr<IPowerHintSession> session = ndk::SharedRefBase::make<PowerHintSession>(
-            mAdaptiveCpu, tgid, uid, threadIds, durationNanos, nanoseconds(mAdpfRateNs));
+            mAdaptiveCpu, tgid, uid, threadIds, durationNanos);
     *_aidl_return = session;
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Power::getHintSessionPreferredRate(int64_t *outNanoseconds) {
-    *outNanoseconds = mAdpfRateNs;
-    if (mAdpfRateNs <= 0) {
+    *outNanoseconds = HintManager::GetInstance()->GetAdpfProfile()
+                              ? HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs
+                              : 0;
+    if (*outNanoseconds <= 0) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
