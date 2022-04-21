@@ -56,6 +56,7 @@ cc_library {
         "PropertyNode.cc",
         "NodeLooperThread.cc",
         "HintManager.cc",
+        "AdpfConfig.cc",
     ]
 }
 
