@@ -256,6 +256,19 @@ void HintManager::DumpToFd(int fd) {
     if (!android::base::WriteStringToFd(footer, fd)) {
         LOG(ERROR) << "Failed to dump fd: " << fd;
     }
+
+    // Dump current ADPF profile
+    if (GetAdpfProfile()) {
+        header = "========== Begin current adpf profile ==========\n";
+        if (!android::base::WriteStringToFd(header, fd)) {
+            LOG(ERROR) << "Failed to dump fd: " << fd;
+        }
+        GetAdpfProfile()->dumpToFd(fd);
+        footer = "==========  End current adpf profile  ==========\n";
+        if (!android::base::WriteStringToFd(footer, fd)) {
+            LOG(ERROR) << "Failed to dump fd: " << fd;
+        }
+    }
     fsync(fd);
 }
 
