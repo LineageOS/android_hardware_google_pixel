@@ -44,10 +44,16 @@ on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_rea
     # sm7250
     write /dev/thermal/tz-by-name/skin-therm/emul_temp 25000
     write /dev/thermal/tz-by-name/skin-therm/mode disabled
+    write /dev/thermal/tz-by-name/skin-virt/emul_temp 25000
+    write /dev/thermal/tz-by-name/skin-virt/mode disabled
     write /dev/thermal/tz-by-name/skin-therm-cpu/emul_temp 25000
     write /dev/thermal/tz-by-name/skin-therm-cpu/mode disabled
+    write /dev/thermal/tz-by-name/skin-virt-cpu/emul_temp 25000
+    write /dev/thermal/tz-by-name/skin-virt-cpu/mode disabled
     write /dev/thermal/tz-by-name/skin-therm-monitor/emul_temp 25000
     write /dev/thermal/tz-by-name/skin-therm-monitor/mode disabled
+    write /dev/thermal/tz-by-name/skin-virt-monitor/emul_temp 25000
+    write /dev/thermal/tz-by-name/skin-virt-monitor/mode disabled
     write /dev/thermal/tz-by-name/panel-audio-therm/emul_temp 25000
     write /dev/thermal/tz-by-name/panel-audio-therm/mode disabled
     write /dev/thermal/tz-by-name/cellular-emergency/emul_temp 25000
@@ -80,10 +86,16 @@ on property:vendor.disable.thermal.control=0 && property:vendor.thermal.link_rea
     # sm7250
     write /dev/thermal/tz-by-name/skin-therm/emul_temp 0
     write /dev/thermal/tz-by-name/skin-therm/mode enabled
+    write /dev/thermal/tz-by-name/skin-virt/emul_temp 0
+    write /dev/thermal/tz-by-name/skin-virt/mode enabled
     write /dev/thermal/tz-by-name/skin-therm-cpu/emul_temp 0
     write /dev/thermal/tz-by-name/skin-therm-cpu/mode enabled
+    write /dev/thermal/tz-by-name/skin-virt-cpu/emul_temp 0
+    write /dev/thermal/tz-by-name/skin-virt-cpu/mode enabled
     write /dev/thermal/tz-by-name/skin-therm-monitor/emul_temp 0
     write /dev/thermal/tz-by-name/skin-therm-monitor/mode enabled
+    write /dev/thermal/tz-by-name/skin-virt-monitor/emul_temp 0
+    write /dev/thermal/tz-by-name/skin-virt-monitor/mode enabled
     write /dev/thermal/tz-by-name/panel-audio-therm/emul_temp 0
     write /dev/thermal/tz-by-name/panel-audio-therm/mode enabled
     write /dev/thermal/tz-by-name/cellular-emergency/emul_temp 0
