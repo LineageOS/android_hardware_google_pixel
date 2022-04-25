@@ -101,6 +101,7 @@ class AdaptiveCpu {
     bool mIsInitialized = false;
     volatile bool mShouldReloadConfig = false;
     std::chrono::nanoseconds mLastEnabledHintTime;
+    std::chrono::nanoseconds mLastThrottleHintTime;
     Device mDevice;
     AdaptiveCpuConfig mConfig = AdaptiveCpuConfig::DEFAULT;
 };
