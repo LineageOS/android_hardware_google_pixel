@@ -196,6 +196,7 @@ bool BatteryDefender::isWiredPresent(void) {
                 std::string portName = std::strtok(ep->d_name, "-");
                 std::string path = kTypeCPath + portName + "/power_role";
                 if (isTypeCSink(path)) {
+                    closedir(dp);
                     return true;
                 }
             }
