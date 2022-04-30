@@ -136,8 +136,8 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
 }
 
 void ChargeStatsReporter::ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client,
-                                                 const char *line, const bool has_wireless,
-                                                 const std::string wfile_contents) {
+                                                 const char *line, const bool has_wireless = false,
+                                                 const std::string &wfile_contents = "") {
     int voltage_tier_stats_fields[] = {
             VoltageTierStats::kVoltageTierFieldNumber,
             VoltageTierStats::kSocInFieldNumber, /* retrieved via ssoc_tmp */
@@ -230,10 +230,11 @@ bool ChargeStatsReporter::shouldReportEvent(void) {
 void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
                                          const std::string &path) {
     std::string file_contents, line, wfile_contents, wline_at, wline_ac, pca_file_contents,
-            pca_line;
+            pca_line, thermal_file_contents;
     std::istringstream ss;
     bool has_wireless = wireless_charge_stats_.CheckWirelessContentsAndAck(&wfile_contents);
     bool has_pca = pca_charge_stats_.CheckPcaContentsAndAck(&pca_file_contents);
+    bool has_thermal = checkThermalContentsAndAck(&thermal_file_contents);
 
     if (!ReadFileToString(path.c_str(), &file_contents)) {
         ALOGE("Unable to read %s - %s", path.c_str(), strerror(errno));
@@ -247,7 +248,7 @@ void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_cl
         return;
     }
 
-    if (!WriteStringToFile(std::to_string(0), path.c_str())) {
+    if (!WriteStringToFile("0", path.c_str())) {
         ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
     }
 
@@ -280,6 +281,26 @@ void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_cl
     while (std::getline(ss, line)) {
         ReportVoltageTierStats(stats_client, line.c_str(), has_wireless, wfile_contents);
     }
+
+    if (has_thermal) {
+        std::istringstream wss;
+        wss.str(thermal_file_contents);
+        while (std::getline(wss, line)) {
+            ReportVoltageTierStats(stats_client, line.c_str());
+        }
+    }
+}
+
+bool ChargeStatsReporter::checkThermalContentsAndAck(std::string *file_contents) {
+    if (!ReadFileToString(kThermalChargeMetricsPath.c_str(), file_contents)) {
+        return false;
+    }
+
+    if (!WriteStringToFile("0", kThermalChargeMetricsPath.c_str())) {
+        ALOGE("Couldn't clear %s - %s", kThermalChargeMetricsPath.c_str(), strerror(errno));
+        return false;
+    }
+    return true;
 }
 
 }  // namespace pixel
