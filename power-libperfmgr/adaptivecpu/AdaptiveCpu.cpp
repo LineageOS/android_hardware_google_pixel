@@ -177,7 +177,13 @@ void AdaptiveCpu::RunMainLoop() {
         LOG(VERBOSE) << "Model decision: " << static_cast<uint32_t>(throttleDecision);
         ATRACE_INT("AdaptiveCpu_throttleDecision", static_cast<uint32_t>(throttleDecision));
 
-        if (throttleDecision != previousThrottleDecision) {
+        const auto now = mTimeSource.GetTime();
+        // Resend the throttle hints, even if they've not changed, if the previous send is close to
+        // timing out. We define "close to" as half the hint timeout, as we can't guarantee we will
+        // run again before the actual timeout.
+        const bool throttleHintMayTimeout = now - mLastThrottleHintTime > mConfig.hintTimeout / 2;
+        if (throttleDecision != previousThrottleDecision || throttleHintMayTimeout) {
+            mLastThrottleHintTime = now;
             ATRACE_NAME("sendHints");
             for (const auto &hintName : THROTTLE_DECISION_TO_HINT_NAMES.at(throttleDecision)) {
                 HintManager::GetInstance()->DoHint(hintName, mConfig.hintTimeout);
