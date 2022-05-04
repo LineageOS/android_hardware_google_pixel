@@ -18,3 +18,10 @@ PRODUCT_COPY_FILES += \
 ifneq ($(wildcard vendor/google_nos/provision),)
 PRODUCT_PACKAGES_DEBUG += CitadelProvision
 endif
+
+# USERDEBUG ONLY: Install test packages
+ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
+PRODUCT_PACKAGES_DEBUG += citadel_integration_tests \
+                          pwntest \
+                          nugget_targeted_tests
+endif
