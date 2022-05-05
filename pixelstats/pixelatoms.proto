@@ -1072,6 +1072,16 @@ message BatteryHealthStatus {
 
   // The cycle count at the time of the log event.
   optional int32 cycle_count = 11;
+
+  enum BattDisconnectStatus {
+    BPST_BATT_UNKNOWN = 0;
+    BPST_BATT_CONNECT = 1;
+    BPST_BATT_DISCONNECT = 2; // Result of single battery disconnect detection
+    BPST_BATT_CELL_FAULT = 3; // Result of cell fault detection which means actual disconnection
+  }
+
+  // Battery disconnect detection stats.
+  optional BattDisconnectStatus battery_disconnect_status = 12;
 }
 
 /**
