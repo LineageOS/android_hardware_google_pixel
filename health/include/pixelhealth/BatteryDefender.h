@@ -95,6 +95,7 @@ class BatteryDefender {
 
     // Sysfs
     const std::string kPathUSBChargerPresent = "/sys/class/power_supply/usb/present";
+    const std::string kPathDOCKChargerPresent = "/sys/class/power_supply/dock/present";
     const std::string kTypeCPath = "/sys/class/typec/";
     const std::string kPathPersistChargerPresentTime =
             "/mnt/vendor/persist/battery/defender_charger_time";
@@ -136,6 +137,7 @@ class BatteryDefender {
     int64_t mTimePreviousSecs;
     bool mIsWiredPresent = false;
     bool mIsWirelessPresent = false;
+    bool mIsDockPresent = false;
     bool mIsPowerAvailable = false;
     bool mIsDefenderDisabled = false;
     int32_t mTimeToActivateSecsModified;
@@ -176,6 +178,7 @@ class BatteryDefender {
     void writeChargeLevelsToFile(const int vendorStart, const int vendorStop);
     bool isTypeCSink(const std::string &path);
     bool isWiredPresent(void);
+    bool isDockPresent(void);
     bool isChargePowerAvailable(void);
     bool isDefaultChargeLevel(const int start, const int stop);
     bool isBatteryDefenderDisabled(const int vendorStart, const int vendorStop);
