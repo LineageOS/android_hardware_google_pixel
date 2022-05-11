@@ -1052,7 +1052,7 @@ message BatteryHealthStatus {
   optional int32 health_capacity_index = 5;
 
   // A percentage measure of the max performance of the device, affected by impedance growth with 100% being perfectly healthy.
-  optional int32 health_perf_index = 6;
+  optional int32 health_impedance_index = 6;
 
   // An index that expresses the likelihood of swelling given the SOC residency stats.
   optional int32 swelling_cumulative = 7;
