@@ -19,7 +19,9 @@
 
 #include <aidl/android/frameworks/stats/IStats.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
+
 #include "BatteryEEPROMReporter.h"
+#include "BatteryHealthReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
 
@@ -39,6 +41,7 @@ class SysfsCollector {
         const char *const SlowioUnmapCntPath;
         const char *const SlowioSyncCntPath;
         const char *const CycleCountBinsPath;
+        const char *const BatterySwellingPath;
         const char *const ImpedancePath;
         const char *const CodecPath;
         const char *const Codec1Path;
@@ -70,6 +73,7 @@ class SysfsCollector {
     void logPerHour();
 
     void logBatteryChargeCycles(const std::shared_ptr<IStats> &stats_client);
+    void logBatteryHealth(const std::shared_ptr<IStats> &stats_client);
     void logCodecFailed(const std::shared_ptr<IStats> &stats_client);
     void logCodec1Failed(const std::shared_ptr<IStats> &stats_client);
     void logSlowIO(const std::shared_ptr<IStats> &stats_client);
@@ -85,6 +89,7 @@ class SysfsCollector {
     void logBootStats(const std::shared_ptr<IStats> &stats_client);
     void logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client);
     void logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client);
+    void logBatterySwelling(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
@@ -119,6 +124,7 @@ class SysfsCollector {
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
+    BatteryHealthReporter battery_health_reporter_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
