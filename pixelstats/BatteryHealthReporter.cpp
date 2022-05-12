@@ -73,7 +73,7 @@ void BatteryHealthReporter::reportBatteryHealthStatusEvent(
             BatteryHealthStatus::kHealthStatusFieldNumber,
             BatteryHealthStatus::kHealthIndexFieldNumber,
             BatteryHealthStatus::kHealthCapacityIndexFieldNumber,
-            BatteryHealthStatus::kHealthPerfIndexFieldNumber,
+            BatteryHealthStatus::kHealthImpedanceIndexFieldNumber,
             BatteryHealthStatus::kSwellingCumulativeFieldNumber,
             BatteryHealthStatus::kHealthFullCapacityFieldNumber,
             BatteryHealthStatus::kCurrentImpedanceFieldNumber,
@@ -87,7 +87,7 @@ void BatteryHealthReporter::reportBatteryHealthStatusEvent(
     VendorAtomValue val;
     int32_t i = 0, tmp[vtier_fields_size] = {0};
 
-    // health_algo: health_status, health_index,healh_capacity_index,health_perf_index,
+    // health_algo: health_status, health_index,healh_capacity_index,health_imp_index,
     // swelling_cumulative,health_full_capacity,current_impedance, battery_age,cycle_count
     if (sscanf(line, "%d: %d, %d,%d,%d %d,%d,%d %d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
                &tmp[5], &tmp[6], &tmp[7], &tmp[8], &tmp[9]) != vtier_fields_size) {

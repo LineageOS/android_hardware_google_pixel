@@ -38,9 +38,6 @@ void reportSlowIo(const std::shared_ptr<IStats> &stats_client,
 void reportChargeCycles(const std::shared_ptr<IStats> &stats_client,
                         const std::vector<int32_t> &chargeCycles);
 
-void reportBatterySwelling(const std::shared_ptr<IStats> &stats_client,
-                           const std::vector<int32_t> &swellingData);
-
 void reportHardwareFailed(const std::shared_ptr<IStats> &stats_client,
                           const PixelAtoms::VendorHardwareFailed &failure);
 
