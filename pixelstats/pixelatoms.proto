@@ -78,6 +78,7 @@ message Atom {
       ChreApWakeUpOccurred chre_ap_wake_up_occurred = 105036;
 
       BatteryHealthStatus battery_health_status = 105037;
+      BatteryHealthUsage battery_health_usage = 105038;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1067,4 +1068,31 @@ message BatteryHealthStatus {
 
   // The cycle count at the time of the log event.
   optional int32 cycle_count = 11;
+}
+
+/**
+ * Log battery SOC/temperature usage data.
+ *
+ * Each data represents cumulative time of the battery
+ * spent over a specific SOC and over a specific temperature
+ * while charging and while discharging in seconds.
+ *
+ * Logged from:
+ * /sys/class/power_supply/battery/swelling_data, via Vendor.
+ */
+message BatteryHealthUsage {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // The temperature limit (deg C) used to accumulate the time above this value.
+  optional int32 temperature_limit_deci_c = 2;
+
+  // The SOC limit (%) used to accumulate the time above this value.
+  optional int32 soc_limit = 3;
+
+  // Time (s) accumulated only during charge at the given thresholds.
+  optional int32 charge_time_secs = 4;
+
+  // Time (s) accumulated only during discharge at the given thresholds.
+  optional int32 discharge_time_secs = 5;
 }

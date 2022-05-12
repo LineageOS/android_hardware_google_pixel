@@ -35,7 +35,12 @@ class BatteryHealthReporter {
     void checkAndReportStatus(const std::shared_ptr<IStats> &stats_client);
 
   private:
-    void reportBatteryHealthStatus(const std::shared_ptr<IStats> &stats_client, const char *line);
+    bool reportBatteryHealthStatus(const std::shared_ptr<IStats> &stats_client);
+    void reportBatteryHealthStatusEvent(const std::shared_ptr<IStats> &stats_client,
+                                        const char *line);
+    bool reportBatteryHealthUsage(const std::shared_ptr<IStats> &stats_client);
+    void reportBatteryHealthUsageEvent(const std::shared_ptr<IStats> &stats_client,
+                                       const char *line);
 
     int64_t report_time_ = 0;
     int64_t getTimeSecs();
@@ -47,6 +52,7 @@ class BatteryHealthReporter {
 
     const std::string kBatteryHealthStatusPath =
             "/sys/class/power_supply/battery/health_index_stats";
+    const std::string kBatteryHealthUsagePath = "/sys/class/power_supply/battery/swelling_data";
 };
 
 }  // namespace pixel
