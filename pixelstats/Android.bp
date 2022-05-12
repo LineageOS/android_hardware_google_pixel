@@ -63,6 +63,7 @@ cc_library {
   srcs: [
     "BatteryCapacityReporter.cpp",
     "BatteryEEPROMReporter.cpp",
+    "BatteryHealthReporter.cpp",
     "ChargeStatsReporter.cpp",
     "DropDetect.cpp",
     "MmMetricsReporter.cpp",

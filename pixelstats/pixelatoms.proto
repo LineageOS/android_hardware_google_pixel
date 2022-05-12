@@ -76,6 +76,9 @@ message Atom {
       ChreDynamicMemorySnapshotReported chre_dynamic_memory_snapshot_reported = 105034;
       ChreEventQueueSnapshotReported chre_event_queue_snapshot_reported = 105035;
       ChreApWakeUpOccurred chre_ap_wake_up_occurred = 105036;
+
+      BatteryHealthStatus battery_health_status = 105037;
+      BatteryHealthUsage battery_health_usage = 105038;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1019,4 +1022,77 @@ message ChreApWakeUpOccurred {
   // from CHRE. Whenever this event occurs, this means that the nanoapp sent a message to
   // the AP causing a transition between suspend/wake-up.
   optional int64 nanoapp_id = 2;
+}
+
+/**
+ * Snapshot of the current battery health of the device.
+ */
+message BatteryHealthStatus {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // The algorithm that computes how the health status and health indexes are calculated.
+  optional int32 health_algorithm = 2;
+
+  enum HealthStatus {
+    UNKNOWN = 0; // The health status is unknown due to a SW limitation or issue
+    NOMINAL = 1; // The battery is operating as expected
+    MARGINAL = 2; // The battery may need replacement soon
+    NEEDS_REPLACEMENT = 3; // The battery needs replacement
+    FAILED = 4; // The battery has failed and no longer operates as expected
+  }
+
+  // HealthStatus calculated using health_index, health_perf_index.
+  optional HealthStatus health_status = 3;
+
+  // A percentage measure of the health of the battery with 100% being perfectly healthy.
+  optional int32 health_index = 4;
+
+  // A percentage measure of the battery capacity of the device, affected by cycle life degradation.
+  optional int32 health_capacity_index = 5;
+
+  // A percentage measure of the max performance of the device, affected by impedance growth with 100% being perfectly healthy.
+  optional int32 health_impedance_index = 6;
+
+  // An index that expresses the likelihood of swelling given the SOC residency stats.
+  optional int32 swelling_cumulative = 7;
+
+  // The battery capacity used to determine the health index. This is the reference value from b/223759710.
+  optional int32 health_full_capacity = 8;
+
+  // This is the Rslow (resistance) value used (in part) to determine the Perf Index. The activation impedance (b/223545817) can be calculated from it using the perf index.
+  optional int32 current_impedance = 9;
+
+  // The (hours) value of TimeH (0xb3), a register value, multiplied by 3.2 hours.
+  optional int32 battery_age = 10;
+
+  // The cycle count at the time of the log event.
+  optional int32 cycle_count = 11;
+}
+
+/**
+ * Log battery SOC/temperature usage data.
+ *
+ * Each data represents cumulative time of the battery
+ * spent over a specific SOC and over a specific temperature
+ * while charging and while discharging in seconds.
+ *
+ * Logged from:
+ * /sys/class/power_supply/battery/swelling_data, via Vendor.
+ */
+message BatteryHealthUsage {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // The temperature limit (deg C) used to accumulate the time above this value.
+  optional int32 temperature_limit_deci_c = 2;
+
+  // The SOC limit (%) used to accumulate the time above this value.
+  optional int32 soc_limit = 3;
+
+  // Time (s) accumulated only during charge at the given thresholds.
+  optional int32 charge_time_secs = 4;
+
+  // Time (s) accumulated only during discharge at the given thresholds.
+  optional int32 discharge_time_secs = 5;
 }
