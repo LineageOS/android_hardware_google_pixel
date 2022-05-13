@@ -90,7 +90,7 @@ void BatteryDefender::removeLineEndings(std::string *str) {
     str->erase(std::remove(str->begin(), str->end(), '\r'), str->end());
 }
 
-int BatteryDefender::readFileToInt(const std::string &path) {
+int BatteryDefender::readFileToInt(const std::string &path, const bool silent) {
     std::string buffer;
     int value = 0;  // default
 
@@ -99,7 +99,9 @@ int BatteryDefender::readFileToInt(const std::string &path) {
     }
 
     if (!android::base::ReadFileToString(path, &buffer)) {
-        LOG(ERROR) << "Failed to read " << path;
+        if (silent == false) {
+            LOG(ERROR) << "Failed to read " << path;
+        }
     } else {
         removeLineEndings(&buffer);
         if (!android::base::ParseInt(buffer, &value)) {
@@ -208,7 +210,7 @@ bool BatteryDefender::isWiredPresent(void) {
 }
 
 bool BatteryDefender::isDockPresent(void) {
-    return readFileToInt(kPathDOCKChargerPresent) != 0;
+    return readFileToInt(kPathDOCKChargerPresent, true) != 0;
 }
 
 bool BatteryDefender::isChargePowerAvailable(void) {
