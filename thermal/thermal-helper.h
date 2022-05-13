@@ -114,12 +114,11 @@ class ThermalHelper {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
         return sensor_status_map_;
     }
-    // Get Thermal Throttling Map
+    // Get ThermalThrottling Map
     const std::unordered_map<std::string, ThermalThrottlingStatus> &GetThermalThrottlingStatusMap()
             const {
         return thermal_throttling_.GetThermalThrottlingStatusMap();
     }
-
     // Get PowerRailInfo Map
     const std::unordered_map<std::string, PowerRailInfo> &GetPowerRailInfoMap() const {
         return power_files_.GetPowerRailInfoMap();
