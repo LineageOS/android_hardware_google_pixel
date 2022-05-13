@@ -629,7 +629,6 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
     bool adpfUclamp;
     uint32_t uclampMinHighLimit;
     uint32_t uclampMinLowLimit;
-    uint32_t uclampMinGranularity;
     uint64_t samplingWindowP;
     uint64_t samplingWindowI;
     uint64_t samplingWindowD;
@@ -735,15 +734,6 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         }
         adpfUclamp = adpfs[i]["UclampMin_On"].asBool();
 
-        if (adpfs[i]["UclampMin_Granularity"].empty() ||
-            !adpfs[i]["UclampMin_Granularity"].isUInt()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name
-                       << "][UclampMin_Granularity]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        uclampMinGranularity = adpfs[i]["UclampMin_Granularity"].asUInt();
-
         if (adpfs[i]["UclampMin_High"].empty() || !adpfs[i]["UclampMin_High"].isUInt()) {
             LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_High]'s Values";
             adpfs_parsed.clear();
@@ -820,9 +810,9 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
 
         adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
-                pidDOver, pidDUnder, adpfUclamp, uclampMinGranularity, uclampMinHighLimit,
-                uclampMinLowLimit, samplingWindowP, samplingWindowI, samplingWindowD, reportingRate,
-                earlyBoostOn, earlyBoostTimeFactor, targetTimeFactor, staleTimeFactor));
+                pidDOver, pidDUnder, adpfUclamp, uclampMinHighLimit, uclampMinLowLimit,
+                samplingWindowP, samplingWindowI, samplingWindowD, reportingRate, earlyBoostOn,
+                earlyBoostTimeFactor, targetTimeFactor, staleTimeFactor));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;
