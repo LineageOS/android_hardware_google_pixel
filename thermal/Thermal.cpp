@@ -574,21 +574,6 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
             dump_buf << "ThermalHAL not initialized properly." << std::endl;
         } else {
             {
-                hidl_vec<Temperature_1_0> temperatures;
-                dump_buf << "getTemperatures:" << std::endl;
-                if (!thermal_helper_.fillTemperatures(&temperatures)) {
-                    dump_buf << "Failed to read thermal sensors." << std::endl;
-                }
-
-                for (const auto &t : temperatures) {
-                    dump_buf << " Type: " << android::hardware::thermal::V1_0::toString(t.type)
-                             << " Name: " << t.name << " CurrentValue: " << t.currentValue
-                             << " ThrottlingThreshold: " << t.throttlingThreshold
-                             << " ShutdownThreshold: " << t.shutdownThreshold
-                             << " VrThrottlingThreshold: " << t.vrThrottlingThreshold << std::endl;
-                }
-            }
-            {
                 hidl_vec<CpuUsage> cpu_usages;
                 dump_buf << "getCpuUsages:" << std::endl;
                 if (!thermal_helper_.fillCpuUsages(&cpu_usages)) {
@@ -602,51 +587,85 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 }
             }
             {
-                dump_buf << "getCurrentTemperatures:" << std::endl;
-                hidl_vec<Temperature_2_0> temperatures;
-                if (!thermal_helper_.fillCurrentTemperatures(
-                            false, false, TemperatureType_2_0::SKIN, &temperatures)) {
-                    dump_buf << "Failed to getCurrentTemperatures." << std::endl;
-                }
-
-                for (const auto &t : temperatures) {
-                    dump_buf << " Type: " << android::hardware::thermal::V2_0::toString(t.type)
-                             << " Name: " << t.name << " CurrentValue: " << t.value
-                             << " ThrottlingStatus: "
-                             << android::hardware::thermal::V2_0::toString(t.throttlingStatus)
-                             << std::endl;
-                }
-            }
-            {
                 dump_buf << "getCachedTemperatures:" << std::endl;
+                boot_clock::time_point now = boot_clock::now();
                 const auto &sensor_status_map = thermal_helper_.GetSensorStatusMap();
                 for (const auto &sensor_status_pair : sensor_status_map) {
+                    if ((sensor_status_pair.second.thermal_cached.timestamp) ==
+                        boot_clock::time_point::min()) {
+                        continue;
+                    }
                     dump_buf << " Name: " << sensor_status_pair.first
                              << " CachedValue: " << sensor_status_pair.second.thermal_cached.temp
-                             << std::endl;
+                             << " TimeToCache: "
+                             << std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        now - sensor_status_pair.second.thermal_cached.timestamp)
+                                        .count()
+                             << "ms" << std::endl;
                 }
             }
             {
-                dump_buf << "getTemperatureThresholds:" << std::endl;
-                hidl_vec<TemperatureThreshold> temperatures;
-                if (!thermal_helper_.fillTemperatureThresholds(false, TemperatureType_2_0::SKIN,
-                                                               &temperatures)) {
-                    dump_buf << "Failed to getTemperatureThresholds." << std::endl;
+                const auto &map = thermal_helper_.GetSensorInfoMap();
+                dump_buf << "getTemperatures:" << std::endl;
+                Temperature_1_0 temp_1_0;
+                for (const auto &name_info_pair : map) {
+                    thermal_helper_.readTemperature(name_info_pair.first, &temp_1_0);
+                    dump_buf << " Type: "
+                             << android::hardware::thermal::V1_0::toString(temp_1_0.type)
+                             << " Name: " << name_info_pair.first
+                             << " CurrentValue: " << temp_1_0.currentValue
+                             << " ThrottlingThreshold: " << temp_1_0.throttlingThreshold
+                             << " ShutdownThreshold: " << temp_1_0.shutdownThreshold
+                             << " VrThrottlingThreshold: " << temp_1_0.vrThrottlingThreshold
+                             << std::endl;
                 }
-
-                for (const auto &t : temperatures) {
-                    dump_buf << " Type: " << android::hardware::thermal::V2_0::toString(t.type)
-                             << " Name: " << t.name;
+                dump_buf << "getCurrentTemperatures:" << std::endl;
+                Temperature_2_0 temp_2_0;
+                for (const auto &name_info_pair : map) {
+                    thermal_helper_.readTemperature(name_info_pair.first, &temp_2_0, nullptr, true);
+                    dump_buf << " Type: "
+                             << android::hardware::thermal::V2_0::toString(temp_2_0.type)
+                             << " Name: " << name_info_pair.first
+                             << " CurrentValue: " << temp_2_0.value << " ThrottlingStatus: "
+                             << android::hardware::thermal::V2_0::toString(
+                                        temp_2_0.throttlingStatus)
+                             << std::endl;
+                }
+                dump_buf << "getTemperatureThresholds:" << std::endl;
+                for (const auto &name_info_pair : map) {
+                    if (!name_info_pair.second.is_watch) {
+                        continue;
+                    }
+                    dump_buf << " Type: "
+                             << android::hardware::thermal::V2_0::toString(
+                                        name_info_pair.second.type)
+                             << " Name: " << name_info_pair.first;
                     dump_buf << " hotThrottlingThreshold: [";
                     for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                        dump_buf << t.hotThrottlingThresholds[i] << " ";
+                        dump_buf << name_info_pair.second.hot_thresholds[i] << " ";
                     }
                     dump_buf << "] coldThrottlingThreshold: [";
                     for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                        dump_buf << t.coldThrottlingThresholds[i] << " ";
+                        dump_buf << name_info_pair.second.cold_thresholds[i] << " ";
                     }
-                    dump_buf << "] vrThrottlingThreshold: " << t.vrThrottlingThreshold;
+                    dump_buf << "] vrThrottlingThreshold: " << name_info_pair.second.vr_threshold;
                     dump_buf << std::endl;
+                }
+                dump_buf << "getHysteresis:" << std::endl;
+                for (const auto &name_info_pair : map) {
+                    if (!name_info_pair.second.is_watch) {
+                        continue;
+                    }
+                    dump_buf << " Name: " << name_info_pair.first;
+                    dump_buf << " hotHysteresis: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        dump_buf << name_info_pair.second.hot_hysteresis[i] << " ";
+                    }
+                    dump_buf << "] coldHysteresis: [";
+                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
+                        dump_buf << name_info_pair.second.cold_hysteresis[i] << " ";
+                    }
+                    dump_buf << "]" << std::endl;
                 }
             }
             {
@@ -668,25 +687,6 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                     dump_buf << " IsFilter: " << c.is_filter_type
                              << " Type: " << android::hardware::thermal::V2_0::toString(c.type)
                              << std::endl;
-                }
-            }
-            {
-                dump_buf << "getHysteresis:" << std::endl;
-                const auto &map = thermal_helper_.GetSensorInfoMap();
-                for (const auto &name_info_pair : map) {
-                    if (!name_info_pair.second.is_watch) {
-                        continue;
-                    }
-                    dump_buf << " Name: " << name_info_pair.first;
-                    dump_buf << " hotHysteresis: [";
-                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                        dump_buf << name_info_pair.second.hot_hysteresis[i] << " ";
-                    }
-                    dump_buf << "] coldHysteresis: [";
-                    for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
-                        dump_buf << name_info_pair.second.cold_hysteresis[i] << " ";
-                    }
-                    dump_buf << "]" << std::endl;
                 }
             }
             {
