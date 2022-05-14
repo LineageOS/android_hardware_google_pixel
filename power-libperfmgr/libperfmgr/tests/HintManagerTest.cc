@@ -760,8 +760,6 @@ TEST_F(HintManagerTest, ParseAdpfConfigsTest) {
     EXPECT_EQ(0LLU, adpfs[1]->mSamplingWindowD);
     EXPECT_TRUE(adpfs[0]->mUclampMinOn);
     EXPECT_TRUE(adpfs[1]->mUclampMinOn);
-    EXPECT_EQ(5U, adpfs[0]->mUclampMinGranularity);
-    EXPECT_EQ(0U, adpfs[1]->mUclampMinGranularity);
     EXPECT_EQ(384U, adpfs[0]->mUclampMinHigh);
     EXPECT_EQ(157U, adpfs[1]->mUclampMinHigh);
     EXPECT_EQ(0U, adpfs[0]->mUclampMinLow);
