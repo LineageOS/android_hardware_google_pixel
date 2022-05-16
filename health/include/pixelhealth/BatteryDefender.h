@@ -172,7 +172,7 @@ class BatteryDefender {
     int64_t getDeltaTimeSeconds(int64_t *timeStartSecs);
     int32_t getTimeToActivate(void);
     void removeLineEndings(std::string *str);
-    int readFileToInt(const std::string &path);
+    int readFileToInt(const std::string &path, const bool silent = false);
     bool writeIntToFile(const std::string &path, const int value);
     void writeTimeToFile(const std::string &path, const int value, int64_t *previous);
     void writeChargeLevelsToFile(const int vendorStart, const int vendorStop);
