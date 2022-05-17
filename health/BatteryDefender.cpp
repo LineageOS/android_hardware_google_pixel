@@ -239,6 +239,10 @@ bool BatteryDefender::isBatteryDefenderDisabled(const int vendorStart, const int
     return isOverrideDisabled || (isDefaultVendorChargeLevel == false) || (isCtrlEnabled == false);
 }
 
+bool BatteryDefender::isDockDefendTrigger(void) {
+    return readFileToInt(kPathDockState, true) == 1;
+}
+
 void BatteryDefender::addTimeToChargeTimers(void) {
     if (mIsPowerAvailable) {
         if (mHasReachedHighCapacityLevel) {
@@ -290,6 +294,11 @@ void BatteryDefender::stateMachine_runAction(const state_E state, const HealthIn
             const int triggerLevel = android::base::GetIntProperty(
                     kPropBatteryDefenderCtrlTriggerSOC, kChargeHighCapacityLevel, 0, 100);
             if (health_info.batteryLevel >= triggerLevel) {
+                mHasReachedHighCapacityLevel = true;
+            }
+
+            /* Do the same as above when dock-defend triggers */
+            if (mIsDockDefendTrigger) {
                 mHasReachedHighCapacityLevel = true;
             }
         } break;
@@ -410,6 +419,11 @@ void BatteryDefender::updateDefenderProperties(
         health_info->batteryHealth = BatteryHealth::OVERHEAT;
     }
 
+    /* Do the same as above when dock-defend triggers */
+    if (mIsDockDefendTrigger) {
+        health_info->batteryHealth = BatteryHealth::OVERHEAT;
+    }
+
     /**
      * If the kernel is forcing the input current limit to 0, then the online status may
      * need to be overwritten. Also, setting a charge limit below the current charge level
@@ -461,6 +475,7 @@ void BatteryDefender::update(HealthInfo *health_info) {
     mIsDefenderDisabled = isBatteryDefenderDisabled(chargeLevelVendorStart, chargeLevelVendorStop);
     mIsPowerAvailable = isChargePowerAvailable();
     mTimeBetweenUpdateCalls = getDeltaTimeSeconds(&mTimePreviousSecs);
+    mIsDockDefendTrigger = isDockDefendTrigger();
 
     // Run state machine
     stateMachine_runAction(mCurrentState, *health_info);
