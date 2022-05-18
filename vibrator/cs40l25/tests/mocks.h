@@ -67,6 +67,7 @@ class MockCal : public ::aidl::android::hardware::vibrator::Vibrator::HwCal {
     MOCK_METHOD1(getTickVolLevels, bool(std::array<uint32_t, 2> *value));
     MOCK_METHOD1(getClickVolLevels, bool(std::array<uint32_t, 2> *value));
     MOCK_METHOD1(getLongVolLevels, bool(std::array<uint32_t, 2> *value));
+    MOCK_METHOD0(isChirpEnabled, bool());
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockCal() override { destructor(); };
