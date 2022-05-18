@@ -273,6 +273,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     createPwleMaxLevelLimitMap();
     mIsUnderExternalControl = false;
     setPwleRampDown();
+    mIsChirpEnabled = mHwCal->isChirpEnabled();
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -286,7 +287,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     if (mHwApi->hasAspEnable() || hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
     }
-    if (mHwApi->hasPwle()) {
+    if (mHwApi->hasPwle() && mIsChirpEnabled) {
         ret |= IVibrator::CAP_FREQUENCY_CONTROL | IVibrator::CAP_COMPOSE_PWLE_EFFECTS;
     }
     *_aidl_return = ret;
@@ -704,6 +705,10 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     ATRACE_NAME("Vibrator::composePwle");
     std::ostringstream pwleBuilder;
     std::string pwleQueue;
+
+    if (!mIsChirpEnabled) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
 
     if (composite.size() <= 0 || composite.size() > mCompositionSizeMax) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
