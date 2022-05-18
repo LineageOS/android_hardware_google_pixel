@@ -74,7 +74,9 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setGpioRiseScale(uint32_t value) override { return set(value, &mGpioRiseScale); }
     bool pollVibeState(bool value) override { return poll(value, &mVibeState); }
     bool setClabEnable(bool value) override { return set(value, &mClabEnable); }
-    bool getAvailablePwleSegments(uint32_t *value) override { return get(value, &mAvailablePwleSegments); }
+    bool getAvailablePwleSegments(uint32_t *value) override {
+        return get(value, &mAvailablePwleSegments);
+    }
     bool hasPwle() override { return has(mPwle); }
     bool setPwle(std::string value) override { return set(value, &mPwle); }
     bool setPwleRampDown(uint32_t value) override { return set(value, &mPwleRampDown); }
@@ -184,6 +186,11 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         }
         *value = V_LONG_DEFAULT;
         return true;
+    }
+    bool isChirpEnabled() override {
+        bool value;
+        getProperty("chirp.enabled", &value, false);
+        return value;
     }
     void debug(int fd) override { HwCalBase::debug(fd); }
 };
