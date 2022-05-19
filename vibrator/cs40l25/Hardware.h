@@ -127,6 +127,8 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
 
     static constexpr uint32_t VERSION_DEFAULT = 1;
     static constexpr int32_t DEFAULT_FREQUENCY_SHIFT = 0;
+    static constexpr float DEFAULT_DEVICE_MASS = 0.21;
+    static constexpr float DEFAULT_LOC_COEFF = 0.5;
     static constexpr uint32_t Q_DEFAULT = 15.5 * Q_FLOAT_TO_FIXED;
     static constexpr std::array<uint32_t, 6> V_LEVELS_DEFAULT = {60, 70, 80, 90, 100, 76};
     static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {10, 70};
@@ -145,6 +147,12 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     }
     bool getLongFrequencyShift(int32_t *value) override {
         return getProperty("long.frequency.shift", value, DEFAULT_FREQUENCY_SHIFT);
+    }
+    bool getDeviceMass(float *value) override {
+        return getProperty("device.mass", value, DEFAULT_DEVICE_MASS);
+    }
+    bool getLocCoeff(float *value) override {
+        return getProperty("loc.coeff", value, DEFAULT_LOC_COEFF);
     }
     bool getF0(uint32_t *value) override { return getPersist(F0_CONFIG, value); }
     bool getRedc(uint32_t *value) override { return getPersist(REDC_CONFIG, value); }
