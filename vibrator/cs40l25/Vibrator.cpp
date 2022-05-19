@@ -16,6 +16,7 @@
 
 #include "Vibrator.h"
 
+#include <android-base/properties.h>
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
 #include <log/log.h>
@@ -93,6 +94,12 @@ static constexpr int32_t Q14_BIT_SHIFT = 14;
 //   q = q_measured / 2^Q16_BIT_SHIFT
 // See the LRA Calibration Support documentation for more details.
 static constexpr int32_t Q16_BIT_SHIFT = 16;
+
+// Measured ReDC, redc_measured, is represented by Q7.17 fixed
+// point format on cs40l2x devices. The expression to calculate redc is:
+//   redc = redc_measured * 5.857 / 2^Q17_BIT_SHIFT
+// See the LRA Calibration Support documentation for more details.
+static constexpr int32_t Q17_BIT_SHIFT = 17;
 
 static constexpr int32_t COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS = 999;
 static constexpr float PWLE_LEVEL_MIN = 0.0f;
@@ -215,6 +222,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
     if (mHwCal->getRedc(&caldata)) {
         mHwApi->setRedc(caldata);
+        mRedc = caldata;
     }
     if (mHwCal->getQ(&caldata)) {
         mHwApi->setQ(caldata);
@@ -271,6 +279,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     createPwleMaxLevelLimitMap();
+    mGenerateBandwidthAmplitudeMapDone = false;
+    mBandwidthAmplitudeMap = generateBandwidthAmplitudeMap();
     mIsUnderExternalControl = false;
     setPwleRampDown();
     mIsChirpEnabled = mHwCal->isChirpEnabled();
@@ -605,14 +615,85 @@ ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
     }
 }
 
+static float redcToFloat(uint32_t redcMeasured) {
+    return redcMeasured * 5.857 / (1 << Q17_BIT_SHIFT);
+}
+
+std::vector<float> Vibrator::generateBandwidthAmplitudeMap() {
+    // Use constant Q Factor of 10 from HW's suggestion
+    const float qFactor = 10.0f;
+    const float blSys = 1.1f;
+    const float gravity = 9.81f;
+    const float maxVoltage = 12.3f;
+    float deviceMass = 0, locCoeff = 0;
+
+    mHwCal->getDeviceMass(&deviceMass);
+    mHwCal->getLocCoeff(&locCoeff);
+    if (!deviceMass || !locCoeff) {
+        ALOGE("Failed to get Device Mass: %f and Loc Coeff: %f", deviceMass, locCoeff);
+        return std::vector<float>();
+    }
+
+    // Resistance value need to be retrieved from calibration file
+    if (!mRedc) {
+        ALOGE("Failed to get redc");
+        return std::vector<float>();
+    }
+    const float rSys = redcToFloat(mRedc);
+
+    std::vector<float> bandwidthAmplitudeMap(PWLE_BW_MAP_SIZE, 1.0);
+
+    const float wnSys = mResonantFrequency * 2 * M_PI;
+
+    float frequencyHz = PWLE_FREQUENCY_MIN_HZ;
+    float frequencyRadians = 0.0f;
+    float vLevel = 0.4f;
+    float vSys = (mLongEffectVol[1] / 100.0) * maxVoltage * vLevel;
+    float maxAsys = 0;
+
+    for (int i = 0; i < PWLE_BW_MAP_SIZE; i++) {
+        frequencyRadians = frequencyHz * 2 * M_PI;
+        vLevel = pwleMaxLevelLimitMap[i];
+        vSys = (mLongEffectVol[1] / 100.0) * maxVoltage * vLevel;
+
+        float var1 = pow((pow(wnSys, 2) - pow(frequencyRadians, 2)), 2);
+        float var2 = pow((wnSys * frequencyRadians / qFactor), 2);
+
+        float psysAbs = sqrt(var1 + var2);
+        // The equation and all related details: b/170919640#comment5
+        float amplitudeSys = (vSys * blSys * locCoeff / rSys / deviceMass) *
+                             pow(frequencyRadians, 2) / psysAbs / gravity;
+        // Record the maximum acceleration for the next for loop
+        if (amplitudeSys > maxAsys)
+            maxAsys = amplitudeSys;
+
+        bandwidthAmplitudeMap[i] = amplitudeSys;
+        frequencyHz += PWLE_FREQUENCY_RESOLUTION_HZ;
+    }
+    // Scaled the map between 0.00 and 1.00
+    if (maxAsys > 0) {
+        for (int j = 0; j < PWLE_BW_MAP_SIZE; j++) {
+            bandwidthAmplitudeMap[j] = std::floor((bandwidthAmplitudeMap[j] / maxAsys) * 100) / 100;
+        }
+        mGenerateBandwidthAmplitudeMapDone = true;
+    } else {
+        return std::vector<float>();
+    }
+
+    return bandwidthAmplitudeMap;
+}
+
 ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_return) {
-    // TODO(b/170919640): complete implementation
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
-        std::vector<float> bandwidthAmplitudeMap(PWLE_BW_MAP_SIZE, 1.0);
-        *_aidl_return = bandwidthAmplitudeMap;
-        return ndk::ScopedAStatus::ok();
+        if (!mGenerateBandwidthAmplitudeMapDone) {
+            mBandwidthAmplitudeMap = generateBandwidthAmplitudeMap();
+        }
+        *_aidl_return = mBandwidthAmplitudeMap;
+        return (!mBandwidthAmplitudeMap.empty())
+                       ? ndk::ScopedAStatus::ok()
+                       : ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     } else {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
