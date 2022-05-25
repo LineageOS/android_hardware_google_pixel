@@ -480,8 +480,7 @@ bool ParseSensorInfo(std::string_view config_path,
         s_power.fill(NAN);
         std::array<float, kThrottlingSeverityCount> i_cutoff;
         i_cutoff.fill(NAN);
-        float i_default = 0.0;
-        int tran_cycle = 0;
+        float err_integral_default = 0.0;
 
         // Parse PID parameters
         if (!sensors[i]["PIDInfo"].empty()) {
@@ -561,15 +560,9 @@ bool ParseSensorInfo(std::string_view config_path,
                 return false;
             }
             LOG(INFO) << "Start to parse"
-                      << " Sensor[" << name << "]'s I_Default";
-            i_default = getFloatFromValue(sensors[i]["PIDInfo"]["I_Default"]);
-            LOG(INFO) << "Sensor[" << name << "]'s I_Default: " << i_default;
-
-            LOG(INFO) << "Start to parse"
-                      << " Sensor[" << name << "]'s TranCycle";
-            tran_cycle = getFloatFromValue(sensors[i]["PIDInfo"]["TranCycle"]);
-            LOG(INFO) << "Sensor[" << name << "]'s TranCycle: " << tran_cycle;
-
+                      << " Sensor[" << name << "]'s E_Integral_Default";
+            err_integral_default = getFloatFromValue(sensors[i]["PIDInfo"]["E_Integral_Default"]);
+            LOG(INFO) << "Sensor[" << name << "]'s E_Integral_Default: " << err_integral_default;
             // Confirm we have at least one valid PID combination
             bool valid_pid_combination = false;
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
@@ -766,7 +759,7 @@ bool ParseSensorInfo(std::string_view config_path,
 
         std::shared_ptr<ThrottlingInfo> throttling_info(
                 new ThrottlingInfo{k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power,
-                                   s_power, i_cutoff, i_default, tran_cycle, binded_cdev_info_map});
+                                   s_power, i_cutoff, err_integral_default, binded_cdev_info_map});
 
         (*sensors_parsed)[name] = {
                 .type = sensor_type,

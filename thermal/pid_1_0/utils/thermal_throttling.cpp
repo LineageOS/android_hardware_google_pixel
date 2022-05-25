@@ -29,9 +29,6 @@
 #include <thread>
 #include <vector>
 
-#include "../../utils/power_files.h"
-#include "../../utils/thermal_info.h"
-
 namespace android {
 namespace hardware {
 namespace thermal {
