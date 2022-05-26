@@ -1,4 +1,4 @@
-on early-init
+on early-boot
     mkdir /dev/thermal 0750 system system
     mkdir /dev/thermal/tz-by-name 0750 system system
     mkdir /dev/thermal/cdev-by-name 0750 system system
