@@ -143,6 +143,7 @@ constexpr char kJSON_RAW[] = R"(
             "SamplingWindow_I": 0,
             "SamplingWindow_D": 1,
             "UclampMin_On": true,
+            "UclampMin_Init": 100,
             "UclampMin_High": 384,
             "UclampMin_Low": 0,
             "ReportingRateLimitNs": 166666660,
@@ -166,6 +167,7 @@ constexpr char kJSON_RAW[] = R"(
             "SamplingWindow_I": 0,
             "SamplingWindow_D": 0,
             "UclampMin_On": true,
+            "UclampMin_Init": 200,
             "UclampMin_High": 157,
             "UclampMin_Low": 157,
             "ReportingRateLimitNs": 83333330,
@@ -758,6 +760,8 @@ TEST_F(HintManagerTest, ParseAdpfConfigsTest) {
     EXPECT_EQ(0LLU, adpfs[1]->mSamplingWindowD);
     EXPECT_TRUE(adpfs[0]->mUclampMinOn);
     EXPECT_TRUE(adpfs[1]->mUclampMinOn);
+    EXPECT_EQ(100U, adpfs[0]->mUclampMinInit);
+    EXPECT_EQ(200U, adpfs[1]->mUclampMinInit);
     EXPECT_EQ(384U, adpfs[0]->mUclampMinHigh);
     EXPECT_EQ(157U, adpfs[1]->mUclampMinHigh);
     EXPECT_EQ(0U, adpfs[0]->mUclampMinLow);
