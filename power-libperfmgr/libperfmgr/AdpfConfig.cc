@@ -19,11 +19,10 @@
 
 #include "perfmgr/AdpfConfig.h"
 
+#include <android-base/file.h>
 #include <android-base/logging.h>
-#include <android-base/parsedouble.h>
-#include <android-base/properties.h>
 
-#include <string>
+#include <sstream>
 
 namespace android {
 namespace perfmgr {
@@ -36,6 +35,34 @@ int64_t AdpfConfig::getPidIHighDivI() {
 }
 int64_t AdpfConfig::getPidILowDivI() {
     return (mPidI == 0) ? 0 : static_cast<int64_t>(mPidILow / mPidI);
+}
+
+void AdpfConfig::dumpToFd(int fd) {
+    std::ostringstream dump_buf;
+    dump_buf << "Name: " << mName << "\n";
+    dump_buf << "PID_On: " << mPidOn << "\n";
+    dump_buf << "PID_Po: " << mPidPo << "\n";
+    dump_buf << "PID_Pu: " << mPidPu << "\n";
+    dump_buf << "PID_I: " << mPidI << "\n";
+    dump_buf << "PID_I_Init: " << mPidIInit << "\n";
+    dump_buf << "PID_I_High: " << mPidIHigh << "\n";
+    dump_buf << "PID_I_Low: " << mPidILow << "\n";
+    dump_buf << "PID_Do: " << mPidDo << "\n";
+    dump_buf << "PID_Du: " << mPidDu << "\n";
+    dump_buf << "SamplingWindow_P: " << mSamplingWindowP << "\n";
+    dump_buf << "SamplingWindow_I: " << mSamplingWindowI << "\n";
+    dump_buf << "SamplingWindow_D: " << mSamplingWindowD << "\n";
+    dump_buf << "UclampMin_On: " << mUclampMinOn << "\n";
+    dump_buf << "UclampMin_High: " << mUclampMinHigh << "\n";
+    dump_buf << "UclampMin_Low: " << mUclampMinLow << "\n";
+    dump_buf << "ReportingRateLimitNs: " << mReportingRateLimitNs << "\n";
+    dump_buf << "EarlyBoost_On: " << mEarlyBoostOn << "\n";
+    dump_buf << "EarlyBoost_TimeFactor: " << mEarlyBoostTimeFactor << "\n";
+    dump_buf << "TargetTimeFactor: " << mTargetTimeFactor << "\n";
+    dump_buf << "StaleTimeFactor: " << mStaleTimeFactor << "\n";
+    if (!android::base::WriteStringToFd(dump_buf.str(), fd)) {
+        LOG(ERROR) << "Failed to dump ADPF profile to fd: " << fd;
+    }
 }
 
 }  // namespace perfmgr
