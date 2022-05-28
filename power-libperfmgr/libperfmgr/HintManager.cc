@@ -256,6 +256,19 @@ void HintManager::DumpToFd(int fd) {
     if (!android::base::WriteStringToFd(footer, fd)) {
         LOG(ERROR) << "Failed to dump fd: " << fd;
     }
+
+    // Dump current ADPF profile
+    if (GetAdpfProfile()) {
+        header = "========== Begin current adpf profile ==========\n";
+        if (!android::base::WriteStringToFd(header, fd)) {
+            LOG(ERROR) << "Failed to dump fd: " << fd;
+        }
+        GetAdpfProfile()->dumpToFd(fd);
+        footer = "==========  End current adpf profile  ==========\n";
+        if (!android::base::WriteStringToFd(footer, fd)) {
+            LOG(ERROR) << "Failed to dump fd: " << fd;
+        }
+    }
     fsync(fd);
 }
 
@@ -627,6 +640,7 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
     int64_t pidIHighLimit;
     int64_t pidILowLimit;
     bool adpfUclamp;
+    uint32_t uclampMinInit;
     uint32_t uclampMinHighLimit;
     uint32_t uclampMinLowLimit;
     uint64_t samplingWindowP;
@@ -734,6 +748,13 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         }
         adpfUclamp = adpfs[i]["UclampMin_On"].asBool();
 
+        if (adpfs[i]["UclampMin_Init"].empty() || !adpfs[i]["UclampMin_Init"].isInt()) {
+            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_Init]'s Values";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
+        }
+        uclampMinInit = adpfs[i]["UclampMin_Init"].asInt();
+
         if (adpfs[i]["UclampMin_High"].empty() || !adpfs[i]["UclampMin_High"].isUInt()) {
             LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_High]'s Values";
             adpfs_parsed.clear();
@@ -810,9 +831,9 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
 
         adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
-                pidDOver, pidDUnder, adpfUclamp, uclampMinHighLimit, uclampMinLowLimit,
-                samplingWindowP, samplingWindowI, samplingWindowD, reportingRate, earlyBoostOn,
-                earlyBoostTimeFactor, targetTimeFactor, staleTimeFactor));
+                pidDOver, pidDUnder, adpfUclamp, uclampMinInit, uclampMinHighLimit,
+                uclampMinLowLimit, samplingWindowP, samplingWindowI, samplingWindowD, reportingRate,
+                earlyBoostOn, earlyBoostTimeFactor, targetTimeFactor, staleTimeFactor));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;

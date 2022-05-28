@@ -35,6 +35,7 @@ struct AdpfConfig {
     double mPidDu;
     // Uclamp boost control
     bool mUclampMinOn;
+    uint32_t mUclampMinInit;
     uint32_t mUclampMinHigh;
     uint32_t mUclampMinLow;
     // Batch update control
@@ -42,6 +43,7 @@ struct AdpfConfig {
     uint64_t mSamplingWindowI;
     uint64_t mSamplingWindowD;
     int64_t mReportingRateLimitNs;
+    int64_t mFreezeDurationNs;
     bool mEarlyBoostOn;
     double mEarlyBoostTimeFactor;
     double mTargetTimeFactor;
@@ -51,13 +53,16 @@ struct AdpfConfig {
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
     int64_t getPidILowDivI();
+    bool isEarlyBoostTimerEnabled();
+    bool isStaleTimerEnabled();
+    void dumpToFd(int fd);
 
     AdpfConfig(std::string name, bool pidOn, double pidPo, double pidPu, double pidI,
                int64_t pidIInit, int64_t pidIHigh, int64_t pidILow, double pidDo, double pidDu,
-               bool uclampMinOn, uint32_t uclampMinHigh, uint32_t uclampMinLow,
-               uint64_t samplingWindowP, uint64_t samplingWindowI, uint64_t samplingWindowD,
-               int64_t reportingRateLimitNs, bool earlyBoostOn, double earlyBoostTimeFactor,
-               double targetTimeFactor, double staleTimeFactor)
+               bool uclampMinOn, uint32_t uclampMinInit, uint32_t uclampMinHigh,
+               uint32_t uclampMinLow, uint64_t samplingWindowP, uint64_t samplingWindowI,
+               uint64_t samplingWindowD, int64_t reportingRateLimitNs, bool earlyBoostOn,
+               double earlyBoostTimeFactor, double targetTimeFactor, double staleTimeFactor)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -69,6 +74,7 @@ struct AdpfConfig {
           mPidDo(pidDo),
           mPidDu(pidDu),
           mUclampMinOn(uclampMinOn),
+          mUclampMinInit(uclampMinInit),
           mUclampMinHigh(uclampMinHigh),
           mUclampMinLow(uclampMinLow),
           mSamplingWindowP(samplingWindowP),
