@@ -95,8 +95,7 @@ struct ThrottlingInfo {
     ThrottlingArray min_alloc_power;
     ThrottlingArray s_power;
     ThrottlingArray i_cutoff;
-    float i_default;
-    int tran_cycle;
+    float err_integral_default;
     std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
 };
 

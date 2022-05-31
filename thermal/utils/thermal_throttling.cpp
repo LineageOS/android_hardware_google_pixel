@@ -83,9 +83,14 @@ void ThermalThrottling::clearThrottlingData(std::string_view sensor_name,
         throttling_release_pair.second = 0;
     }
 
-    thermal_throttling_status_map_[sensor_name.data()].err_integral =
-            sensor_info.throttling_info->err_integral_default;
     thermal_throttling_status_map_[sensor_name.data()].prev_err = NAN;
+    thermal_throttling_status_map_[sensor_name.data()].i_budget =
+            sensor_info.throttling_info->i_default;
+    thermal_throttling_status_map_[sensor_name.data()].prev_target =
+            static_cast<size_t>(ThrottlingSeverity::NONE);
+    thermal_throttling_status_map_[sensor_name.data()].prev_power_budget = NAN;
+    thermal_throttling_status_map_[sensor_name.data()].tran_cycle = 0;
+
     return;
 }
 
@@ -101,9 +106,13 @@ bool ThermalThrottling::registerThermalThrottling(
         LOG(ERROR) << "Sensor " << sensor_name.data() << " has no throttling info";
         return false;
     }
-    thermal_throttling_status_map_[sensor_name.data()].err_integral =
-            throttling_info->err_integral_default;
+
     thermal_throttling_status_map_[sensor_name.data()].prev_err = NAN;
+    thermal_throttling_status_map_[sensor_name.data()].i_budget = throttling_info->i_default;
+    thermal_throttling_status_map_[sensor_name.data()].prev_target =
+            static_cast<size_t>(ThrottlingSeverity::NONE);
+    thermal_throttling_status_map_[sensor_name.data()].prev_power_budget = NAN;
+    thermal_throttling_status_map_[sensor_name.data()].tran_cycle = 0;
 
     for (auto &binded_cdev_pair : throttling_info->binded_cdev_info_map) {
         if (!cooling_device_info_map.count(binded_cdev_pair.first)) {
@@ -153,38 +162,49 @@ float ThermalThrottling::updatePowerBudget(const Temperature_2_0 &temp,
                                            const SensorInfo &sensor_info,
                                            std::chrono::milliseconds time_elapsed_ms,
                                            ThrottlingSeverity curr_severity) {
-    float p = 0, i = 0, d = 0;
+    float p = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
+    bool target_changed = false;
+    float budget_transient = 0.0;
+    auto &throttling_status = thermal_throttling_status_map_.at(temp.name);
 
     if (curr_severity == ThrottlingSeverity::NONE) {
         return power_budget;
     }
 
     const auto target_state = getTargetStateOfPID(sensor_info, curr_severity);
+    if (throttling_status.prev_target != static_cast<size_t>(ThrottlingSeverity::NONE) &&
+        target_state != throttling_status.prev_target &&
+        sensor_info.throttling_info->tran_cycle > 0) {
+        throttling_status.tran_cycle = sensor_info.throttling_info->tran_cycle - 1;
+        target_changed = true;
+    }
+    throttling_status.prev_target = target_state;
 
     // Compute PID
     float err = sensor_info.hot_thresholds[target_state] - temp.value;
     p = err * (err < 0 ? sensor_info.throttling_info->k_po[target_state]
                        : sensor_info.throttling_info->k_pu[target_state]);
-    i = thermal_throttling_status_map_[temp.name].err_integral *
-        sensor_info.throttling_info->k_i[target_state];
+
     if (err < sensor_info.throttling_info->i_cutoff[target_state]) {
-        float i_next = i + err * sensor_info.throttling_info->k_i[target_state];
-        if (abs(i_next) < sensor_info.throttling_info->i_max[target_state]) {
-            i = i_next;
-            thermal_throttling_status_map_[temp.name].err_integral += err;
-        }
+        throttling_status.i_budget += err * sensor_info.throttling_info->k_i[target_state];
     }
 
-    if (!std::isnan(thermal_throttling_status_map_[temp.name].prev_err) &&
+    if (fabsf(throttling_status.i_budget) > sensor_info.throttling_info->i_max[target_state]) {
+        throttling_status.i_budget = sensor_info.throttling_info->i_max[target_state] *
+                                     (throttling_status.i_budget > 0 ? 1 : -1);
+    }
+
+    if (!std::isnan(throttling_status.prev_err) &&
         time_elapsed_ms != std::chrono::milliseconds::zero()) {
-        d = sensor_info.throttling_info->k_d[target_state] *
-            (err - thermal_throttling_status_map_[temp.name].prev_err) / time_elapsed_ms.count();
+        d = sensor_info.throttling_info->k_d[target_state] * (err - throttling_status.prev_err) /
+            time_elapsed_ms.count();
     }
 
-    thermal_throttling_status_map_[temp.name].prev_err = err;
+    throttling_status.prev_err = err;
     // Calculate power budget
-    power_budget = sensor_info.throttling_info->s_power[target_state] + p + i + d;
+    power_budget =
+            sensor_info.throttling_info->s_power[target_state] + p + throttling_status.i_budget + d;
     if (power_budget < sensor_info.throttling_info->min_alloc_power[target_state]) {
         power_budget = sensor_info.throttling_info->min_alloc_power[target_state];
     }
@@ -192,11 +212,25 @@ float ThermalThrottling::updatePowerBudget(const Temperature_2_0 &temp,
         power_budget = sensor_info.throttling_info->max_alloc_power[target_state];
     }
 
+    if (target_changed) {
+        throttling_status.budget_transient = throttling_status.prev_power_budget - power_budget;
+    }
+
+    if (throttling_status.tran_cycle) {
+        budget_transient = throttling_status.budget_transient *
+                           ((static_cast<float>(throttling_status.tran_cycle) /
+                             static_cast<float>(sensor_info.throttling_info->tran_cycle)));
+        power_budget += budget_transient;
+        throttling_status.tran_cycle--;
+    }
+
     LOG(INFO) << temp.name << " power_budget=" << power_budget << " err=" << err
-              << " err_integral=" << thermal_throttling_status_map_[temp.name].err_integral
               << " s_power=" << sensor_info.throttling_info->s_power[target_state]
-              << " time_elapsed_ms=" << time_elapsed_ms.count() << " p=" << p << " i=" << i
-              << " d=" << d << " control target=" << target_state;
+              << " time_elapsed_ms=" << time_elapsed_ms.count() << " p=" << p
+              << " i=" << throttling_status.i_budget << " d=" << d
+              << " budget transient=" << budget_transient << " control target=" << target_state;
+
+    throttling_status.prev_power_budget = power_budget;
 
     return power_budget;
 }
@@ -278,12 +312,16 @@ bool ThermalThrottling::allocatePowerToCdev(
                     allocated_power += last_updated_avg_power;
                     allocated_weight += cdev_weight;
                     allocated_cdev.insert(binded_cdev_info_pair.first);
+                    LOG(VERBOSE) << temp.name << " binded " << binded_cdev_info_pair.first
+                                 << " has been already at min state 0";
                 }
             } else {
                 // Ignore the power distribution if the CDEV has no space to reduce power
                 if ((cdev_power_adjustment < 0 &&
                      thermal_throttling_status_map_[temp.name].pid_cdev_request_map.at(
                              binded_cdev_info_pair.first) == cdev_info.max_state)) {
+                    LOG(VERBOSE) << temp.name << " binded " << binded_cdev_info_pair.first
+                                 << " has been already at max state " << cdev_info.max_state;
                     continue;
                 }
 
