@@ -24,8 +24,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "../../utils/power_files.h"
-#include "../../utils/thermal_info.h"
+#include "power_files.h"
+#include "thermal_info.h"
 
 namespace android {
 namespace hardware {

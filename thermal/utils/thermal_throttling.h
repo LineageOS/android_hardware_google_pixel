@@ -45,8 +45,12 @@ struct ThermalThrottlingStatus {
     std::unordered_map<std::string, int> hardlimit_cdev_request_map;
     std::unordered_map<std::string, int> throttling_release_map;
     std::unordered_map<std::string, int> cdev_status_map;
-    float err_integral;
     float prev_err;
+    float i_budget;
+    float prev_target;
+    float prev_power_budget;
+    float budget_transient;
+    int tran_cycle;
 };
 
 // Return the control temp target of PID algorithm
