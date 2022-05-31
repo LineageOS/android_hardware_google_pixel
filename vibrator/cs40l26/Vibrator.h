@@ -58,6 +58,8 @@ class Vibrator : public BnVibrator {
         virtual bool setF0CompEnable(bool value) = 0;
         // Enables/Disables Redc compensation enable status
         virtual bool setRedcCompEnable(bool value) = 0;
+        // Stores the minumun delay time between playback and stop effects.
+        virtual bool setMinOnOffInterval(uint32_t value) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
