@@ -21,12 +21,28 @@ thermal_hal_feature_cc_defaults {
     pid: {
       apply_1_0: {
         srcs: [
+          "pid_1_0/service.cpp",
+          "pid_1_0/Thermal.cpp",
+          "pid_1_0/thermal-helper.cpp",
           "pid_1_0/utils/thermal_throttling.cpp",
+          "pid_1_0/utils/thermal_info.cpp",
+          "pid_1_0/utils/thermal_files.cpp",
+          "pid_1_0/utils/power_files.cpp",
+          "pid_1_0/utils/powerhal_helper.cpp",
+          "pid_1_0/utils/thermal_watcher.cpp",
         ],
       },
       apply_2_0: {
         srcs: [
+          "service.cpp",
+          "Thermal.cpp",
+          "thermal-helper.cpp",
           "utils/thermal_throttling.cpp",
+          "utils/thermal_info.cpp",
+          "utils/thermal_files.cpp",
+          "utils/power_files.cpp",
+          "utils/powerhal_helper.cpp",
+          "utils/thermal_watcher.cpp",
         ],
       },
     },
@@ -44,16 +60,6 @@ cc_binary {
   vintf_fragments: ["android.hardware.thermal@2.0-service.pixel.xml"],
   init_rc: [
     "android.hardware.thermal@2.0-service.pixel.rc",
-  ],
-  srcs: [
-    "service.cpp",
-    "Thermal.cpp",
-    "thermal-helper.cpp",
-    "utils/thermal_info.cpp",
-    "utils/thermal_files.cpp",
-    "utils/power_files.cpp",
-    "utils/powerhal_helper.cpp",
-    "utils/thermal_watcher.cpp",
   ],
   shared_libs: [
     "libbase",
