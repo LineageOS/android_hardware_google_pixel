@@ -480,8 +480,7 @@ bool ParseSensorInfo(std::string_view config_path,
         s_power.fill(NAN);
         std::array<float, kThrottlingSeverityCount> i_cutoff;
         i_cutoff.fill(NAN);
-        float i_default = 0.0;
-        int tran_cycle = 0;
+        float err_integral_default = 0.0;
 
         // Parse PID parameters
         if (!sensors[i]["PIDInfo"].empty()) {
@@ -561,15 +560,9 @@ bool ParseSensorInfo(std::string_view config_path,
                 return false;
             }
             LOG(INFO) << "Start to parse"
-                      << " Sensor[" << name << "]'s I_Default";
-            i_default = getFloatFromValue(sensors[i]["PIDInfo"]["I_Default"]);
-            LOG(INFO) << "Sensor[" << name << "]'s I_Default: " << i_default;
-
-            LOG(INFO) << "Start to parse"
-                      << " Sensor[" << name << "]'s TranCycle";
-            tran_cycle = getFloatFromValue(sensors[i]["PIDInfo"]["TranCycle"]);
-            LOG(INFO) << "Sensor[" << name << "]'s TranCycle: " << tran_cycle;
-
+                      << " Sensor[" << name << "]'s E_Integral_Default";
+            err_integral_default = getFloatFromValue(sensors[i]["PIDInfo"]["E_Integral_Default"]);
+            LOG(INFO) << "Sensor[" << name << "]'s E_Integral_Default: " << err_integral_default;
             // Confirm we have at least one valid PID combination
             bool valid_pid_combination = false;
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
@@ -749,31 +742,6 @@ bool ParseSensorInfo(std::string_view config_path,
             };
         }
 
-        std::unordered_map<std::string, ThrottlingArray> excluded_power_info_map;
-        values = sensors[i]["ExcludedPowerInfo"];
-        for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
-            Json::Value sub_values;
-            const std::string &power_rail = values[j]["PowerRail"].asString();
-            if (power_rail.empty()) {
-                LOG(ERROR) << "Sensor[" << name << "] failed to parse excluded PowerRail";
-                sensors_parsed->clear();
-                return false;
-            }
-            ThrottlingArray power_weight;
-            power_weight.fill(1);
-            if (!values[j]["PowerWeight"].empty()) {
-                LOG(INFO) << "Sensor[" << name << "]: Start to parse " << power_rail
-                          << "'s PowerWeight";
-                if (!getFloatFromJsonValues(values[j]["PowerWeight"], &power_weight, false,
-                                            false)) {
-                    LOG(ERROR) << "Failed to parse PowerWeight";
-                    sensors_parsed->clear();
-                    return false;
-                }
-            }
-            excluded_power_info_map[power_rail] = power_weight;
-        }
-
         if (is_hidden && send_cb) {
             LOG(ERROR) << "is_hidden and send_cb cannot be enabled together";
             sensors_parsed->clear();
@@ -789,9 +757,9 @@ bool ParseSensorInfo(std::string_view config_path,
                                                             trigger_sensor, formula});
         }
 
-        std::shared_ptr<ThrottlingInfo> throttling_info(new ThrottlingInfo{
-                k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power, s_power, i_cutoff,
-                i_default, tran_cycle, excluded_power_info_map, binded_cdev_info_map});
+        std::shared_ptr<ThrottlingInfo> throttling_info(
+                new ThrottlingInfo{k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power,
+                                   s_power, i_cutoff, err_integral_default, binded_cdev_info_map});
 
         (*sensors_parsed)[name] = {
                 .type = sensor_type,

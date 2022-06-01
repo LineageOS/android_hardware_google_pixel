@@ -45,8 +45,12 @@ struct ThermalThrottlingStatus {
     std::unordered_map<std::string, int> hardlimit_cdev_request_map;
     std::unordered_map<std::string, int> throttling_release_map;
     std::unordered_map<std::string, int> cdev_status_map;
-    float err_integral;
     float prev_err;
+    float i_budget;
+    float prev_target;
+    float prev_power_budget;
+    float budget_transient;
+    int tran_cycle;
 };
 
 // Return the control temp target of PID algorithm
@@ -93,6 +97,13 @@ class ThermalThrottling {
     float updatePowerBudget(const Temperature_2_0 &temp, const SensorInfo &sensor_info,
                             std::chrono::milliseconds time_elapsed_ms,
                             ThrottlingSeverity curr_severity);
+
+    // PID algo - return the power number from excluded power rail list
+    float computeExcludedPower(const SensorInfo &sensor_info,
+                               const ThrottlingSeverity curr_severity,
+                               const std::unordered_map<std::string, PowerStatus> &power_status_map,
+                               std::string *log_buf);
+
     // PID algo - allocate the power to target CDEV according to the ODPM
     bool allocatePowerToCdev(
             const Temperature_2_0 &temp, const SensorInfo &sensor_info,

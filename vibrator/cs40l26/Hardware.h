@@ -35,6 +35,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         open("default/owt_free_space", &mOwtFreeSpace);
         open("default/f0_comp_enable", &mF0CompEnable);
         open("default/redc_comp_enable", &mRedcCompEnable);
+        open("default/delay_before_stop_playback_us", &mMinOnOffInterval);
     }
 
     bool setF0(std::string value) override { return set(value, &mF0); }
@@ -49,6 +50,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool getOwtFreeSpace(uint32_t *value) override { return get(value, &mOwtFreeSpace); }
     bool setF0CompEnable(bool value) override { return set(value, &mF0CompEnable); }
     bool setRedcCompEnable(bool value) override { return set(value, &mRedcCompEnable); }
+    bool setMinOnOffInterval(uint32_t value) override { return set(value, &mMinOnOffInterval); }
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
@@ -61,6 +63,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ifstream mOwtFreeSpace;
     std::ofstream mF0CompEnable;
     std::ofstream mRedcCompEnable;
+    std::ofstream mMinOnOffInterval;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {

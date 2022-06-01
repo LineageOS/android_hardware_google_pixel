@@ -232,17 +232,16 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         }
 
         // Update cooling device max state
-        for (auto &binded_cdev_info_pair :
+        for (auto &binded_cdev_pair :
              name_status_pair.second.throttling_info->binded_cdev_info_map) {
-            const auto &cdev_info = cooling_device_info_map_.at(binded_cdev_info_pair.first);
+            const auto &cdev_info = cooling_device_info_map_.at(binded_cdev_pair.first);
 
-            for (auto &cdev_ceiling : binded_cdev_info_pair.second.cdev_ceiling) {
+            for (auto &cdev_ceiling : binded_cdev_pair.second.cdev_ceiling) {
                 if (cdev_ceiling > cdev_info.max_state) {
                     if (cdev_ceiling != std::numeric_limits<int>::max()) {
-                        LOG(ERROR)
-                                << "Sensor " << name_status_pair.first << "'s "
-                                << binded_cdev_info_pair.first << " cdev_ceiling:" << cdev_ceiling
-                                << " is higher than max state:" << cdev_info.max_state;
+                        LOG(ERROR) << "Sensor " << name_status_pair.first << "'s "
+                                   << binded_cdev_pair.first << " cdev_ceiling:" << cdev_ceiling
+                                   << " is higher than max state:" << cdev_info.max_state;
                     }
                     cdev_ceiling = cdev_info.max_state;
                 }
@@ -434,8 +433,6 @@ void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated
         }
         if (cooling_devices_.writeCdevFile(target_cdev, std::to_string(max_state))) {
             LOG(INFO) << "Successfully update cdev " << target_cdev << " sysfs to " << max_state;
-        } else {
-            LOG(ERROR) << "Failed to update cdev " << target_cdev << " sysfs to " << max_state;
         }
     }
 }
@@ -932,7 +929,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         }
 
         LOG(VERBOSE) << "sensor " << name_status_pair.first
-                     << ": time_elpased=" << time_elapsed_ms.count()
+                     << ": time_elapsed=" << time_elapsed_ms.count()
                      << ", sleep_ms=" << sleep_ms.count() << ", force_update = " << force_update
                      << ", force_sysfs = " << force_sysfs;
 
