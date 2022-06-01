@@ -97,6 +97,13 @@ class ThermalThrottling {
     float updatePowerBudget(const Temperature_2_0 &temp, const SensorInfo &sensor_info,
                             std::chrono::milliseconds time_elapsed_ms,
                             ThrottlingSeverity curr_severity);
+
+    // PID algo - return the power number from excluded power rail list
+    float computeExcludedPower(const SensorInfo &sensor_info,
+                               const ThrottlingSeverity curr_severity,
+                               const std::unordered_map<std::string, PowerStatus> &power_status_map,
+                               std::string *log_buf);
+
     // PID algo - allocate the power to target CDEV according to the ODPM
     bool allocatePowerToCdev(
             const Temperature_2_0 &temp, const SensorInfo &sensor_info,
