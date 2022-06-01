@@ -433,8 +433,6 @@ void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated
         }
         if (cooling_devices_.writeCdevFile(target_cdev, std::to_string(max_state))) {
             LOG(INFO) << "Successfully update cdev " << target_cdev << " sysfs to " << max_state;
-        } else {
-            LOG(ERROR) << "Failed to update cdev " << target_cdev << " sysfs to " << max_state;
         }
     }
 }
@@ -931,7 +929,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         }
 
         LOG(VERBOSE) << "sensor " << name_status_pair.first
-                     << ": time_elpased=" << time_elapsed_ms.count()
+                     << ": time_elapsed=" << time_elapsed_ms.count()
                      << ", sleep_ms=" << sleep_ms.count() << ", force_update = " << force_update
                      << ", force_sysfs = " << force_sysfs;
 
