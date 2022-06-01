@@ -37,6 +37,7 @@ namespace hardware {
 namespace thermal {
 namespace V2_0 {
 namespace implementation {
+using android::base::StringPrintf;
 
 // To find the next PID target state according to the current thermal severity
 size_t getTargetStateOfPID(const SensorInfo &sensor_info, const ThrottlingSeverity curr_severity) {
@@ -235,6 +236,28 @@ float ThermalThrottling::updatePowerBudget(const Temperature_2_0 &temp,
     return power_budget;
 }
 
+float ThermalThrottling::computeExcludedPower(
+        const SensorInfo &sensor_info, const ThrottlingSeverity curr_severity,
+        const std::unordered_map<std::string, PowerStatus> &power_status_map,
+        std::string *log_buf) {
+    float excluded_power = 0.0;
+
+    for (const auto &excluded_power_info_pair :
+         sensor_info.throttling_info->excluded_power_info_map) {
+        const auto last_updated_avg_power =
+                power_status_map.at(excluded_power_info_pair.first).last_updated_avg_power;
+        if (!std::isnan(last_updated_avg_power)) {
+            excluded_power += last_updated_avg_power *
+                              excluded_power_info_pair.second[static_cast<size_t>(curr_severity)];
+            log_buf->append(StringPrintf(
+                    "(%s: %0.2f mW, cdev_weight: %f)", excluded_power_info_pair.first.c_str(),
+                    last_updated_avg_power,
+                    excluded_power_info_pair.second[static_cast<size_t>(curr_severity)]));
+        }
+    }
+    return excluded_power;
+}
+
 // Allocate power budget to binded cooling devices base on the real ODPM power data
 bool ThermalThrottling::allocatePowerToCdev(
         const Temperature_2_0 &temp, const SensorInfo &sensor_info,
@@ -248,10 +271,23 @@ bool ThermalThrottling::allocatePowerToCdev(
     bool low_power_device_check = true;
     bool is_budget_allocated = false;
     bool power_data_invalid = false;
-    auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity);
     std::set<std::string> allocated_cdev;
+    std::string log_buf;
 
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
+    auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity);
+
+    if (sensor_info.throttling_info->excluded_power_info_map.size()) {
+        std::string log_buf;
+        total_power_budget -=
+                computeExcludedPower(sensor_info, curr_severity, power_status_map, &log_buf);
+        total_power_budget = std::max(total_power_budget, 0.0f);
+        if (!log_buf.empty()) {
+            LOG(INFO) << temp.name << " power budget=" << total_power_budget << " after " << log_buf
+                      << " is excluded";
+        }
+    }
+
     // Compute total cdev weight
     for (const auto &binded_cdev_info_pair : sensor_info.throttling_info->binded_cdev_info_map) {
         const auto cdev_weight = binded_cdev_info_pair.second
@@ -270,8 +306,6 @@ bool ThermalThrottling::allocatePowerToCdev(
             const auto cdev_weight =
                     binded_cdev_info_pair.second
                             .cdev_weight_for_pid[static_cast<size_t>(curr_severity)];
-
-            const CdevInfo &cdev_info = cooling_device_info_map.at(binded_cdev_info_pair.first);
 
             if (allocated_cdev.count(binded_cdev_info_pair.first)) {
                 continue;
@@ -312,10 +346,18 @@ bool ThermalThrottling::allocatePowerToCdev(
                     allocated_power += last_updated_avg_power;
                     allocated_weight += cdev_weight;
                     allocated_cdev.insert(binded_cdev_info_pair.first);
+                    log_buf.append(StringPrintf("(%s: %0.2f mW)",
+                                                binded_cdev_info_pair.second.power_rail.c_str(),
+                                                last_updated_avg_power));
+
                     LOG(VERBOSE) << temp.name << " binded " << binded_cdev_info_pair.first
                                  << " has been already at min state 0";
                 }
             } else {
+                const CdevInfo &cdev_info = cooling_device_info_map.at(binded_cdev_info_pair.first);
+                log_buf.append(StringPrintf("(%s: %0.2f mW)",
+                                            binded_cdev_info_pair.second.power_rail.c_str(),
+                                            last_updated_avg_power));
                 // Ignore the power distribution if the CDEV has no space to reduce power
                 if ((cdev_power_adjustment < 0 &&
                      thermal_throttling_status_map_[temp.name].pid_cdev_request_map.at(
@@ -394,7 +436,9 @@ bool ThermalThrottling::allocatePowerToCdev(
             is_budget_allocated = true;
         }
     }
-
+    if (log_buf.size()) {
+        LOG(INFO) << temp.name << " binded power rails: " << log_buf;
+    }
     return true;
 }
 
