@@ -79,7 +79,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     static constexpr uint32_t VERSION_DEFAULT = 2;
     static constexpr int32_t DEFAULT_FREQUENCY_SHIFT = 0;
     static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {1, 100};
-    static constexpr std::array<uint32_t, 2> V_CTICK_DEFAULT = {1, 100};
+    static constexpr std::array<uint32_t, 2> V_CLICK_DEFAULT = {1, 100};
     static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {1, 100};
 
   public:
@@ -109,7 +109,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         if (getPersist(CLICK_VOLTAGES_CONFIG, value)) {
             return true;
         }
-        *value = V_CTICK_DEFAULT;
+        *value = V_CLICK_DEFAULT;
         return true;
     }
     bool getLongVolLevels(std::array<uint32_t, 2> *value) override {
