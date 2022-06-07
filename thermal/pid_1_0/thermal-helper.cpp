@@ -100,7 +100,7 @@ void parseCpuUsagesFileAndAssignUsages(hidl_vec<CpuUsage> *cpu_usages) {
     std::istringstream stat_data(data);
     std::string line;
     while (std::getline(stat_data, line)) {
-        if (!line.find("cpu") && isdigit(line[3])) {
+        if (android::base::StartsWith(line, "cpu") && isdigit(line[3])) {
             // Split the string using spaces.
             std::vector<std::string> words = android::base::Split(line, " ");
             std::string cpu_name = words[0];
