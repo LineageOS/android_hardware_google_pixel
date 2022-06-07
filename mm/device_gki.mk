@@ -16,6 +16,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 
 # LMK tuning
 PRODUCT_PROPERTY_OVERRIDES += \
-    ro.lmk.filecache_min_kb=153600
+    ro.lmk.filecache_min_kb=153600 \
+    ro.lmk.stall_limit_critical=40
 
 BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/mm/gki
