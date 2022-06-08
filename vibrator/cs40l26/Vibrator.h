@@ -17,6 +17,7 @@
 
 #include <aidl/android/hardware/vibrator/BnVibrator.h>
 #include <android-base/unique_fd.h>
+#include <linux/input.h>
 #include <tinyalsa/asoundlib.h>
 
 #include <array>
@@ -131,7 +132,7 @@ class Vibrator : public BnVibrator {
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   private:
-    ndk::ScopedAStatus on(uint32_t timeoutMs, uint32_t effectIndex,
+    ndk::ScopedAStatus on(uint32_t timeoutMs, uint32_t effectIndex, struct dspmem_chunk *ch,
                           const std::shared_ptr<IVibratorCallback> &callback);
     // set 'amplitude' based on an arbitrary scale determined by 'maximum'
     ndk::ScopedAStatus setEffectAmplitude(float amplitude, float maximum);
@@ -146,6 +147,7 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, uint32_t *outEffectIndex);
     ndk::ScopedAStatus uploadOwtEffect(uint8_t *owtData, uint32_t num_bytes,
                                        uint32_t *outEffectIndex);
+    ndk::ScopedAStatus eraseOwtEffect(int8_t effectIndex);
     ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *outTimeMs);
@@ -166,6 +168,7 @@ class Vibrator : public BnVibrator {
     std::array<uint32_t, 2> mTickEffectVol;
     std::array<uint32_t, 2> mClickEffectVol;
     std::array<uint32_t, 2> mLongEffectVol;
+    std::vector<ff_effect> mFfEffects;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
     ::android::base::unique_fd mInputFd;
