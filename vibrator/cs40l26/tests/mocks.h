@@ -34,6 +34,15 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(setF0CompEnable, bool(bool value));
     MOCK_METHOD1(setRedcCompEnable, bool(bool value));
     MOCK_METHOD1(setMinOnOffInterval, bool(uint32_t value));
+    MOCK_METHOD2(setFFGain, bool(int fd, uint16_t value));
+    MOCK_METHOD3(setFFEffect, bool(int fd, struct ff_effect *effect, uint16_t timeoutMs));
+    MOCK_METHOD3(setFFPlay, bool(int fd, int8_t index, bool value));
+    MOCK_METHOD2(getHapticAlsaDevice, bool(int *card, int *device));
+    MOCK_METHOD4(setHapticPcmAmp, bool(struct pcm **haptic_pcm, bool enable, int card, int device));
+    MOCK_METHOD6(uploadOwtEffect,
+                 bool(int fd, uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+                      uint32_t *outEffectIndex, int *status));
+    MOCK_METHOD3(eraseOwtEffect, bool(int fd, int8_t effectIndex, std::vector<ff_effect> *effect));
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockApi() override { destructor(); };
