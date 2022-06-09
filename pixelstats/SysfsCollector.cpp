@@ -47,6 +47,7 @@ using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
@@ -721,6 +722,26 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     }
 }
 
+void SysfsCollector::logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> &stats_client) {
+    bool smart_idle_enabled = android::base::GetBoolProperty(
+        "persist.device_config.storage_native_boot.smart_idle_maint_enabled", false);
+
+    // Load values array
+    VendorAtomValue tmp;
+    std::vector<VendorAtomValue> values(1);
+    tmp.set<VendorAtomValue::intValue>(smart_idle_enabled);
+    values[F2fsSmartIdleMaintEnabledStateChanged::kEnabledFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Atom::kF2FsSmartIdleMaintEnabledStateChanged,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report Boot stats to Stats service");
+    }
+}
+
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
@@ -897,6 +918,7 @@ void SysfsCollector::logPerDay() {
     logF2fsStats(stats_client);
     logF2fsCompressionInfo(stats_client);
     logF2fsGcSegmentInfo(stats_client);
+    logF2fsSmartIdleMaintEnabled(stats_client);
     logSlowIO(stats_client);
     logSpeakerImpedance(stats_client);
     logSpeechDspStat(stats_client);
