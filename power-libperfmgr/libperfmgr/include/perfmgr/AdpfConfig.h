@@ -53,8 +53,6 @@ struct AdpfConfig {
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
     int64_t getPidILowDivI();
-    bool isEarlyBoostTimerEnabled();
-    bool isStaleTimerEnabled();
     void dumpToFd(int fd);
 
     AdpfConfig(std::string name, bool pidOn, double pidPo, double pidPu, double pidI,

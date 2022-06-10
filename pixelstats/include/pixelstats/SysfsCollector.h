@@ -88,6 +88,7 @@ class SysfsCollector {
     void logBootStats(const std::shared_ptr<IStats> &stats_client);
     void logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client);
     void logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client);
+    void logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
