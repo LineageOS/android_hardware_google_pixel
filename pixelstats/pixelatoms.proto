@@ -814,6 +814,8 @@ message F2fsGcSegmentInfo {
     optional int32 reclaimed_segments_urgent_high = 3;
     /* Reclaimed segments in GC urgent low mode */
     optional int32 reclaimed_segments_urgent_low = 4;
+    /* Reclaimed segments in GC urgent mid mode */
+    optional int32 reclaimed_segments_urgent_mid = 5;
 }
 
 /**
