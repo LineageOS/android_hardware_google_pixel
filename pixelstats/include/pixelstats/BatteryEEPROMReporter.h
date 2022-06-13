@@ -34,9 +34,9 @@ using aidl::android::frameworks::stats::IStats;
 // hence the history number is 928/28~33
 #define BATT_HIST_NUM_MAX 33
 
-// New history layout total size is 924 or 912 byte
-// each history data size is 12 bytes: 912/12=76
-#define BATT_HIST_NUM_MAX_V2 76
+// New history layout total size is 924 or 900 byte
+// each history data size is 12 bytes: 900/12=75
+#define BATT_HIST_NUM_MAX_V2 75
 
 /**
  * A class to upload battery EEPROM metrics
