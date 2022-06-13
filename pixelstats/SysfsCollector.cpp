@@ -685,10 +685,12 @@ int SysfsCollector::getReclaimedSegments(const std::string &mode) {
 }
 
 void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_client) {
-    int reclaimed_segments_normal, reclaimed_segments_urgent_high, reclaimed_segments_urgent_low;
+    int reclaimed_segments_normal, reclaimed_segments_urgent_high;
+    int reclaimed_segments_urgent_mid, reclaimed_segments_urgent_low;
     std::string gc_normal_mode = std::to_string(0);         // GC normal mode
     std::string gc_urgent_high_mode = std::to_string(4);    // GC urgent high mode
     std::string gc_urgent_low_mode = std::to_string(5);     // GC urgent low mode
+    std::string gc_urgent_mid_mode = std::to_string(6);     // GC urgent mid mode
 
     if (kF2fsStatsPath == nullptr) {
         ALOGV("F2fs stats path not specified");
@@ -701,15 +703,19 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     if (reclaimed_segments_urgent_high == -1) return;
     reclaimed_segments_urgent_low = getReclaimedSegments(gc_urgent_low_mode);
     if (reclaimed_segments_urgent_low == -1) return;
+    reclaimed_segments_urgent_mid = getReclaimedSegments(gc_urgent_mid_mode);
+    if (reclaimed_segments_urgent_mid == -1) return;
 
     // Load values array
-    std::vector<VendorAtomValue> values(3);
+    std::vector<VendorAtomValue> values(4);
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_normal);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsNormalFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_high);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentHighFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_low);
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_mid);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
 
     // Send vendor atom to IStats HAL
