@@ -80,6 +80,7 @@ message Atom {
       BatteryHealthStatus battery_health_status = 105037;
       BatteryHealthUsage battery_health_usage = 105038;
       F2fsSmartIdleMaintEnabledStateChanged f2fs_smart_idle_maint_enabled_state_changed = 105039;
+      BlockStatsReported block_stats_reported = 105040;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1107,4 +1108,23 @@ message F2fsSmartIdleMaintEnabledStateChanged {
     optional string reverse_domain_name = 1;
     /* Smart idle maint is enabled */
     optional bool enabled = 2;
+}
+
+/*
+ * Snapshot of the block layer read write stats
+ */
+message BlockStatsReported {
+    optional string reverse_domain_name = 1;
+        /* number of read I/Os processed */
+        optional int64 read_io = 2;
+        /* number of sectors read */
+        optional int64 read_sectors = 3;
+        /* total wait time for read requests */
+        optional int64 read_ticks = 4;
+        /* number of write I/Os processed */
+        optional int64 write_io = 5;
+        /* number of sectors written */
+        optional int64 write_sectors = 6;
+        /* total wait time for write requests */
+        optional int64 write_ticks = 7;
 }

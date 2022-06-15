@@ -44,6 +44,7 @@ using android::base::StartsWith;
 using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
@@ -82,7 +83,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
-      kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath) {}
+      kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath),
+      kBlockStatsLength(sysfs_paths.BlockStatsLength) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -748,6 +750,68 @@ void SysfsCollector::logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> 
     }
 }
 
+void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string sdaPath = "/sys/block/sda/stat";
+    std::string file_contents;
+    std::string stat;
+    std::vector<std::string> stats;
+    std::stringstream ss;
+
+    // These index comes from kernel Document
+    // Documentation/ABI/stable/sysfs-block
+    const int READ_IO_IDX = 0, READ_SEC_IDX = 2, READ_TICK_IDX = 3;
+    const int WRITE_IO_IDX = 4, WRITE_SEC_IDX = 6, WRITE_TICK_IDX = 7;
+    uint64_t read_io, read_sectors, read_ticks;
+    uint64_t write_io, write_sectors, write_ticks;
+
+    if (!ReadFileToString(sdaPath.c_str(), &file_contents)) {
+        ALOGE("Failed to read block layer stat %s", sdaPath.c_str());
+        return;
+    }
+
+    ss.str(file_contents);
+    while (ss >> stat) {
+        stats.push_back(stat);
+    }
+
+    if (stats.size() < kBlockStatsLength) {
+        ALOGE("block layer stat format is incorrect %s, length %lu/%d",
+            file_contents.c_str(), stats.size(), kBlockStatsLength);
+        return;
+    }
+
+    read_io = std::stoul(stats[READ_IO_IDX]);
+    read_sectors = std::stoul(stats[READ_SEC_IDX]);
+    read_ticks = std::stoul(stats[READ_TICK_IDX]);
+    write_io = std::stoul(stats[WRITE_IO_IDX]);
+    write_sectors = std::stoul(stats[WRITE_SEC_IDX]);
+    write_ticks = std::stoul(stats[WRITE_TICK_IDX]);
+
+    // Load values array
+    std::vector<VendorAtomValue> values(6);
+    values[BlockStatsReported::kReadIoFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(read_io);
+    values[BlockStatsReported::kReadSectorsFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(read_sectors);
+    values[BlockStatsReported::kReadTicksFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(read_ticks);
+    values[BlockStatsReported::kWriteIoFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(write_io);
+    values[BlockStatsReported::kWriteSectorsFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(write_sectors);
+    values[BlockStatsReported::kWriteTicksFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(write_ticks);
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Atom::kBlockStatsReported,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report block layer stats to Stats service");
+    }
+}
+
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
@@ -919,6 +983,7 @@ void SysfsCollector::logPerDay() {
     logBatteryChargeCycles(stats_client);
     logBatteryEEPROM(stats_client);
     logBatteryHealth(stats_client);
+    logBlockStatsReported(stats_client);
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
     logF2fsStats(stats_client);
