@@ -60,6 +60,7 @@ class SysfsCollector {
         const char *const SpeakerExcursionPath;
         const char *const SpeakerHeartBeatPath;
         const std::vector<std::string> UFSErrStatsPath;
+        const int BlockStatsLength;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -73,6 +74,7 @@ class SysfsCollector {
 
     void logBatteryChargeCycles(const std::shared_ptr<IStats> &stats_client);
     void logBatteryHealth(const std::shared_ptr<IStats> &stats_client);
+    void logBlockStatsReported(const std::shared_ptr<IStats> &stats_client);
     void logCodecFailed(const std::shared_ptr<IStats> &stats_client);
     void logCodec1Failed(const std::shared_ptr<IStats> &stats_client);
     void logSlowIO(const std::shared_ptr<IStats> &stats_client);
@@ -119,6 +121,7 @@ class SysfsCollector {
     const char *const kSpeakerExcursionPath;
     const char *const kSpeakerHeartbeatPath;
     const std::vector<std::string> kUFSErrStatsPath;
+    const int kBlockStatsLength;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
