@@ -27,6 +27,8 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <memory>
+#include <optional>
 #include <sstream>
 
 #include "Stats.h"
@@ -176,34 +178,26 @@ static int floatToUint16(float input, uint16_t *output, float scale, float min, 
 }
 
 struct dspmem_chunk {
-    uint8_t *head;
+    std::unique_ptr<uint8_t[]> head;
     uint8_t *current;
     uint8_t *max;
-    int bytes;
+    int bytes = 0;
 
-    uint32_t cache;
-    int cachebits;
+    uint32_t cache = 0;
+    int cachebits = 0;
+
+    dspmem_chunk(int size) : head(new uint8_t[size]{0x00}) {
+        current = head.get();
+        max = current + size;
+    }
 };
 
-static dspmem_chunk *dspmem_chunk_create(void *data, int size) {
-    HAPTICS_TRACE("     dspmem_chunk_create(data, size:%d)", size);
-    auto ch = new dspmem_chunk{
-            .head = reinterpret_cast<uint8_t *>(data),
-            .current = reinterpret_cast<uint8_t *>(data),
-            .max = reinterpret_cast<uint8_t *>(data) + size,
-    };
-
-    return ch;
+static bool dspmem_chunk_end(const struct dspmem_chunk &ch) {
+    return ch.current == ch.max;
 }
 
-static bool dspmem_chunk_end(struct dspmem_chunk *ch) {
-    HAPTICS_TRACE("     dspmem_chunk_end(ch)");
-    return ch->current == ch->max;
-}
-
-static int dspmem_chunk_bytes(struct dspmem_chunk *ch) {
-    HAPTICS_TRACE("     dspmem_chunk_bytes(ch)");
-    return ch->bytes;
+static int dspmem_chunk_bytes(const struct dspmem_chunk &ch) {
+    return ch.bytes;
 }
 
 static int dspmem_chunk_write(struct dspmem_chunk *ch, int nbits, uint32_t val) {
@@ -217,7 +211,7 @@ static int dspmem_chunk_write(struct dspmem_chunk *ch, int nbits, uint32_t val) 
     nbits -= nwrite;
 
     if (ch->cachebits == 24) {
-        if (dspmem_chunk_end(ch))
+        if (dspmem_chunk_end(*ch))
             return -ENOSPC;
 
         ch->cache &= 0xFFFFFF;
@@ -568,9 +562,6 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
 
     mStatsApi->logLatencyStart(kCompositionEffectLatency);
 
-    auto ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_COMP]{0x00},
-                                  FF_CUSTOM_DATA_LEN_MAX_COMP);
-
     if (composite.size() > COMPOSE_SIZE_MAX || composite.empty()) {
         mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -588,15 +579,16 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         size = composite.size();
     }
 
-    dspmem_chunk_write(ch, 8, 0);                      /* Padding */
-    dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & size)); /* nsections */
-    dspmem_chunk_write(ch, 8, 0);                      /* repeat */
+    dspmem_chunk ch(FF_CUSTOM_DATA_LEN_MAX_COMP);
+    dspmem_chunk_write(&ch, 8, 0);                      /* Padding */
+    dspmem_chunk_write(&ch, 8, (uint8_t)(0xFF & size)); /* nsections */
+    dspmem_chunk_write(&ch, 8, 0);                      /* repeat */
     uint8_t header_count = dspmem_chunk_bytes(ch);
 
     /* Insert 1 section for a wait before the first effect. */
     if (nextEffectDelay) {
-        dspmem_chunk_write(ch, 32, 0); /* amplitude, index, repeat & flags */
-        dspmem_chunk_write(ch, 16, (uint16_t)(0xFFFF & nextEffectDelay)); /* delay */
+        dspmem_chunk_write(&ch, 32, 0); /* amplitude, index, repeat & flags */
+        dspmem_chunk_write(&ch, 16, (uint16_t)(0xFFFF & nextEffectDelay)); /* delay */
     }
 
     for (uint32_t i_curr = 0, i_next = 1; i_curr < composite.size(); i_curr++, i_next++) {
@@ -638,19 +630,19 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         }
         mStatsApi->logPrimitive(effectIndex);
 
-        dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & effectVolLevel));      /* amplitude */
-        dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & effectIndex));         /* index */
-        dspmem_chunk_write(ch, 8, 0);                                     /* repeat */
-        dspmem_chunk_write(ch, 8, 0);                                     /* flags */
-        dspmem_chunk_write(ch, 16, (uint16_t)(0xFFFF & nextEffectDelay)); /* delay */
+        dspmem_chunk_write(&ch, 8, (uint8_t)(0xFF & effectVolLevel));      /* amplitude */
+        dspmem_chunk_write(&ch, 8, (uint8_t)(0xFF & effectIndex));         /* index */
+        dspmem_chunk_write(&ch, 8, 0);                                     /* repeat */
+        dspmem_chunk_write(&ch, 8, 0);                                     /* flags */
+        dspmem_chunk_write(&ch, 16, (uint16_t)(0xFFFF & nextEffectDelay)); /* delay */
     }
-    dspmem_chunk_flush(ch);
+    dspmem_chunk_flush(&ch);
     if (header_count == dspmem_chunk_bytes(ch)) {
         mStatsApi->logError(kComposeFailError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
         mFfEffects[WAVEFORM_COMPOSE].replay.length = totalDuration;
-        return performEffect(WAVEFORM_MAX_INDEX /*ignored*/, VOLTAGE_SCALE_MAX /*ignored*/, ch,
+        return performEffect(WAVEFORM_MAX_INDEX /*ignored*/, VOLTAGE_SCALE_MAX /*ignored*/, &ch,
                              callback);
     }
 }
@@ -676,31 +668,26 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
         if (ch->head == nullptr) {
             mStatsApi->logError(kBadCompositeError);
             ALOGE("Invalid OWT bank");
-            delete ch;
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
-        bool isPwle = (*reinterpret_cast<uint16_t *>(ch->head) != 0x0000);
+        bool isPwle = (*reinterpret_cast<uint16_t *>(ch->head.get()) != 0x0000);
         effectIndex = isPwle ? WAVEFORM_PWLE : WAVEFORM_COMPOSE;
 
         uint32_t freeBytes;
         mHwApi->getOwtFreeSpace(&freeBytes);
-        if (dspmem_chunk_bytes(ch) > freeBytes) {
+        if (dspmem_chunk_bytes(*ch) > freeBytes) {
             mStatsApi->logError(kBadCompositeError);
-            ALOGE("Invalid OWT length: Effect %d: %d > %d!", effectIndex, dspmem_chunk_bytes(ch),
+            ALOGE("Invalid OWT length: Effect %d: %d > %d!", effectIndex, dspmem_chunk_bytes(*ch),
                   freeBytes);
-            delete ch;
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
         int errorStatus;
-        if (!mHwApi->uploadOwtEffect(ch->head, dspmem_chunk_bytes(ch), &mFfEffects[effectIndex],
-                                     &effectIndex, &errorStatus)) {
-            delete ch;
+        if (!mHwApi->uploadOwtEffect(ch->head.get(), dspmem_chunk_bytes(*ch),
+                                     &mFfEffects[effectIndex], &effectIndex, &errorStatus)) {
             mStatsApi->logError(kHwApiError);
             ALOGE("Invalid uploadOwtEffect");
             return ndk::ScopedAStatus::fromExceptionCode(errorStatus);
         }
-        delete ch;
-
     } else if (effectIndex == WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX ||
                effectIndex == WAVEFORM_LONG_VIBRATION_EFFECT_INDEX) {
         /* Update duration for long/short vibration. */
@@ -1065,16 +1052,18 @@ static void updateWLength(dspmem_chunk *ch, uint32_t totalDuration) {
     HAPTICS_TRACE("     updateWLength(ch, totalDuration:%u)", totalDuration);
     totalDuration *= 8;            /* Unit: 0.125 ms (since wlength played @ 8kHz). */
     totalDuration |= WT_LEN_CALCD; /* Bit 23 is for WT_LEN_CALCD; Bit 22 is for WT_INDEFINITE. */
-    *(ch->head + 0) = (totalDuration >> 24) & 0xFF;
-    *(ch->head + 1) = (totalDuration >> 16) & 0xFF;
-    *(ch->head + 2) = (totalDuration >> 8) & 0xFF;
-    *(ch->head + 3) = totalDuration & 0xFF;
+    uint8_t *head = ch->head.get();
+    *(head + 0) = (totalDuration >> 24) & 0xFF;
+    *(head + 1) = (totalDuration >> 16) & 0xFF;
+    *(head + 2) = (totalDuration >> 8) & 0xFF;
+    *(head + 3) = totalDuration & 0xFF;
 }
 
 static void updateNSection(dspmem_chunk *ch, int segmentIdx) {
     HAPTICS_TRACE("     updateNSection(ch, segmentIdx:%u)", segmentIdx);
-    *(ch->head + 7) |= (0xF0 & segmentIdx) >> 4; /* Bit 4 to 7 */
-    *(ch->head + 9) |= (0x0F & segmentIdx) << 4; /* Bit 3 to 0 */
+    uint8_t *head = ch->head.get();
+    *(head + 7) |= (0xF0 & segmentIdx) >> 4; /* Bit 4 to 7 */
+    *(head + 9) |= (0x0F & segmentIdx) << 4; /* Bit 3 to 0 */
 }
 
 ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &composite,
@@ -1106,14 +1095,13 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     float prevEndAmplitude;
     float prevEndFrequency;
     resetPreviousEndAmplitudeEndFrequency(&prevEndAmplitude, &prevEndFrequency);
-    auto ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_PWLE]{0x00},
-                                  FF_CUSTOM_DATA_LEN_MAX_PWLE);
+    dspmem_chunk ch(FF_CUSTOM_DATA_LEN_MAX_PWLE);
     bool chirp = false;
 
-    dspmem_chunk_write(ch, 24, 0x000000); /* Waveform length placeholder */
-    dspmem_chunk_write(ch, 8, 0);         /* Repeat */
-    dspmem_chunk_write(ch, 12, 0);        /* Wait time between repeats */
-    dspmem_chunk_write(ch, 8, 0x00);      /* nsections placeholder */
+    dspmem_chunk_write(&ch, 24, 0x000000); /* Waveform length placeholder */
+    dspmem_chunk_write(&ch, 8, 0);         /* Repeat */
+    dspmem_chunk_write(&ch, 12, 0);        /* Wait time between repeats */
+    dspmem_chunk_write(&ch, 8, 0x00);      /* nsections placeholder */
 
     for (auto &e : composite) {
         switch (e.getTag()) {
@@ -1147,7 +1135,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 
                 if (!((active.startAmplitude == prevEndAmplitude) &&
                       (active.startFrequency == prevEndFrequency))) {
-                    if (constructActiveSegment(ch, 0, active.startAmplitude, active.startFrequency,
+                    if (constructActiveSegment(&ch, 0, active.startAmplitude, active.startFrequency,
                                                false) < 0) {
                         mStatsApi->logError(kPwleConstructionFailError);
                         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -1158,7 +1146,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 if (active.startFrequency != active.endFrequency) {
                     chirp = true;
                 }
-                if (constructActiveSegment(ch, active.duration, active.endAmplitude,
+                if (constructActiveSegment(&ch, active.duration, active.endAmplitude,
                                            active.endFrequency, chirp) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -1186,13 +1174,13 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
-                if (constructBrakingSegment(ch, 0, braking.braking) < 0) {
+                if (constructBrakingSegment(&ch, 0, braking.braking) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
 
-                if (constructBrakingSegment(ch, braking.duration, braking.braking) < 0) {
+                if (constructBrakingSegment(&ch, braking.duration, braking.braking) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
@@ -1210,7 +1198,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
     }
-    dspmem_chunk_flush(ch);
+    dspmem_chunk_flush(&ch);
 
     /* Update wlength */
     totalDuration += MAX_COLD_START_LATENCY_MS;
@@ -1221,12 +1209,12 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     } else {
         mFfEffects[WAVEFORM_PWLE].replay.length = totalDuration;
     }
-    updateWLength(ch, totalDuration);
+    updateWLength(&ch, totalDuration);
 
     /* Update nsections */
-    updateNSection(ch, segmentIdx);
+    updateNSection(&ch, segmentIdx);
 
-    return performEffect(WAVEFORM_MAX_INDEX /*ignored*/, VOLTAGE_SCALE_MAX /*ignored*/, ch,
+    return performEffect(WAVEFORM_MAX_INDEX /*ignored*/, VOLTAGE_SCALE_MAX /*ignored*/, &ch,
                          callback);
 }
 
@@ -1490,7 +1478,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
     uint32_t effectIndex;
     uint32_t timeMs = 0;
     uint32_t volLevel;
-    dspmem_chunk *ch = nullptr;
+    std::optional<dspmem_chunk> maybeCh;
     switch (effect) {
         case Effect::TEXTURE_TICK:
             // fall-through
@@ -1502,9 +1490,8 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
             status = getSimpleDetails(effect, strength, &effectIndex, &timeMs, &volLevel);
             break;
         case Effect::DOUBLE_CLICK:
-            ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_COMP]{0x00},
-                                     FF_CUSTOM_DATA_LEN_MAX_COMP);
-            status = getCompoundDetails(effect, strength, &timeMs, ch);
+            maybeCh.emplace(FF_CUSTOM_DATA_LEN_MAX_COMP);
+            status = getCompoundDetails(effect, strength, &timeMs, &*maybeCh);
             volLevel = VOLTAGE_SCALE_MAX;
             break;
         default:
@@ -1512,13 +1499,11 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
             status = ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
             break;
     }
-    if (!status.isOk()) {
-        goto exit;
+    if (status.isOk()) {
+        dspmem_chunk *ch = maybeCh ? &*maybeCh : nullptr;
+        status = performEffect(effectIndex, volLevel, ch, callback);
     }
 
-    status = performEffect(effectIndex, volLevel, ch, callback);
-
-exit:
     *outTimeMs = timeMs;
     return status;
 }
