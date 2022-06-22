@@ -65,9 +65,9 @@ MonitorFfs::MonitorFfs(const char *const gadget, const char *const extconTypecSt
     if (addEpollFd(epollFd, eventFd) == -1)
         abort();
 
-    mEpollFd = move(epollFd);
-    mInotifyFd = move(inotifyFd);
-    mEventFd = move(eventFd);
+    mEpollFd = std::move(epollFd);
+    mInotifyFd = std::move(inotifyFd);
+    mEventFd = std::move(eventFd);
     gadgetPullup = false;
 }
 
