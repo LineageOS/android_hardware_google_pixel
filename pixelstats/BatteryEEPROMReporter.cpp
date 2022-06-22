@@ -252,6 +252,14 @@ void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_cli
     values[BatteryEEPROM::kMinIbattFieldNumber - kVendorAtomOffset] = val;
     val.set<VendorAtomValue::intValue>(hist.checksum);
     values[BatteryEEPROM::kChecksumFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.tempco);
+    values[BatteryEEPROM::kTempcoFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.rcomp0);
+    values[BatteryEEPROM::kRcomp0FieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.timer_h);
+    values[BatteryEEPROM::kTimerHFieldNumber - kVendorAtomOffset] = val;
+    val.set<VendorAtomValue::intValue>(hist.full_rep);
+    values[BatteryEEPROM::kFullRepFieldNumber - kVendorAtomOffset] = val;
 
     VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kBatteryEeprom,
