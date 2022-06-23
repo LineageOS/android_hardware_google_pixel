@@ -359,6 +359,8 @@ TEST_F(VibratorTest, Constructor) {
             .WillOnce(DoAll(SetArgPointee<0>(supportedPrimitivesBits), Return(true)));
 
     EXPECT_CALL(*mMockApi, setMinOnOffInterval(MIN_ON_OFF_INTERVAL_US)).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, hasOwtFreeSpace()).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).WillOnce(Return(true));
     createVibrator(std::move(mockapi), std::move(mockcal), false);
 }
 
