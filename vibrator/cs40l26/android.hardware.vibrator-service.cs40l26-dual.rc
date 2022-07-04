@@ -1,4 +1,4 @@
-on boot && property:vendor.all.modules.ready=1
+on enable-thermal-hal
     wait /sys/bus/i2c/devices/i2c-cs40l26a-dual/calibration/redc_cal_time_ms
 
     mkdir /mnt/vendor/persist/haptics 0770 system system
