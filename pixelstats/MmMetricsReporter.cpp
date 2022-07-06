@@ -159,8 +159,10 @@ MmMetricsReporter::MmMetricsReporter()
       kIonTotalPoolsPath("/sys/kernel/dma_heap/total_pools_kb"),
       kIonTotalPoolsPathForLegacy("/sys/kernel/ion/total_pools_kb"),
       kGpuTotalPages("/sys/kernel/pixel_stat/gpu/mem/total_page_count"),
+      kCompactDuration("/sys/kernel/pixel_stat/mm/compaction/mm_compaction_duration"),
       kDirectReclaimBasePath("/sys/kernel/pixel_stat/mm/vmscan/direct_reclaim"),
       kPixelStatMm("/sys/kernel/pixel_stat/mm"),
+      prev_compaction_duration_(kNumCompactionDurationPrevMetrics, 0),
       prev_direct_reclaim_(kNumDirectReclaimPrevMetrics, 0) {
     is_user_build_ = checkUserBuild();
     ker_mm_metrics_support_ = checkKernelMMMetricSupport();
@@ -445,6 +447,9 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     std::vector<long> direct_reclaim;
     readDirectReclaimStat(&direct_reclaim);
 
+    std::vector<long> compaction_duration;
+    readCompactionDurationStat(&compaction_duration);
+
     bool is_first_atom = (prev_day_vmstat_.size() == 0) ? true : false;
 
     // allocate enough values[] entries for the metrics.
@@ -464,6 +469,7 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     fillProcessStime(PixelMmMetricsPerDay::kKcompactdStimeClksFieldNumber, "kcompactd0",
                      &kcompactd_pid_, &prev_kcompactd_stime_, &values);
     fillDirectReclaimStatAtom(direct_reclaim, &values);
+    fillCompactionDurationStatAtom(direct_reclaim, &values);
 
     // Don't report the first atom to avoid big spike in accumulated values.
     if (!is_first_atom) {
@@ -604,6 +610,60 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
         cma_stat[entry.name] = file_contents;
     }
     return cma_stat;
+}
+
+/**
+ * This function reads compaction duration sysfs node
+ * (/sys/kernel/pixel_stat/mm/compaction/mm_compaction_duration)
+ *
+ * store: vector to save compaction duration info
+ */
+void MmMetricsReporter::readCompactionDurationStat(std::vector<long> *store) {
+    static const std::string path(kCompactDuration);
+    constexpr int num_metrics = 6;
+
+    store->resize(num_metrics);
+
+    int start_idx = 0;
+    int expected_num = num_metrics;
+
+    if (!ReadFileToLongsCheck(path, store, start_idx, " ", 1, expected_num, true)) {
+        ALOGI("Unable to read %s for the direct reclaim info.", path.c_str());
+    }
+}
+
+/**
+ * This function fills atom values (values) from acquired compaction duration
+ * information from vector store
+ *
+ * store: the already collected (by readCompactionDurationStat()) compaction
+ *        duration information
+ * values: the atom value vector to be filled.
+ */
+void MmMetricsReporter::fillCompactionDurationStatAtom(const std::vector<long> &store,
+                                                       std::vector<VendorAtomValue> *values) {
+    // first metric index
+    constexpr int start_idx = PixelMmMetricsPerDay::kCompactionTotalTimeFieldNumber;
+    constexpr int num_metrics = 6;
+
+    if (!MmMetricsSupported())
+        return;
+
+    int size = start_idx + num_metrics - kVendorAtomOffset;
+    if (values->size() < size)
+        values->resize(size);
+
+    for (int i = 0; i < num_metrics; i++) {
+        VendorAtomValue tmp;
+        if (store[i] == -1) {
+            tmp.set<VendorAtomValue::longValue>(0);
+        } else {
+            tmp.set<VendorAtomValue::longValue>(store[i] - prev_compaction_duration_[i]);
+            prev_compaction_duration_[i] = store[i];
+        }
+        (*values)[start_idx + i] = tmp;
+    }
+    prev_compaction_duration_ = store;
 }
 
 /**
