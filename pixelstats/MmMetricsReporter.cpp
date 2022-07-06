@@ -54,13 +54,13 @@ const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetric
         {"nr_anon_pages", PixelMmMetricsPerHour::kAnonPagesFieldNumber, false},
         {"nr_file_pages", PixelMmMetricsPerHour::kFilePagesFieldNumber, false},
         {"nr_slab_reclaimable", PixelMmMetricsPerHour::kSlabReclaimableFieldNumber, false},
+        {"nr_slab_unreclaimable", PixelMmMetricsPerHour::kSlabUnreclaimableFieldNumber, false},
         {"nr_zspages", PixelMmMetricsPerHour::kZspagesFieldNumber, false},
         {"nr_unevictable", PixelMmMetricsPerHour::kUnevictableFieldNumber, false},
 };
 
 const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetricsPerDayInfo = {
         {"workingset_refault", PixelMmMetricsPerDay::kWorkingsetRefaultFieldNumber, true},
-        {"workingset_refault_file", PixelMmMetricsPerDay::kWorkingsetRefaultFieldNumber, true},
         {"pswpin", PixelMmMetricsPerDay::kPswpinFieldNumber, true},
         {"pswpout", PixelMmMetricsPerDay::kPswpoutFieldNumber, true},
         {"allocstall_dma", PixelMmMetricsPerDay::kAllocstallDmaFieldNumber, true},
@@ -79,6 +79,18 @@ const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetric
         {"pgalloc_costly_order", PixelMmMetricsPerDay::kPgallocHighFieldNumber, true},
         {"pgcache_hit", PixelMmMetricsPerDay::kPgcacheHitFieldNumber, true},
         {"pgcache_miss", PixelMmMetricsPerDay::kPgcacheMissFieldNumber, true},
+        {"workingset_refault_file", PixelMmMetricsPerDay::kWorkingsetRefaultFileFieldNumber, true},
+        {"workingset_refault_anon", PixelMmMetricsPerDay::kWorkingsetRefaultAnonFieldNumber, true},
+        {"compact_success", PixelMmMetricsPerDay::kCompactSuccessFieldNumber, true},
+        {"compact_fail", PixelMmMetricsPerDay::kCompactFailFieldNumber, true},
+        {"kswapd_low_wmark_hit_quickly", PixelMmMetricsPerDay::kKswapdLowWmarkHqFieldNumber, true},
+        {"kswapd_high_wmark_hit_quickly", PixelMmMetricsPerDay::kKswapdHighWmarkHqFieldNumber,
+         true},
+        {"thp_file_alloc", PixelMmMetricsPerDay::kThpFileAllocFieldNumber, true},
+        {"thp_zero_page_alloc", PixelMmMetricsPerDay::kThpZeroPageAllocFieldNumber, true},
+        {"thp_split_page", PixelMmMetricsPerDay::kThpSplitPageFieldNumber, true},
+        {"thp_migration_split", PixelMmMetricsPerDay::kThpMigrationSplitFieldNumber, true},
+        {"thp_deferred_split_page", PixelMmMetricsPerDay::kThpDeferredSplitPageFieldNumber, true},
 };
 
 const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kCmaStatusInfo = {
