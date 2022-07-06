@@ -18,6 +18,7 @@
 
 #include <aidl/android/frameworks/stats/IStats.h>
 #include <android-base/file.h>
+#include <android-base/parsedouble.h>
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
@@ -272,7 +273,7 @@ void MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics
         if (max_idx < entry.atom_key)
             max_idx = entry.atom_key;
     }
-    int size = max_idx - kVendorAtomOffset + 1;
+    unsigned int size = max_idx - kVendorAtomOffset + 1;
     if (atom_values->size() < size)
         atom_values->resize(size, tmp);
 
@@ -301,6 +302,10 @@ void MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics
     (*prev_mm_metrics) = mm_metrics;
 }
 
+void MmMetricsReporter::aggregatePixelMmMetricsPer5Min() {
+    aggregatePressureStall();
+}
+
 void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &stats_client) {
     if (!MmMetricsSupported())
         return;
@@ -324,6 +329,7 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
     values[PixelMmMetricsPerHour::kIonTotalPoolsFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::longValue>(gpu_memory);
     values[PixelMmMetricsPerHour::kGpuMemoryFieldNumber - kVendorAtomOffset] = tmp;
+    fillPressureStallAtom(&values);
 
     // Send vendor atom to IStats HAL
     reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerHour, values,
@@ -496,6 +502,431 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
         cma_stat[entry.name] = file_contents;
     }
     return cma_stat;
+}
+
+/**
+ * This function reads pressure (PSI) files (loop thru all 3 files: cpu, io, and
+ * memory) and calls the parser to parse and store the metric values.
+ * Note that each file have two lines (except cpu has one line only): one with
+ * a leading "full", and the other with a leading "some", showing the category
+ * for that line.
+ * A category has 4 metrics, avg10, avg60, avg300, and total.
+ * i.e. the moving average % of PSI in 10s, 60s, 300s time window plus lastly
+ * the total stalled time, except that 'cpu' has no 'full' category.
+ * In total, we have 3 x 2 x 4 - 4 = 24 - 4  = 20 metrics, arranged in
+ * the order of
+ *
+ *    cpu_some_avg<xyz>
+ *    cpu_some_total
+ *    io_full_avg<xyz>
+ *    io_full_total
+ *    io_some_avg<xyz>
+ *    io_some_total
+ *    mem_full_avg<xyz>
+ *    mem_full_total
+ *    mem_some_avg<xyz>
+ *    mem_some_total
+ *
+ *    where <xyz>=10, 60, 300 in the order as they appear.
+ *
+ *    Note that for those avg values (i.e.  <abc>_<def>_avg<xyz>), they
+ *    are in percentage with 2-decimal digit accuracy.  We will use an
+ *    integer in 2-decimal fixed point format to represent the values.
+ *    i.e. value x 100, or to cope with floating point errors,
+ *         floor(value x 100 + 0.5)
+ *
+ *    In fact, in newer kernels, "cpu" PSI has no "full" category.  Some
+ *    old kernel has them all zeros, to keep backward compatibility.  The
+ *    parse function called by this function is able to detect and ignore
+ *    the "cpu, full" category.
+ *
+ *    sample pressure stall files:
+ *    /proc/pressure # cat cpu
+ *    some avg10=2.93 avg60=3.17 avg300=3.15 total=94628150260
+ *    /proc/pressure # cat io
+ *    some avg10=1.06 avg60=1.15 avg300=1.18 total=37709873805
+ *    full avg10=1.06 avg60=1.10 avg300=1.11 total=36592322936
+ *    /proc/pressure # cat memory
+ *    some avg10=0.00 avg60=0.00 avg300=0.00 total=29705314
+ *    full avg10=0.00 avg60=0.00 avg300=0.00 total=17234456
+ *
+ *    PSI information definitions could be found at
+ *    https://www.kernel.org/doc/html/latest/accounting/psi.html
+ *
+ * basePath: the base path to the pressure stall information
+ * store: pointer to the vector to store the 20 metrics in the mentioned
+ *        order
+ */
+void MmMetricsReporter::readPressureStall(const char *basePath, std::vector<long> *store) {
+    constexpr int kTypeIdxCpu = 0;
+
+    // Callers should have already prepared this, but we resize it here for safety
+    store->resize(kPsiNumAllMetrics);
+    std::fill(store->begin(), store->end(), -1);
+
+    // To make the process unified, we prepend an imaginary "cpu + full"
+    // type-category combination.  Now, each file (cpu, io, memnry) contains
+    // two categories, i.e. "full" and "some".
+    // Each category has <kPsiNumNames> merics and thus need that many entries
+    // to store them, except that the first category (the imaginary one) do not
+    // need any storage. So we set the save index for the 1st file ("cpu") to
+    // -kPsiNumNames.
+    int file_save_idx = -kPsiNumNames;
+
+    // loop thru all pressure stall files: cpu, io, memory
+    for (int type_idx = 0; type_idx < kPsiNumFiles;
+         ++type_idx, file_save_idx += kPsiMetricsPerFile) {
+        std::string file_contents;
+        std::string path = std::string("") + basePath + '/' + kPsiTypes[type_idx];
+
+        if (!ReadFileToString(path, &file_contents)) {
+            // Don't print this log if the file doesn't exist, since logs will be printed
+            // repeatedly.
+            if (errno != ENOENT)
+                ALOGI("Unable to read %s - %s", path.c_str(), strerror(errno));
+            goto err_out;
+        }
+        if (!MmMetricsReporter::parsePressureStallFileContent(type_idx == kTypeIdxCpu,
+                                                              file_contents, store, file_save_idx))
+            goto err_out;
+    }
+    return;
+
+err_out:
+    std::fill(store->begin(), store->end(), -1);
+}
+
+/*
+ * This function parses a pressure stall file, which contains two
+ * lines, i.e. the "full", and "some" lines, except that the 'cpu' file
+ * contains only one line ("some"). Refer to the function comments of
+ * readPressureStall() for pressure stall file format.
+ *
+ * For old kernel, 'cpu' file might contain an extra line for "full", which
+ * will be ignored.
+ *
+ * is_cpu: Is the data from the file 'cpu'
+ * lines: the file content
+ * store: the output vector to hold the parsed data.
+ * file_save_idx: base index to start saving 'store' vector for this file.
+ *
+ * Return value: true on success, false otherwise.
+ */
+bool MmMetricsReporter::parsePressureStallFileContent(bool is_cpu, std::string lines,
+                                                      std::vector<long> *store, int file_save_idx) {
+    constexpr int kNumOfWords = 5;  // expected number of words separated by spaces.
+    constexpr int kCategoryFull = 0;
+
+    std::istringstream data(lines);
+    std::string line;
+
+    while (std::getline(data, line)) {
+        int category_idx = 0;
+
+        line = android::base::Trim(line);
+        std::vector<std::string> words = android::base::Tokenize(line, " ");
+        if (words.size() != kNumOfWords) {
+            ALOGE("PSI parse fail: num of words = %d != expected %d",
+                  static_cast<int>(words.size()), kNumOfWords);
+            return false;
+        }
+
+        // words[0] should be either "full" or "some", the category name.
+        for (auto &cat : kPsiCategories) {
+            if (words[0].compare(cat) == 0)
+                break;
+            ++category_idx;
+        }
+        if (category_idx == kPsiNumCategories) {
+            ALOGE("PSI parse fail: unknown category %s", words[0].c_str());
+            return false;
+        }
+
+        // skip (cpu, full) combination.
+        if (is_cpu && category_idx == kCategoryFull) {
+            ALOGI("kernel: old PSI sysfs node.");
+            continue;
+        }
+
+        // Now we have separated words in a vector, e.g.
+        // ["some", "avg10=2.93", "avg60=3.17", "avg300=3.15",  total=94628150260"]
+        // call parsePressureStallWords to parse them.
+        int line_save_idx = file_save_idx + category_idx * kPsiNumNames;
+        if (!parsePressureStallWords(words, store, line_save_idx))
+            return false;
+    }
+    return true;
+}
+
+// This function parses the already split words, e.g.
+// ["some", "avg10=0.00", "avg60=0.00", "avg300=0.00", "total=29705314"],
+// from a line (category) in a pressure stall file.
+//
+// words: the split words in the form of "name=value"
+// store: the output vector
+// line_save_idx: the base start index to save in vector for this line (category)
+//
+// Return value: true on success, false otherwise.
+bool MmMetricsReporter::parsePressureStallWords(std::vector<std::string> words,
+                                                std::vector<long> *store, int line_save_idx) {
+    // Skip the first word, which is already parsed by the caller.
+    // All others are value pairs in "name=value" form.
+    // e.g. ["some", "avg10=0.00", "avg60=0.00", "avg300=0.00", "total=29705314"]
+    // "some" is skipped.
+    for (int i = 1; i < words.size(); ++i) {
+        std::vector<std::string> metric = android::base::Tokenize(words[i], "=");
+        if (metric.size() != 2) {
+            ALOGE("%s: parse error (name=value) @ idx %d", __FUNCTION__, i);
+            return false;
+        }
+        if (!MmMetricsReporter::savePressureMetrics(metric[0], metric[1], store, line_save_idx))
+            return false;
+    }
+    return true;
+}
+
+// This function parses one value pair in "name=value" format, and depending on
+// the name, save to its proper location in the store vector.
+// name = "avg10" -> save to index base_save_idx.
+// name = "avg60" -> save to index base_save_idx + 1.
+// name = "avg300" -> save to index base_save_idx + 2.
+// name = "total" -> save to index base_save_idx + 3.
+//
+// name: the metrics name
+// value: the metrics value
+// store: the output vector
+// base_save_idx: the base save index
+//
+// Return value: true on success, false otherwise.
+//
+bool MmMetricsReporter::savePressureMetrics(std::string name, std::string value,
+                                            std::vector<long> *store, int base_save_idx) {
+    int name_idx = 0;
+    constexpr int kNameIdxTotal = 3;
+
+    for (auto &mn : kPsiMetricNames) {
+        if (name.compare(mn) == 0)
+            break;
+        ++name_idx;
+    }
+    if (name_idx == kPsiNumNames) {
+        ALOGE("%s: parse error: unknown metric name.", __FUNCTION__);
+        return false;
+    }
+
+    long out;
+    if (name_idx == kNameIdxTotal) {
+        // 'total' metrics
+        unsigned long tmp;
+        if (!android::base::ParseUint(value, &tmp))
+            out = -1;
+        else
+            out = tmp;
+    } else {
+        // 'avg' metrics
+        double d = -1.0;
+        if (android::base::ParseDouble(value, &d))
+            out = static_cast<long>(d * 100 + 0.5);
+        else
+            out = -1;
+    }
+
+    if (base_save_idx + name_idx >= store->size()) {
+        // should never reach here
+        ALOGE("out of bound access to store[] (src line %d) @ index %d", __LINE__,
+              base_save_idx + name_idx);
+        return false;
+    } else {
+        (*store)[base_save_idx + name_idx] = out;
+    }
+    return true;
+}
+
+/**
+ * This function reads in the current pressure (PSI) information, and aggregates
+ * it (except for the "total" information, which will overwrite
+ * the previous value without aggregation.
+ *
+ * data are arranged in the following order, and must comply the order defined
+ * in the proto:
+ *
+ *    // note: these 5 'total' metrics are not aggregated.
+ *    cpu_some_total
+ *    io_full_total
+ *    io_some_total
+ *    mem_full_total
+ *    mem_some_total
+ *
+ *    //  9 aggregated metrics as above avg<xyz>_<aggregate>
+ *    //  where <xyz> = 10, 60, 300; <aggregate> = min, max, sum
+ *    cpu_some_avg10_min
+ *    cpu_some_avg10_max
+ *    cpu_some_avg10_sum
+ *    cpu_some_avg60_min
+ *    cpu_some_avg60_max
+ *    cpu_some_avg60_sum
+ *    cpu_some_avg300_min
+ *    cpu_some_avg300_max
+ *    cpu_some_avg300_sum
+ *
+ *    // similar 9 metrics as above avg<xyz>_<aggregate>
+ *    io_full_avg<xyz>_<aggregate>
+ *
+ *    // similar 9 metrics as above avg<xyz>_<aggregate>
+ *    io_some_avg<xyz>_<aggregate>
+ *
+ *    // similar 9 metrics as above avg<xyz>_<aggregate>
+ *    mem_full_avg<xyz>_<aggregate>
+ *
+ *    // similar 9 metrics as above avg<xyz>_<aggregate>
+ *    mem_some_avg<xyz>_<aggregate>
+ *
+ * In addition, it increases psi_data_set_count_ by 1 (in order to calculate
+ * the average from the "_sum" aggregate.)
+ */
+void MmMetricsReporter::aggregatePressureStall() {
+    constexpr int kFirstTotalOffset = kPsiNumAvgs;
+
+    if (!MmMetricsSupported())
+        return;
+
+    std::vector<long> psi(kPsiNumAllMetrics, -1);
+    readPressureStall(kPsiBasePath, &psi);
+
+    // Pre-check for possible later out of bound error, if readPressureStall()
+    // decreases the vector size.
+    // It's for safety only.  The condition should never be true.
+    if (psi.size() != kPsiNumAllMetrics) {
+        ALOGE("Wrong psi[] size %d != expected %d after read.", static_cast<int>(psi.size()),
+              kPsiNumAllMetrics);
+        return;
+    }
+
+    // check raw metrics and preventively handle errors: Although we don't expect read sysfs
+    // node could fail.  Discard all current readings on any error.
+    for (int i = 0; i < kPsiNumAllMetrics; ++i) {
+        if (psi[i] == -1) {
+            ALOGE("Bad data @ psi[%ld] = -1", psi[i]);
+            goto err_out;
+        }
+    }
+
+    // "total" metrics are accumulative: just replace the previous accumulation.
+    for (int i = 0; i < kPsiNumAllTotals; ++i) {
+        int psi_idx;
+
+        psi_idx = i * kPsiNumNames + kFirstTotalOffset;
+        if (psi_idx >= psi.size()) {
+            // should never reach here
+            ALOGE("out of bound access to psi[] (src line %d) @ index %d", __LINE__, psi_idx);
+            goto err_out;
+        } else {
+            psi_total_[i] = psi[psi_idx];
+        }
+    }
+
+    // "avg" metrics will be aggregated to min, max and sum
+    // later on, the sum will be divided by psi_data_set_count_ to get the average.
+    int aggr_idx;
+    aggr_idx = 0;
+    for (int psi_idx = 0; psi_idx < kPsiNumAllMetrics; ++psi_idx) {
+        if (psi_idx % kPsiNumNames == kFirstTotalOffset)
+            continue;  // skip 'total' metrics, already processed.
+
+        if (aggr_idx + 3 > kPsiNumAllUploadAvgMetrics) {
+            // should never reach here
+            ALOGE("out of bound access to psi_aggregated_[] (src line %d) @ index %d ~ %d",
+                  __LINE__, aggr_idx, aggr_idx + 2);
+            return;  // give up avgs, but keep totals (so don't go err_out
+        }
+
+        long value = psi[psi_idx];
+        if (psi_data_set_count_ == 0) {
+            psi_aggregated_[aggr_idx++] = value;
+            psi_aggregated_[aggr_idx++] = value;
+            psi_aggregated_[aggr_idx++] = value;
+        } else {
+            psi_aggregated_[aggr_idx++] = std::min(value, psi_aggregated_[aggr_idx]);
+            psi_aggregated_[aggr_idx++] = std::max(value, psi_aggregated_[aggr_idx]);
+            psi_aggregated_[aggr_idx++] += value;
+        }
+    }
+    ++psi_data_set_count_;
+    return;
+
+err_out:
+    for (int i = 0; i < kPsiNumAllTotals; ++i) psi_total_[i] = -1;
+}
+
+/**
+ * This function fills atom values (values) from psi_aggregated_[]
+ *
+ * values: the atom value vector to be filled.
+ */
+void MmMetricsReporter::fillPressureStallAtom(std::vector<VendorAtomValue> *values) {
+    constexpr int avg_of_avg_offset = 2;
+    constexpr int total_start_idx =
+            PixelMmMetricsPerHour::kPsiCpuSomeTotalFieldNumber - kVendorAtomOffset;
+    constexpr int avg_start_idx = total_start_idx + kPsiNumAllTotals;
+
+    if (!MmMetricsSupported())
+        return;
+
+    VendorAtomValue tmp;
+
+    // The caller should have setup the correct total size,
+    // but we check and extend the size when it's too small for safety.
+    unsigned int min_value_size = total_start_idx + kPsiNumAllUploadMetrics;
+    if (values->size() < min_value_size)
+        values->resize(min_value_size);
+
+    // "total" metric
+    int metric_idx = total_start_idx;
+    for (int save = 0; save < kPsiNumAllTotals; ++save, ++metric_idx) {
+        if (psi_data_set_count_ == 0)
+            psi_total_[save] = -1;  // no data: invalidate the current total
+
+        // A good difference needs a good previous value and a good current value.
+        if (psi_total_[save] != -1 && prev_psi_total_[save] != -1)
+            tmp.set<VendorAtomValue::longValue>(psi_total_[save] - prev_psi_total_[save]);
+        else
+            tmp.set<VendorAtomValue::longValue>(-1);
+
+        prev_psi_total_[save] = psi_total_[save];
+        if (metric_idx >= values->size()) {
+            // should never reach here
+            ALOGE("out of bound access to value[] for psi-total @ index %d", metric_idx);
+            goto cleanup;
+        } else {
+            (*values)[metric_idx] = tmp;
+        }
+    }
+
+    // "avg" metrics -> aggregate to min,  max, and avg of the original avg
+    metric_idx = avg_start_idx;
+    for (int save = 0; save < kPsiNumAllUploadAvgMetrics; ++save, ++metric_idx) {
+        if (psi_data_set_count_) {
+            if (save % kPsiNumOfAggregatedType == avg_of_avg_offset) {
+                // avg of avg
+                tmp.set<VendorAtomValue::intValue>(psi_aggregated_[save] / psi_data_set_count_);
+            } else {
+                // min or max of avg
+                tmp.set<VendorAtomValue::intValue>(psi_aggregated_[save]);
+            }
+        } else {
+            tmp.set<VendorAtomValue::intValue>(-1);
+        }
+        if (metric_idx >= values->size()) {
+            // should never reach here
+            ALOGE("out of bound access to value[] for psi-avg @ index %d", metric_idx);
+            goto cleanup;
+        } else {
+            (*values)[metric_idx] = tmp;
+        }
+    }
+
+cleanup:
+    psi_data_set_count_ = 0;
 }
 
 /**

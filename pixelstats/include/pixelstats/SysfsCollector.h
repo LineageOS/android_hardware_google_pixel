@@ -69,6 +69,7 @@ class SysfsCollector {
   private:
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
+    void aggregatePer5Min();
     void logPerDay();
     void logPerHour();
 
