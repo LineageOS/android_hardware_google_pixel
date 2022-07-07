@@ -201,11 +201,12 @@ void ChargeStatsReporter::ReportVoltageTierStats(const std::shared_ptr<IStats> &
 void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
                                          const std::string &path) {
     std::string file_contents, line, wfile_contents, wline_at, wline_ac, pca_file_contents,
-            pca_line, thermal_file_contents;
+            pca_line, thermal_file_contents, gcharger_file_contents;
     std::istringstream ss;
     bool has_wireless = wireless_charge_stats_.CheckWirelessContentsAndAck(&wfile_contents);
     bool has_pca = pca_charge_stats_.CheckPcaContentsAndAck(&pca_file_contents);
-    bool has_thermal = checkThermalContentsAndAck(&thermal_file_contents);
+    bool has_thermal = checkContentsAndAck(&thermal_file_contents, kThermalChargeMetricsPath);
+    bool has_gcharger = checkContentsAndAck(&gcharger_file_contents, kGChargerMetricsPath);
 
     if (!ReadFileToString(path.c_str(), &file_contents)) {
         ALOGE("Unable to read %s - %s", path.c_str(), strerror(errno));
@@ -255,15 +256,23 @@ void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_cl
             ReportVoltageTierStats(stats_client, line.c_str());
         }
     }
+
+    if (has_gcharger) {
+        std::istringstream wss;
+        wss.str(gcharger_file_contents);
+        while (std::getline(wss, line)) {
+            ReportVoltageTierStats(stats_client, line.c_str());
+        }
+    }
 }
 
-bool ChargeStatsReporter::checkThermalContentsAndAck(std::string *file_contents) {
-    if (!ReadFileToString(kThermalChargeMetricsPath.c_str(), file_contents)) {
+bool ChargeStatsReporter::checkContentsAndAck(std::string *file_contents, const std::string &path) {
+    if (!ReadFileToString(path.c_str(), file_contents)) {
         return false;
     }
 
-    if (!WriteStringToFile("0", kThermalChargeMetricsPath.c_str())) {
-        ALOGE("Couldn't clear %s - %s", kThermalChargeMetricsPath.c_str(), strerror(errno));
+    if (!WriteStringToFile("0", path.c_str())) {
+        ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
         return false;
     }
     return true;
