@@ -37,7 +37,7 @@ class ChargeStatsReporter {
     void checkAndReport(const std::shared_ptr<IStats> &stats_client, const std::string &path);
 
   private:
-    bool checkThermalContentsAndAck(std::string *file_contents);
+    bool checkContentsAndAck(std::string *file_contents, const std::string &path);
     void ReportVoltageTierStats(const std::shared_ptr<IStats> &stats_client, const char *line,
                                 const bool has_wireless, const std::string &wfile_contents);
     void ReportChargeStats(const std::shared_ptr<IStats> &stats_client, const std::string line,
@@ -54,6 +54,8 @@ class ChargeStatsReporter {
 
     const std::string kThermalChargeMetricsPath =
             "/sys/devices/platform/google,charger/thermal_stats";
+
+    const std::string kGChargerMetricsPath = "/sys/devices/platform/google,charger/charge_stats";
 };
 
 }  // namespace pixel
