@@ -17,6 +17,42 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+soong_config_module_type {
+    name: "haptics_feature_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "haptics",
+    variables: [
+        "actuator_model",
+    ],
+    properties: ["cflags"],
+}
+
+soong_config_string_variable {
+    name: "actuator_model",
+    values: [
+        "luxshare_ict_081545",
+        "luxshare_ict_lt_xlra1906d",
+    ],
+}
+
+haptics_feature_cc_defaults {
+    name: "haptics_feature_defaults",
+    soong_config_variables: {
+        actuator_model: {
+            luxshare_ict_081545: {
+                cflags: [
+                    "-DLUXSHARE_ICT_081545",
+                ],
+            },
+            luxshare_ict_lt_xlra1906d: {
+                cflags: [
+                    "-DLUXSHARE_ICT_LT_XLRA1906D",
+                ],
+            },
+        },
+    },
+}
+
 cc_library {
     name: "PixelVibratorCommon",
     srcs: [

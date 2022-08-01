@@ -57,7 +57,10 @@ cc_defaults {
 
 cc_library {
     name: "android.hardware.vibrator-impl.cs40l26",
-    defaults: ["VibratorHalCs40l26BinaryDefaults"],
+    defaults: [
+        "VibratorHalCs40l26BinaryDefaults",
+        "haptics_feature_defaults",
+    ],
     srcs: ["Vibrator.cpp"],
     export_include_dirs: ["."],
     vendor_available: true,
