@@ -16,6 +16,7 @@
 
 #include "Vibrator.h"
 
+#include <android-base/properties.h>
 #include <glob.h>
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
@@ -27,6 +28,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 
 #ifndef ARRAY_SIZE
@@ -66,6 +68,14 @@ static constexpr int32_t COMPOSE_PWLE_SIZE_MAX_DEFAULT = 127;
 // See the LRA Calibration Support documentation for more details.
 static constexpr int32_t Q14_BIT_SHIFT = 14;
 
+// Measured ReDC. The LRA series resistance (ReDC), expressed as follows
+// redc(ohms) = redc_measured / 2^Q15_BIT_SHIFT.
+// This value represents the unit-specific ReDC input to the click compensation
+// algorithm. It can be overwritten at a later time by writing to the redc_stored
+// sysfs control.
+// See the LRA Calibration Support documentation for more details.
+static constexpr int32_t Q15_BIT_SHIFT = 15;
+
 // Measured Q factor, q_measured, is represented by Q8.16 fixed
 // point format on cs40l26 devices. The expression to calculate q is:
 //   q = q_measured / 2^Q16_BIT_SHIFT
@@ -81,11 +91,12 @@ static constexpr uint8_t PWLE_AMP_REG_BIT = 0x2;
 
 static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
-static constexpr float CS40L26_PWLE_LEVEL_MIX = -1.0;
+static constexpr float CS40L26_PWLE_LEVEL_MIN = -1.0;
 static constexpr float CS40L26_PWLE_LEVEL_MAX = 0.9995118;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 1.00;
-static constexpr float PWLE_FREQUENCY_MIN_HZ = 1.00;
-static constexpr float PWLE_FREQUENCY_MAX_HZ = 1000.00;
+static constexpr float PWLE_FREQUENCY_MIN_HZ = 30.0f;
+static constexpr float RESONANT_FREQUENCY_DEFAULT = 145.0f;
+static constexpr float PWLE_FREQUENCY_MAX_HZ = 300.0f;
 static constexpr float PWLE_BW_MAP_SIZE =
         1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 
@@ -222,6 +233,22 @@ static int dspmem_chunk_flush(struct dspmem_chunk *ch) {
     return dspmem_chunk_write(ch, 24 - ch->cachebits, 0);
 }
 
+// Discrete points of frequency:max_level pairs around resonant(145Hz default) frequency
+// Initialize the actuator LUXSHARE_ICT_081545 limits to 0.447 and others 1.0
+#if defined(LUXSHARE_ICT_081545)
+static std::map<float, float> discretePwleMaxLevels = {
+        {120.0, 0.447}, {130.0, 0.346}, {140.0, 0.156}, {145.0, 0.1},
+        {150.0, 0.167}, {160.0, 0.391}, {170.0, 0.447}};
+std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 0.447);
+#else
+static std::map<float, float> discretePwleMaxLevels = {};
+std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 1.0);
+#endif
+
+static float redcToFloat(std::string *caldata) {
+    return static_cast<float>(std::stoul(*caldata, nullptr, 16)) / (1 << Q15_BIT_SHIFT);
+}
+
 Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
     int32_t longFrequencyShift;
@@ -321,9 +348,16 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
 
     if (mHwCal->getF0(&caldata)) {
         mHwApi->setF0(caldata);
+        mResonantFrequency =
+                static_cast<float>(std::stoul(caldata, nullptr, 16)) / (1 << Q14_BIT_SHIFT);
+    } else {
+        ALOGE("Failed to get resonant frequency (%d): %s, using default resonant HZ: %f", errno,
+              strerror(errno), RESONANT_FREQUENCY_DEFAULT);
+        mResonantFrequency = RESONANT_FREQUENCY_DEFAULT;
     }
     if (mHwCal->getRedc(&caldata)) {
         mHwApi->setRedc(caldata);
+        mRedc = redcToFloat(&caldata);
     }
     if (mHwCal->getQ(&caldata)) {
         mHwApi->setQ(caldata);
@@ -369,6 +403,9 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     }
 
     mHwApi->setMinOnOffInterval(MIN_ON_OFF_INTERVAL_US);
+
+    createPwleMaxLevelLimitMap();
+    createBandwidthAmplitudeMap();
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
@@ -728,12 +765,7 @@ ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t id) {
 }
 
 ndk::ScopedAStatus Vibrator::getResonantFrequency(float *resonantFreqHz) {
-    std::string caldata{8, '0'};
-    if (!mHwCal->getF0(&caldata)) {
-        ALOGE("Failed to get resonant frequency (%d): %s", errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
-    *resonantFreqHz = static_cast<float>(std::stoul(caldata, nullptr, 16)) / (1 << Q14_BIT_SHIFT);
+    *resonantFreqHz = mResonantFrequency;
 
     return ndk::ScopedAStatus::ok();
 }
@@ -771,14 +803,136 @@ ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
     }
 }
 
+void Vibrator::createPwleMaxLevelLimitMap() {
+    int32_t capabilities;
+    Vibrator::getCapabilities(&capabilities);
+    if (!(capabilities & IVibrator::CAP_FREQUENCY_CONTROL)) {
+        ALOGE("Frequency control not support.");
+        return;
+    }
+
+    if (discretePwleMaxLevels.empty()) {
+        ALOGE("Discrete PWLE max level maps are empty.");
+        return;
+    }
+
+    int32_t pwleMaxLevelLimitMapIdx = 0;
+    std::map<float, float>::iterator itr0 = discretePwleMaxLevels.begin();
+    if (discretePwleMaxLevels.size() == 1) {
+        ALOGD("Discrete PWLE max level map size is 1");
+        pwleMaxLevelLimitMapIdx =
+                (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
+        pwleMaxLevelLimitMap[pwleMaxLevelLimitMapIdx] = itr0->second;
+        return;
+    }
+
+    auto itr1 = std::next(itr0, 1);
+
+    while (itr1 != discretePwleMaxLevels.end()) {
+        float x0 = itr0->first;
+        float y0 = itr0->second;
+        float x1 = itr1->first;
+        float y1 = itr1->second;
+        const float ratioOfXY = ((y1 - y0) / (x1 - x0));
+        pwleMaxLevelLimitMapIdx =
+                (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
+
+        for (float xp = x0; xp < (x1 + PWLE_FREQUENCY_RESOLUTION_HZ);
+             xp += PWLE_FREQUENCY_RESOLUTION_HZ) {
+            float yp = y0 + ratioOfXY * (xp - x0);
+
+            pwleMaxLevelLimitMap[pwleMaxLevelLimitMapIdx++] = yp;
+        }
+
+        itr0++;
+        itr1++;
+    }
+}
+
+void Vibrator::createBandwidthAmplitudeMap() {
+    // Use constant Q Factor of 10 from HW's suggestion
+    const float qFactor = 10.0f;
+    const float blSys = 1.1f;
+    const float gravity = 9.81f;
+    const float maxVoltage = 11.0f;
+    float deviceMass = 0, locCoeff = 0;
+
+    mHwCal->getDeviceMass(&deviceMass);
+    mHwCal->getLocCoeff(&locCoeff);
+    if (!deviceMass || !locCoeff) {
+        ALOGE("Failed to get Device Mass: %f and Loc Coeff: %f", deviceMass, locCoeff);
+        return;
+    }
+
+    // Resistance value need to be retrieved from calibration file
+    if (mRedc == 0.0) {
+        std::string caldata{8, '0'};
+        if (mHwCal->getRedc(&caldata)) {
+            mHwApi->setRedc(caldata);
+            mRedc = redcToFloat(&caldata);
+        } else {
+            ALOGE("Failed to get resistance value from calibration file");
+            return;
+        }
+    }
+
+    std::vector<float> bandwidthAmplitudeMap(PWLE_BW_MAP_SIZE, 1.0);
+
+    const float wnSys = mResonantFrequency * 2 * M_PI;
+    const float powWnSys = pow(wnSys, 2);
+    const float var2Para = wnSys / qFactor;
+
+    float frequencyHz = PWLE_FREQUENCY_MIN_HZ;
+    float frequencyRadians = 0.0f;
+    float vLevel = 0.4473f;
+    float vSys = (mLongEffectVol[1] / 100.0) * maxVoltage * vLevel;
+    float maxAsys = 0;
+    const float amplitudeSysPara = blSys * locCoeff / mRedc / deviceMass;
+
+    for (int i = 0; i < PWLE_BW_MAP_SIZE; i++) {
+        frequencyRadians = frequencyHz * 2 * M_PI;
+        vLevel = pwleMaxLevelLimitMap[i];
+        vSys = (mLongEffectVol[1] / 100.0) * maxVoltage * vLevel;
+
+        float var1 = pow((powWnSys - pow(frequencyRadians, 2)), 2);
+        float var2 = pow((var2Para * frequencyRadians), 2);
+
+        float psysAbs = sqrt(var1 + var2);
+        // The equation and all related details can be found in the bug
+        float amplitudeSys =
+                (vSys * amplitudeSysPara) * pow(frequencyRadians, 2) / psysAbs / gravity;
+        // Record the maximum acceleration for the next for loop
+        if (amplitudeSys > maxAsys)
+            maxAsys = amplitudeSys;
+
+        bandwidthAmplitudeMap[i] = amplitudeSys;
+        frequencyHz += PWLE_FREQUENCY_RESOLUTION_HZ;
+    }
+    // Scaled the map between 0 and 1.0
+    if (maxAsys > 0) {
+        for (int j = 0; j < PWLE_BW_MAP_SIZE; j++) {
+            bandwidthAmplitudeMap[j] =
+                    std::floor((bandwidthAmplitudeMap[j] / maxAsys) * 1000) / 1000;
+        }
+        mBandwidthAmplitudeMap = bandwidthAmplitudeMap;
+        mCreateBandwidthAmplitudeMapDone = true;
+    } else {
+        mCreateBandwidthAmplitudeMapDone = false;
+    }
+}
+
 ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_return) {
-    // TODO(b/170919640): complete implementation
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
-        std::vector<float> bandwidthAmplitudeMap(PWLE_BW_MAP_SIZE, 1.0);
-        *_aidl_return = bandwidthAmplitudeMap;
-        return ndk::ScopedAStatus::ok();
+        if (!mCreateBandwidthAmplitudeMapDone) {
+            createPwleMaxLevelLimitMap();
+            createBandwidthAmplitudeMap();
+        }
+        *_aidl_return = mBandwidthAmplitudeMap;
+        return (!mBandwidthAmplitudeMap.empty())
+                       ? ndk::ScopedAStatus::ok()
+                       : ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     } else {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
@@ -849,7 +1003,7 @@ static int constructActiveSegment(dspmem_chunk *ch, int duration, float amplitud
     uint16_t freq = 0;
     uint8_t flags = 0x0;
     if ((floatToUint16(duration, &delay, 4, 0.0f, COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) < 0) ||
-        (floatToUint16(amplitude, &amp, 2048, CS40L26_PWLE_LEVEL_MIX, CS40L26_PWLE_LEVEL_MAX) <
+        (floatToUint16(amplitude, &amp, 2048, CS40L26_PWLE_LEVEL_MIN, CS40L26_PWLE_LEVEL_MAX) <
          0) ||
         (floatToUint16(frequency, &freq, 4, PWLE_FREQUENCY_MIN_HZ, PWLE_FREQUENCY_MAX_HZ) < 0)) {
         ALOGE("Invalid argument: %d, %f, %f", duration, amplitude, frequency);

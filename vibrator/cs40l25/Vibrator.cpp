@@ -106,9 +106,9 @@ static constexpr float PWLE_LEVEL_MIN = 0.0f;
 static constexpr float PWLE_LEVEL_MAX = 1.0f;
 static constexpr float CS40L2X_PWLE_LEVEL_MAX = 0.99f;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 1.0f;
-static constexpr float PWLE_FREQUENCY_MIN_HZ = 1.0f;
+static constexpr float PWLE_FREQUENCY_MIN_HZ = 30.0f;
 static constexpr float RESONANT_FREQUENCY_DEFAULT = 145.0f;
-static constexpr float PWLE_FREQUENCY_MAX_HZ = 999.0f;
+static constexpr float PWLE_FREQUENCY_MAX_HZ = 300.0f;
 static constexpr float PWLE_BW_MAP_SIZE =
     1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 static constexpr float RAMP_DOWN_CONSTANT = 1048.576f;
@@ -128,13 +128,11 @@ static uint8_t amplitudeToScale(float amplitude, float maximum) {
 }
 
 // Discrete points of frequency:max_level pairs as recommended by the document
-// [R4O6] Max. Allowable Chirp Levels (go/r4o6-max-chirp-levels) around resonant frequency
 #if defined(LUXSHARE_ICT_081545)
 static std::map<float, float> discretePwleMaxLevels = {{120.0, 0.4},  {130.0, 0.31}, {140.0, 0.14},
                                                        {145.0, 0.09}, {150.0, 0.15}, {160.0, 0.35},
                                                        {170.0, 0.4}};
 // Discrete points of frequency:max_level pairs as recommended by the document
-// [P7] Max. Allowable Chirp Levels (go/p7-max-chirp-levels) around resonant frequency
 #elif defined(LUXSHARE_ICT_LT_XLRA1906D)
 static std::map<float, float> discretePwleMaxLevels = {{145.0, 0.38}, {150.0, 0.35}, {160.0, 0.35},
                                                        {170.0, 0.15}, {180.0, 0.35}, {190.0, 0.35},
@@ -143,12 +141,10 @@ static std::map<float, float> discretePwleMaxLevels = {{145.0, 0.38}, {150.0, 0.
 static std::map<float, float> discretePwleMaxLevels = {};
 #endif
 
-// Initialize all limits to 0.4 according to the document [R4O6] Max. Allowable Chirp Levels
-// (go/r4o6-max-chirp-levels)
+// Initialize all limits to 0.4 according to the document Max. Allowable Chirp Levels
 #if defined(LUXSHARE_ICT_081545)
 std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 0.4);
-// Initialize all limits to 0.38 according to the document [P7] Max. Allowable Chirp Levels
-// (go/p7-max-chirp-levels)
+// Initialize all limits to 0.38 according to the document Max. Allowable Chirp Levels
 #elif defined(LUXSHARE_ICT_LT_XLRA1906D)
 std::vector<float> pwleMaxLevelLimitMap(PWLE_BW_MAP_SIZE, 0.38);
 #else
@@ -278,12 +274,12 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         mCompositionSizeMax = COMPOSE_PWLE_SIZE_LIMIT;
     }
 
+    mIsChirpEnabled = mHwCal->isChirpEnabled();
     createPwleMaxLevelLimitMap();
     mGenerateBandwidthAmplitudeMapDone = false;
     mBandwidthAmplitudeMap = generateBandwidthAmplitudeMap();
     mIsUnderExternalControl = false;
     setPwleRampDown();
-    mIsChirpEnabled = mHwCal->isChirpEnabled();
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {

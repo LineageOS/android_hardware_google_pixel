@@ -101,6 +101,10 @@ class Vibrator : public BnVibrator {
         virtual bool getQ(std::string *value) = 0;
         // Obtains frequency shift for long vibrations.
         virtual bool getLongFrequencyShift(int32_t *value) = 0;
+        // Obtains device mass for calculating the bandwidth amplitude map
+        virtual bool getDeviceMass(float *value) = 0;
+        // Obtains loc coeff for calculating the bandwidth amplitude map
+        virtual bool getLocCoeff(float *value) = 0;
         // Obtains the v0/v1(min/max) voltage levels to be applied for
         // tick/click/long in units of 1%.
         virtual bool getTickVolLevels(std::array<uint32_t, 2> *value) = 0;
@@ -177,6 +181,8 @@ class Vibrator : public BnVibrator {
     bool findHapticAlsaDevice(int *card, int *device);
     bool hasHapticAlsaDevice();
     bool enableHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card, int device);
+    void createPwleMaxLevelLimitMap();
+    void createBandwidthAmplitudeMap();
 
     std::unique_ptr<HwApi> mHwApi;
     std::unique_ptr<HwCal> mHwCal;
@@ -197,8 +203,12 @@ class Vibrator : public BnVibrator {
     float mLongEffectScale = 1.0;
     bool mIsChirpEnabled;
     uint32_t mSupportedPrimitivesBits = 0x0;
+    float mRedc{0};
+    float mResonantFrequency{0};
     std::vector<CompositePrimitive> mSupportedPrimitives;
     bool mConfigHapticAlsaDeviceDone{false};
+    std::vector<float> mBandwidthAmplitudeMap{};
+    bool mCreateBandwidthAmplitudeMapDone{false};
 };
 
 }  // namespace vibrator
