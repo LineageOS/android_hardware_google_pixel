@@ -120,6 +120,10 @@ message ChargeStats {
         ADAPTER_TYPE_WPC_10W = 23;
         ADAPTER_TYPE_WPC_BPP = 24;
         ADAPTER_TYPE_WPC_L7 = 25;
+        ADAPTER_TYPE_EXT = 26;
+        ADAPTER_TYPE_EXT1 = 27;
+        ADAPTER_TYPE_EXT2 = 28;
+        ADAPTER_TYPE_EXT_UNKNOWN = 29;
     }
     optional string reverse_domain_name = 1;
     /* Type of charge adapter, enumerated above. */
