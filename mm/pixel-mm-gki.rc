@@ -19,8 +19,13 @@ on init
     # khugepaged tuning
     write /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 60000
 
-on property:persist.vendor.zram.size=*
-    setprop vendor.zram.size ${persist.vendor.zram.size}
+# Property from experiments - server config
+on property:persist.device_config.vendor_system_native_boot.zram_size=*
+    setprop vendor.zram.size ${persist.device_config.vendor_system_native_boot.zram_size}
+
+# Property for local test. It can overwrite the server side config
+on property:sys.boot_completed=1 && property:persist.vendor.boot.zram.size=*
+    setprop vendor.zram.size ${persist.vendor.boot.zram.size}
 
 on property:sys.boot_completed=1
     swapon_all /vendor/etc/fstab.zram.${vendor.zram.size}
