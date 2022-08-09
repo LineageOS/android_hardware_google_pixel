@@ -301,11 +301,17 @@ void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
             *dump_buf << "]" << std::endl;
             *dump_buf << "  Offset: " << sensor_info_pair.second.virtual_sensor_info->offset
                       << std::endl;
-            *dump_buf << "  Trigger Sensor: "
-                      << (sensor_info_pair.second.virtual_sensor_info->trigger_sensor.empty()
-                                  ? "N/A"
-                                  : sensor_info_pair.second.virtual_sensor_info->trigger_sensor)
-                      << std::endl;
+            *dump_buf << "  Trigger Sensor: ";
+            if (sensor_info_pair.second.virtual_sensor_info->trigger_sensors.empty()) {
+                *dump_buf << "N/A" << std::endl;
+            } else {
+                for (size_t i = 0;
+                     i < sensor_info_pair.second.virtual_sensor_info->trigger_sensors.size(); i++) {
+                    *dump_buf << sensor_info_pair.second.virtual_sensor_info->trigger_sensors[i]
+                              << " ";
+                }
+                *dump_buf << std::endl;
+            }
             *dump_buf << "  Formula: ";
             switch (sensor_info_pair.second.virtual_sensor_info->formula) {
                 case FormulaOption::COUNT_THRESHOLD:
