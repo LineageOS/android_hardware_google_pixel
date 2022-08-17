@@ -87,3 +87,8 @@ cc_binary {
     cflags: ["-DVIBRATOR_NAME=\"dual\""],
     proprietary: true,
 }
+
+filegroup {
+    name: "haptics_srcs",
+    srcs: ["service.cpp", "Vibrator.cpp"],
+}
