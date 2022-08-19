@@ -61,6 +61,7 @@ class SysfsCollector {
         const char *const SpeakerHeartBeatPath;
         const std::vector<std::string> UFSErrStatsPath;
         const int BlockStatsLength;
+        const char *const AmsRatePath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -97,6 +98,7 @@ class SysfsCollector {
     void reportZramMmStat(const std::shared_ptr<IStats> &stats_client);
     void reportZramBdStat(const std::shared_ptr<IStats> &stats_client);
     int getReclaimedSegments(const std::string &mode);
+    void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -122,6 +124,7 @@ class SysfsCollector {
     const char *const kSpeakerHeartbeatPath;
     const std::vector<std::string> kUFSErrStatsPath;
     const int kBlockStatsLength;
+    const char *const kAmsRatePath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
