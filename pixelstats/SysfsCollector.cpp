@@ -480,7 +480,7 @@ void SysfsCollector::logUFSErrorStats(const std::shared_ptr<IStats> &stats_clien
     int value, host_reset_count = 0;
 
     if (kUFSErrStatsPath.empty() || strlen(kUFSErrStatsPath.front().c_str()) == 0) {
-        ALOGV("UFS host reset count specified");
+        ALOGV("UFS host reset count path not specified");
         return;
     }
 
@@ -746,7 +746,7 @@ void SysfsCollector::logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> 
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
-        ALOGE("Unable to report Boot stats to Stats service");
+        ALOGE("Unable to report F2fsSmartIdleMaintEnabled to Stats service");
     }
 }
 
