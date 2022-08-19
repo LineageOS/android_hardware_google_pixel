@@ -92,3 +92,13 @@ filegroup {
     name: "haptics_srcs",
     srcs: ["service.cpp", "Vibrator.cpp"],
 }
+
+filegroup {
+    name: "android.hardware.vibrator-service.cs40l26.xml",
+    srcs: ["android.hardware.vibrator-service.cs40l26.xml"],
+}
+
+filegroup {
+    name: "android.hardware.vibrator-service.cs40l26.rc",
+    srcs: ["android.hardware.vibrator-service.cs40l26.rc"],
+}
