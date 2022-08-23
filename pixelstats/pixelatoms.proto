@@ -81,6 +81,7 @@ message Atom {
       BatteryHealthUsage battery_health_usage = 105038;
       F2fsSmartIdleMaintEnabledStateChanged f2fs_smart_idle_maint_enabled_state_changed = 105039;
       BlockStatsReported block_stats_reported = 105040;
+      VendorAudioHardwareStatsReported vendor_audio_hardware_stats_reported = 105041;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1146,4 +1147,15 @@ message BlockStatsReported {
         optional int64 write_sectors = 6;
         /* total wait time for write requests */
         optional int64 write_ticks = 7;
+}
+
+/**
+ * Logs the reported vendor audio hardware stats.
+ */
+message VendorAudioHardwareStatsReported {
+  /* The percentage of calls in a day where auto-mic-switch triggered.
+   * It represented as a fixed-point integer with three decimal place.
+   * E.g.:12.345% is repsented by 12345.
+   */
+  optional int32 milli_rate_of_AMS_per_day = 1;
 }
