@@ -43,14 +43,15 @@ using android::base::ReadFileToString;
 using android::base::StartsWith;
 using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
-using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
+using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
-using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
+using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
@@ -84,7 +85,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
       kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath),
-      kBlockStatsLength(sysfs_paths.BlockStatsLength) {}
+      kBlockStatsLength(sysfs_paths.BlockStatsLength),
+      kAmsRatePath(sysfs_paths.AmsRatePath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -969,6 +971,44 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
     }
 }
 
+/**
+ * Report the AMS rate.
+ */
+void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (kAmsRatePath == nullptr) {
+        ALOGD("Audio AMS_Rate path not specified");
+        return;
+    }
+
+    uint32_t milli_ams_rate;
+    if (!ReadFileToString(kAmsRatePath, &file_contents)) {
+        ALOGE("Unable to read ams_rate path %s", kAmsRatePath);
+        return;
+    }
+
+    if (sscanf(file_contents.c_str(), "%u", &milli_ams_rate) != 1) {
+        ALOGE("Unable to parse ams_rate %s", file_contents.c_str());
+        return;
+    }
+
+    ALOGD("milli_ams_rate = %s", file_contents.c_str());
+
+    std::vector<VendorAtomValue> values(1);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
+    values[0] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorAudioHardwareStatsReported,
+                        .values = std::move(values)};
+
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -998,6 +1038,7 @@ void SysfsCollector::logPerDay() {
     logSpeakerHealthStats(stats_client);
     mm_metrics_reporter_.logCmaStatus(stats_client);
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
+    logVendorAudioHardwareStats(stats_client);
 }
 
 void SysfsCollector::logPerHour() {
