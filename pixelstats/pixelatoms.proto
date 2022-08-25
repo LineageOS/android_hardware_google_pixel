@@ -1153,9 +1153,10 @@ message BlockStatsReported {
  * Logs the reported vendor audio hardware stats.
  */
 message VendorAudioHardwareStatsReported {
+  optional string reverse_domain_name = 1;
   /* The percentage of calls in a day where auto-mic-switch triggered.
    * It represented as a fixed-point integer with three decimal place.
    * E.g.:12.345% is repsented by 12345.
    */
-  optional int32 milli_rate_of_AMS_per_day = 1;
+  optional int32 milli_rate_of_AMS_per_day = 2;
 }
