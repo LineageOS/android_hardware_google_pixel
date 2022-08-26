@@ -1158,5 +1158,5 @@ message VendorAudioHardwareStatsReported {
    * It represented as a fixed-point integer with three decimal place.
    * E.g.:12.345% is repsented by 12345.
    */
-  optional int32 milli_rate_of_AMS_per_day = 2;
+  optional int32 milli_rate_of_ams_per_day = 2;
 }
