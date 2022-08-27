@@ -720,7 +720,7 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_low);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_mid);
-    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentMidFieldNumber - kVendorAtomOffset] = tmp;
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
