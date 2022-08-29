@@ -118,6 +118,9 @@ class MmMetricsReporter {
     bool ReadFileToUint(const char *const path, uint64_t *val);
     bool reportVendorAtom(const std::shared_ptr<IStats> &stats_client, int atom_id,
                           const std::vector<VendorAtomValue> &values, const std::string &atom_name);
+    void readCompactionDurationStat(std::vector<long> *store);
+    void fillCompactionDurationStatAtom(const std::vector<long> &store,
+                                        std::vector<VendorAtomValue> *values);
     void readDirectReclaimStat(std::vector<long> *store);
     void fillDirectReclaimStatAtom(const std::vector<long> &store,
                                    std::vector<VendorAtomValue> *values);
@@ -153,14 +156,17 @@ class MmMetricsReporter {
     const char *const kIonTotalPoolsPath;
     const char *const kIonTotalPoolsPathForLegacy;
     const char *const kGpuTotalPages;
+    const char *const kCompactDuration;
     const char *const kDirectReclaimBasePath;
     const char *const kPixelStatMm;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
     // -2.
     static constexpr int kVendorAtomOffset = 2;
+    static constexpr int kNumCompactionDurationPrevMetrics = 6;
     static constexpr int kNumDirectReclaimPrevMetrics = 20;
 
+    std::vector<long> prev_compaction_duration_;
     std::vector<long> prev_direct_reclaim_;
     long prev_psi_total_[kPsiNumAllTotals];
     long psi_total_[kPsiNumAllTotals];
