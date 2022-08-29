@@ -313,7 +313,6 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
     uint64_t gpu_memory = getGpuMemory();
 
     std::vector<VendorAtomValue> values;
-    bool is_first_atom = (prev_hour_vmstat_.size() == 0) ? true : false;
     fillAtomValues(kMmMetricsPerHourInfo, vmstat, &prev_hour_vmstat_, &values);
 
     // resize values to add the following fields
@@ -328,12 +327,9 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
     tmp.set<VendorAtomValue::longValue>(gpu_memory);
     values[PixelMmMetricsPerHour::kGpuMemoryFieldNumber - kVendorAtomOffset] = tmp;
 
-    // Don't report the first atom to avoid big spike in accumulated values.
-    if (!is_first_atom) {
-        // Send vendor atom to IStats HAL
-        reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerHour, values,
-                         "PixelMmMetricsPerHour");
-    }
+    // Send vendor atom to IStats HAL
+    reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerHour, values,
+                     "PixelMmMetricsPerHour");
 }
 
 void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stats_client) {
