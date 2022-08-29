@@ -183,6 +183,90 @@ bool MmMetricsReporter::ReadFileToUint(const char *const path, uint64_t *val) {
     return true;
 }
 
+/*
+ * This function reads whole file and parses tokens separated by <delim> into
+ * long integers.  Useful for direct reclaim & compaction duration sysfs nodes.
+ * Data write is using all or none policy: It will not write partial data unless
+ * all data values are good.
+ *
+ * path: file to open/read
+ * data: where to store the results
+ * start_idx: index into data[] where to start saving the results
+ * delim: delimiters separating different longs
+ * skip: how many resulting longs to skip before saving
+ * nonnegtive: set to true to validate positive numbers
+ *
+ * Return value: number of longs actually stored on success.  negative
+ *               error codes on errors.
+ */
+static int ReadFileToLongs(const std::string &path, std::vector<long> *data, int start_idx,
+                           const char *delim, int skip, bool nonnegative = false) {
+    std::vector<long> out;
+    enum { err_read_file = -1, err_parse = -2 };
+    std::string file_contents;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        // Don't print this log if the file doesn't exist, since logs will be printed repeatedly.
+        if (errno != ENOENT) {
+            ALOGI("Unable to read %s - %s", path.c_str(), strerror(errno));
+        }
+        return err_read_file;
+    }
+
+    file_contents = android::base::Trim(file_contents);
+    std::vector<std::string> words = android::base::Tokenize(file_contents, delim);
+    if (words.size() == 0)
+        return 0;
+
+    for (auto &w : words) {
+        if (skip) {
+            skip--;
+            continue;
+        }
+        long tmp;
+        if (!android::base::ParseInt(w, &tmp) || (nonnegative && tmp < 0))
+            return err_parse;
+        out.push_back(tmp);
+    }
+
+    int min_size = std::max(static_cast<int>(out.size()) + start_idx, 0);
+    if (min_size > data->size())
+        data->resize(min_size);
+    std::copy(out.begin(), out.end(), data->begin() + start_idx);
+
+    return out.size();
+}
+
+/*
+ * This function calls ReadFileToLongs, and checks the expected number
+ * of long integers read.  Useful for direct reclaim & compaction duration
+ * sysfs nodes.
+ *
+ *  path: file to open/read
+ *  data: where to store the results
+ *  start_idx: index into data[] where to start saving the results
+ *  delim: delimiters separating different longs
+ *  skip: how many resulting longs to skip before saving
+ *  expected_num: number of expected longs to be read.
+ *  nonnegtive: set to true to validate positive numbers
+ *
+ *  Return value: true if successfully get expected number of long values.
+ *                otherwise false.
+ */
+static inline bool ReadFileToLongsCheck(const std::string &path, std::vector<long> *store,
+                                        int start_idx, const char *delim, int skip,
+                                        int expected_num, bool nonnegative = false) {
+    int num = ReadFileToLongs(path, store, start_idx, delim, skip, nonnegative);
+
+    if (num == expected_num)
+        return true;
+
+    int last_idx = std::min(start_idx + expected_num, static_cast<int>(store->size()));
+    std::fill(store->begin() + start_idx, store->begin() + last_idx, -1);
+
+    return false;
+}
+
 bool MmMetricsReporter::reportVendorAtom(const std::shared_ptr<IStats> &stats_client, int atom_id,
                                          const std::vector<VendorAtomValue> &values,
                                          const std::string &atom_name) {
