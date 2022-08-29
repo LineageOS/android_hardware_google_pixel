@@ -159,7 +159,9 @@ MmMetricsReporter::MmMetricsReporter()
       kIonTotalPoolsPath("/sys/kernel/dma_heap/total_pools_kb"),
       kIonTotalPoolsPathForLegacy("/sys/kernel/ion/total_pools_kb"),
       kGpuTotalPages("/sys/kernel/pixel_stat/gpu/mem/total_page_count"),
-      kPixelStatMm("/sys/kernel/pixel_stat/mm") {
+      kDirectReclaimBasePath("/sys/kernel/pixel_stat/mm/vmscan/direct_reclaim"),
+      kPixelStatMm("/sys/kernel/pixel_stat/mm"),
+      prev_direct_reclaim_(kNumDirectReclaimPrevMetrics, 0) {
     is_user_build_ = checkUserBuild();
     ker_mm_metrics_support_ = checkKernelMMMetricSupport();
 }
@@ -440,6 +442,9 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     if (vmstat.size() == 0)
         return;
 
+    std::vector<long> direct_reclaim;
+    readDirectReclaimStat(&direct_reclaim);
+
     bool is_first_atom = (prev_day_vmstat_.size() == 0) ? true : false;
 
     // allocate enough values[] entries for the metrics.
@@ -458,6 +463,7 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
                      &prev_kswapd_stime_, &values);
     fillProcessStime(PixelMmMetricsPerDay::kKcompactdStimeClksFieldNumber, "kcompactd0",
                      &kcompactd_pid_, &prev_kcompactd_stime_, &values);
+    fillDirectReclaimStatAtom(direct_reclaim, &values);
 
     // Don't report the first atom to avoid big spike in accumulated values.
     if (!is_first_atom) {
@@ -598,6 +604,65 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
         cma_stat[entry.name] = file_contents;
     }
     return cma_stat;
+}
+
+/**
+ * This function reads direct reclaim sysfs node (4 files:
+ * /sys/kernel/pixel_stat/mm/vmscan/direct_reclaim/<level>/latency_stat,
+ * where <level> = native, top, visible, other.), and save total time and
+ * 4 latency information per file. Total (1+4) x 4 = 20 metrics will be
+ * saved.
+ *
+ * store: vector to save direct reclaim info
+ */
+void MmMetricsReporter::readDirectReclaimStat(std::vector<long> *store) {
+    static const std::string base_path(kDirectReclaimBasePath);
+    static const std::vector<std::string> dr_levels{"native", "top", "visible", "other"};
+    static const std::string sysfs_name = "latency_stat";
+    constexpr int num_metrics_per_file = 5;
+    int num_file = dr_levels.size();
+    int num_metrics = num_metrics_per_file * num_file;
+
+    store->resize(num_metrics);
+    int pass = -1;
+    for (auto level : dr_levels) {
+        ++pass;
+        std::string path = base_path + '/' + level + '/' + sysfs_name;
+        int start_idx = pass * num_metrics_per_file;
+        int expected_num = num_metrics_per_file;
+        if (!ReadFileToLongsCheck(path, store, start_idx, " ", 1, expected_num, true)) {
+            ALOGI("Unable to read %s for the direct reclaim info.", path.c_str());
+        }
+    }
+}
+
+/**
+ * This function fills atom values (values) from acquired direct reclaim
+ * information from vector store
+ *
+ * store: the already collected (by readDirectReclaimStat()) direct reclaim
+ *        information
+ * values: the atom value vector to be filled.
+ */
+void MmMetricsReporter::fillDirectReclaimStatAtom(const std::vector<long> &store,
+                                                  std::vector<VendorAtomValue> *values) {
+    // first metric index
+    constexpr int start_idx = PixelMmMetricsPerDay::kDirectReclaimNativeLatencyTotalTimeFieldNumber;
+    constexpr int num_metrics = 20; /* num_metrics_per_file * num_file */
+
+    if (!MmMetricsSupported())
+        return;
+
+    int size = start_idx + num_metrics - kVendorAtomOffset;
+    if (values->size() < size)
+        values->resize(size);
+
+    for (int i = 0; i < num_metrics; i++) {
+        VendorAtomValue tmp;
+        tmp.set<VendorAtomValue::longValue>(store[i] - prev_direct_reclaim_[i]);
+        (*values)[start_idx + i] = tmp;
+    }
+    prev_direct_reclaim_ = store;
 }
 
 /**
