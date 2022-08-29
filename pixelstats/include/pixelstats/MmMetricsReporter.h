@@ -107,7 +107,7 @@ class MmMetricsReporter {
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
     // -2.
-    const int kVendorAtomOffset = 2;
+    static constexpr int kVendorAtomOffset = 2;
 
     std::map<std::string, uint64_t> prev_hour_vmstat_;
     std::map<std::string, uint64_t> prev_day_vmstat_;

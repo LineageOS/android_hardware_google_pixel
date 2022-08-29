@@ -312,16 +312,14 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
     uint64_t ion_total_pools = getIonTotalPools();
     uint64_t gpu_memory = getGpuMemory();
 
-    std::vector<VendorAtomValue> values;
-    fillAtomValues(kMmMetricsPerHourInfo, vmstat, &prev_hour_vmstat_, &values);
-
-    // resize values to add the following fields
+    // allocate enough values[] entries for the metrics.
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::longValue>(0);
-    int size = PixelMmMetricsPerHour::kGpuMemoryFieldNumber - kVendorAtomOffset + 1;
-    if (values.size() < size) {
-        values.resize(size, tmp);
-    }
+    int last_value_index =
+            PixelMmMetricsPerHour::kPsiMemSomeAvg300AvgFieldNumber - kVendorAtomOffset;
+    std::vector<VendorAtomValue> values(last_value_index + 1, tmp);
+
+    fillAtomValues(kMmMetricsPerHourInfo, vmstat, &prev_hour_vmstat_, &values);
     tmp.set<VendorAtomValue::longValue>(ion_total_pools);
     values[PixelMmMetricsPerHour::kIonTotalPoolsFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::longValue>(gpu_memory);
@@ -340,8 +338,15 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     if (vmstat.size() == 0)
         return;
 
-    std::vector<VendorAtomValue> values;
     bool is_first_atom = (prev_day_vmstat_.size() == 0) ? true : false;
+
+    // allocate enough values[] entries for the metrics.
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::longValue>(0);
+    int last_value_index =
+            PixelMmMetricsPerDay::kThpDeferredSplitPageFieldNumber - kVendorAtomOffset;
+    std::vector<VendorAtomValue> values(last_value_index + 1, tmp);
+
     fillAtomValues(kMmMetricsPerDayInfo, vmstat, &prev_day_vmstat_, &values);
 
     std::map<std::string, uint64_t> pixel_vmstat =
