@@ -1041,6 +1041,10 @@ void SysfsCollector::logPerDay() {
     logVendorAudioHardwareStats(stats_client);
 }
 
+void SysfsCollector::aggregatePer5Min() {
+    mm_metrics_reporter_.aggregatePixelMmMetricsPer5Min();
+}
+
 void SysfsCollector::logPerHour() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -1068,17 +1072,29 @@ void SysfsCollector::collect(void) {
     // Sleep for 30 seconds on launch to allow codec driver to load.
     sleep(30);
 
+    // sample & aggregate for the first time.
+    aggregatePer5Min();
+
     // Collect first set of stats on boot.
     logPerHour();
     logPerDay();
 
-    // Set an one-hour timer.
     struct itimerspec period;
-    const int kSecondsPerHour = 60 * 60;
-    int hours = 0;
-    period.it_interval.tv_sec = kSecondsPerHour;
+
+    // gcd (greatest common divisor) of all the following timings
+    constexpr int kSecondsPerWake = 5 * 60;
+
+    constexpr int kWakesPer5Min = 5 * 60 / kSecondsPerWake;
+    constexpr int kWakesPerHour = 60 * 60 / kSecondsPerWake;
+    constexpr int kWakesPerDay = 24 * 60 * 60 / kSecondsPerWake;
+
+    int wake_5min = 0;
+    int wake_hours = 0;
+    int wake_days = 0;
+
+    period.it_interval.tv_sec = kSecondsPerWake;
     period.it_interval.tv_nsec = 0;
-    period.it_value.tv_sec = kSecondsPerHour;
+    period.it_value.tv_sec = kSecondsPerWake;
     period.it_value.tv_nsec = 0;
 
     if (timerfd_settime(timerfd, 0, &period, NULL)) {
@@ -1088,22 +1104,41 @@ void SysfsCollector::collect(void) {
 
     while (1) {
         int readval;
-        do {
+        union {
             char buf[8];
+            uint64_t count;
+        } expire;
+
+        do {
             errno = 0;
-            readval = read(timerfd, buf, sizeof(buf));
+            readval = read(timerfd, expire.buf, sizeof(expire.buf));
         } while (readval < 0 && errno == EINTR);
         if (readval < 0) {
             ALOGE("Timerfd error - %s\n", strerror(errno));
             return;
         }
 
-        hours++;
-        logPerHour();
-        if (hours == 24) {
-            // Collect stats every 24hrs after.
+        wake_5min += expire.count;
+        wake_hours += expire.count;
+        wake_days += expire.count;
+
+        if (wake_5min >= kWakesPer5Min) {
+            wake_5min %= kWakesPer5Min;
+            aggregatePer5Min();
+        }
+
+        if (wake_hours >= kWakesPerHour) {
+            if (wake_hours >= 2 * kWakesPerHour)
+                ALOGW("Hourly wake: sleep too much: expire.count=%" PRId64, expire.count);
+            wake_hours %= kWakesPerHour;
+            logPerHour();
+        }
+
+        if (wake_days >= kWakesPerDay) {
+            if (wake_hours >= 2 * kWakesPerDay)
+                ALOGW("Daily wake: sleep too much: expire.count=%" PRId64, expire.count);
+            wake_days %= kWakesPerDay;
             logPerDay();
-            hours = 0;
         }
     }
 }
