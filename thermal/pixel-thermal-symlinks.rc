@@ -5,7 +5,6 @@ on boot
     start vendor.thermal.symlinks
 
 service vendor.thermal.symlinks /vendor/bin/thermal_symlinks
-    class hal
     user system
     group system
     oneshot
