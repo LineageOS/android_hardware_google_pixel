@@ -4,11 +4,9 @@ on property:vendor.thermal.link_ready=1
     trigger enable-thermal-hal
 
 on enable-thermal-hal
-    start vendor.thermal-hal-2-0
+    restart vendor.thermal-hal-2-0
 
 service vendor.thermal-hal-2-0 /vendor/bin/hw/android.hardware.thermal@2.0-service.pixel
-    interface android.hardware.thermal@1.0::IThermal default
-    interface android.hardware.thermal@2.0::IThermal default
     class hal
     user system
     group system
