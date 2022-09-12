@@ -347,8 +347,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         ALOGD("Unsupported calibration version: %u!", calVer);
     }
 
-    mHwApi->setF0CompEnable(true);
-    mHwApi->setRedcCompEnable(true);
+    mHwApi->setF0CompEnable(mHwCal->isF0CompEnabled());
+    mHwApi->setRedcCompEnable(mHwCal->isRedcCompEnabled());
 
     mIsUnderExternalControl = false;
 
