@@ -377,6 +377,8 @@ TEST_F(VibratorTest, on) {
 }
 
 TEST_F(VibratorTest, off) {
+    Sequence s1;
+    EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
     EXPECT_TRUE(mVibrator->off().isOk());
 }
 

@@ -394,28 +394,34 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 
 ndk::ScopedAStatus Vibrator::off() {
     ATRACE_NAME("Vibrator::off");
-    if (mActiveId < 0) {
-        ALOGD("Vibrator is already off");
-        return ndk::ScopedAStatus::ok();
+    bool ret{true};
+
+    if (mActiveId >= 0) {
+        /* Stop the active effect. */
+        if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
+            ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
+            ret = false;
+        }
+
+        if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
+            (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+            ret = false;
+        }
+    } else {
+        ALOGV("Vibrator is already off");
     }
 
-    /* Stop the active effect. */
-    if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
-        ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
-
-    if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
-        (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
     mActiveId = -1;
     setGlobalAmplitude(false);
     if (mF0Offset) {
         mHwApi->setF0Offset(0);
     }
 
-    return ndk::ScopedAStatus::ok();
+    if (ret) {
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
