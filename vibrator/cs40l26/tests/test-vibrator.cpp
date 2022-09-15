@@ -298,6 +298,8 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockCal, getLongVolLevels(_)).Times(times);
         EXPECT_CALL(*mMockCal, isChirpEnabled()).Times(times);
         EXPECT_CALL(*mMockCal, getLongFrequencyShift(_)).Times(times);
+        EXPECT_CALL(*mMockCal, isF0CompEnabled()).Times(times);
+        EXPECT_CALL(*mMockCal, isRedcCompEnabled()).Times(times);
         EXPECT_CALL(*mMockCal, debug(_)).Times(times);
     }
 
@@ -350,7 +352,9 @@ TEST_F(VibratorTest, Constructor) {
         volGet = EXPECT_CALL(*mMockCal, getLongVolLevels(_)).WillOnce(DoDefault());
     }
 
+    EXPECT_CALL(*mMockCal, isF0CompEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setF0CompEnable(true)).WillOnce(Return(true));
+    EXPECT_CALL(*mMockCal, isRedcCompEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setRedcCompEnable(true)).WillOnce(Return(true));
 
     EXPECT_CALL(*mMockCal, isChirpEnabled()).WillOnce(Return(true));
