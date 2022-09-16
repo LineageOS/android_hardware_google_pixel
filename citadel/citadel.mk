@@ -7,6 +7,7 @@ PRODUCT_PACKAGES += \
     android.hardware.authsecret-service.citadel \
     android.hardware.oemlock@1.0-service.citadel \
     android.hardware.weaver@1.0-service.citadel \
+    android.hardware.weaver-service.citadel \
     android.hardware.keymaster@4.1-service.citadel \
     android.hardware.identity@1.0-service.citadel \
     android.hardware.fastboot@1.1-impl.pixel \
