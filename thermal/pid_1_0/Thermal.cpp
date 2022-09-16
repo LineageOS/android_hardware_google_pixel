@@ -282,7 +282,7 @@ void Thermal::sendThermalChangedCallback(const Temperature_2_0 &t) {
 }
 
 void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
-    *dump_buf << "VirtualSensorInfo:" << std::endl;
+    *dump_buf << "getVirtualSensorInfo:" << std::endl;
     const auto &map = thermal_helper_.GetSensorInfoMap();
     for (const auto &sensor_info_pair : map) {
         if (sensor_info_pair.second.virtual_sensor_info != nullptr) {
@@ -331,7 +331,7 @@ void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
 }
 
 void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
-    *dump_buf << "Throttling Info:" << std::endl;
+    *dump_buf << "getThrottlingInfo:" << std::endl;
     const auto &map = thermal_helper_.GetSensorInfoMap();
     const auto &thermal_throttling_status_map = thermal_helper_.GetThermalThrottlingStatusMap();
     for (const auto &name_info_pair : map) {
@@ -458,7 +458,7 @@ void Thermal::dumpThrottlingRequestStatus(std::ostringstream *dump_buf) {
     if (!thermal_throttling_status_map.size()) {
         return;
     }
-    *dump_buf << "Throttling Request Status " << std::endl;
+    *dump_buf << "getThrottlingRequestStatus:" << std::endl;
     for (const auto &thermal_throttling_status_pair : thermal_throttling_status_map) {
         *dump_buf << " Name: " << thermal_throttling_status_pair.first << std::endl;
         if (thermal_throttling_status_pair.second.pid_power_budget_map.size()) {
@@ -507,7 +507,7 @@ void Thermal::dumpPowerRailInfo(std::ostringstream *dump_buf) {
     const auto &power_rail_info_map = thermal_helper_.GetPowerRailInfoMap();
     const auto &power_status_map = thermal_helper_.GetPowerStatusMap();
 
-    *dump_buf << "Power Rail Info " << std::endl;
+    *dump_buf << "getPowerRailInfo:" << std::endl;
     for (const auto &power_rail_pair : power_rail_info_map) {
         *dump_buf << " Power Rail: " << power_rail_pair.first << std::endl;
         *dump_buf << "  Power Sample Count: " << power_rail_pair.second.power_sample_count
@@ -577,7 +577,7 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 hidl_vec<CpuUsage> cpu_usages;
                 dump_buf << "getCpuUsages:" << std::endl;
                 if (!thermal_helper_.fillCpuUsages(&cpu_usages)) {
-                    dump_buf << "Failed to get CPU usages." << std::endl;
+                    dump_buf << " Failed to get CPU usages." << std::endl;
                 }
 
                 for (const auto &usage : cpu_usages) {
@@ -673,7 +673,7 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 hidl_vec<CoolingDevice_2_0> cooling_devices;
                 if (!thermal_helper_.fillCurrentCoolingDevices(false, CoolingType::CPU,
                                                                &cooling_devices)) {
-                    dump_buf << "Failed to getCurrentCoolingDevices." << std::endl;
+                    dump_buf << " Failed to getCurrentCoolingDevices." << std::endl;
                 }
 
                 for (const auto &c : cooling_devices) {
@@ -682,7 +682,8 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 }
             }
             {
-                dump_buf << "Callbacks: Total " << callbacks_.size() << std::endl;
+                dump_buf << "getCallbacks:" << std::endl;
+                dump_buf << " Total: " << callbacks_.size() << std::endl;
                 for (const auto &c : callbacks_) {
                     dump_buf << " IsFilter: " << c.is_filter_type
                              << " Type: " << android::hardware::thermal::V2_0::toString(c.type)
@@ -690,7 +691,7 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 }
             }
             {
-                dump_buf << "SendCallback" << std::endl;
+                dump_buf << "sendCallback:" << std::endl;
                 dump_buf << "  Enabled List: ";
                 const auto &map = thermal_helper_.GetSensorInfoMap();
                 for (const auto &name_info_pair : map) {
@@ -701,7 +702,7 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                 dump_buf << std::endl;
             }
             {
-                dump_buf << "SendPowerHint" << std::endl;
+                dump_buf << "sendPowerHint:" << std::endl;
                 dump_buf << "  Enabled List: ";
                 const auto &map = thermal_helper_.GetSensorInfoMap();
                 for (const auto &name_info_pair : map) {
@@ -716,11 +717,12 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
             dumpThrottlingRequestStatus(&dump_buf);
             dumpPowerRailInfo(&dump_buf);
             {
-                dump_buf << "AIDL Power Hal exist: " << std::boolalpha
-                         << thermal_helper_.isAidlPowerHalExist() << std::endl;
-                dump_buf << "AIDL Power Hal connected: " << std::boolalpha
+                dump_buf << "getAIDLPowerHalInfo:" << std::endl;
+                dump_buf << " Exist: " << std::boolalpha << thermal_helper_.isAidlPowerHalExist()
+                         << std::endl;
+                dump_buf << " Connected: " << std::boolalpha
                          << thermal_helper_.isPowerHalConnected() << std::endl;
-                dump_buf << "AIDL Power Hal Ext connected: " << std::boolalpha
+                dump_buf << " Ext connected: " << std::boolalpha
                          << thermal_helper_.isPowerHalExtConnected() << std::endl;
             }
         }
