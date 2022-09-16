@@ -110,6 +110,10 @@ class Vibrator : public BnVibrator {
         virtual bool isChirpEnabled() = 0;
         // Obtains the supported primitive effects.
         virtual bool getSupportedPrimitives(uint32_t *value) = 0;
+        // Checks if the f0 compensation feature needs to be enabled.
+        virtual bool isF0CompEnabled() = 0;
+        // Checks if the redc compensation feature needs to be enabled.
+        virtual bool isRedcCompEnabled() = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
