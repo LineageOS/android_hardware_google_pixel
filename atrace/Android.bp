@@ -17,26 +17,6 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_binary {
-    name: "android.hardware.atrace@1.0-service.pixel",
-    defaults: ["hidl_defaults"],
-    relative_install_path: "hw",
-    vendor: true,
-    init_rc: ["android.hardware.atrace@1.0-service.pixel.rc"],
-    vintf_fragments: ["android.hardware.atrace@1.0-service.pixel.xml"],
-    srcs: [
-        "AtraceDevice.cpp",
-        "service.cpp",
-    ],
-    shared_libs: [
-        "liblog",
-        "libbase",
-        "libutils",
-        "libhidlbase",
-        "android.hardware.atrace@1.0",
-    ],
-}
-
 genrule {
     name: "atrace_categories.rc.pixel",
     tool_files: ["generate_rc.py"],

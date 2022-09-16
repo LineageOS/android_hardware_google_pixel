@@ -8,9 +8,8 @@ SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common/system
 PRODUCT_PACKAGES += \
     misc_writer
 
-# Enable atrace categories hal and tools for pixel devices
+# Enable atrace categories and tools for pixel devices
 PRODUCT_PACKAGES += \
-    android.hardware.atrace@1.0-service.pixel \
     atrace_categories.txt.pixel \
     dmabuf_dump
 
