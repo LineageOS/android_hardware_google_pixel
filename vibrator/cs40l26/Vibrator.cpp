@@ -143,6 +143,8 @@ enum vibe_state {
     VIBE_STATE_ASP,
 };
 
+std::mutex mActiveId_mutex;  // protects mActiveId
+
 static int min(int x, int y) {
     return x < y ? x : y;
 }
@@ -389,28 +391,36 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 
 ndk::ScopedAStatus Vibrator::off() {
     ATRACE_NAME("Vibrator::off");
-    if (mActiveId < 0) {
-        ALOGD("Vibrator is already off");
-        return ndk::ScopedAStatus::ok();
+    bool ret{true};
+    const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
+
+    if (mActiveId >= 0) {
+        /* Stop the active effect. */
+        if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
+            ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
+            ret = false;
+        }
+
+        if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
+            (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+            ALOGE("Failed to clean up the composed effect %d", mActiveId);
+            ret = false;
+        }
+    } else {
+        ALOGV("Vibrator is already off");
     }
 
-    /* Stop the active effect. */
-    if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
-        ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
-
-    if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
-        (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
     mActiveId = -1;
     setGlobalAmplitude(false);
     if (mF0Offset) {
         mHwApi->setF0Offset(0);
     }
 
-    return ndk::ScopedAStatus::ok();
+    if (ret) {
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
@@ -599,13 +609,11 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
 
     if (effectIndex >= FF_MAX_EFFECTS) {
         ALOGE("Invalid waveform index %d", effectIndex);
-        status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-        goto end;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
         ALOGE("Previous vibration pending: prev: %d, curr: %d", mActiveId, effectIndex);
-        status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-        goto end;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
     if (ch) {
@@ -642,23 +650,20 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
         if (!mHwApi->setFFEffect(mInputFd, &mFfEffects[effectIndex],
                                  static_cast<uint16_t>(timeoutMs))) {
             ALOGE("Failed to edit effect %d (%d): %s", effectIndex, errno, strerror(errno));
-            status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-            goto end;
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
         }
     }
 
+    const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     mActiveId = effectIndex;
     /* Play the event now. */
     if (!mHwApi->setFFPlay(mInputFd, effectIndex, true)) {
         ALOGE("Failed to play effect %d (%d): %s", effectIndex, errno, strerror(errno));
-        status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-        goto end;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
-
-end:
-    return status;
+    return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) {
@@ -1271,8 +1276,10 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     }
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
 
-    if (mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) {
-        mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects);
+    const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
+    if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
+        (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+        ALOGE("Failed to clean up the composed effect %d", mActiveId);
     }
     mActiveId = -1;
 
