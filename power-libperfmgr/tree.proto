@@ -29,7 +29,7 @@ message SplitNode {
     optional Feature feature = 1;
     // Model input can contain values of the same feature at different time points
     optional int32 value_index = 2;
-    // If feature value at value_index < threshold go left, otherwise go right
+    // If feature value at value_index <= threshold go left, otherwise go right
     optional float threshold = 3;
 }
 

@@ -29,9 +29,7 @@ namespace pixel {
 
 proto::ThrottleDecision ModelTree::RunModel(const std::deque<ModelInput> &model_inputs
                                             __attribute__((unused))) {
-    LOG(ERROR) << "TODO: implement function ModelTree::RunModel.";
-
-    return proto::ThrottleDecision::NO_THROTTLE;
+    return mRoot->EvaluateSubtree(model_inputs);
 }
 
 const std::unique_ptr<TreeNode> &ModelTree::GetModel() const {
@@ -39,8 +37,7 @@ const std::unique_ptr<TreeNode> &ModelTree::GetModel() const {
 }
 
 bool ModelTree::operator==(const ModelTree &other) const {
-    return mRoot->Equal(*other.mRoot) && mFeatureMeans == other.mFeatureMeans &&
-           mFeatureStds == other.mFeatureStds;
+    return mRoot->Equal(*other.mRoot);
 }
 
 }  // namespace pixel

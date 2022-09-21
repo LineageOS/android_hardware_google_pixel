@@ -35,7 +35,7 @@ bool SplitNode::Equal(const TreeNode &other) const {
 
 bool SplitNode::EqualToSplit(const SplitNode &other) const {
     return (other.mFeature == mFeature && other.mValueIndex == mValueIndex &&
-            other.mThreshold == mThreshold && mLeft->Equal(*other.mLeft) &&
+            std::abs(other.mThreshold - mThreshold) <= 0.00001 && mLeft->Equal(*other.mLeft) &&
             mRight->Equal(*other.mRight));
 }
 
@@ -55,11 +55,67 @@ bool LeafNode::EqualToLeaf(const LeafNode &other) const {
     return other.mDecision == mDecision;
 }
 
-proto::ThrottleDecision SplitNode::EvaluateSubtree(const std::deque<ModelInput> &model_inputs
-                                                   __attribute__((unused))) const {
-    LOG(ERROR) << "TODO: implement function.";
+proto::ThrottleDecision SplitNode::EvaluateSubtree(
+        const std::deque<ModelInput> &model_inputs) const {
+    // Node's mValueIndex determines index in model_inputs deque.
+    ModelInput modelInput = model_inputs[mValueIndex];
+    // Find the feature value corresponding to this split node in modelInput.
+    float featureValue;
+    switch (mFeature) {
+        case proto::Feature::CPU_POLICY_AVG_FREQ_0:
+            featureValue = modelInput.cpuPolicyAverageFrequencyHz[0];
+            break;
+        case proto::Feature::CPU_POLICY_AVG_FREQ_1:
+            featureValue = modelInput.cpuPolicyAverageFrequencyHz[1];
+            break;
+        case proto::Feature::CPU_POLICY_AVG_FREQ_2:
+            featureValue = modelInput.cpuPolicyAverageFrequencyHz[2];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_0:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[0];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[1];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_2:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[2];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_3:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[3];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_4:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[4];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_5:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[5];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_6:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[6];
+            break;
+        case proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_7:
+            featureValue = modelInput.cpuCoreIdleTimesPercentage[7];
+            break;
+        case proto::Feature::AVG_DURATION:
+            featureValue = modelInput.workDurationFeatures.averageDuration.count();
+            break;
+        case proto::Feature::MAX_DURATION:
+            featureValue = modelInput.workDurationFeatures.maxDuration.count();
+            break;
+        case proto::Feature::NUM_DURATIONS:
+            featureValue = modelInput.workDurationFeatures.numDurations;
+            break;
+        case proto::Feature::NUM_MISSED_DEADLINES:
+            featureValue = modelInput.workDurationFeatures.numMissedDeadlines;
+            break;
+        default:
+            return proto::ThrottleDecision::NO_THROTTLE;
+    }
 
-    return proto::ThrottleDecision::NO_THROTTLE;
+    if (featureValue <= mThreshold) {
+        return mLeft->EvaluateSubtree(model_inputs);
+    } else {
+        return mRight->EvaluateSubtree(model_inputs);
+    }
 }
 
 proto::ThrottleDecision LeafNode::EvaluateSubtree(const std::deque<ModelInput> &model_inputs

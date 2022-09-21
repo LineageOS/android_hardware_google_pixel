@@ -42,8 +42,10 @@ class TreeReader {
   private:
     // Helper function that holds deserialization logic.
     static bool DeserializeRecursive(const proto::ModelTree &protoTree,
+                                     const std::map<proto::Feature, float> &means,
+                                     const std::map<proto::Feature, float> &stds,
                                      std::unique_ptr<TreeNode> *next, int *nodeIndex,
-                                     int maxTreeDepth);
+                                     int currentTreeDepth);
     static bool ReadProtoTreeFromString(const std::string &content, proto::ModelTree *protoTree);
 };
 
