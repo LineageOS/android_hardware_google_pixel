@@ -112,7 +112,7 @@ static constexpr float PWLE_FREQUENCY_MAX_HZ = 999.0f;
 static constexpr float PWLE_BW_MAP_SIZE =
     1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 static constexpr float RAMP_DOWN_CONSTANT = 1048.576f;
-static constexpr float RAMP_DOWN_TIME_MS = 50.0f;
+static constexpr float RAMP_DOWN_TIME_MS = 0.0f;
 
 static struct pcm_config haptic_nohost_config = {
     .channels = 1,
@@ -1276,12 +1276,18 @@ void Vibrator::setPwleRampDown() {
     // where Trd is the desired ramp down time in seconds
     // pwle_ramp_down accepts only 24 bit integers values
 
-    const float seconds = RAMP_DOWN_TIME_MS / 1000;
-    const auto ramp_down_coefficient = static_cast<uint32_t>(RAMP_DOWN_CONSTANT / seconds);
-
-    if (!mHwApi->setPwleRampDown(ramp_down_coefficient)) {
-        ALOGE("Failed to write \"%d\" to pwle_ramp_down (%d): %s", ramp_down_coefficient, errno,
-              strerror(errno));
+    if (RAMP_DOWN_TIME_MS != 0.0) {
+        const float seconds = RAMP_DOWN_TIME_MS / 1000;
+        const auto ramp_down_coefficient = static_cast<uint32_t>(RAMP_DOWN_CONSTANT / seconds);
+        if (!mHwApi->setPwleRampDown(ramp_down_coefficient)) {
+            ALOGE("Failed to write \"%d\" to pwle_ramp_down (%d): %s", ramp_down_coefficient, errno,
+                  strerror(errno));
+        }
+    } else {
+        // Turn off the low level PWLE Ramp Down feature
+        if (!mHwApi->setPwleRampDown(0)) {
+            ALOGE("Failed to write 0 to pwle_ramp_down (%d): %s", errno, strerror(errno));
+        }
     }
 }
 
