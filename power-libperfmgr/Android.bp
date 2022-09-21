@@ -71,7 +71,7 @@ cc_library {
         "adaptivecpu/ModelTreeNode.cpp"
     ],
     shared_libs: [
-        "android.hardware.power-V3-ndk",
+        "android.hardware.power-V4-ndk",
         "libbase",
         "liblog",
         "libperfmgr",
@@ -104,7 +104,7 @@ cc_test {
     static_libs: [
         "libadaptivecpu",
         "libgmock",
-        "android.hardware.power-V3-ndk",
+        "android.hardware.power-V4-ndk",
         "libtree",
     ],
     shared_libs: [
@@ -131,7 +131,7 @@ cc_binary {
     vintf_fragments: ["aidl/android.hardware.power-service.pixel.xml"],
     vendor: true,
     shared_libs: [
-        "android.hardware.power-V3-ndk",
+        "android.hardware.power-V4-ndk",
         "libadaptivecpu",
         "libbase",
         "libcutils",
