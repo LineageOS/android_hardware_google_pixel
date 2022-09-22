@@ -25,7 +25,7 @@ message Node {
 // Internal tree node used to make a decision to go left or right
 // based on the value of its feature compared to its threshold
 message SplitNode {
-    // Feature is used to make a desicion to go to left or right subtree
+    // Feature is used to make a decision to go to left or right subtree
     optional Feature feature = 1;
     // Model input can contain values of the same feature at different time points
     optional int32 value_index = 2;
