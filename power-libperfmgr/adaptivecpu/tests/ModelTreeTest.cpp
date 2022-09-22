@@ -19,7 +19,7 @@
 #include <random>
 #include <set>
 
-#include "adaptivecpu/ModelTree.h"
+#include "adaptivecpu/ModelTreeNode.h"
 #include "mocks.h"
 
 using std::chrono_literals::operator""ns;
@@ -47,8 +47,6 @@ TEST(ModelTreeTest, ModelTree_RunModel_Throttle70) {
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
             std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
-
     // Most values can be random, only hardcoding inputs for idle times % used in the mock model.
     std::default_random_engine generator;
     std::uniform_real_distribution<double> frequencyDistribution(0, 1e6);
@@ -77,7 +75,7 @@ TEST(ModelTreeTest, ModelTree_RunModel_Throttle70) {
     for (int i = 0; i < 10; i++) {
         std::deque<ModelInput> modelInputs{randomModelInput(), randomModelInput(),
                                            randomModelInput()};
-        decision = model->RunModel(modelInputs);
+        decision = root->EvaluateSubtree(modelInputs);
         ASSERT_EQ(decision, proto::ThrottleDecision::THROTTLE_70);
     }
 }
@@ -94,8 +92,6 @@ TEST(ModelTreeTest, ModelTree_RunModel_NoThrottle) {
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
             std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
-
     // Most values can be random, only hardcoding inputs for idle times % used in the mock model.
     std::default_random_engine generator;
     std::uniform_real_distribution<double> frequencyDistribution(0, 1e6);
@@ -124,7 +120,7 @@ TEST(ModelTreeTest, ModelTree_RunModel_NoThrottle) {
     for (int i = 0; i < 10; i++) {
         std::deque<ModelInput> modelInputs{randomModelInput(), randomModelInput(),
                                            randomModelInput()};
-        decision = model->RunModel(modelInputs);
+        decision = root->EvaluateSubtree(modelInputs);
         ASSERT_EQ(decision, proto::ThrottleDecision::NO_THROTTLE);
     }
 }
@@ -168,12 +164,10 @@ TEST(ModelTreeTest, ModelTree_RandomInputs) {
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
             std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
-
     for (int i = 0; i < 10; i++) {
         std::deque<ModelInput> modelInputs{randomModelInput(), randomModelInput(),
                                            randomModelInput()};
-        model->RunModel(modelInputs);
+        root->EvaluateSubtree(modelInputs);
     }
 }
 

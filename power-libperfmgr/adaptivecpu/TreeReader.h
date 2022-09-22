@@ -20,7 +20,7 @@
 
 #include <string>
 
-#include "ModelTree.h"
+#include "ModelTreeNode.h"
 
 namespace aidl {
 namespace google {
@@ -29,15 +29,19 @@ namespace power {
 namespace impl {
 namespace pixel {
 
+// TODO(jasnamarin@): Revisit MAX_TREE_DEPTH, change to a larger number if needed.
+constexpr uint32_t MAX_TREE_DEPTH = 128;
+constexpr uint64_t MAX_NUM_NODES = 1000000;
+
 class TreeReader {
   public:
     // Reading directly from a proto message for now (public for tests).
     static bool DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
-                                             std::unique_ptr<ModelTree> *model);
+                                             std::unique_ptr<TreeNode> *model);
     // Helper function to read temporary out.bin file which contains the message.
     static bool ReadProtoTreeFromFile(std::string_view filePath, proto::ModelTree *protoTree);
     static bool DeserializeTreeFromFile(std::string_view filePath,
-                                        std::unique_ptr<ModelTree> *model);
+                                        std::unique_ptr<TreeNode> *model);
 
   private:
     // Helper function that holds deserialization logic.

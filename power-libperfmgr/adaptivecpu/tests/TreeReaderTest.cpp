@@ -89,13 +89,11 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_CompareEqual) {
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
             std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
-
     // Call function for deserializing proto tree.
-    std::unique_ptr<ModelTree> deserializedTree;
+    std::unique_ptr<TreeNode> deserializedTree;
     TreeReader::DeserializeProtoTreeToMemory(protoTree, &deserializedTree);
     // Compare.
-    ASSERT_EQ(*model, *deserializedTree);
+    ASSERT_TRUE(root->Equal(*deserializedTree));
 }
 
 TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_CompareDifferent) {
@@ -149,13 +147,11 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_CompareDifferent) {
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
             std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
-
     // Call function for deserializing proto tree.
-    std::unique_ptr<ModelTree> deserializedTree;
+    std::unique_ptr<TreeNode> deserializedTree;
     TreeReader::DeserializeProtoTreeToMemory(protoTree, &deserializedTree);
     // Compare.
-    ASSERT_FALSE(*model == *deserializedTree);
+    ASSERT_FALSE(root->Equal(*deserializedTree));
 }
 
 void GenerateCompleteTree(int depth, proto::ModelTree *protoTree) {
@@ -197,7 +193,7 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_TooManyNodes) {
     }
 
     // Call function for deserializing proto tree.
-    std::unique_ptr<ModelTree> deserializedTree;
+    std::unique_ptr<TreeNode> deserializedTree;
     bool result = TreeReader::DeserializeProtoTreeToMemory(protoTree, &deserializedTree);
     ASSERT_FALSE(result);
 }
@@ -239,7 +235,7 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_TreeTooDeep) {
     }
 
     // Call function for deserializing proto tree.
-    std::unique_ptr<ModelTree> deserializedTree;
+    std::unique_ptr<TreeNode> deserializedTree;
     bool result = TreeReader::DeserializeProtoTreeToMemory(protoTree, &deserializedTree);
     ASSERT_FALSE(result);
 }

@@ -68,7 +68,6 @@ cc_library {
         "adaptivecpu/TimeSource.cpp",
         "adaptivecpu/WorkDurationProcessor.cpp",
         "adaptivecpu/TreeReader.cpp",
-        "adaptivecpu/ModelTree.cpp",
         "adaptivecpu/ModelTreeNode.cpp"
     ],
     shared_libs: [
