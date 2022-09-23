@@ -334,7 +334,8 @@ bool ThermalHelper::readCoolingDevice(std::string_view cooling_device,
 bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_0 *out) {
     // Return fail if the thermal sensor cannot be read.
     float temp;
-    if (!readThermalSensor(sensor_name, &temp, false)) {
+    std::string sensor_log;
+    if (!readThermalSensor(sensor_name, &temp, false, &sensor_log)) {
         LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
         return false;
     }
@@ -353,6 +354,10 @@ bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_
             sensor_info.hot_thresholds[static_cast<size_t>(ThrottlingSeverity::SHUTDOWN)];
     out->vrThrottlingThreshold = sensor_info.vr_threshold;
 
+    if (sensor_info.is_watch) {
+        LOG(INFO) << sensor_name.data() << ":" << out->currentValue << " raw data:[" << sensor_log
+                  << "]";
+    }
     return true;
 }
 
@@ -362,8 +367,9 @@ bool ThermalHelper::readTemperature(
         const bool force_no_cache) {
     // Return fail if the thermal sensor cannot be read.
     float temp;
+    std::string sensor_log;
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache)) {
+    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log)) {
         LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
         return false;
     }
@@ -395,7 +401,9 @@ bool ThermalHelper::readTemperature(
     out->throttlingStatus = static_cast<size_t>(status.first) > static_cast<size_t>(status.second)
                                     ? status.first
                                     : status.second;
-
+    if (sensor_info.is_watch) {
+        LOG(INFO) << sensor_name.data() << ":" << out->value << " raw data:[" << sensor_log << "]";
+    }
     return true;
 }
 
@@ -784,10 +792,10 @@ bool ThermalHelper::fillCpuUsages(hidl_vec<CpuUsage> *cpu_usages) const {
 }
 
 bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
-                                      const bool force_no_cache) {
+                                      const bool force_no_cache, std::string *sensor_log) {
     float temp_val = 0.0;
     std::string file_reading;
-    std::string log_buf;
+    std::string sub_sensor_log;
     boot_clock::time_point now = boot_clock::now();
 
     ATRACE_NAME(StringPrintf("ThermalHelper::readThermalSensor - %s", sensor_name.data()).c_str());
@@ -806,6 +814,7 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                  now - sensor_status.thermal_cached.timestamp) < sensor_info.time_resolution) &&
         !isnan(sensor_status.thermal_cached.temp)) {
         *temp = sensor_status.thermal_cached.temp;
+        sensor_log->append(StringPrintf("%s:%0.f ", sensor_name.data(), *temp));
         LOG(VERBOSE) << "read " << sensor_name.data() << " from buffer, value:" << *temp;
         return true;
     }
@@ -821,16 +830,14 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
             return false;
         }
         *temp = std::stof(::android::base::Trim(file_reading));
+        sensor_log->append(StringPrintf("%s:%0.f ", sensor_name.data(), *temp));
     } else {
         for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
             float sensor_reading = 0.0;
             if (!readThermalSensor(sensor_info.virtual_sensor_info->linked_sensors[i],
-                                   &sensor_reading, force_no_cache)) {
+                                   &sensor_reading, force_no_cache, &sub_sensor_log)) {
                 return false;
             }
-            log_buf.append(StringPrintf("(%s: %0.2f)",
-                                        sensor_info.virtual_sensor_info->linked_sensors[i].c_str(),
-                                        sensor_reading));
             if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
                 return false;
             }
@@ -861,8 +868,9 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                     break;
             }
         }
-        LOG(VERBOSE) << sensor_name.data() << "'s sub sensors:" << log_buf;
         *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
+        sensor_log->append(
+                StringPrintf("%s:%0.f(%s) ", sensor_name.data(), *temp, sub_sensor_log.data()));
     }
 
     {
@@ -994,10 +1002,8 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         }
 
         if (sensor_status.severity == ThrottlingSeverity::NONE) {
-            LOG(VERBOSE) << temp.name << ": " << temp.value;
             thermal_throttling_.clearThrottlingData(name_status_pair.first, sensor_info);
         } else {
-            LOG(INFO) << temp.name << ": " << temp.value;
             // update thermal throttling request
             thermal_throttling_.thermalThrottlingUpdate(
                     temp, sensor_info, sensor_status.severity, time_elapsed_ms,
