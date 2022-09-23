@@ -82,6 +82,8 @@ message Atom {
       F2fsSmartIdleMaintEnabledStateChanged f2fs_smart_idle_maint_enabled_state_changed = 105039;
       BlockStatsReported block_stats_reported = 105040;
       VendorAudioHardwareStatsReported vendor_audio_hardware_stats_reported = 105041;
+
+      ThermalDfsStats thermal_dfs_stats = 105042;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -900,6 +902,25 @@ message PowerMitigationStats {
  optional int32 soft_ocp_gpu_cap = 24;
  // The last triggered capacity: soft_ocp_tpu.
  optional int32 soft_ocp_tpu_cap = 25;
+}
+
+/**
+ * Log thermal statistics.
+ */
+message ThermalDfsStats {
+ optional string reverse_domain_name = 1;
+ // The last count of BIG cluster dfs triggers
+ optional int32 big_dfs_count = 2;
+ // The last count of MID cluster dfs triggers
+ optional int32 mid_dfs_count = 3;
+ // The last count of LITTLE cluster dfs triggers
+ optional int32 little_dfs_count = 4;
+ // The last count of GPU dfs triggers
+ optional int32 gpu_dfs_count = 5;
+ // The last count of TPU dfs triggers
+ optional int32 tpu_dfs_count = 6;
+ // The last count of DSP dfs triggers
+ optional int32 aur_dfs_count = 7;
 }
 
 /**
