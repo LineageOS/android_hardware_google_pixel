@@ -51,6 +51,7 @@ using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledSta
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
+using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
@@ -86,7 +87,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
       kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath),
       kBlockStatsLength(sysfs_paths.BlockStatsLength),
-      kAmsRatePath(sysfs_paths.AmsRatePath) {}
+      kAmsRatePath(sysfs_paths.AmsRatePath),
+      kThermalStatsPaths(sysfs_paths.ThermalStatsPaths) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -369,6 +371,10 @@ void SysfsCollector::logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_
 
     reportSpeakerHealthStat(stats_client, left_obj);
     reportSpeakerHealthStat(stats_client, right_obj);
+}
+
+void SysfsCollector::logThermalStats(const std::shared_ptr<IStats> &stats_client) {
+    thermal_stats_reporter_.logThermalStats(stats_client, kThermalStatsPaths);
 }
 
 /**
@@ -1039,6 +1045,7 @@ void SysfsCollector::logPerDay() {
     mm_metrics_reporter_.logCmaStatus(stats_client);
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
     logVendorAudioHardwareStats(stats_client);
+    logThermalStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
