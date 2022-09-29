@@ -32,6 +32,7 @@ namespace pixel {
 
 // TODO(jasnamarin@): Revisit MAX_TREE_DEPTH, change to a larger number if needed.
 constexpr uint32_t MAX_TREE_DEPTH = 128;
+constexpr uint64_t MAX_NUM_NODES = 1000000;
 
 class ModelTree {
   public:

@@ -38,10 +38,14 @@ bool TreeReader::DeserializeRecursive(const proto::ModelTree &protoTree,
                                       const std::map<proto::Feature, float> &stds,
                                       std::unique_ptr<TreeNode> *next, int *nodeIndex,
                                       int currentTreeDepth) {
+    if (*nodeIndex >= protoTree.nodes().size()) {
+        LOG(ERROR) << "Invalid tree structure!";
+        return false;
+    }
     // Pre-increment operator sets the expression after incrementing the value
     proto::Node currNode = protoTree.nodes(++(*nodeIndex));
     if (currentTreeDepth > MAX_TREE_DEPTH) {
-        LOG(ERROR) << "Tree depth exceedes " << currentTreeDepth << " nodes!";
+        LOG(ERROR) << "Tree depth exceedes " << MAX_TREE_DEPTH << " nodes!";
         return false;
     }
 
@@ -90,6 +94,11 @@ bool TreeReader::DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
     int nodeIndex = -1;
     int currentTreeDepth = 0;
     std::unique_ptr<TreeNode> root;
+    if (protoTree.nodes().size() > MAX_NUM_NODES) {
+        LOG(ERROR) << "Model tree has " << protoTree.nodes().size()
+                   << " nodes, and the max number allowed is " << MAX_NUM_NODES << "!";
+        return false;
+    }
     // Read feature statistics (before the model tree so that we can denormalize thresholds).
     std::map<proto::Feature, float> means;
     for (auto i = 0; i < protoTree.feature_means().size(); i++) {
@@ -101,7 +110,10 @@ bool TreeReader::DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
         stds.insert({protoTree.feature_stds(i).feature(), protoTree.feature_stds(i).statistic()});
     }
     // Deserialize model tree (simultaneously denormalize threshold values).
-    TreeReader::DeserializeRecursive(protoTree, means, stds, &root, &nodeIndex, currentTreeDepth);
+    if (!TreeReader::DeserializeRecursive(protoTree, means, stds, &root, &nodeIndex,
+                                          currentTreeDepth)) {
+        return false;
+    }
     // Save the new tree into the in-memory ModelTree object.
     *model = std::make_unique<ModelTree>(std::move(root));
 
