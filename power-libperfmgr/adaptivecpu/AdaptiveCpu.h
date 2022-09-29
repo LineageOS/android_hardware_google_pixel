@@ -80,7 +80,7 @@ class AdaptiveCpu {
     void WaitForEnabledAndWorkDurations();
 
     Model mModel;  // to be removed.
-    std::unique_ptr<ModelTree> modelTree;
+    std::unique_ptr<TreeNode> mModelRoot;
     WorkDurationProcessor mWorkDurationProcessor;
     KernelCpuFeatureReader mKernelCpuFeatureReader;
     AdaptiveCpuStats mAdaptiveCpuStats;

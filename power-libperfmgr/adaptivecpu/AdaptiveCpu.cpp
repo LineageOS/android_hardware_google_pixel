@@ -153,7 +153,7 @@ void AdaptiveCpu::RunMainLoop() {
             mDevice = ReadDevice();
             if (mUpdatableModelsEnabled) {
                 // Initialize model from tree proto.
-                if (!TreeReader::DeserializeTreeFromFile(kPathToSerializedModel, &modelTree)) {
+                if (!TreeReader::DeserializeTreeFromFile(kPathToSerializedModel, &mModelRoot)) {
                     mIsEnabled = false;
                     continue;
                 }

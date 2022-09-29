@@ -89,11 +89,10 @@ bool TreeReader::DeserializeRecursive(const proto::ModelTree &protoTree,
 }
 
 bool TreeReader::DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
-                                              std::unique_ptr<ModelTree> *model) {
+                                              std::unique_ptr<TreeNode> *model) {
     // Traverse proto tree in pre-order, create an in-memory tree.
     int nodeIndex = -1;
     int currentTreeDepth = 0;
-    std::unique_ptr<TreeNode> root;
     if (protoTree.nodes().size() > MAX_NUM_NODES) {
         LOG(ERROR) << "Model tree has " << protoTree.nodes().size()
                    << " nodes, and the max number allowed is " << MAX_NUM_NODES << "!";
@@ -110,12 +109,11 @@ bool TreeReader::DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
         stds.insert({protoTree.feature_stds(i).feature(), protoTree.feature_stds(i).statistic()});
     }
     // Deserialize model tree (simultaneously denormalize threshold values).
-    if (!TreeReader::DeserializeRecursive(protoTree, means, stds, &root, &nodeIndex,
+    if (!TreeReader::DeserializeRecursive(protoTree, means, stds, model, &nodeIndex,
                                           currentTreeDepth)) {
+        LOG(ERROR) << "Model not successfully deserialized!";
         return false;
     }
-    // Save the new tree into the in-memory ModelTree object.
-    *model = std::make_unique<ModelTree>(std::move(root));
 
     return true;
 }
@@ -142,7 +140,7 @@ bool TreeReader::ReadProtoTreeFromFile(std::string_view filePath, proto::ModelTr
 }
 
 bool TreeReader::DeserializeTreeFromFile(std::string_view filePath,
-                                         std::unique_ptr<ModelTree> *model) {
+                                         std::unique_ptr<TreeNode> *model) {
     proto::ModelTree protoTree;
     if (!TreeReader::ReadProtoTreeFromFile(filePath, &protoTree)) {
         return false;
