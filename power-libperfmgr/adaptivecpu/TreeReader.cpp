@@ -34,6 +34,8 @@ namespace pixel {
 // recursively, we need to know which node is being processed in each function call - for this we
 // use nodeIndex.
 bool TreeReader::DeserializeRecursive(const proto::ModelTree &protoTree,
+                                      const std::map<proto::Feature, float> &means,
+                                      const std::map<proto::Feature, float> &stds,
                                       std::unique_ptr<TreeNode> *next, int *nodeIndex,
                                       int currentTreeDepth) {
     // Pre-increment operator sets the expression after incrementing the value
@@ -46,18 +48,35 @@ bool TreeReader::DeserializeRecursive(const proto::ModelTree &protoTree,
     if (currNode.has_split_node()) {
         // The next node in the array is the left child of the current node. (pre-order)
         std::unique_ptr<TreeNode> left;
-        if (!TreeReader::DeserializeRecursive(protoTree, &left, nodeIndex, currentTreeDepth + 1)) {
+        if (!TreeReader::DeserializeRecursive(protoTree, means, stds, &left, nodeIndex,
+                                              currentTreeDepth + 1)) {
             return false;
         }
         // When the whole left sub-tree is deserialized, repeat the same for the right.
         std::unique_ptr<TreeNode> right;
-        if (!TreeReader::DeserializeRecursive(protoTree, &right, nodeIndex, currentTreeDepth + 1)) {
+        if (!TreeReader::DeserializeRecursive(protoTree, means, stds, &right, nodeIndex,
+                                              currentTreeDepth + 1)) {
             return false;
         }
 
-        *next = std::make_unique<SplitNode>(
-                std::move(left), std::move(right), currNode.split_node().threshold(),
-                currNode.split_node().feature(), currNode.split_node().value_index());
+        proto::Feature feature = currNode.split_node().feature();
+        // Denormalize the threshold to get valid comparisons when running the model later.
+        float threshold = currNode.split_node().threshold() * stds.at(feature) + means.at(feature);
+        // Features for CPU idle time % were scaled to [0-1], so for them we need to further adjust
+        // thresholds.
+        if (feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_0 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_2 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_3 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_4 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_5 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_6 ||
+            feature == proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_7) {
+            threshold *= 0.01;
+        }
+
+        *next = std::make_unique<SplitNode>(std::move(left), std::move(right), threshold, feature,
+                                            currNode.split_node().value_index());
         return true;
     } else {
         *next = std::make_unique<LeafNode>(currNode.leaf_node().decision());
@@ -71,11 +90,7 @@ bool TreeReader::DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
     int nodeIndex = -1;
     int currentTreeDepth = 0;
     std::unique_ptr<TreeNode> root;
-    if (!TreeReader::DeserializeRecursive(protoTree, &root, &nodeIndex, currentTreeDepth)) {
-        LOG(ERROR) << "Model not successfully deserialized!";
-        return false;
-    }
-    // Read feature statistics.
+    // Read feature statistics (before the model tree so that we can denormalize thresholds).
     std::map<proto::Feature, float> means;
     for (auto i = 0; i < protoTree.feature_means().size(); i++) {
         means.insert(
@@ -85,8 +100,10 @@ bool TreeReader::DeserializeProtoTreeToMemory(const proto::ModelTree &protoTree,
     for (auto i = 0; i < protoTree.feature_stds().size(); i++) {
         stds.insert({protoTree.feature_stds(i).feature(), protoTree.feature_stds(i).statistic()});
     }
-    // Save the new tree and feature stats into the in-memory ModelTree object.
-    *model = std::make_unique<ModelTree>(std::move(root), means, stds);
+    // Deserialize model tree (simultaneously denormalize threshold values).
+    TreeReader::DeserializeRecursive(protoTree, means, stds, &root, &nodeIndex, currentTreeDepth);
+    // Save the new tree into the in-memory ModelTree object.
+    *model = std::make_unique<ModelTree>(std::move(root));
 
     return true;
 }

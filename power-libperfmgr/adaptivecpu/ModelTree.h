@@ -30,21 +30,18 @@ namespace power {
 namespace impl {
 namespace pixel {
 
+// TODO(jasnamarin@): Revisit MAX_TREE_DEPTH, change to a larger number if needed.
 constexpr uint32_t MAX_TREE_DEPTH = 128;
 
 class ModelTree {
   public:
-    ModelTree(std::unique_ptr<TreeNode> root, std::map<proto::Feature, float> means,
-              std::map<proto::Feature, float> stds)
-        : mRoot(std::move(root)), mFeatureMeans(means), mFeatureStds(stds) {}
+    ModelTree(std::unique_ptr<TreeNode> root) : mRoot(std::move(root)) {}
     proto::ThrottleDecision RunModel(const std::deque<ModelInput> &model_inputs);
     const std::unique_ptr<TreeNode> &GetModel() const;
     bool operator==(const ModelTree &other) const;
 
   private:
     const std::unique_ptr<TreeNode> mRoot;
-    const std::map<proto::Feature, float> mFeatureMeans;
-    const std::map<proto::Feature, float> mFeatureStds;
 };
 
 }  // namespace pixel

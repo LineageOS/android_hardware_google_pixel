@@ -67,40 +67,29 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_CompareEqual) {
     leafNode->set_decision(proto::ThrottleDecision::NO_THROTTLE);
 
     // Add feature statistics - 15 means and std devs.
-    proto::FeatureStatistic stat;
     for (int i = 0; i < 15; i++) {
         proto::FeatureStatistic *stat = protoTree.add_feature_means();
         stat->set_feature(proto::Feature(i));
-        stat->set_statistic(10);
+        stat->set_statistic(10.0);
     }
     for (int i = 0; i < 15; i++) {
-        proto::FeatureStatistic *stat = protoTree.add_feature_means();
+        proto::FeatureStatistic *stat = protoTree.add_feature_stds();
         stat->set_feature(proto::Feature(i));
-        stat->set_statistic(1);
+        stat->set_statistic(1.0);
     }
 
-    // Construct equivalent cpp tree.
+    // Construct equivalent cpp tree. (And denormalize thresholds.)
     std::unique_ptr<TreeNode> l2 = std::make_unique<LeafNode>(proto::ThrottleDecision::THROTTLE_70);
     std::unique_ptr<TreeNode> r2 = std::make_unique<LeafNode>(proto::ThrottleDecision::NO_THROTTLE);
 
     std::unique_ptr<TreeNode> l1 = std::make_unique<SplitNode>(
-            std::move(l2), std::move(r2), 45.678, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_4, 2);
+            std::move(l2), std::move(r2), 0.55678, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_4, 2);
     std::unique_ptr<TreeNode> r1 = std::make_unique<LeafNode>(proto::ThrottleDecision::NO_THROTTLE);
 
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
-            std::move(l1), std::move(r1), 12.345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
+            std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::map<proto::Feature, float> means;
-    for (auto i = 0; i < protoTree.feature_means().size(); i++) {
-        means.insert(
-                {protoTree.feature_means(i).feature(), protoTree.feature_means(i).statistic()});
-    }
-    std::map<proto::Feature, float> stds;
-    for (auto i = 0; i < protoTree.feature_stds().size(); i++) {
-        stds.insert({protoTree.feature_stds(i).feature(), protoTree.feature_stds(i).statistic()});
-    }
-
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root), means, stds);
+    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
 
     // Call function for deserializing proto tree.
     std::unique_ptr<ModelTree> deserializedTree;
@@ -138,16 +127,15 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_CompareDifferent) {
     leafNode->set_decision(proto::ThrottleDecision::NO_THROTTLE);
 
     // Add feature statistics - 15 means and std devs.
-    proto::FeatureStatistic stat;
     for (int i = 0; i < 15; i++) {
         proto::FeatureStatistic *stat = protoTree.add_feature_means();
         stat->set_feature(proto::Feature(i));
-        stat->set_statistic(10);
+        stat->set_statistic(10.0);
     }
     for (int i = 0; i < 15; i++) {
-        proto::FeatureStatistic *stat = protoTree.add_feature_means();
+        proto::FeatureStatistic *stat = protoTree.add_feature_stds();
         stat->set_feature(proto::Feature(i));
-        stat->set_statistic(1);
+        stat->set_statistic(1.0);
     }
 
     // Construct a cpp tree with different decisions.
@@ -155,23 +143,13 @@ TEST(TreeReaderTest, TreeReader_DeserializeProtoTree_CompareDifferent) {
     std::unique_ptr<TreeNode> r2 = std::make_unique<LeafNode>(proto::ThrottleDecision::THROTTLE_70);
 
     std::unique_ptr<TreeNode> l1 = std::make_unique<SplitNode>(
-            std::move(l2), std::move(r2), 45.678, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_4, 2);
+            std::move(l2), std::move(r2), 0.55678, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_4, 2);
     std::unique_ptr<TreeNode> r1 = std::make_unique<LeafNode>(proto::ThrottleDecision::THROTTLE_70);
 
     std::unique_ptr<TreeNode> root = std::make_unique<SplitNode>(
-            std::move(l1), std::move(r1), 12.345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
+            std::move(l1), std::move(r1), 0.22345, proto::Feature::CPU_CORE_IDLE_TIME_PERCENT_1, 2);
 
-    std::map<proto::Feature, float> means;
-    for (auto i = 0; i < protoTree.feature_means().size(); i++) {
-        means.insert(
-                {protoTree.feature_means(i).feature(), protoTree.feature_means(i).statistic()});
-    }
-    std::map<proto::Feature, float> stds;
-    for (auto i = 0; i < protoTree.feature_stds().size(); i++) {
-        stds.insert({protoTree.feature_stds(i).feature(), protoTree.feature_stds(i).statistic()});
-    }
-
-    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root), means, stds);
+    std::unique_ptr<ModelTree> model = std::make_unique<ModelTree>(std::move(root));
 
     // Call function for deserializing proto tree.
     std::unique_ptr<ModelTree> deserializedTree;
