@@ -28,10 +28,13 @@
 
 #include <chrono>
 #include <deque>
+#include <fstream>
 #include <numeric>
+#include <string>
 
 #include "CpuLoadReaderSysDevices.h"
 #include "Model.h"
+#include "TreeReader.h"
 
 namespace aidl {
 namespace google {
@@ -44,6 +47,7 @@ using ::android::perfmgr::HintManager;
 
 // We pass the previous N ModelInputs to the model, including the most recent ModelInput.
 constexpr uint32_t kNumHistoricalModelInputs = 3;
+constexpr std::string_view kPathToSerializedModel("/data/misc/acpu_model.bin");
 
 // TODO(b/207662659): Add config for changing between different reader types.
 AdaptiveCpu::AdaptiveCpu() {}
@@ -147,6 +151,14 @@ void AdaptiveCpu::RunMainLoop() {
                 continue;
             }
             mDevice = ReadDevice();
+            if (mUpdatableModelsEnabled) {
+                // Initialize model from tree proto.
+                if (!TreeReader::DeserializeTreeFromFile(kPathToSerializedModel, &mModelRoot)) {
+                    mIsEnabled = false;
+                    continue;
+                }
+            }
+
             mIsInitialized = true;
         }
 
