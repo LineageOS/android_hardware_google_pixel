@@ -18,6 +18,7 @@
 
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <perfmgr/HintManager.h>
+#include <tree.pb.h>
 
 #include <chrono>
 #include <thread>
@@ -29,6 +30,7 @@
 #include "Device.h"
 #include "KernelCpuFeatureReader.h"
 #include "Model.h"
+#include "TreeReader.h"
 #include "WorkDurationProcessor.h"
 
 namespace aidl {
@@ -77,7 +79,8 @@ class AdaptiveCpu {
 
     void WaitForEnabledAndWorkDurations();
 
-    Model mModel;
+    Model mModel;  // to be removed.
+    std::unique_ptr<TreeNode> mModelRoot;
     WorkDurationProcessor mWorkDurationProcessor;
     KernelCpuFeatureReader mKernelCpuFeatureReader;
     AdaptiveCpuStats mAdaptiveCpuStats;
@@ -97,6 +100,7 @@ class AdaptiveCpu {
 
     volatile bool mIsEnabled = false;
     bool mIsInitialized = false;
+    bool mUpdatableModelsEnabled = false;
     volatile bool mShouldReloadConfig = false;
     std::chrono::nanoseconds mLastEnabledHintTime;
     std::chrono::nanoseconds mLastThrottleHintTime;

@@ -1,0 +1,76 @@
+syntax = "proto2";
+
+package aidl.google.hardware.power.impl.pixel.proto;
+
+option optimize_for = LITE_RUNTIME;
+
+// Serialized Decision Tree Classifier doesn't keep pointers to child nodes
+// To preserve node order serialize and deserialize tree in preorder
+// (root-left-right)
+message ModelTree {
+    // Order of nodes in repeated field is preserved
+    repeated Node nodes = 1;
+    // Mean and standard deviation are used to normalize input feature values
+    repeated FeatureStatistic feature_means = 2;
+    repeated FeatureStatistic feature_stds = 3;
+}
+
+message Node {
+    oneof node {
+        SplitNode split_node = 1;
+        LeafNode leaf_node = 2;
+    }
+}
+
+// Internal tree node used to make a decision to go left or right
+// based on the value of its feature compared to its threshold
+message SplitNode {
+    // Feature is used to make a decision to go to left or right subtree
+    optional Feature feature = 1;
+    // Model input can contain values of the same feature at different time points
+    optional int32 value_index = 2;
+    // If feature value at value_index <= threshold go left, otherwise go right
+    optional float threshold = 3;
+}
+
+// Leaf node only contains final throttle decision
+message LeafNode {
+    optional ThrottleDecision decision = 1;
+}
+
+// Used for keeping statistics such as mean and variance for each feature
+message FeatureStatistic {
+    optional Feature feature = 1;
+    optional float statistic = 2;
+}
+
+enum Feature {
+    // Frequency CPU cores run on in each of the three clusters
+    CPU_POLICY_AVG_FREQ_0 = 0;
+    CPU_POLICY_AVG_FREQ_1 = 1;
+    CPU_POLICY_AVG_FREQ_2 = 2;
+    // Idle time percentage of each CPU core
+    CPU_CORE_IDLE_TIME_PERCENT_0 = 3;
+    CPU_CORE_IDLE_TIME_PERCENT_1 = 4;
+    CPU_CORE_IDLE_TIME_PERCENT_2 = 5;
+    CPU_CORE_IDLE_TIME_PERCENT_3 = 6;
+    CPU_CORE_IDLE_TIME_PERCENT_4 = 7;
+    CPU_CORE_IDLE_TIME_PERCENT_5 = 8;
+    CPU_CORE_IDLE_TIME_PERCENT_6 = 9;
+    CPU_CORE_IDLE_TIME_PERCENT_7 = 10;
+    // Work duration metrics obtained between two GetFeatures() calls
+    AVG_DURATION = 11;
+    MAX_DURATION = 12;
+    NUM_DURATIONS = 13;
+    // Where work took longer than target duration (based on 60FPS)
+    NUM_MISSED_DEADLINES = 14;
+}
+
+enum ThrottleDecision {
+    NO_THROTTLE = 0;
+    THROTTLE_50 = 1;
+    THROTTLE_60 = 2;
+    THROTTLE_70 = 3;
+    THROTTLE_80 = 4;
+    THROTTLE_90 = 5;
+}

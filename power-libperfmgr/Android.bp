@@ -17,6 +17,22 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+cc_library_static {
+    name: "libtree",
+    proprietary: true,
+    vendor: true,
+    srcs: [
+        "tree.proto",
+    ],
+    proto: {
+        export_proto_headers: true,
+        type: "full",
+    },
+    shared_libs: [
+        "libprotobuf-cpp-full",
+    ]
+}
+
 cc_library {
     name: "libdisppower-pixel",
     proprietary: true,
@@ -51,6 +67,8 @@ cc_library {
         "adaptivecpu/ThrottleDecision.cpp",
         "adaptivecpu/TimeSource.cpp",
         "adaptivecpu/WorkDurationProcessor.cpp",
+        "adaptivecpu/TreeReader.cpp",
+        "adaptivecpu/ModelTreeNode.cpp"
     ],
     shared_libs: [
         "android.hardware.power-V3-ndk",
@@ -58,7 +76,11 @@ cc_library {
         "liblog",
         "libperfmgr",
         "libutils",
+        "libprotobuf-cpp-full",
         "libcutils",
+    ],
+    static_libs: [
+        "libtree",
     ],
 }
 
@@ -66,6 +88,7 @@ cc_test {
     name: "libadaptivecpu_test",
     proprietary: true,
     vendor: true,
+    require_root: true,
     srcs: [
         "adaptivecpu/tests/AdaptiveCpuConfigTest.cpp",
         "adaptivecpu/tests/AdaptiveCpuStatsTest.cpp",
@@ -75,16 +98,20 @@ cc_test {
         "adaptivecpu/tests/KernelCpuFeatureReaderTest.cpp",
         "adaptivecpu/tests/ModelTest.cpp",
         "adaptivecpu/tests/WorkDurationProcessorTest.cpp",
+        "adaptivecpu/tests/TreeReaderTest.cpp",
+        "adaptivecpu/tests/ModelTreeTest.cpp",
     ],
     static_libs: [
         "libadaptivecpu",
         "libgmock",
         "android.hardware.power-V3-ndk",
+        "libtree",
     ],
     shared_libs: [
         "liblog",
         "libbase",
         "libcutils",
+        "libprotobuf-cpp-full",
     ],
     test_suites: ["device-tests"],
 }
@@ -115,6 +142,10 @@ cc_binary {
         "libperfmgr",
         "libprocessgroup",
         "pixel-power-ext-V1-ndk",
+        "libprotobuf-cpp-full",
+    ],
+    static_libs: [
+        "libtree",
     ],
     srcs: [
         "aidl/service.cpp",
