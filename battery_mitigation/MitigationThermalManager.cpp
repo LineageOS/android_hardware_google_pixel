@@ -124,6 +124,7 @@ void MitigationThermalManager::thermalCb(const Temperature &temperature) {
     std::stringstream oss;
     oss << temperature.name << " triggered at " << temperature.value << std::endl << std::flush;
     android::base::WriteStringToFd(oss.str(), fd);
+    fsync(fd);
 
     for (int i = 0; i < NUM_OF_SAMPLES; i++) {
         auto now = std::chrono::system_clock::now();
@@ -135,6 +136,7 @@ void MitigationThermalManager::thermalCb(const Temperature &temperature) {
         oss << std::put_time(&now_tm, "%m-%d %H:%M:%S.") << std::setw(3) << std::setfill('0')
                 << ms.count() << std::endl << std::flush;
         android::base::WriteStringToFd(oss.str(), fd);
+        fsync(fd);
         oss.str("");
         /* log System info */
         for (int j = 0; j < kSystemName.size(); j++) {

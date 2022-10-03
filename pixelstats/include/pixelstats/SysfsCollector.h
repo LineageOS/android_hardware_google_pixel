@@ -24,6 +24,7 @@
 #include "BatteryHealthReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
+#include "ThermalStatsReporter.h"
 
 namespace android {
 namespace hardware {
@@ -61,6 +62,8 @@ class SysfsCollector {
         const char *const SpeakerHeartBeatPath;
         const std::vector<std::string> UFSErrStatsPath;
         const int BlockStatsLength;
+        const char *const AmsRatePath;
+        const std::vector<std::string> ThermalStatsPaths;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -69,6 +72,7 @@ class SysfsCollector {
   private:
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
+    void aggregatePer5Min();
     void logPerDay();
     void logPerHour();
 
@@ -91,12 +95,14 @@ class SysfsCollector {
     void logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client);
     void logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client);
     void logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> &stats_client);
+    void logThermalStats(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
     void reportZramMmStat(const std::shared_ptr<IStats> &stats_client);
     void reportZramBdStat(const std::shared_ptr<IStats> &stats_client);
     int getReclaimedSegments(const std::string &mode);
+    void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -122,10 +128,13 @@ class SysfsCollector {
     const char *const kSpeakerHeartbeatPath;
     const std::vector<std::string> kUFSErrStatsPath;
     const int kBlockStatsLength;
+    const char *const kAmsRatePath;
+    const std::vector<std::string> kThermalStatsPaths;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
+    ThermalStatsReporter thermal_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so

@@ -327,6 +327,16 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     bool getSupportedPrimitives(uint32_t *value) override {
         return getProperty("supported_primitives", value, (uint32_t)0);
     }
+    bool isF0CompEnabled() override {
+        bool value;
+        getProperty("f0.comp.enabled", &value, true);
+        return value;
+    }
+    bool isRedcCompEnabled() override {
+        bool value;
+        getProperty("redc.comp.enabled", &value, true);
+        return value;
+    }
     void debug(int fd) override { HwCalBase::debug(fd); }
 };
 
