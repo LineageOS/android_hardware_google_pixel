@@ -84,6 +84,7 @@ message Atom {
       VendorAudioHardwareStatsReported vendor_audio_hardware_stats_reported = 105041;
 
       ThermalDfsStats thermal_dfs_stats = 105042;
+      VendorLongIRQStatsReported vendor_long_irq_stats_reported = 105043;
       VendorTempResidencyStats vendor_temp_residency_stats = 105045;
     }
     // AOSP atom ID range ends at 109999
@@ -1283,6 +1284,45 @@ message VendorAudioHardwareStatsReported {
   optional int32 rate_of_cca_enable_per_day = 4;
 }
 
+/*
+ * Logs vendor stats about long IRQs.
+ *
+ * IRQ is considered long when it exceeds a threshold (currently 1 ms).
+ * Stats include top 5 slowest IRQs: their numbers and the worst latency.
+ * Stats are reset after every report.
+ */
+ message VendorLongIRQStatsReported {
+  optional string reverse_domain_name = 1;
+
+  // Count of long soft IRQ since last report.
+  optional int64 long_softirq_count = 2;
+
+  optional int64 top1_softirq_num = 3;
+  optional int64 top1_softirq_latency_us = 4;
+  optional int64 top2_softirq_num = 5;
+  optional int64 top2_softirq_latency_us = 6;
+  optional int64 top3_softirq_num = 7;
+  optional int64 top3_softirq_latency_us = 8;
+  optional int64 top4_softirq_num = 9;
+  optional int64 top4_softirq_latency_us = 10;
+  optional int64 top5_softirq_num = 11;
+  optional int64 top5_softirq_latency_us = 12;
+
+  // Count of long IRQ since last report.
+  optional int64 long_irq_count = 13;
+
+  optional int64 top1_irq_num = 14;
+  optional int64 top1_irq_latency_us = 15;
+  optional int64 top2_irq_num = 16;
+  optional int64 top2_irq_latency_us = 17;
+  optional int64 top3_irq_num = 18;
+  optional int64 top3_irq_latency_us = 19;
+  optional int64 top4_irq_num = 20;
+  optional int64 top4_irq_latency_us = 21;
+  optional int64 top5_irq_num = 22;
+  optional int64 top5_irq_latency_us = 23;
+}
+
 /**
  * Logs the Temperature residency stats per thermal zone.
  */
@@ -1319,5 +1359,4 @@ message VendorTempResidencyStats {
   optional int64 temp_residency_ms_bucket_18 = 21;
   optional int64 temp_residency_ms_bucket_19 = 22;
   optional int64 temp_residency_ms_bucket_20 = 23;
-
 }
