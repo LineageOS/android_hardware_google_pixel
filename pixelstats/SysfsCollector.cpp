@@ -56,6 +56,7 @@ using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsRepo
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorLongIRQStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorResumeLatencyStats;
 using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerStatsReported;
@@ -93,7 +94,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
       kCCARatePath(sysfs_paths.CCARatePath),
       kTempResidencyPath(sysfs_paths.TempResidencyPath),
-      kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath) {}
+      kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
+      kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1059,6 +1061,103 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
         ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
 }
 
+/**
+ * Logs the Resume Latency stats.
+ */
+void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (!kResumeLatencyMetricsPath) {
+        ALOGE("ResumeLatencyMetrics path not specified");
+        return;
+    }
+    if (!ReadFileToString(kResumeLatencyMetricsPath, &file_contents)) {
+        ALOGE("Unable to ResumeLatencyMetric %s - %s", kResumeLatencyMetricsPath, strerror(errno));
+        return;
+    }
+
+    int offset = 0;
+    int bytes_read;
+    const char *data = file_contents.c_str();
+    int data_len = file_contents.length();
+
+    int curr_bucket_cnt;
+    if (!sscanf(data + offset, "Resume Latency Bucket Count: %d\n%n", &curr_bucket_cnt,
+                &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    int64_t max_latency;
+    if (!sscanf(data + offset, "Max Resume Latency: %ld\n%n", &max_latency, &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    uint64_t sum_latency;
+    if (!sscanf(data + offset, "Sum Resume Latency: %lu\n%n", &sum_latency, &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    if (curr_bucket_cnt > kMaxResumeLatencyBuckets)
+        return;
+    if (curr_bucket_cnt != prev_data.bucket_cnt) {
+        prev_data.resume_latency_buckets.clear();
+    }
+
+    int64_t total_latency_cnt = 0;
+    int64_t count;
+    int index = 2;
+    std::vector<VendorAtomValue> values(curr_bucket_cnt + 2);
+    VendorAtomValue tmp;
+    // Iterate over resume latency buckets to get latency count within some latency thresholds
+    while (sscanf(data + offset, "%*ld - %*ldms ====> %ld\n%n", &count, &bytes_read) == 1 ||
+           sscanf(data + offset, "%*ld - infms ====> %ld\n%n", &count, &bytes_read) == 1) {
+        offset += bytes_read;
+        if (offset >= data_len && (index + 1 < curr_bucket_cnt + 2))
+            return;
+        if (curr_bucket_cnt == prev_data.bucket_cnt) {
+            tmp.set<VendorAtomValue::longValue>(count -
+                                                prev_data.resume_latency_buckets[index - 2]);
+            prev_data.resume_latency_buckets[index - 2] = count;
+        } else {
+            tmp.set<VendorAtomValue::longValue>(count);
+            prev_data.resume_latency_buckets.push_back(count);
+        }
+        if (index >= curr_bucket_cnt + 2)
+            return;
+        values[index] = tmp;
+        index += 1;
+        total_latency_cnt += count;
+    }
+    tmp.set<VendorAtomValue::longValue>(max_latency);
+    values[0] = tmp;
+    if ((sum_latency - prev_data.resume_latency_sum_ms < 0) ||
+        (total_latency_cnt - prev_data.resume_count <= 0)) {
+        tmp.set<VendorAtomValue::longValue>(-1);
+        ALOGI("average resume latency get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(
+                (int64_t)(sum_latency - prev_data.resume_latency_sum_ms) /
+                (total_latency_cnt - prev_data.resume_count));
+    }
+    values[1] = tmp;
+
+    prev_data.resume_latency_sum_ms = sum_latency;
+    prev_data.resume_count = total_latency_cnt;
+    prev_data.bucket_cnt = curr_bucket_cnt;
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorResumeLatencyStats,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorResumeLatencyStats to Stats service");
+}
+
 bool cmp(const std::pair<int, int64_t> &a, const std::pair<int, int64_t> &b) {
     return a.second > b.second;
 }
@@ -1217,6 +1316,7 @@ void SysfsCollector::logPerDay() {
     logThermalStats(stats_client);
     logTempResidencyStats(stats_client);
     logVendorLongIRQStatsReported(stats_client);
+    logVendorResumeLatencyStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
