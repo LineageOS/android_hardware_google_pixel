@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,26 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef HARDWARE_GOOGLE_PIXEL_PIXELSTATS_PCACHARGESTATS_H
-#define HARDWARE_GOOGLE_PIXEL_PIXELSTATS_PCACHARGESTATS_H
+#ifndef HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
+#define HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
 
-class PcaChargeStats {
+class MitigationConfig {
   public:
-    PcaChargeStats(const std::string pca_charge_metrics_path =
-                           "/sys/class/power_supply/pca9468-mains/device/chg_stats",
-                   const std::string pca94xx_charge_metrics_path =
-                           "/sys/class/power_supply/pca94xx-mains/device/chg_stats");
+    struct Config {
+        const std::vector<std::string> SystemPath;
+        const std::vector<std::string> FilteredZones;
+        const std::vector<std::string> SystemName;
+        const char *const LogFilePath;
+    };
 
-    bool CheckPcaContentsAndAck(std::string *file_contents);
+    MitigationConfig(const struct Config &cfg);
 
   private:
-    const std::string kPcaChargeMetricsPath;
-    const std::string kPca94xxChargeMetricsPath;
+    const std::vector<std::string> kSystemPath;
+    const std::vector<std::string> kFilteredZones;
+    const std::vector<std::string> kSystemName;
+    const char *const kLogFilePath;
 };
 
 }  // namespace pixel
@@ -41,4 +45,4 @@ class PcaChargeStats {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // HARDWARE_GOOGLE_PIXEL_PIXELSTATS_PCACHARGESTATS_H
+#endif  // HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
