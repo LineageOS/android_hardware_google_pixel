@@ -15,14 +15,13 @@
  */
 #define LOG_TAG "mitigation-logger"
 
-#include <battery_mitigation/MitigationThermalManager.h>
-
 #include <android-base/chrono_utils.h>
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
+#include <battery_mitigation/MitigationThermalManager.h>
 #include <errno.h>
 #include <sys/time.h>
 
@@ -84,6 +83,7 @@ void MitigationThermalManager::updateConfig(const struct MitigationConfig::Confi
     kSystemPath = cfg.SystemPath;
     kSystemName = cfg.SystemName;
     kFilteredZones = cfg.FilteredZones;
+    kTimestampFormat = cfg.TimestampFormat;
 }
 
 bool MitigationThermalManager::connectThermalHal() {
@@ -133,8 +133,9 @@ void MitigationThermalManager::thermalCb(const Temperature &temperature) {
                 std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch());
         struct tm now_tm;
         localtime_r(&time_sec, &now_tm);
-        oss << std::put_time(&now_tm, "%m-%d %H:%M:%S.") << std::setw(3) << std::setfill('0')
-                << ms.count() << std::endl << std::flush;
+        oss << std::put_time(&now_tm, kTimestampFormat.c_str()) << "." << std::setw(3)
+            << std::setfill('0') << ms.count() << std::endl
+            << std::flush;
         android::base::WriteStringToFd(oss.str(), fd);
         fsync(fd);
         oss.str("");
