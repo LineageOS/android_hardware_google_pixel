@@ -28,6 +28,9 @@ using ::android::sp;
 class BatteryMitigation : public RefBase {
   public:
     BatteryMitigation(const struct MitigationConfig::Config &cfg);
+    bool isMitigationLogTimeValid(std::chrono::system_clock::time_point startTime,
+                                  const char *const logFilePath, const char *const timestampFormat,
+                                  const std::regex pattern);
 
   private:
     MitigationThermalManager *mThermalMgr;

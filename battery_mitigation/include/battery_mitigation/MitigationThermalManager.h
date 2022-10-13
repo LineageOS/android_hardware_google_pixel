@@ -31,10 +31,11 @@
 #include <unistd.h>
 #include <utils/Mutex.h>
 
-#include "MitigationConfig.h"
-
 #include <fstream>
 #include <iostream>
+#include <regex>
+
+#include "MitigationConfig.h"
 
 namespace android {
 namespace hardware {
@@ -116,6 +117,7 @@ class MitigationThermalManager {
     std::vector<std::string> kFilteredZones;
     std::vector<std::string> kSystemName;
     std::string kLogFilePath;
+    std::string kTimestampFormat;
 };
 
 }  // namespace pixel
