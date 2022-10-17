@@ -26,6 +26,7 @@
 #include <time.h>
 #include <utils/Timers.h>
 
+#include <cinttypes>
 #include <thread>
 
 /* I set a higher rare limit ti orientation, beacuae user might try to adjust
@@ -266,7 +267,7 @@ bool WlcReporter::checkRateLimit(int64_t minSecond, int maxCount, ReportRecord *
     }
     int64_t now = nanoseconds_to_seconds(systemTime(SYSTEM_TIME_BOOTTIME));
     if (rec->last_reported_time_in_sec > 0 && now - rec->last_reported_time_in_sec < minSecond) {
-        ALOGV("%s: Rate limit, min period: %ld", rec->name, minSecond);
+        ALOGV("%s: Rate limit, min period: %" PRId64, rec->name, minSecond);
         return false;
     }
     if (rec->last_reported_time_in_sec_today == 0) {
