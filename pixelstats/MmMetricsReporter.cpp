@@ -547,7 +547,7 @@ uint64_t MmMetricsReporter::getStimeByPid(int pid) {
 
     std::vector<std::string> data = android::base::Split(file_contents, " ");
     if (data.size() < stime_idx) {
-        ALOGI("Unable to find stime from %s. size: %lu", path.c_str(), data.size());
+        ALOGI("Unable to find stime from %s. size: %zu", path.c_str(), data.size());
         return false;
     }
 
