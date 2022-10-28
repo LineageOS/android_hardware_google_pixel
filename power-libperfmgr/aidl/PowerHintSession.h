@@ -93,8 +93,6 @@ class PowerHintSession : public BnPowerHintSession {
     int getUclampMin();
     void dumpToStream(std::ostream &stream);
 
-    void updateWorkPeriod(const std::vector<WorkDuration> &actualDurations);
-    time_point<steady_clock> getEarlyBoostTime();
     time_point<steady_clock> getStaleTime();
 
   private:
@@ -116,23 +114,6 @@ class PowerHintSession : public BnPowerHintSession {
         bool mIsSessionDead;
     };
 
-    class EarlyBoostHandler : public MessageHandler {
-      public:
-        EarlyBoostHandler(PowerHintSession *session)
-            : mSession(session), mIsMonitoring(false), mIsSessionDead(false) {}
-        void updateTimer(time_point<steady_clock> boostTime);
-        void handleMessage(const Message &message) override;
-        void setSessionDead();
-
-      private:
-        PowerHintSession *mSession;
-        std::mutex mBoostLock;
-        std::mutex mMessageLock;
-        std::atomic<time_point<steady_clock>> mBoostTime;
-        std::atomic<bool> mIsMonitoring;
-        bool mIsSessionDead;
-    };
-
   private:
     void updateUniveralBoostMode();
     int setSessionUclampMin(int32_t min);
@@ -140,15 +121,10 @@ class PowerHintSession : public BnPowerHintSession {
     const std::shared_ptr<AdaptiveCpu> mAdaptiveCpu;
     AppHintDesc *mDescriptor = nullptr;
     sp<StaleTimerHandler> mStaleTimerHandler;
-    sp<EarlyBoostHandler> mEarlyBoostHandler;
     std::atomic<time_point<steady_clock>> mLastUpdatedTime;
     sp<MessageHandler> mPowerManagerHandler;
     std::mutex mSessionLock;
     std::atomic<bool> mSessionClosed = false;
-    // These 3 variables are for earlyboost work period estimation.
-    int64_t mLastStartedTimeNs;
-    int64_t mLastDurationNs;
-    int64_t mWorkPeriodNs;
 };
 
 }  // namespace pixel
