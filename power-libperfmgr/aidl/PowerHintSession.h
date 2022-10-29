@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
+#include <aidl/android/hardware/power/SessionHint.h>
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <utils/Looper.h>
 #include <utils/Thread.h>
@@ -34,6 +35,7 @@ namespace impl {
 namespace pixel {
 
 using aidl::android::hardware::power::BnPowerHintSession;
+using aidl::android::hardware::power::SessionHint;
 using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
@@ -79,6 +81,7 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus updateTargetWorkDuration(int64_t targetDurationNanos) override;
     ndk::ScopedAStatus reportActualWorkDuration(
             const std::vector<WorkDuration> &actualDurations) override;
+    ndk::ScopedAStatus sendHint(SessionHint hint) override;
     bool isActive();
     bool isTimeout();
     void wakeup();
