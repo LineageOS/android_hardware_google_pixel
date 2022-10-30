@@ -135,6 +135,22 @@ int PowerSessionManager::getDisplayRefreshRate() {
 }
 
 void PowerSessionManager::addPowerSession(PowerHintSession *session) {
+    addThreadsFromPowerSession(session);
+    {
+        std::lock_guard<std::mutex> guard(mLock);
+        mSessions.insert(session);
+    }
+}
+
+void PowerSessionManager::removePowerSession(PowerHintSession *session) {
+    removeThreadsFromPowerSession(session);
+    {
+        std::lock_guard<std::mutex> guard(mLock);
+        mSessions.erase(session);
+    }
+}
+
+void PowerSessionManager::addThreadsFromPowerSession(PowerHintSession *session) {
     std::lock_guard<std::mutex> guard(mLock);
     for (auto t : session->getTidList()) {
         mTidSessionListMap[t].insert(session);
@@ -152,10 +168,9 @@ void PowerSessionManager::addPowerSession(PowerHintSession *session) {
         }
         mTidRefCountMap[t]++;
     }
-    mSessions.insert(session);
 }
 
-void PowerSessionManager::removePowerSession(PowerHintSession *session) {
+void PowerSessionManager::removeThreadsFromPowerSession(PowerHintSession *session) {
     std::lock_guard<std::mutex> guard(mLock);
     for (auto t : session->getTidList()) {
         if (mTidRefCountMap.find(t) == mTidRefCountMap.end()) {
@@ -171,7 +186,6 @@ void PowerSessionManager::removePowerSession(PowerHintSession *session) {
             mTidRefCountMap.erase(t);
         }
     }
-    mSessions.erase(session);
 }
 
 void PowerSessionManager::setUclampMin(PowerHintSession *session, int val) {
