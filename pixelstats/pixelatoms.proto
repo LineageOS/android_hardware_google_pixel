@@ -1268,4 +1268,16 @@ message VendorAudioHardwareStatsReported {
    * E.g.:12.345% is repsented by 12345.
    */
   optional int32 milli_rate_of_ams_per_day = 2;
+
+  /* The percentage of calls in a day where CCA is active.
+  * It represented as a fixed-point and rounded integer.
+  * E.g.:12.345% is represented by 12.
+  * CCA can only be applied under some radio bands.
+  */
+
+  /* cca_active: UI enable & algorithm is active (C1) */
+  optional int32 rate_of_cca_active_per_day = 3;
+
+  /* cca_enable: UI enable & algorithm is inactive. (C2) */
+  optional int32 rate_of_cca_enable_per_day = 4;
 }
