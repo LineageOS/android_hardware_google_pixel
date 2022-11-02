@@ -59,6 +59,7 @@ using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeechDspStat;
+using android::hardware::google::pixel::PixelAtoms::VendorTempResidencyStats;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 
@@ -89,7 +90,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kBlockStatsLength(sysfs_paths.BlockStatsLength),
       kAmsRatePath(sysfs_paths.AmsRatePath),
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
-      kCCARatePath(sysfs_paths.CCARatePath) {}
+      kCCARatePath(sysfs_paths.CCARatePath),
+      kTempResidencyPath(sysfs_paths.TempResidencyPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -814,6 +816,10 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
     }
 }
 
+void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
+    temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPath);
+}
+
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
@@ -1075,6 +1081,7 @@ void SysfsCollector::logPerDay() {
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
     logVendorAudioHardwareStats(stats_client);
     logThermalStats(stats_client);
+    logTempResidencyStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
