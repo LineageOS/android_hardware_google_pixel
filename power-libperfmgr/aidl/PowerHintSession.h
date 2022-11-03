@@ -122,6 +122,8 @@ class PowerHintSession : public BnPowerHintSession {
     sp<MessageHandler> mPowerManagerHandler;
     std::mutex mSessionLock;
     std::atomic<bool> mSessionClosed = false;
+    // Used when setting a temporary boost value to hold the true boost
+    std::atomic<std::optional<int>> mNextUclampMin;
 };
 
 }  // namespace pixel
