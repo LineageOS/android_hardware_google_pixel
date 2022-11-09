@@ -390,6 +390,7 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
             ALOGE("Error: hint is invalid");
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
+    mLastUpdatedTime.store(std::chrono::steady_clock::now());
     if (ATRACE_ENABLED()) {
         const std::string idstr = getIdString();
         std::string sz = StringPrintf("adpf.%s-session_hint", idstr.c_str());
