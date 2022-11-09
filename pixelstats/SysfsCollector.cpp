@@ -88,7 +88,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath),
       kBlockStatsLength(sysfs_paths.BlockStatsLength),
       kAmsRatePath(sysfs_paths.AmsRatePath),
-      kThermalStatsPaths(sysfs_paths.ThermalStatsPaths) {}
+      kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
+      kCCARatePath(sysfs_paths.CCARatePath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -978,32 +979,67 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
 }
 
 /**
- * Report the AMS rate.
+ * Report the AMS & CCA rate.
  */
 void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
+    uint32_t milli_ams_rate, cca_active_rate, cca_enable_rate;
+    bool isAmsReady = false, isCCAReady = false;
+
     if (kAmsRatePath == nullptr) {
-        ALOGD("Audio AMS_Rate path not specified");
+        ALOGD("Audio AMS Rate path not specified");
+    } else {
+        if (!ReadFileToString(kAmsRatePath, &file_contents)) {
+            ALOGD("Unable to read ams_rate path %s", kAmsRatePath);
+        } else {
+            if (sscanf(file_contents.c_str(), "%u", &milli_ams_rate) != 1) {
+                ALOGD("Unable to parse ams_rate %s", file_contents.c_str());
+            } else {
+                isAmsReady = true;
+                ALOGD("milli_ams_rate = %u", milli_ams_rate);
+            }
+        }
+    }
+
+    if (kCCARatePath == nullptr) {
+        ALOGD("Audio CCA Rate path not specified");
+    } else {
+        if (!ReadFileToString(kCCARatePath, &file_contents)) {
+            ALOGD("Unable to read cca_rate path %s", kCCARatePath);
+        } else {
+            if (sscanf(file_contents.c_str(), "%u,%u", &cca_active_rate, &cca_enable_rate) != 2) {
+                ALOGD("Unable to parse cca rates %s", file_contents.c_str());
+            } else {
+                isCCAReady = true;
+                ALOGD("cca_active_rate = %u, cca_enable_rate = %u", cca_active_rate,
+                      cca_enable_rate);
+            }
+        }
+    }
+
+    if (!(isAmsReady || isCCAReady)) {
+        ALOGD("no ams or cca data to report");
         return;
     }
 
-    uint32_t milli_ams_rate;
-    if (!ReadFileToString(kAmsRatePath, &file_contents)) {
-        ALOGE("Unable to read ams_rate path %s", kAmsRatePath);
-        return;
-    }
-
-    if (sscanf(file_contents.c_str(), "%u", &milli_ams_rate) != 1) {
-        ALOGE("Unable to parse ams_rate %s", file_contents.c_str());
-        return;
-    }
-
-    ALOGD("milli_ams_rate = %s", file_contents.c_str());
-
-    std::vector<VendorAtomValue> values(1);
+    std::vector<VendorAtomValue> values(3);
     VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
-    values[0] = tmp;
+
+    if (isAmsReady) {
+        tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
+        values[VendorAudioHardwareStatsReported::kMilliRateOfAmsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+    }
+
+    if (isCCAReady) {
+        tmp.set<VendorAtomValue::intValue>(cca_active_rate);
+        values[VendorAudioHardwareStatsReported::kRateOfCcaActivePerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(cca_enable_rate);
+        values[VendorAudioHardwareStatsReported::kRateOfCcaEnablePerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+    }
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
