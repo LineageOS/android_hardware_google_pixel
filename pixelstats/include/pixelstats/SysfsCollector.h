@@ -64,6 +64,7 @@ class SysfsCollector {
         const int BlockStatsLength;
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
+        const char *const CCARatePath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -130,6 +131,7 @@ class SysfsCollector {
     const int kBlockStatsLength;
     const char *const kAmsRatePath;
     const std::vector<std::string> kThermalStatsPaths;
+    const char *const kCCARatePath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
