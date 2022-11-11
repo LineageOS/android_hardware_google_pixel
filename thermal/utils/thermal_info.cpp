@@ -134,6 +134,35 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
     *out = ret;
     return true;
 }
+
+template <typename T>
+bool getStatsThresholdFromJsonValues(const Json::Value &values,
+                                     const std::function<T(const Json::Value &value)> &value_parser,
+                                     std::vector<T> *stats_threshold, T prev_value) {
+    if (values.empty()) {
+        LOG(INFO) << "Empty Stats Threshold";
+        return true;
+    }
+    const auto &values_size = values.size();
+    if (values_size > kMaxStatsThresholdCount) {
+        LOG(ERROR) << "Number of stats threshold " << values_size << " greater than max "
+                   << kMaxStatsThresholdCount;
+        return false;
+    }
+    stats_threshold->resize(values_size);
+    for (Json::Value::ArrayIndex i = 0; i < values_size; ++i) {
+        (*stats_threshold)[i] = value_parser(values[i]);
+        if ((*stats_threshold)[i] <= prev_value) {
+            LOG(ERROR) << "Invalid array[" << i << "]" << (*stats_threshold)[i]
+                       << " is <=" << prev_value;
+            return false;
+        }
+        prev_value = (*stats_threshold)[i];
+        LOG(INFO) << "[" << i << "]: " << (*stats_threshold)[i];
+    }
+    return true;
+}
+
 }  // namespace
 
 bool ParseBindedCdevInfo(const Json::Value &values,
@@ -264,6 +293,14 @@ bool ParseBindedCdevInfo(const Json::Value &values,
             }
         }
 
+        std::vector<int> stats_threshold;
+        if (!getStatsThresholdFromJsonValues<int>(values[j]["StatsThreshold"], getIntFromValue,
+                                                  &stats_threshold, -1)) {
+            LOG(ERROR) << "Failed to parse stats_threshold";
+            binded_cdev_info_map->clear();
+            return false;
+        }
+
         (*binded_cdev_info_map)[cdev_name] = {
                 .limit_info = limit_info,
                 .power_thresholds = power_thresholds,
@@ -276,11 +313,13 @@ bool ParseBindedCdevInfo(const Json::Value &values,
                 .max_throttle_step = max_throttle_step,
                 .cdev_floor_with_power_link = cdev_floor_with_power_link,
                 .power_rail = power_rail,
-        };
+                .stats_threshold = stats_threshold};
     }
     return true;
 }
 
+// ToDO: refactor sensorInfo parser & Remove parsing same config_path in each of sensor, cdev, power
+// rail.
 bool ParseSensorInfo(std::string_view config_path,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed) {
     std::string json_doc;
@@ -796,9 +835,6 @@ bool ParseSensorInfo(std::string_view config_path,
             return false;
         }
 
-        bool is_watch = (send_cb | send_powerhint | support_pid | support_hard_limit);
-        LOG(INFO) << "Sensor[" << name << "]'s is_watch: " << std::boolalpha << is_watch;
-
         std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
         if (is_virtual_sensor) {
             virtual_sensor_info.reset(new VirtualSensorInfo{linked_sensors, coefficients, offset,
@@ -808,6 +844,19 @@ bool ParseSensorInfo(std::string_view config_path,
         std::shared_ptr<ThrottlingInfo> throttling_info(new ThrottlingInfo{
                 k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power, s_power, i_cutoff,
                 i_default, tran_cycle, excluded_power_info_map, binded_cdev_info_map});
+
+        std::vector<float> stats_threshold;
+        if (!getStatsThresholdFromJsonValues<float>(sensors[i]["StatsThreshold"], getFloatFromValue,
+                                                    &stats_threshold,
+                                                    std::numeric_limits<float>::lowest())) {
+            LOG(ERROR) << "Failed to parse stats_threshold";
+            sensors_parsed->clear();
+            return false;
+        }
+
+        bool is_watch = (send_cb | send_powerhint | support_pid | support_hard_limit |
+                         !stats_threshold.empty());
+        LOG(INFO) << "Sensor[" << name << "]'s is_watch: " << std::boolalpha << is_watch;
 
         (*sensors_parsed)[name] = {
                 .type = sensor_type,
@@ -827,13 +876,14 @@ bool ParseSensorInfo(std::string_view config_path,
                 .is_hidden = is_hidden,
                 .virtual_sensor_info = std::move(virtual_sensor_info),
                 .throttling_info = std::move(throttling_info),
+                .stats_threshold = stats_threshold,
         };
 
         ++total_parsed;
     }
     LOG(INFO) << total_parsed << " Sensors parsed successfully";
     return true;
-}
+}  // NOLINT(readability/fn_size)
 
 bool ParseCoolingDevice(std::string_view config_path,
                         std::unordered_map<std::string, CdevInfo> *cooling_devices_parsed) {
