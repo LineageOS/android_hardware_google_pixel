@@ -341,7 +341,14 @@ void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
     const auto &map = thermal_helper_.GetSensorInfoMap();
     const auto &thermal_throttling_status_map = thermal_helper_.GetThermalThrottlingStatusMap();
     for (const auto &name_info_pair : map) {
+        if (name_info_pair.second.throttling_info == nullptr) {
+            continue;
+        }
         if (name_info_pair.second.throttling_info->binded_cdev_info_map.size()) {
+            if (thermal_throttling_status_map.find(name_info_pair.first) ==
+                thermal_throttling_status_map.end()) {
+                continue;
+            }
             *dump_buf << " Name: " << name_info_pair.first << std::endl;
             if (thermal_throttling_status_map.at(name_info_pair.first)
                         .pid_power_budget_map.size()) {
