@@ -37,6 +37,9 @@ using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverit
 using CdevArray = std::array<int, static_cast<size_t>(kThrottlingSeverityCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
 constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
+// Max number of time_in_state buckets is 20 in atoms
+// VendorSensorCoolingDeviceStats, VendorTempResidencyStats
+constexpr size_t kMaxStatsThresholdCount = 19;
 
 enum FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
@@ -83,6 +86,9 @@ struct BindedCdevInfo {
     bool high_power_check;
     // The flag for only triggering throttling until all power samples are collected
     bool throttling_with_power_link;
+    // List of upper_bounds of buckets into which to split state requests. If not present use each
+    // state as bucket
+    std::vector<int> stats_threshold;
 };
 
 struct ThrottlingInfo {
@@ -119,6 +125,9 @@ struct SensorInfo {
     bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::shared_ptr<ThrottlingInfo> throttling_info;
+    // List of bounds of buckets (inclusive) into which to split temperature. If not present use
+    // severity as bucket.
+    std::vector<float> stats_threshold;
 };
 
 struct CdevInfo {
