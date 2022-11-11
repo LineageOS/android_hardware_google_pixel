@@ -31,3 +31,9 @@ BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_perf_diag
 # but also allow explicit overriding for testing and development.
 SYSTEM_OPTIMIZE_JAVA ?= true
 SYSTEMUI_OPTIMIZE_JAVA ?= true
+
+# Exclude features that are not available on AOSP devices.
+ifneq (,$(filter aosp_%,$(TARGET_PRODUCT)))
+PRODUCT_COPY_FILES += \
+    frameworks/native/data/etc/aosp_excluded_hardware.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/aosp_excluded_hardware.xml
+endif
