@@ -32,3 +32,36 @@ on property:sys.boot_completed=1
 
 on property:sys.boot_completed=1
     chmod 444 /sys/kernel/debug/page_owner
+
+    # Create mm_event trace point.
+    # For legacy devices, only mm_event is using this trace instance.
+    # Debugfs is only used in legacy devices and going to be deprecated.
+    # If others want to put more,it should get hard review from pixel-perf-team.
+    mkdir /sys/kernel/tracing/instances/pixel 0755 system system
+    chown system system /sys/kernel/tracing/instances/pixel/trace
+    chmod 0660 /sys/kernel/tracing/instances/pixel/trace
+    chown system system /sys/kernel/tracing/instances/pixel/tracing_on
+    chmod 0660 /sys/kernel/tracing/instances/pixel/tracing_on
+    write /sys/kernel/tracing/instances/pixel/buffer_size_kb 64
+    write /sys/kernel/tracing/instances/pixel/events/cma/cma_alloc_busy_retry/enable 1
+    write /sys/kernel/tracing/instances/pixel/events/cma/cma_alloc_start/enable 1
+    write /sys/kernel/tracing/instances/pixel/events/cma/cma_alloc_info/enable 1
+
+# turns off tracing right before bugreporting to keep more traces
+on property:init.svc.dumpstatez=running
+    write /sys/kernel/tracing/instances/pixel/tracing_on 0
+
+on property:init.svc.dumpstatez=stopped
+    write /sys/kernel/tracing/instances/pixel/tracing_on 1
+
+on property:init.svc.bugreport=running
+    write /sys/kernel/tracing/instances/pixel/tracing_on 0
+
+on property:init.svc.bugreport=stopped
+    write /sys/kernel/tracing/instances/pixel/tracing_on 1
+
+on property:init.svc.bugreportd=running
+    write /sys/kernel/tracing/instances/pixel/tracing_on 0
+
+on property:init.svc.bugreportd=stopped
+    write /sys/kernel/tracing/instances/pixel/tracing_on 1
