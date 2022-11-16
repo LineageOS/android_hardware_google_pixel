@@ -145,6 +145,7 @@ struct PowerRailInfo {
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
 };
 
+// ToDo: combine each parser into one single call to avoid parsing same config_path multiple times.
 bool ParseSensorInfo(std::string_view config_path,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed);
 bool ParseCoolingDevice(std::string_view config_path,
