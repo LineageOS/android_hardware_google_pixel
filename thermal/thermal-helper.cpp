@@ -446,6 +446,7 @@ void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated
             }
         }
         if (cooling_devices_.writeCdevFile(target_cdev, std::to_string(max_state))) {
+            ATRACE_INT(target_cdev.c_str(), max_state);
             LOG(INFO) << "Successfully update cdev " << target_cdev << " sysfs to " << max_state;
         } else {
             LOG(ERROR) << "Failed to update cdev " << target_cdev << " sysfs to " << max_state;
@@ -815,7 +816,9 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
         !isnan(sensor_status.thermal_cached.temp)) {
         *temp = sensor_status.thermal_cached.temp;
         sensor_log->append(StringPrintf("%s:%0.f ", sensor_name.data(), *temp));
+
         LOG(VERBOSE) << "read " << sensor_name.data() << " from buffer, value:" << *temp;
+        ATRACE_INT((sensor_name.data() + std::string("-cached")).c_str(), static_cast<int>(*temp));
         return true;
     }
 
@@ -872,6 +875,8 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
         sensor_log->append(
                 StringPrintf("%s:%0.f(%s) ", sensor_name.data(), *temp, sub_sensor_log.data()));
     }
+
+    ATRACE_INT(sensor_name.data(), static_cast<int>(*temp));
 
     {
         std::unique_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
