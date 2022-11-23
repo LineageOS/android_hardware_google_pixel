@@ -97,6 +97,7 @@ message Atom {
       VendorTempResidencyStats vendor_temp_residency_stats = 105045;
       BrownoutDetected brownout_detected = 105046;
       PcieLinkStatsReported pcie_link_stats = 105047;
+      VendorSensorCoolingDeviceStats vendor_sensor_cooling_device_stats = 105048;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1571,4 +1572,42 @@ message PcieLinkStatsReported {
     optional int32 wifi_pcie_pll_lock_avg = 10;
     /* Average time (uS) for successful PCIe Link Up on wifi interface */
     optional int32 wifi_pcie_link_up_avg = 11;
+}
+
+/**
+ * Log the CDEV request stats per sensor, binded cooling device.
+ * Logged from: hardware/google/pixel/thermal/utils/thermal_stats_helper.cpp
+ */
+message VendorSensorCoolingDeviceStats {
+ optional string reverse_domain_name = 1;
+ // Sensor name which is making the cooling device request
+ optional string  trigger_sensor_name = 2;
+
+ // Cooling device name for which request is being made
+ optional string  cooling_device_name = 3;
+
+ // Time duration for which stats are recorded
+ optional int64 since_last_update_ms = 4;
+
+ // Sequence of values corresponding to time spent in each request state
+ optional int64 time_in_state_ms_bucket_1 = 5;
+ optional int64 time_in_state_ms_bucket_2 = 6;
+ optional int64 time_in_state_ms_bucket_3 = 7;
+ optional int64 time_in_state_ms_bucket_4 = 8;
+ optional int64 time_in_state_ms_bucket_5 = 9;
+ optional int64 time_in_state_ms_bucket_6 = 10;
+ optional int64 time_in_state_ms_bucket_7 = 11;
+ optional int64 time_in_state_ms_bucket_8 = 12;
+ optional int64 time_in_state_ms_bucket_9 = 13;
+ optional int64 time_in_state_ms_bucket_10 = 14;
+ optional int64 time_in_state_ms_bucket_11 = 15;
+ optional int64 time_in_state_ms_bucket_12 = 16;
+ optional int64 time_in_state_ms_bucket_13 = 17;
+ optional int64 time_in_state_ms_bucket_14 = 18;
+ optional int64 time_in_state_ms_bucket_15 = 19;
+ optional int64 time_in_state_ms_bucket_16 = 20;
+ optional int64 time_in_state_ms_bucket_17 = 21;
+ optional int64 time_in_state_ms_bucket_18 = 22;
+ optional int64 time_in_state_ms_bucket_19 = 23;
+ optional int64 time_in_state_ms_bucket_20 = 24;
 }
