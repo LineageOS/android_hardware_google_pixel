@@ -135,35 +135,53 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
     return true;
 }
 
+}  // namespace
+
 template <typename T>
-bool getStatsThresholdFromJsonValues(const Json::Value &values,
-                                     const std::function<T(const Json::Value &value)> &value_parser,
-                                     std::vector<T> *stats_threshold, T prev_value) {
-    if (values.empty()) {
-        LOG(INFO) << "Empty Stats Threshold";
-        return true;
-    }
-    const auto &values_size = values.size();
-    if (values_size > kMaxStatsThresholdCount) {
-        LOG(ERROR) << "Number of stats threshold " << values_size << " greater than max "
-                   << kMaxStatsThresholdCount;
-        return false;
-    }
-    stats_threshold->resize(values_size);
-    for (Json::Value::ArrayIndex i = 0; i < values_size; ++i) {
-        (*stats_threshold)[i] = value_parser(values[i]);
-        if ((*stats_threshold)[i] <= prev_value) {
-            LOG(ERROR) << "Invalid array[" << i << "]" << (*stats_threshold)[i]
-                       << " is <=" << prev_value;
-            return false;
+bool ParseStatsInfo(const Json::Value &values, std::shared_ptr<StatsInfo<T>> *stats_info,
+                    const std::function<T(const Json::Value &value)> &value_parser, T min_value,
+                    bool default_enable = false) {
+    bool record_stats = default_enable;
+    std::vector<T> stats_threshold;
+    // Parse stats config, if given
+    if (!values["StatsInfo"].empty()) {
+        if (values["StatsInfo"]["RecordStats"].empty() ||
+            !values["StatsInfo"]["RecordStats"].isBool()) {
+            LOG(INFO) << "Failed to read RecordStats, set to 'false'";
+        } else if (values["StatsInfo"]["RecordStats"].asBool()) {
+            record_stats = true;
+            LOG(INFO) << " RecordStats, set to 'true'";
         }
-        prev_value = (*stats_threshold)[i];
-        LOG(INFO) << "[" << i << "]: " << (*stats_threshold)[i];
+
+        Json::Value threshold_values = values["StatsInfo"]["StatsThreshold"];
+        if (!threshold_values.empty()) {
+            if (!record_stats) {
+                LOG(ERROR) << "To enable StatsThreshold, RecordStats not provided.";
+                return false;
+            }
+            const auto &threshold_values_count = threshold_values.size();
+            if (threshold_values_count > kMaxStatsThresholdCount) {
+                LOG(ERROR) << "Number of stats threshold " << threshold_values_count
+                           << " greater than max " << kMaxStatsThresholdCount;
+                return false;
+            }
+            stats_threshold.resize(threshold_values_count);
+            T prev_value = min_value;
+            for (Json::Value::ArrayIndex i = 0; i < threshold_values_count; ++i) {
+                stats_threshold[i] = value_parser(threshold_values[i]);
+                if (stats_threshold[i] <= prev_value) {
+                    LOG(ERROR) << "Invalid array[" << i << "]" << stats_threshold[i]
+                               << " is <=" << prev_value;
+                    return false;
+                }
+                prev_value = stats_threshold[i];
+                LOG(INFO) << "[" << i << "]: " << stats_threshold[i];
+            }
+        }
     }
+    stats_info->reset(new StatsInfo<T>{record_stats, stats_threshold});
     return true;
 }
-
-}  // namespace
 
 bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sensor,
                             std::unique_ptr<VirtualSensorInfo> *virtual_sensor_info) {
@@ -381,14 +399,13 @@ bool ParseBindedCdevInfo(const Json::Value &values,
             }
         }
 
-        std::vector<int> stats_threshold;
-        if (!getStatsThresholdFromJsonValues<int>(values[j]["StatsThreshold"], getIntFromValue,
-                                                  &stats_threshold, -1)) {
-            LOG(ERROR) << "Failed to parse stats_threshold";
+        std::shared_ptr<StatsInfo<int>> stats_info;
+        if (!ParseStatsInfo<int>(values[j], &stats_info, getIntFromValue, -1,
+                                 kIsDefaultEnableBindedCdevStats)) {
+            LOG(ERROR) << "BindedCdev[" << cdev_name << "]: Failed to parse stats info";
             binded_cdev_info_map->clear();
             return false;
         }
-
         (*binded_cdev_info_map)[cdev_name] = {
                 .limit_info = limit_info,
                 .power_thresholds = power_thresholds,
@@ -401,7 +418,7 @@ bool ParseBindedCdevInfo(const Json::Value &values,
                 .max_throttle_step = max_throttle_step,
                 .cdev_floor_with_power_link = cdev_floor_with_power_link,
                 .power_rail = power_rail,
-                .stats_threshold = stats_threshold};
+                .stats_info = stats_info};
     }
     return true;
 }
@@ -840,16 +857,16 @@ bool ParseSensorInfo(std::string_view config_path,
             return false;
         }
 
-        std::vector<float> stats_threshold;
-        if (!getStatsThresholdFromJsonValues<float>(sensors[i]["StatsThreshold"], getFloatFromValue,
-                                                    &stats_threshold,
-                                                    std::numeric_limits<float>::lowest())) {
-            LOG(ERROR) << "Failed to parse stats_threshold";
+        std::shared_ptr<StatsInfo<float>> stats_info;
+        if (!ParseStatsInfo<float>(sensors[i], &stats_info, getFloatFromValue,
+                                   std::numeric_limits<float>::lowest(),
+                                   kIsDefaultEnableSensorStats)) {
+            LOG(ERROR) << "Sensor[" << name << "]: Failed to parse stats info";
             sensors_parsed->clear();
             return false;
         }
 
-        bool is_watch = (send_cb | send_powerhint | support_throttling | !stats_threshold.empty());
+        bool is_watch = (send_cb | send_powerhint | support_throttling | stats_info->record_stats);
         LOG(INFO) << "Sensor[" << name << "]'s is_watch: " << std::boolalpha << is_watch;
 
         (*sensors_parsed)[name] = {
@@ -870,7 +887,7 @@ bool ParseSensorInfo(std::string_view config_path,
                 .is_hidden = is_hidden,
                 .virtual_sensor_info = std::move(virtual_sensor_info),
                 .throttling_info = std::move(throttling_info),
-                .stats_threshold = stats_threshold,
+                .stats_info = stats_info,
         };
 
         ++total_parsed;
