@@ -85,6 +85,7 @@ message Atom {
 
       ThermalDfsStats thermal_dfs_stats = 105042;
       VendorLongIRQStatsReported vendor_long_irq_stats_reported = 105043;
+      VendorTempResidencyStats vendor_temp_residency_stats = 105045;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1320,4 +1321,43 @@ message VendorLongIRQStatsReported {
   optional int64 top4_irq_latency_us = 21;
   optional int64 top5_irq_num = 22;
   optional int64 top5_irq_latency_us = 23;
+}
+
+/**
+ * Logs the Temperature residency stats per thermal zone.
+ */
+message VendorTempResidencyStats {
+  optional string reverse_domain_name = 1;
+  // Thermal zone name
+  optional string sensor_name = 2;
+
+  // Time since last collect of this thermal zone
+  optional int64 since_last_update_ms = 3;
+
+  // Temperature residency stats is measured by time in ms that a temperature zone's temperature
+  // lay within some temperature thresholds
+  // e.g.
+  // With temperature thresholds predefined as thresholds_i, thresholds_i+1,
+  // temp_residency_ms_bucket_i measures how much time the sensor lay within this two thresholds
+  optional int64 temp_residency_ms_bucket_1 = 4;
+  optional int64 temp_residency_ms_bucket_2 = 5;
+  optional int64 temp_residency_ms_bucket_3 = 6;
+  optional int64 temp_residency_ms_bucket_4 = 7;
+  optional int64 temp_residency_ms_bucket_5 = 8;
+  optional int64 temp_residency_ms_bucket_6 = 9;
+  optional int64 temp_residency_ms_bucket_7 = 10;
+  optional int64 temp_residency_ms_bucket_8 = 11;
+  optional int64 temp_residency_ms_bucket_9 = 12;
+  optional int64 temp_residency_ms_bucket_10 = 13;
+  optional int64 temp_residency_ms_bucket_11 = 14;
+  optional int64 temp_residency_ms_bucket_12 = 15;
+  optional int64 temp_residency_ms_bucket_13 = 16;
+  optional int64 temp_residency_ms_bucket_14 = 17;
+  optional int64 temp_residency_ms_bucket_15 = 18;
+  optional int64 temp_residency_ms_bucket_16 = 19;
+  optional int64 temp_residency_ms_bucket_17 = 20;
+  optional int64 temp_residency_ms_bucket_18 = 21;
+  optional int64 temp_residency_ms_bucket_19 = 22;
+  optional int64 temp_residency_ms_bucket_20 = 23;
+
 }
