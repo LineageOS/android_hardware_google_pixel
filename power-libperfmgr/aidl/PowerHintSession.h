@@ -85,7 +85,6 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus setThreads(const std::vector<int32_t> &threadIds) override;
     bool isActive();
     bool isTimeout();
-    void wakeup();
     void setStale();
     // Is this hint session for a user application
     bool isAppSession();
