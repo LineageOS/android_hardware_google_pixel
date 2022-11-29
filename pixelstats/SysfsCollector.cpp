@@ -293,85 +293,78 @@ void SysfsCollector::logSpeakerImpedance(const std::shared_ptr<IStats> &stats_cl
  * Report the last-detected impedance, temperature and heartbeats of left & right speakers.
  */
 void SysfsCollector::logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client) {
-    std::string file_contents;
+    std::string file_contents_impedance;
+    std::string file_contents_temperature;
+    std::string file_contents_excursion;
+    std::string file_contents_heartbeat;
+    int count, i;
+    float impedance_ohm[4];
+    float temperature_C[4];
+    float excursion_mm[4];
+    float heartbeat[4];
 
     if (kImpedancePath == nullptr || strlen(kImpedancePath) == 0) {
         ALOGD("Audio impedance path not specified");
+        return;
+    } else if (!ReadFileToString(kImpedancePath, &file_contents_impedance)) {
+        ALOGD("Unable to read speaker impedance path %s", kImpedancePath);
         return;
     }
 
     if (kSpeakerTemperaturePath == nullptr || strlen(kSpeakerTemperaturePath) == 0) {
         ALOGD("Audio speaker temperature path not specified");
         return;
-    }
-
-    if (kSpeakerHeartbeatPath == nullptr || strlen(kSpeakerHeartbeatPath) == 0) {
-        ALOGD("Audio speaker heartbeat path not specified");
+    } else if (!ReadFileToString(kSpeakerTemperaturePath, &file_contents_temperature)) {
+        ALOGD("Unable to read speaker temperature path %s", kSpeakerTemperaturePath);
         return;
     }
 
     if (kSpeakerExcursionPath == nullptr || strlen(kSpeakerExcursionPath) == 0) {
         ALOGD("Audio speaker excursion path not specified");
         return;
-    }
-
-    float left_impedance_ohm, right_impedance_ohm;
-
-    if (!ReadFileToString(kImpedancePath, &file_contents)) {
-        ALOGE("Unable to read speaker impedance path %s", kImpedancePath);
-        return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_impedance_ohm, &right_impedance_ohm) != 2) {
-        ALOGE("Unable to parse speaker impedance %s", file_contents.c_str());
+    } else if (!ReadFileToString(kSpeakerExcursionPath, &file_contents_excursion)) {
+        ALOGD("Unable to read speaker excursion path %s", kSpeakerExcursionPath);
         return;
     }
 
-    float left_temperature_C, right_temperature_C;
-    if (!ReadFileToString(kSpeakerTemperaturePath, &file_contents)) {
-        ALOGE("Unable to read speaker temperature path %s", kSpeakerTemperaturePath);
+    if (kSpeakerHeartbeatPath == nullptr || strlen(kSpeakerHeartbeatPath) == 0) {
+        ALOGD("Audio speaker heartbeat path not specified");
         return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_temperature_C, &right_temperature_C) != 2) {
-        ALOGE("Unable to parse speaker temperature %s", file_contents.c_str());
-        return;
-    }
-
-    float left_excursion_mm, right_excursion_mm;
-    if (!ReadFileToString(kSpeakerExcursionPath, &file_contents)) {
-        ALOGE("Unable to read speaker excursion path %s", kSpeakerExcursionPath);
-        return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_excursion_mm, &right_excursion_mm) != 2) {
-        ALOGE("Unable to parse speaker excursion %s", file_contents.c_str());
+    } else if (!ReadFileToString(kSpeakerHeartbeatPath, &file_contents_heartbeat)) {
+        ALOGD("Unable to read speaker heartbeat path %s", kSpeakerHeartbeatPath);
         return;
     }
 
-    float left_heartbeat, right_heartbeat;
-    if (!ReadFileToString(kSpeakerHeartbeatPath, &file_contents)) {
-        ALOGE("Unable to read speaker heartbeat path %s", kSpeakerHeartbeatPath);
+    count = sscanf(file_contents_impedance.c_str(), "%g,%g,%g,%g", &impedance_ohm[0],
+                   &impedance_ohm[1], &impedance_ohm[2], &impedance_ohm[3]);
+    if (count <= 0)
         return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_heartbeat, &right_heartbeat) != 2) {
-        ALOGE("Unable to parse speaker heartbeat %s", file_contents.c_str());
+
+    count = sscanf(file_contents_temperature.c_str(), "%g,%g,%g,%g", &temperature_C[0],
+                   &temperature_C[1], &temperature_C[2], &temperature_C[3]);
+    if (count <= 0)
         return;
+
+    count = sscanf(file_contents_excursion.c_str(), "%g,%g,%g,%g", &excursion_mm[0],
+                   &excursion_mm[1], &excursion_mm[2], &excursion_mm[3]);
+    if (count <= 0)
+        return;
+
+    count = sscanf(file_contents_heartbeat.c_str(), "%g,%g,%g,%g", &heartbeat[0], &heartbeat[1],
+                   &heartbeat[2], &heartbeat[3]);
+    if (count <= 0)
+        return;
+
+    VendorSpeakerStatsReported obj[4];
+    for (i = 0; i < count && i < 4; i++) {
+        obj[i].set_speaker_location(i);
+        obj[i].set_impedance(static_cast<int32_t>(impedance_ohm[i] * 1000));
+        obj[i].set_max_temperature(static_cast<int32_t>(temperature_C[i] * 1000));
+        obj[i].set_excursion(static_cast<int32_t>(excursion_mm[i] * 1000));
+        obj[i].set_heartbeat(static_cast<int32_t>(heartbeat[i]));
+
+        reportSpeakerHealthStat(stats_client, obj[i]);
     }
-
-    VendorSpeakerStatsReported left_obj;
-    left_obj.set_speaker_location(0);
-    left_obj.set_impedance(static_cast<int32_t>(left_impedance_ohm * 1000));
-    left_obj.set_max_temperature(static_cast<int32_t>(left_temperature_C * 1000));
-    left_obj.set_excursion(static_cast<int32_t>(left_excursion_mm * 1000));
-    left_obj.set_heartbeat(static_cast<int32_t>(left_heartbeat));
-
-    VendorSpeakerStatsReported right_obj;
-    right_obj.set_speaker_location(1);
-    right_obj.set_impedance(static_cast<int32_t>(right_impedance_ohm * 1000));
-    right_obj.set_max_temperature(static_cast<int32_t>(right_temperature_C * 1000));
-    right_obj.set_excursion(static_cast<int32_t>(right_excursion_mm * 1000));
-    right_obj.set_heartbeat(static_cast<int32_t>(right_heartbeat));
-
-    reportSpeakerHealthStat(stats_client, left_obj);
-    reportSpeakerHealthStat(stats_client, right_obj);
 }
 
 void SysfsCollector::logThermalStats(const std::shared_ptr<IStats> &stats_client) {
