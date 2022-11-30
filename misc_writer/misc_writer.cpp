@@ -70,6 +70,13 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
       content = (action_ == MiscWriterActions::kSetEnablePkvmFlag) ? kEnablePkvmFlag
                                                                    : kDisablePkvmFlag;
       break;
+    case MiscWriterActions::kSetWristOrientationFlag:
+    case MiscWriterActions::kClearWristOrientationFlag:
+      offset = override_offset.value_or(kWristOrientationFlagOffsetInVendorSpace);
+      content = (action_ == MiscWriterActions::kSetWristOrientationFlag)
+                    ? std::string(kWristOrientationFlag) + orientation_
+                    : std::string(strlen(kWristOrientationFlag) + sizeof(orientation_), 0);
+      break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
       return false;
