@@ -78,7 +78,7 @@ bool ThermalStatsReporter::captureThermalDfsStats(
     std::string path;
 
     if (thermal_stats_paths.size() < kNumOfThermalDfsStats) {
-        ALOGE("Number of thermal stats paths (%lu) is less than expected (%d)",
+        ALOGE("Number of thermal stats paths (%zu) is less than expected (%d)",
               thermal_stats_paths.size(), kNumOfThermalDfsStats);
         return false;
     }
