@@ -24,6 +24,7 @@
 #include "BatteryHealthReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
+#include "TempResidencyReporter.h"
 #include "ThermalStatsReporter.h"
 
 namespace android {
@@ -65,6 +66,7 @@ class SysfsCollector {
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
         const char *const CCARatePath;
+        const char *const TempResidencyPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -100,6 +102,7 @@ class SysfsCollector {
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
+    void logTempResidencyStats(const std::shared_ptr<IStats> &stats_client);
     void reportZramMmStat(const std::shared_ptr<IStats> &stats_client);
     void reportZramBdStat(const std::shared_ptr<IStats> &stats_client);
     int getReclaimedSegments(const std::string &mode);
@@ -132,13 +135,14 @@ class SysfsCollector {
     const char *const kAmsRatePath;
     const std::vector<std::string> kThermalStatsPaths;
     const char *const kCCARatePath;
+    const char *const kTempResidencyPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
     ThermalStatsReporter thermal_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
-
+    TempResidencyReporter temp_residency_reporter_;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
     // -2.
