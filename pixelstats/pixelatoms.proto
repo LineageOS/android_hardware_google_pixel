@@ -1161,11 +1161,11 @@ message BatteryHealthStatus {
   optional int32 health_algorithm = 2;
 
   enum HealthStatus {
-    UNKNOWN = 0; // The health status is unknown due to a SW limitation or issue
-    NOMINAL = 1; // The battery is operating as expected
-    MARGINAL = 2; // The battery may need replacement soon
-    NEEDS_REPLACEMENT = 3; // The battery needs replacement
-    FAILED = 4; // The battery has failed and no longer operates as expected
+    UNKNOWN = -1; // The health status is unknown due to a SW limitation or issue
+    NOMINAL = 0; // The battery is operating as expected
+    MARGINAL = 1; // The battery may need replacement soon
+    NEEDS_REPLACEMENT = 2; // The battery needs replacement
+    FAILED = 3; // The battery has failed and no longer operates as expected
   }
 
   // HealthStatus calculated using health_index, health_perf_index.
