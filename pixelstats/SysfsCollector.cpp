@@ -55,10 +55,13 @@ using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
+using android::hardware::google::pixel::PixelAtoms::VendorLongIRQStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorResumeLatencyStats;
 using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeechDspStat;
+using android::hardware::google::pixel::PixelAtoms::VendorTempResidencyStats;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 
@@ -89,7 +92,10 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kBlockStatsLength(sysfs_paths.BlockStatsLength),
       kAmsRatePath(sysfs_paths.AmsRatePath),
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
-      kCCARatePath(sysfs_paths.CCARatePath) {}
+      kCCARatePath(sysfs_paths.CCARatePath),
+      kTempResidencyPath(sysfs_paths.TempResidencyPath),
+      kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
+      kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -814,6 +820,10 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
     }
 }
 
+void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
+    temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPath);
+}
+
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
     if (!kZramMmStatPath) {
@@ -1044,6 +1054,228 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
         ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
 }
 
+/**
+ * Logs the Resume Latency stats.
+ */
+void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (!kResumeLatencyMetricsPath) {
+        ALOGE("ResumeLatencyMetrics path not specified");
+        return;
+    }
+    if (!ReadFileToString(kResumeLatencyMetricsPath, &file_contents)) {
+        ALOGE("Unable to ResumeLatencyMetric %s - %s", kResumeLatencyMetricsPath, strerror(errno));
+        return;
+    }
+
+    int offset = 0;
+    int bytes_read;
+    const char *data = file_contents.c_str();
+    int data_len = file_contents.length();
+
+    int curr_bucket_cnt;
+    if (!sscanf(data + offset, "Resume Latency Bucket Count: %d\n%n", &curr_bucket_cnt,
+                &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    int64_t max_latency;
+    if (!sscanf(data + offset, "Max Resume Latency: %ld\n%n", &max_latency, &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    uint64_t sum_latency;
+    if (!sscanf(data + offset, "Sum Resume Latency: %lu\n%n", &sum_latency, &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    if (curr_bucket_cnt > kMaxResumeLatencyBuckets)
+        return;
+    if (curr_bucket_cnt != prev_data.bucket_cnt) {
+        prev_data.resume_latency_buckets.clear();
+    }
+
+    int64_t total_latency_cnt = 0;
+    int64_t count;
+    int index = 2;
+    std::vector<VendorAtomValue> values(curr_bucket_cnt + 2);
+    VendorAtomValue tmp;
+    // Iterate over resume latency buckets to get latency count within some latency thresholds
+    while (sscanf(data + offset, "%*ld - %*ldms ====> %ld\n%n", &count, &bytes_read) == 1 ||
+           sscanf(data + offset, "%*ld - infms ====> %ld\n%n", &count, &bytes_read) == 1) {
+        offset += bytes_read;
+        if (offset >= data_len && (index + 1 < curr_bucket_cnt + 2))
+            return;
+        if (curr_bucket_cnt == prev_data.bucket_cnt) {
+            tmp.set<VendorAtomValue::longValue>(count -
+                                                prev_data.resume_latency_buckets[index - 2]);
+            prev_data.resume_latency_buckets[index - 2] = count;
+        } else {
+            tmp.set<VendorAtomValue::longValue>(count);
+            prev_data.resume_latency_buckets.push_back(count);
+        }
+        if (index >= curr_bucket_cnt + 2)
+            return;
+        values[index] = tmp;
+        index += 1;
+        total_latency_cnt += count;
+    }
+    tmp.set<VendorAtomValue::longValue>(max_latency);
+    values[0] = tmp;
+    if ((sum_latency - prev_data.resume_latency_sum_ms < 0) ||
+        (total_latency_cnt - prev_data.resume_count <= 0)) {
+        tmp.set<VendorAtomValue::longValue>(-1);
+        ALOGI("average resume latency get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(
+                (int64_t)(sum_latency - prev_data.resume_latency_sum_ms) /
+                (total_latency_cnt - prev_data.resume_count));
+    }
+    values[1] = tmp;
+
+    prev_data.resume_latency_sum_ms = sum_latency;
+    prev_data.resume_count = total_latency_cnt;
+    prev_data.bucket_cnt = curr_bucket_cnt;
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorResumeLatencyStats,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorResumeLatencyStats to Stats service");
+}
+
+bool cmp(const std::pair<int, int64_t> &a, const std::pair<int, int64_t> &b) {
+    return a.second > b.second;
+}
+
+/**
+ * Sort irq stats by irq latency, and load top 5 irq stats.
+ */
+void process_irqatom_values(std::vector<std::pair<int, int64_t>> sorted_pair,
+                            std::vector<VendorAtomValue> *values) {
+    VendorAtomValue tmp;
+    sort(sorted_pair.begin(), sorted_pair.end(), cmp);
+    int irq_stats_size = sorted_pair.size();
+    for (int i = 0; i < 5; i++) {
+        if (irq_stats_size < 5 && i >= irq_stats_size) {
+            tmp.set<VendorAtomValue::longValue>(-1);
+            values->push_back(tmp);
+            tmp.set<VendorAtomValue::longValue>(0);
+            values->push_back(tmp);
+        } else {
+            tmp.set<VendorAtomValue::longValue>(sorted_pair[i].first);
+            values->push_back(tmp);
+            tmp.set<VendorAtomValue::longValue>(sorted_pair[i].second);
+            values->push_back(tmp);
+        }
+    }
+}
+
+/**
+ * Logs the Long irq stats.
+ */
+void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (!kLongIRQMetricsPath) {
+        ALOGV("LongIRQ path not specified");
+        return;
+    }
+    if (!ReadFileToString(kLongIRQMetricsPath, &file_contents)) {
+        ALOGE("Unable to LongIRQ %s - %s", kLongIRQMetricsPath, strerror(errno));
+        return;
+    }
+    int offset = 0;
+    int bytes_read;
+    const char *data = file_contents.c_str();
+    int data_len = file_contents.length();
+    //  Get, process, store softirq stats
+    std::vector<std::pair<int, int64_t>> sorted_softirq_pair;
+    int64_t softirq_count;
+    if (sscanf(data + offset, "long SOFTIRQ count: %ld\n%n", &softirq_count, &bytes_read) != 1)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+    std::vector<VendorAtomValue> values;
+    VendorAtomValue tmp;
+    if (softirq_count - prev_data.softirq_count < 0) {
+        tmp.set<VendorAtomValue::intValue>(-1);
+        ALOGI("long softirq count get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(softirq_count - prev_data.softirq_count);
+    }
+    values.push_back(tmp);
+
+    if (sscanf(data + offset, "long SOFTIRQ detail (num, latency):\n%n", &bytes_read) != 0)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    //  Iterate over softirq stats and record top 5 long softirq
+    int64_t softirq_latency;
+    int softirq_num;
+    while (sscanf(data + offset, "%d %ld\n%n", &softirq_num, &softirq_latency, &bytes_read) == 2) {
+        sorted_softirq_pair.push_back(std::make_pair(softirq_num, softirq_latency));
+        offset += bytes_read;
+        if (offset >= data_len)
+            return;
+    }
+    process_irqatom_values(sorted_softirq_pair, &values);
+
+    //  Get, process, store irq stats
+    std::vector<std::pair<int, int64_t>> sorted_irq_pair;
+    int64_t irq_count;
+    if (sscanf(data + offset, "long IRQ count: %ld\n%n", &irq_count, &bytes_read) != 1)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+    if (irq_count - prev_data.irq_count < 0) {
+        tmp.set<VendorAtomValue::intValue>(-1);
+        ALOGI("long irq count get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(irq_count - prev_data.irq_count);
+    }
+    values.push_back(tmp);
+
+    if (sscanf(data + offset, "long IRQ detail (num, latency):\n%n", &bytes_read) != 0)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    int64_t irq_latency;
+    int irq_num;
+    int index = 0;
+    //  Iterate over softirq stats and record top 5 long irq
+    while (sscanf(data + offset, "%d %ld\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
+        sorted_irq_pair.push_back(std::make_pair(irq_num, irq_latency));
+        offset += bytes_read;
+        if (offset >= data_len && index < 5)
+            return;
+        index += 1;
+    }
+    process_irqatom_values(sorted_irq_pair, &values);
+
+    prev_data.softirq_count = softirq_count;
+    prev_data.irq_count = irq_count;
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorLongIrqStatsReported,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report kVendorLongIRQStatsReported to Stats service");
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -1075,6 +1307,9 @@ void SysfsCollector::logPerDay() {
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
     logVendorAudioHardwareStats(stats_client);
     logThermalStats(stats_client);
+    logTempResidencyStats(stats_client);
+    logVendorLongIRQStatsReported(stats_client);
+    logVendorResumeLatencyStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {

@@ -84,6 +84,9 @@ message Atom {
       VendorAudioHardwareStatsReported vendor_audio_hardware_stats_reported = 105041;
 
       ThermalDfsStats thermal_dfs_stats = 105042;
+      VendorLongIRQStatsReported vendor_long_irq_stats_reported = 105043;
+      VendorResumeLatencyStats vendor_resume_latency_stats = 105044;
+      VendorTempResidencyStats vendor_temp_residency_stats = 105045;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1158,11 +1161,11 @@ message BatteryHealthStatus {
   optional int32 health_algorithm = 2;
 
   enum HealthStatus {
-    UNKNOWN = 0; // The health status is unknown due to a SW limitation or issue
-    NOMINAL = 1; // The battery is operating as expected
-    MARGINAL = 2; // The battery may need replacement soon
-    NEEDS_REPLACEMENT = 3; // The battery needs replacement
-    FAILED = 4; // The battery has failed and no longer operates as expected
+    UNKNOWN = -1; // The health status is unknown due to a SW limitation or issue
+    NOMINAL = 0; // The battery is operating as expected
+    MARGINAL = 1; // The battery may need replacement soon
+    NEEDS_REPLACEMENT = 2; // The battery needs replacement
+    FAILED = 3; // The battery has failed and no longer operates as expected
   }
 
   // HealthStatus calculated using health_index, health_perf_index.
@@ -1280,4 +1283,131 @@ message VendorAudioHardwareStatsReported {
 
   /* cca_enable: UI enable & algorithm is inactive. (C2) */
   optional int32 rate_of_cca_enable_per_day = 4;
+}
+
+/*
+ * Logs vendor stats about long IRQs.
+ *
+ * IRQ is considered long when it exceeds a threshold (currently 1 ms).
+ * Stats include top 5 slowest IRQs: their numbers and the worst latency.
+ * Stats are reset after every report.
+ */
+message VendorLongIRQStatsReported {
+  optional string reverse_domain_name = 1;
+
+  // Count of long soft IRQ since last report.
+  optional int64 long_softirq_count = 2;
+
+  optional int64 top1_softirq_num = 3;
+  optional int64 top1_softirq_latency_us = 4;
+  optional int64 top2_softirq_num = 5;
+  optional int64 top2_softirq_latency_us = 6;
+  optional int64 top3_softirq_num = 7;
+  optional int64 top3_softirq_latency_us = 8;
+  optional int64 top4_softirq_num = 9;
+  optional int64 top4_softirq_latency_us = 10;
+  optional int64 top5_softirq_num = 11;
+  optional int64 top5_softirq_latency_us = 12;
+
+  // Count of long IRQ since last report.
+  optional int64 long_irq_count = 13;
+
+  optional int64 top1_irq_num = 14;
+  optional int64 top1_irq_latency_us = 15;
+  optional int64 top2_irq_num = 16;
+  optional int64 top2_irq_latency_us = 17;
+  optional int64 top3_irq_num = 18;
+  optional int64 top3_irq_latency_us = 19;
+  optional int64 top4_irq_num = 20;
+  optional int64 top4_irq_latency_us = 21;
+  optional int64 top5_irq_num = 22;
+  optional int64 top5_irq_latency_us = 23;
+}
+
+/**
+ * Logs the Temperature residency stats per thermal zone.
+ */
+message VendorTempResidencyStats {
+  optional string reverse_domain_name = 1;
+  // Thermal zone name
+  optional string sensor_name = 2;
+
+  // Time since last collect of this thermal zone
+  optional int64 since_last_update_ms = 3;
+
+  // Temperature residency stats is measured by time in ms that a temperature zone's temperature
+  // lay within some temperature thresholds
+  // e.g.
+  // With temperature thresholds predefined as thresholds_i, thresholds_i+1,
+  // temp_residency_ms_bucket_i measures how much time the sensor lay within this two thresholds
+  optional int64 temp_residency_ms_bucket_1 = 4;
+  optional int64 temp_residency_ms_bucket_2 = 5;
+  optional int64 temp_residency_ms_bucket_3 = 6;
+  optional int64 temp_residency_ms_bucket_4 = 7;
+  optional int64 temp_residency_ms_bucket_5 = 8;
+  optional int64 temp_residency_ms_bucket_6 = 9;
+  optional int64 temp_residency_ms_bucket_7 = 10;
+  optional int64 temp_residency_ms_bucket_8 = 11;
+  optional int64 temp_residency_ms_bucket_9 = 12;
+  optional int64 temp_residency_ms_bucket_10 = 13;
+  optional int64 temp_residency_ms_bucket_11 = 14;
+  optional int64 temp_residency_ms_bucket_12 = 15;
+  optional int64 temp_residency_ms_bucket_13 = 16;
+  optional int64 temp_residency_ms_bucket_14 = 17;
+  optional int64 temp_residency_ms_bucket_15 = 18;
+  optional int64 temp_residency_ms_bucket_16 = 19;
+  optional int64 temp_residency_ms_bucket_17 = 20;
+  optional int64 temp_residency_ms_bucket_18 = 21;
+  optional int64 temp_residency_ms_bucket_19 = 22;
+  optional int64 temp_residency_ms_bucket_20 = 23;
+}
+
+/**
+ * Logs the Resume Latency stats.
+ */
+message VendorResumeLatencyStats {
+  optional string reverse_domain_name = 1;
+  optional int64 max_latency_ms = 2;
+  optional int64 avg_latency_ms = 3;
+
+  // Resume Latency stats is measured by count of resumes that lay within some latency thresholds
+  // e.g.
+  // With resume times thresholds predefined as thresholds_i, thresholds_i+1,
+  // resume_count_bucket_i measures count of resumes that lay within this two thresholds
+  optional int64 resume_count_bucket_1 = 4;
+  optional int64 resume_count_bucket_2 = 5;
+  optional int64 resume_count_bucket_3 = 6;
+  optional int64 resume_count_bucket_4 = 7;
+  optional int64 resume_count_bucket_5 = 8;
+  optional int64 resume_count_bucket_6 = 9;
+  optional int64 resume_count_bucket_7 = 10;
+  optional int64 resume_count_bucket_8 = 11;
+  optional int64 resume_count_bucket_9 = 12;
+  optional int64 resume_count_bucket_10 = 13;
+  optional int64 resume_count_bucket_11 = 14;
+  optional int64 resume_count_bucket_12 = 15;
+  optional int64 resume_count_bucket_13 = 16;
+  optional int64 resume_count_bucket_14 = 17;
+  optional int64 resume_count_bucket_15 = 18;
+  optional int64 resume_count_bucket_16 = 19;
+  optional int64 resume_count_bucket_17 = 20;
+  optional int64 resume_count_bucket_18 = 21;
+  optional int64 resume_count_bucket_19 = 22;
+  optional int64 resume_count_bucket_20 = 23;
+  optional int64 resume_count_bucket_21 = 24;
+  optional int64 resume_count_bucket_22 = 25;
+  optional int64 resume_count_bucket_23 = 26;
+  optional int64 resume_count_bucket_24 = 27;
+  optional int64 resume_count_bucket_25 = 28;
+  optional int64 resume_count_bucket_26 = 29;
+  optional int64 resume_count_bucket_27 = 30;
+  optional int64 resume_count_bucket_28 = 31;
+  optional int64 resume_count_bucket_29 = 32;
+  optional int64 resume_count_bucket_30 = 33;
+  optional int64 resume_count_bucket_31 = 34;
+  optional int64 resume_count_bucket_32 = 35;
+  optional int64 resume_count_bucket_33 = 36;
+  optional int64 resume_count_bucket_34 = 37;
+  optional int64 resume_count_bucket_35 = 38;
+  optional int64 resume_count_bucket_36 = 39;
 }
