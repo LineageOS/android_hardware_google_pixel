@@ -57,7 +57,8 @@ bool PowerHalService::connect() {
     }
 
     const std::string kInstance = std::string(IPower::descriptor) + "/default";
-    ndk::SpAIBinder power_binder = ndk::SpAIBinder(AServiceManager_getService(kInstance.c_str()));
+    ndk::SpAIBinder power_binder =
+            ndk::SpAIBinder(AServiceManager_waitForService(kInstance.c_str()));
     ndk::SpAIBinder ext_power_binder;
 
     if (power_binder.get() == nullptr) {
