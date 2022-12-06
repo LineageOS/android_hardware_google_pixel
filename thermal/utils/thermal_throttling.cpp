@@ -346,18 +346,21 @@ bool ThermalThrottling::allocatePowerToCdev(
                     allocated_power += last_updated_avg_power;
                     allocated_weight += cdev_weight;
                     allocated_cdev.insert(binded_cdev_info_pair.first);
-                    log_buf.append(StringPrintf("(%s: %0.2f mW)",
-                                                binded_cdev_info_pair.second.power_rail.c_str(),
-                                                last_updated_avg_power));
-
+                    if (!binded_cdev_info_pair.second.power_rail.empty()) {
+                        log_buf.append(StringPrintf("(%s: %0.2f mW)",
+                                                    binded_cdev_info_pair.second.power_rail.c_str(),
+                                                    last_updated_avg_power));
+                    }
                     LOG(VERBOSE) << temp.name << " binded " << binded_cdev_info_pair.first
                                  << " has been already at min state 0";
                 }
             } else {
                 const CdevInfo &cdev_info = cooling_device_info_map.at(binded_cdev_info_pair.first);
-                log_buf.append(StringPrintf("(%s: %0.2f mW)",
-                                            binded_cdev_info_pair.second.power_rail.c_str(),
-                                            last_updated_avg_power));
+                if (!binded_cdev_info_pair.second.power_rail.empty()) {
+                    log_buf.append(StringPrintf("(%s: %0.2f mW)",
+                                                binded_cdev_info_pair.second.power_rail.c_str(),
+                                                last_updated_avg_power));
+                }
                 // Ignore the power distribution if the CDEV has no space to reduce power
                 if ((cdev_power_adjustment < 0 &&
                      thermal_throttling_status_map_[temp.name].pid_cdev_request_map.at(

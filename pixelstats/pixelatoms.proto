@@ -79,6 +79,11 @@ message Atom {
 
       BatteryHealthStatus battery_health_status = 105037;
       BatteryHealthUsage battery_health_usage = 105038;
+      F2fsSmartIdleMaintEnabledStateChanged f2fs_smart_idle_maint_enabled_state_changed = 105039;
+      BlockStatsReported block_stats_reported = 105040;
+      VendorAudioHardwareStatsReported vendor_audio_hardware_stats_reported = 105041;
+
+      ThermalDfsStats thermal_dfs_stats = 105042;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -118,6 +123,10 @@ message ChargeStats {
         ADAPTER_TYPE_WPC_10W = 23;
         ADAPTER_TYPE_WPC_BPP = 24;
         ADAPTER_TYPE_WPC_L7 = 25;
+        ADAPTER_TYPE_EXT = 26;
+        ADAPTER_TYPE_EXT1 = 27;
+        ADAPTER_TYPE_EXT2 = 28;
+        ADAPTER_TYPE_EXT_UNKNOWN = 29;
     }
     optional string reverse_domain_name = 1;
     /* Type of charge adapter, enumerated above. */
@@ -419,6 +428,7 @@ message CitadelEvent {
     REBOOTED = 2;
     UPGRADED = 3;
     ALERT_V2 = 4;
+    SEC_CH_STATE = 5;
   };
   optional string reverse_domain_name = 1;
   optional Event event = 2;
@@ -462,6 +472,10 @@ message CitadelEvent {
   optional int32 temp_min = 20;
   optional int32 temp_max = 21;
   optional int32 bus_err = 22;
+
+  // SEC_CH_STATE-specific filed. This field corresponds to the state
+  // of GSA-GSC secure channel.
+  optional int32 sec_ch_state = 23;
 }
 
 /* A message containing the citadel firmware version. */
@@ -514,12 +528,63 @@ message PixelMmMetricsPerHour {
     optional int64 unevictable = 7;
     optional int64 ion_total_pools = 8;
     optional int64 gpu_memory = 9;
+    optional int64 slab_unreclaimable = 10;
+    optional int64 psi_cpu_some_total = 11;
+    optional int64 psi_io_full_total = 12;
+    optional int64 psi_io_some_total = 13;
+    optional int64 psi_mem_full_total = 14;
+    optional int64 psi_mem_some_total = 15;
+    optional int32 psi_cpu_some_avg10_min = 16;
+    optional int32 psi_cpu_some_avg10_max = 17;
+    optional int32 psi_cpu_some_avg10_avg = 18;
+    optional int32 psi_cpu_some_avg60_min = 19;
+    optional int32 psi_cpu_some_avg60_max = 20;
+    optional int32 psi_cpu_some_avg60_avg = 21;
+    optional int32 psi_cpu_some_avg300_min = 22;
+    optional int32 psi_cpu_some_avg300_max = 23;
+    optional int32 psi_cpu_some_avg300_avg = 24;
+    optional int32 psi_io_full_avg10_min = 25;
+    optional int32 psi_io_full_avg10_max = 26;
+    optional int32 psi_io_full_avg10_avg = 27;
+    optional int32 psi_io_full_avg60_min = 28;
+    optional int32 psi_io_full_avg60_max = 29;
+    optional int32 psi_io_full_avg60_avg = 30;
+    optional int32 psi_io_full_avg300_min = 31;
+    optional int32 psi_io_full_avg300_max = 32;
+    optional int32 psi_io_full_avg300_avg = 33;
+    optional int32 psi_io_some_avg10_min = 34;
+    optional int32 psi_io_some_avg10_max = 35;
+    optional int32 psi_io_some_avg10_avg = 36;
+    optional int32 psi_io_some_avg60_min = 37;
+    optional int32 psi_io_some_avg60_max = 38;
+    optional int32 psi_io_some_avg60_avg = 39;
+    optional int32 psi_io_some_avg300_min = 40;
+    optional int32 psi_io_some_avg300_max = 41;
+    optional int32 psi_io_some_avg300_avg = 42;
+    optional int32 psi_mem_full_avg10_min = 43;
+    optional int32 psi_mem_full_avg10_max = 44;
+    optional int32 psi_mem_full_avg10_avg = 45;
+    optional int32 psi_mem_full_avg60_min = 46;
+    optional int32 psi_mem_full_avg60_max = 47;
+    optional int32 psi_mem_full_avg60_avg = 48;
+    optional int32 psi_mem_full_avg300_min = 49;
+    optional int32 psi_mem_full_avg300_max = 50;
+    optional int32 psi_mem_full_avg300_avg = 51;
+    optional int32 psi_mem_some_avg10_min = 52;
+    optional int32 psi_mem_some_avg10_max = 53;
+    optional int32 psi_mem_some_avg10_avg = 54;
+    optional int32 psi_mem_some_avg60_min = 55;
+    optional int32 psi_mem_some_avg60_max = 56;
+    optional int32 psi_mem_some_avg60_avg = 57;
+    optional int32 psi_mem_some_avg300_min = 58;
+    optional int32 psi_mem_some_avg300_max = 59;
+    optional int32 psi_mem_some_avg300_avg = 60;
 }
 
 /* A message containing Pixel memory metrics collected daily. */
 message PixelMmMetricsPerDay {
     optional string reverse_domain_name = 1;
-    optional int64 workingset_refault = 2;
+    optional int64 workingset_refault = 2;  /* refault_file */
     optional int64 pswpin = 3;
     optional int64 pswpout = 4;
     optional int64 allocstall_dma = 5;
@@ -540,6 +605,43 @@ message PixelMmMetricsPerDay {
     optional int64 pgcache_miss = 20;
     optional int64 kswapd_stime_clks = 21;
     optional int64 kcompactd_stime_clks = 22;
+    optional int64 direct_reclaim_native_latency_total_time = 23;
+    optional int64 direct_reclaim_native_latency0 = 24;
+    optional int64 direct_reclaim_native_latency1 = 25;
+    optional int64 direct_reclaim_native_latency2 = 26;
+    optional int64 direct_reclaim_native_latency3 = 27;
+    optional int64 direct_reclaim_visible_latency_total_time = 28;
+    optional int64 direct_reclaim_visible_latency0 = 29;
+    optional int64 direct_reclaim_visible_latency1 = 30;
+    optional int64 direct_reclaim_visible_latency2 = 31;
+    optional int64 direct_reclaim_visible_latency3 = 32;
+    optional int64 direct_reclaim_top_latency_total_time = 33;
+    optional int64 direct_reclaim_top_latency0 = 34;
+    optional int64 direct_reclaim_top_latency1 = 35;
+    optional int64 direct_reclaim_top_latency2 = 36;
+    optional int64 direct_reclaim_top_latency3 = 37;
+    optional int64 direct_reclaim_other_latency_total_time = 38;
+    optional int64 direct_reclaim_other_latency0 = 39;
+    optional int64 direct_reclaim_other_latency1 = 40;
+    optional int64 direct_reclaim_other_latency2 = 41;
+    optional int64 direct_reclaim_other_latency3 = 42;
+    optional int64 compaction_total_time = 43;
+    optional int64 compaction_ev_count0 = 44;
+    optional int64 compaction_ev_count1 = 45;
+    optional int64 compaction_ev_count2 = 46;
+    optional int64 compaction_ev_count3 = 47;
+    optional int64 compaction_ev_count4 = 48;
+    optional int64 workingset_refault_anon = 49;
+    optional int64 workingset_refault_file = 50;
+    optional int64 compact_success = 51;
+    optional int64 compact_fail = 52;
+    optional int64 kswapd_low_wmark_hq = 53;
+    optional int64 kswapd_high_wmark_hq = 54;
+    optional int64 thp_file_alloc = 55;
+    optional int64 thp_zero_page_alloc = 56;
+    optional int64 thp_split_page = 57;
+    optional int64 thp_migration_split = 58;
+    optional int64 thp_deferred_split_page = 59;
 }
 
 /* A message containing CMA metrics collected from dogfooding only. */
@@ -803,6 +905,25 @@ message PowerMitigationStats {
 }
 
 /**
+ * Log thermal statistics.
+ */
+message ThermalDfsStats {
+ optional string reverse_domain_name = 1;
+ // The last count of BIG cluster dfs triggers
+ optional int32 big_dfs_count = 2;
+ // The last count of MID cluster dfs triggers
+ optional int32 mid_dfs_count = 3;
+ // The last count of LITTLE cluster dfs triggers
+ optional int32 little_dfs_count = 4;
+ // The last count of GPU dfs triggers
+ optional int32 gpu_dfs_count = 5;
+ // The last count of TPU dfs triggers
+ optional int32 tpu_dfs_count = 6;
+ // The last count of DSP dfs triggers
+ optional int32 aur_dfs_count = 7;
+}
+
+/**
  * Log how many segments have been reclaimed in a specific GC mode.
  */
 message F2fsGcSegmentInfo {
@@ -813,6 +934,8 @@ message F2fsGcSegmentInfo {
     optional int32 reclaimed_segments_urgent_high = 3;
     /* Reclaimed segments in GC urgent low mode */
     optional int32 reclaimed_segments_urgent_low = 4;
+    /* Reclaimed segments in GC urgent mid mode */
+    optional int32 reclaimed_segments_urgent_mid = 5;
 }
 
 /**
@@ -1068,6 +1191,16 @@ message BatteryHealthStatus {
 
   // The cycle count at the time of the log event.
   optional int32 cycle_count = 11;
+
+  enum BattDisconnectStatus {
+    BPST_BATT_UNKNOWN = 0;
+    BPST_BATT_CONNECT = 1;
+    BPST_BATT_DISCONNECT = 2; // Result of single battery disconnect detection
+    BPST_BATT_CELL_FAULT = 3; // Result of cell fault detection which means actual disconnection
+  }
+
+  // Battery disconnect detection stats.
+  optional BattDisconnectStatus battery_disconnect_status = 12;
 }
 
 /**
@@ -1095,4 +1228,44 @@ message BatteryHealthUsage {
 
   // Time (s) accumulated only during discharge at the given thresholds.
   optional int32 discharge_time_secs = 5;
+}
+
+/*
+ * A Value of F2FS smart idle maintenance feature enabled
+ */
+message F2fsSmartIdleMaintEnabledStateChanged {
+    optional string reverse_domain_name = 1;
+    /* Smart idle maint is enabled */
+    optional bool enabled = 2;
+}
+
+/*
+ * Snapshot of the block layer read write stats
+ */
+message BlockStatsReported {
+    optional string reverse_domain_name = 1;
+        /* number of read I/Os processed */
+        optional int64 read_io = 2;
+        /* number of sectors read */
+        optional int64 read_sectors = 3;
+        /* total wait time for read requests */
+        optional int64 read_ticks = 4;
+        /* number of write I/Os processed */
+        optional int64 write_io = 5;
+        /* number of sectors written */
+        optional int64 write_sectors = 6;
+        /* total wait time for write requests */
+        optional int64 write_ticks = 7;
+}
+
+/**
+ * Logs the reported vendor audio hardware stats.
+ */
+message VendorAudioHardwareStatsReported {
+  optional string reverse_domain_name = 1;
+  /* The percentage of calls in a day where auto-mic-switch triggered.
+   * It represented as a fixed-point integer with three decimal place.
+   * E.g.:12.345% is repsented by 12345.
+   */
+  optional int32 milli_rate_of_ams_per_day = 2;
 }

@@ -43,12 +43,16 @@ using android::base::ReadFileToString;
 using android::base::StartsWith;
 using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
+using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
+using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
@@ -81,7 +85,10 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
-      kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath) {}
+      kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath),
+      kBlockStatsLength(sysfs_paths.BlockStatsLength),
+      kAmsRatePath(sysfs_paths.AmsRatePath),
+      kThermalStatsPaths(sysfs_paths.ThermalStatsPaths) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -364,6 +371,10 @@ void SysfsCollector::logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_
 
     reportSpeakerHealthStat(stats_client, left_obj);
     reportSpeakerHealthStat(stats_client, right_obj);
+}
+
+void SysfsCollector::logThermalStats(const std::shared_ptr<IStats> &stats_client) {
+    thermal_stats_reporter_.logThermalStats(stats_client, kThermalStatsPaths);
 }
 
 /**
@@ -684,10 +695,12 @@ int SysfsCollector::getReclaimedSegments(const std::string &mode) {
 }
 
 void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_client) {
-    int reclaimed_segments_normal, reclaimed_segments_urgent_high, reclaimed_segments_urgent_low;
+    int reclaimed_segments_normal, reclaimed_segments_urgent_high;
+    int reclaimed_segments_urgent_mid, reclaimed_segments_urgent_low;
     std::string gc_normal_mode = std::to_string(0);         // GC normal mode
     std::string gc_urgent_high_mode = std::to_string(4);    // GC urgent high mode
     std::string gc_urgent_low_mode = std::to_string(5);     // GC urgent low mode
+    std::string gc_urgent_mid_mode = std::to_string(6);     // GC urgent mid mode
 
     if (kF2fsStatsPath == nullptr) {
         ALOGV("F2fs stats path not specified");
@@ -700,9 +713,11 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     if (reclaimed_segments_urgent_high == -1) return;
     reclaimed_segments_urgent_low = getReclaimedSegments(gc_urgent_low_mode);
     if (reclaimed_segments_urgent_low == -1) return;
+    reclaimed_segments_urgent_mid = getReclaimedSegments(gc_urgent_mid_mode);
+    if (reclaimed_segments_urgent_mid == -1) return;
 
     // Load values array
-    std::vector<VendorAtomValue> values(3);
+    std::vector<VendorAtomValue> values(4);
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_normal);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsNormalFieldNumber - kVendorAtomOffset] = tmp;
@@ -710,6 +725,8 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentHighFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_low);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_mid);
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentMidFieldNumber - kVendorAtomOffset] = tmp;
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
@@ -718,6 +735,88 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report F2fs GC Segment info to Stats service");
+    }
+}
+
+void SysfsCollector::logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> &stats_client) {
+    bool smart_idle_enabled = android::base::GetBoolProperty(
+        "persist.device_config.storage_native_boot.smart_idle_maint_enabled", false);
+
+    // Load values array
+    VendorAtomValue tmp;
+    std::vector<VendorAtomValue> values(1);
+    tmp.set<VendorAtomValue::intValue>(smart_idle_enabled);
+    values[F2fsSmartIdleMaintEnabledStateChanged::kEnabledFieldNumber - kVendorAtomOffset] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Atom::kF2FsSmartIdleMaintEnabledStateChanged,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report Boot stats to Stats service");
+    }
+}
+
+void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string sdaPath = "/sys/block/sda/stat";
+    std::string file_contents;
+    std::string stat;
+    std::vector<std::string> stats;
+    std::stringstream ss;
+
+    // These index comes from kernel Document
+    // Documentation/ABI/stable/sysfs-block
+    const int READ_IO_IDX = 0, READ_SEC_IDX = 2, READ_TICK_IDX = 3;
+    const int WRITE_IO_IDX = 4, WRITE_SEC_IDX = 6, WRITE_TICK_IDX = 7;
+    uint64_t read_io, read_sectors, read_ticks;
+    uint64_t write_io, write_sectors, write_ticks;
+
+    if (!ReadFileToString(sdaPath.c_str(), &file_contents)) {
+        ALOGE("Failed to read block layer stat %s", sdaPath.c_str());
+        return;
+    }
+
+    ss.str(file_contents);
+    while (ss >> stat) {
+        stats.push_back(stat);
+    }
+
+    if (stats.size() < kBlockStatsLength) {
+        ALOGE("block layer stat format is incorrect %s, length %lu/%d",
+            file_contents.c_str(), stats.size(), kBlockStatsLength);
+        return;
+    }
+
+    read_io = std::stoul(stats[READ_IO_IDX]);
+    read_sectors = std::stoul(stats[READ_SEC_IDX]);
+    read_ticks = std::stoul(stats[READ_TICK_IDX]);
+    write_io = std::stoul(stats[WRITE_IO_IDX]);
+    write_sectors = std::stoul(stats[WRITE_SEC_IDX]);
+    write_ticks = std::stoul(stats[WRITE_TICK_IDX]);
+
+    // Load values array
+    std::vector<VendorAtomValue> values(6);
+    values[BlockStatsReported::kReadIoFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(read_io);
+    values[BlockStatsReported::kReadSectorsFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(read_sectors);
+    values[BlockStatsReported::kReadTicksFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(read_ticks);
+    values[BlockStatsReported::kWriteIoFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(write_io);
+    values[BlockStatsReported::kWriteSectorsFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(write_sectors);
+    values[BlockStatsReported::kWriteTicksFieldNumber - kVendorAtomOffset] =
+                        VendorAtomValue::make<VendorAtomValue::longValue>(write_ticks);
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                        .atomId = PixelAtoms::Atom::kBlockStatsReported,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report block layer stats to Stats service");
     }
 }
 
@@ -878,6 +977,44 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
     }
 }
 
+/**
+ * Report the AMS rate.
+ */
+void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (kAmsRatePath == nullptr) {
+        ALOGD("Audio AMS_Rate path not specified");
+        return;
+    }
+
+    uint32_t milli_ams_rate;
+    if (!ReadFileToString(kAmsRatePath, &file_contents)) {
+        ALOGE("Unable to read ams_rate path %s", kAmsRatePath);
+        return;
+    }
+
+    if (sscanf(file_contents.c_str(), "%u", &milli_ams_rate) != 1) {
+        ALOGE("Unable to parse ams_rate %s", file_contents.c_str());
+        return;
+    }
+
+    ALOGD("milli_ams_rate = %s", file_contents.c_str());
+
+    std::vector<VendorAtomValue> values(1);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
+    values[0] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorAudioHardwareStatsReported,
+                        .values = std::move(values)};
+
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -892,11 +1029,13 @@ void SysfsCollector::logPerDay() {
     logBatteryChargeCycles(stats_client);
     logBatteryEEPROM(stats_client);
     logBatteryHealth(stats_client);
+    logBlockStatsReported(stats_client);
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
     logF2fsStats(stats_client);
     logF2fsCompressionInfo(stats_client);
     logF2fsGcSegmentInfo(stats_client);
+    logF2fsSmartIdleMaintEnabled(stats_client);
     logSlowIO(stats_client);
     logSpeakerImpedance(stats_client);
     logSpeechDspStat(stats_client);
@@ -905,6 +1044,12 @@ void SysfsCollector::logPerDay() {
     logSpeakerHealthStats(stats_client);
     mm_metrics_reporter_.logCmaStatus(stats_client);
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
+    logVendorAudioHardwareStats(stats_client);
+    logThermalStats(stats_client);
+}
+
+void SysfsCollector::aggregatePer5Min() {
+    mm_metrics_reporter_.aggregatePixelMmMetricsPer5Min();
 }
 
 void SysfsCollector::logPerHour() {
@@ -934,17 +1079,29 @@ void SysfsCollector::collect(void) {
     // Sleep for 30 seconds on launch to allow codec driver to load.
     sleep(30);
 
+    // sample & aggregate for the first time.
+    aggregatePer5Min();
+
     // Collect first set of stats on boot.
     logPerHour();
     logPerDay();
 
-    // Set an one-hour timer.
     struct itimerspec period;
-    const int kSecondsPerHour = 60 * 60;
-    int hours = 0;
-    period.it_interval.tv_sec = kSecondsPerHour;
+
+    // gcd (greatest common divisor) of all the following timings
+    constexpr int kSecondsPerWake = 5 * 60;
+
+    constexpr int kWakesPer5Min = 5 * 60 / kSecondsPerWake;
+    constexpr int kWakesPerHour = 60 * 60 / kSecondsPerWake;
+    constexpr int kWakesPerDay = 24 * 60 * 60 / kSecondsPerWake;
+
+    int wake_5min = 0;
+    int wake_hours = 0;
+    int wake_days = 0;
+
+    period.it_interval.tv_sec = kSecondsPerWake;
     period.it_interval.tv_nsec = 0;
-    period.it_value.tv_sec = kSecondsPerHour;
+    period.it_value.tv_sec = kSecondsPerWake;
     period.it_value.tv_nsec = 0;
 
     if (timerfd_settime(timerfd, 0, &period, NULL)) {
@@ -954,22 +1111,41 @@ void SysfsCollector::collect(void) {
 
     while (1) {
         int readval;
-        do {
+        union {
             char buf[8];
+            uint64_t count;
+        } expire;
+
+        do {
             errno = 0;
-            readval = read(timerfd, buf, sizeof(buf));
+            readval = read(timerfd, expire.buf, sizeof(expire.buf));
         } while (readval < 0 && errno == EINTR);
         if (readval < 0) {
             ALOGE("Timerfd error - %s\n", strerror(errno));
             return;
         }
 
-        hours++;
-        logPerHour();
-        if (hours == 24) {
-            // Collect stats every 24hrs after.
+        wake_5min += expire.count;
+        wake_hours += expire.count;
+        wake_days += expire.count;
+
+        if (wake_5min >= kWakesPer5Min) {
+            wake_5min %= kWakesPer5Min;
+            aggregatePer5Min();
+        }
+
+        if (wake_hours >= kWakesPerHour) {
+            if (wake_hours >= 2 * kWakesPerHour)
+                ALOGW("Hourly wake: sleep too much: expire.count=%" PRId64, expire.count);
+            wake_hours %= kWakesPerHour;
+            logPerHour();
+        }
+
+        if (wake_days >= kWakesPerDay) {
+            if (wake_hours >= 2 * kWakesPerDay)
+                ALOGW("Daily wake: sleep too much: expire.count=%" PRId64, expire.count);
+            wake_days %= kWakesPerDay;
             logPerDay();
-            hours = 0;
         }
     }
 }
