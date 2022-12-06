@@ -15,8 +15,49 @@
  */
 #pragma once
 
+#include <algorithm>
+
 #include "HardwareBase.h"
 #include "Vibrator.h"
+
+#define PROC_SND_PCM "/proc/asound/pcm"
+#define HAPTIC_PCM_DEVICE_SYMBOL "haptic nohost playback"
+
+static struct pcm_config haptic_nohost_config = {
+        .channels = 1,
+        .rate = 48000,
+        .period_size = 80,
+        .period_count = 2,
+        .format = PCM_FORMAT_S16_LE,
+};
+
+enum WaveformIndex : uint16_t {
+    /* Physical waveform */
+    WAVEFORM_LONG_VIBRATION_EFFECT_INDEX = 0,
+    WAVEFORM_RESERVED_INDEX_1 = 1,
+    WAVEFORM_CLICK_INDEX = 2,
+    WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX = 3,
+    WAVEFORM_THUD_INDEX = 4,
+    WAVEFORM_SPIN_INDEX = 5,
+    WAVEFORM_QUICK_RISE_INDEX = 6,
+    WAVEFORM_SLOW_RISE_INDEX = 7,
+    WAVEFORM_QUICK_FALL_INDEX = 8,
+    WAVEFORM_LIGHT_TICK_INDEX = 9,
+    WAVEFORM_LOW_TICK_INDEX = 10,
+    WAVEFORM_RESERVED_MFG_1,
+    WAVEFORM_RESERVED_MFG_2,
+    WAVEFORM_RESERVED_MFG_3,
+    WAVEFORM_MAX_PHYSICAL_INDEX,
+    /* OWT waveform */
+    WAVEFORM_COMPOSE = WAVEFORM_MAX_PHYSICAL_INDEX,
+    WAVEFORM_PWLE,
+    /*
+     * Refer to <linux/input.h>, the WAVEFORM_MAX_INDEX must not exceed 96.
+     * #define FF_GAIN          0x60  // 96 in decimal
+     * #define FF_MAX_EFFECTS   FF_GAIN
+     */
+    WAVEFORM_MAX_INDEX,
+};
 
 namespace aidl {
 namespace android {
@@ -51,6 +92,165 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setF0CompEnable(bool value) override { return set(value, &mF0CompEnable); }
     bool setRedcCompEnable(bool value) override { return set(value, &mRedcCompEnable); }
     bool setMinOnOffInterval(uint32_t value) override { return set(value, &mMinOnOffInterval); }
+    // TODO(b/234338136): Need to add the force feedback HW API test cases
+    bool setFFGain(int fd, uint16_t value) override {
+        struct input_event gain = {
+                .type = EV_FF,
+                .code = FF_GAIN,
+                .value = value,
+        };
+        if (write(fd, (const void *)&gain, sizeof(gain)) != sizeof(gain)) {
+            return false;
+        }
+        return true;
+    }
+    bool setFFEffect(int fd, struct ff_effect *effect, uint16_t timeoutMs) override {
+        if (((*effect).replay.length != timeoutMs) || (ioctl(fd, EVIOCSFF, effect) < 0)) {
+            ALOGE("setFFEffect fail");
+            return false;
+        } else {
+            return true;
+        }
+    }
+    bool setFFPlay(int fd, int8_t index, bool value) override {
+        struct input_event play = {
+                .type = EV_FF,
+                .code = static_cast<uint16_t>(index),
+                .value = value,
+        };
+        if (write(fd, (const void *)&play, sizeof(play)) != sizeof(play)) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    bool getHapticAlsaDevice(int *card, int *device) override {
+        std::string line;
+        std::ifstream myfile(PROC_SND_PCM);
+        if (myfile.is_open()) {
+            while (getline(myfile, line)) {
+                if (line.find(HAPTIC_PCM_DEVICE_SYMBOL) != std::string::npos) {
+                    std::stringstream ss(line);
+                    std::string currentToken;
+                    std::getline(ss, currentToken, ':');
+                    sscanf(currentToken.c_str(), "%d-%d", card, device);
+                    return true;
+                }
+            }
+            myfile.close();
+        } else {
+            ALOGE("Failed to read file: %s", PROC_SND_PCM);
+        }
+        return false;
+    }
+    bool setHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card, int device) override {
+        int ret = 0;
+
+        if (enable) {
+            *haptic_pcm = pcm_open(card, device, PCM_OUT, &haptic_nohost_config);
+            if (!pcm_is_ready(*haptic_pcm)) {
+                ALOGE("cannot open pcm_out driver: %s", pcm_get_error(*haptic_pcm));
+                goto fail;
+            }
+
+            ret = pcm_prepare(*haptic_pcm);
+            if (ret < 0) {
+                ALOGE("cannot prepare haptic_pcm: %s", pcm_get_error(*haptic_pcm));
+                goto fail;
+            }
+
+            ret = pcm_start(*haptic_pcm);
+            if (ret < 0) {
+                ALOGE("cannot start haptic_pcm: %s", pcm_get_error(*haptic_pcm));
+                goto fail;
+            }
+
+            return true;
+        } else {
+            if (*haptic_pcm) {
+                pcm_close(*haptic_pcm);
+                *haptic_pcm = NULL;
+            }
+            return true;
+        }
+
+    fail:
+        pcm_close(*haptic_pcm);
+        *haptic_pcm = NULL;
+        return false;
+    }
+    bool uploadOwtEffect(int fd, uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+                         uint32_t *outEffectIndex, int *status) override {
+        (*effect).u.periodic.custom_len = numBytes / sizeof(uint16_t);
+        delete[] ((*effect).u.periodic.custom_data);
+        (*effect).u.periodic.custom_data = new int16_t[(*effect).u.periodic.custom_len]{0x0000};
+        if ((*effect).u.periodic.custom_data == nullptr) {
+            ALOGE("Failed to allocate memory for custom data\n");
+            *status = EX_NULL_POINTER;
+            return false;
+        }
+        memcpy((*effect).u.periodic.custom_data, owtData, numBytes);
+
+        if ((*effect).id != -1) {
+            ALOGE("(*effect).id != -1");
+        }
+
+        /* Create a new OWT waveform to update the PWLE or composite effect. */
+        (*effect).id = -1;
+        if (ioctl(fd, EVIOCSFF, effect) < 0) {
+            ALOGE("Failed to upload effect %d (%d): %s", *outEffectIndex, errno, strerror(errno));
+            delete[] ((*effect).u.periodic.custom_data);
+            *status = EX_ILLEGAL_STATE;
+            return false;
+        }
+
+        if ((*effect).id >= FF_MAX_EFFECTS || (*effect).id < 0) {
+            ALOGE("Invalid waveform index after upload OWT effect: %d", (*effect).id);
+            *status = EX_ILLEGAL_ARGUMENT;
+            return false;
+        }
+        *outEffectIndex = (*effect).id;
+        *status = 0;
+        return true;
+    }
+    bool eraseOwtEffect(int fd, int8_t effectIndex, std::vector<ff_effect> *effect) override {
+        uint32_t effectCountBefore, effectCountAfter, i, successFlush = 0;
+
+        if (effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX) {
+            ALOGE("Invalid waveform index for OWT erase: %d", effectIndex);
+            return false;
+        }
+
+        if (effectIndex < WAVEFORM_MAX_INDEX) {
+            /* Normal situation. Only erase the effect which we just played. */
+            if (ioctl(fd, EVIOCRMFF, effectIndex) < 0) {
+                ALOGE("Failed to erase effect %d (%d): %s", effectIndex, errno, strerror(errno));
+            }
+            for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < WAVEFORM_MAX_INDEX; i++) {
+                if ((*effect)[i].id == effectIndex) {
+                    (*effect)[i].id = -1;
+                    break;
+                }
+            }
+        } else {
+            /* Flush all non-prestored effects of ff-core and driver. */
+            getEffectCount(&effectCountBefore);
+            for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < FF_MAX_EFFECTS; i++) {
+                if (ioctl(fd, EVIOCRMFF, i) >= 0) {
+                    successFlush++;
+                }
+            }
+            getEffectCount(&effectCountAfter);
+            ALOGW("Flushed effects: ff: %d; driver: %d -> %d; success: %d", effectIndex,
+                  effectCountBefore, effectCountAfter, successFlush);
+            /* Reset all OWT effect index of HAL. */
+            for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < WAVEFORM_MAX_INDEX; i++) {
+                (*effect)[i].id = -1;
+            }
+        }
+        return true;
+    }
+
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
@@ -79,7 +279,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     static constexpr uint32_t VERSION_DEFAULT = 2;
     static constexpr int32_t DEFAULT_FREQUENCY_SHIFT = 0;
     static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {1, 100};
-    static constexpr std::array<uint32_t, 2> V_CTICK_DEFAULT = {1, 100};
+    static constexpr std::array<uint32_t, 2> V_CLICK_DEFAULT = {1, 100};
     static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {1, 100};
 
   public:
@@ -109,7 +309,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         if (getPersist(CLICK_VOLTAGES_CONFIG, value)) {
             return true;
         }
-        *value = V_CTICK_DEFAULT;
+        *value = V_CLICK_DEFAULT;
         return true;
     }
     bool getLongVolLevels(std::array<uint32_t, 2> *value) override {
@@ -126,6 +326,16 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     }
     bool getSupportedPrimitives(uint32_t *value) override {
         return getProperty("supported_primitives", value, (uint32_t)0);
+    }
+    bool isF0CompEnabled() override {
+        bool value;
+        getProperty("f0.comp.enabled", &value, true);
+        return value;
+    }
+    bool isRedcCompEnabled() override {
+        bool value;
+        getProperty("redc.comp.enabled", &value, true);
+        return value;
     }
     void debug(int fd) override { HwCalBase::debug(fd); }
 };
