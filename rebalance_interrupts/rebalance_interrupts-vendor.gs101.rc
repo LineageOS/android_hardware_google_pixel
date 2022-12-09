@@ -2,7 +2,7 @@ service vendor.rebalance_interrupts-vendor /vendor/bin/rebalance_interrupts-vend
     disabled
     oneshot
     user root
-    group system
+    group root
 
 on early-boot
     start vendor.rebalance_interrupts-vendor
