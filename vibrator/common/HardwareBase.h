@@ -15,15 +15,16 @@
  */
 #pragma once
 
-#include <list>
-#include <map>
-#include <sstream>
-#include <string>
-
+#include <android-base/stringprintf.h>
 #include <android-base/unique_fd.h>
 #include <log/log.h>
 #include <sys/epoll.h>
 #include <utils/Trace.h>
+
+#include <list>
+#include <map>
+#include <sstream>
+#include <string>
 
 #include "utils.h"
 
@@ -32,6 +33,7 @@ namespace android {
 namespace hardware {
 namespace vibrator {
 
+using ::android::base::StringPrintf;
 using ::android::base::unique_fd;
 
 class HwApiBase {
@@ -125,7 +127,9 @@ bool HwApiBase::set(const T &value, std::ostream *stream) {
 
 template <typename T>
 bool HwApiBase::poll(const T &value, std::istream *stream, const int32_t timeoutMs) {
-    ATRACE_NAME("HwApi::poll");
+    ATRACE_NAME(StringPrintf("HwApi::poll %s==%s", mNames[stream].c_str(),
+                             std::to_string(value).c_str())
+                        .c_str());
     auto path = mPathPrefix + mNames[stream];
     unique_fd fileFd{::open(path.c_str(), O_RDONLY)};
     unique_fd epollFd{epoll_create(1)};

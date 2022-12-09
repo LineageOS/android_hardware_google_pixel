@@ -39,6 +39,7 @@ namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
+
 static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 2044;  // (COMPOSE_SIZE_MAX + 1) * 8 + 4
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_PWLE = 2302;
@@ -462,7 +463,7 @@ ndk::ScopedAStatus Vibrator::off() {
 
 ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
-    ATRACE_NAME("Vibrator::on");
+    ATRACE_NAME(StringPrintf("Vibrator::on %dms", timeoutMs).c_str());
     if (timeoutMs > MAX_TIME_MS) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
@@ -482,7 +483,9 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
 ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *_aidl_return) {
-    ATRACE_NAME("Vibrator::perform");
+    ATRACE_NAME(StringPrintf("Vibrator::perform %s,%s", toString(effect).c_str(),
+                             toString(strength).c_str())
+                        .c_str());
     return performEffect(effect, strength, callback, _aidl_return);
 }
 
@@ -560,7 +563,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDuration(CompositePrimitive primitive,
 
 ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composite,
                                      const std::shared_ptr<IVibratorCallback> &callback) {
-    ATRACE_NAME("Vibrator::compose");
+    ATRACE_NAME(StringPrintf("Vibrator::compose size=%zu", composite.size()).c_str());
     uint16_t size;
     uint16_t nextEffectDelay;
 
@@ -1017,7 +1020,7 @@ static void updateNSection(dspmem_chunk *ch, int segmentIdx) {
 
 ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &composite,
                                          const std::shared_ptr<IVibratorCallback> &callback) {
-    ATRACE_NAME("Vibrator::composePwle");
+    ATRACE_NAME(StringPrintf("Vibrator::composePwle size=%zu", composite.size()).c_str());
     int32_t capabilities;
 
     Vibrator::getCapabilities(&capabilities);
@@ -1428,7 +1431,9 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGW("Failed to get state \"Haptic\"");
     }
+    ATRACE_BEGIN("Vibrating");
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
+    ATRACE_END();
 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
