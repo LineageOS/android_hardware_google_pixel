@@ -61,6 +61,25 @@ class Vibrator : public BnVibrator {
         virtual bool setRedcCompEnable(bool value) = 0;
         // Stores the minumun delay time between playback and stop effects.
         virtual bool setMinOnOffInterval(uint32_t value) = 0;
+        // Indicates the number of 0.125-dB steps of attenuation to apply to
+        // waveforms triggered in response to vibration calls from the
+        // Android vibrator HAL.
+        virtual bool setFFGain(int fd, uint16_t value) = 0;
+        // Create/modify custom effects for all physical waveforms.
+        virtual bool setFFEffect(int fd, struct ff_effect *effect, uint16_t timeoutMs) = 0;
+        // Activates/deactivates the effect index after setFFGain() and setFFEffect().
+        virtual bool setFFPlay(int fd, int8_t index, bool value) = 0;
+        // Get the Alsa device for the audio coupled haptics effect
+        virtual bool getHapticAlsaDevice(int *card, int *device) = 0;
+        // Set haptics PCM amplifier before triggering audio haptics feature
+        virtual bool setHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card,
+                                     int device) = 0;
+        // Set OWT waveform for compose or compose PWLE request
+        virtual bool uploadOwtEffect(int fd, uint8_t *owtData, uint32_t numBytes,
+                                     struct ff_effect *effect, uint32_t *outEffectIndex,
+                                     int *status) = 0;
+        // Erase OWT waveform
+        virtual bool eraseOwtEffect(int fd, int8_t effectIndex, std::vector<ff_effect> *effect) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -91,6 +110,10 @@ class Vibrator : public BnVibrator {
         virtual bool isChirpEnabled() = 0;
         // Obtains the supported primitive effects.
         virtual bool getSupportedPrimitives(uint32_t *value) = 0;
+        // Checks if the f0 compensation feature needs to be enabled.
+        virtual bool isF0CompEnabled() = 0;
+        // Checks if the redc compensation feature needs to be enabled.
+        virtual bool isRedcCompEnabled() = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -145,9 +168,6 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus getCompoundDetails(Effect effect, EffectStrength strength,
                                           uint32_t *outTimeMs, struct dspmem_chunk *outCh);
     ndk::ScopedAStatus getPrimitiveDetails(CompositePrimitive primitive, uint32_t *outEffectIndex);
-    ndk::ScopedAStatus uploadOwtEffect(uint8_t *owtData, uint32_t num_bytes,
-                                       uint32_t *outEffectIndex);
-    ndk::ScopedAStatus eraseOwtEffect(int8_t effectIndex);
     ndk::ScopedAStatus performEffect(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *outTimeMs);
@@ -176,12 +196,13 @@ class Vibrator : public BnVibrator {
     struct pcm *mHapticPcm;
     int mCard;
     int mDevice;
-    bool mHasHapticAlsaDevice;
+    bool mHasHapticAlsaDevice{false};
     bool mIsUnderExternalControl;
     float mLongEffectScale = 1.0;
     bool mIsChirpEnabled;
     uint32_t mSupportedPrimitivesBits = 0x0;
     std::vector<CompositePrimitive> mSupportedPrimitives;
+    bool mConfigHapticAlsaDeviceDone{false};
 };
 
 }  // namespace vibrator

@@ -72,6 +72,7 @@ cc_library {
     "PcaChargeStats.cpp",
     "StatsHelper.cpp",
     "SysfsCollector.cpp",
+    "ThermalStatsReporter.cpp",
     "UeventListener.cpp",
     "WirelessChargeStats.cpp",
     "WlcReporter.cpp",
