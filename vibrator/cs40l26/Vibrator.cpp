@@ -1276,10 +1276,20 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
+    uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
     if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
         (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
         ALOGE("Failed to clean up the composed effect %d", mActiveId);
+    } else {
+        ALOGD("waitForComplete: Vibrator is already off");
     }
+    mHwApi->getEffectCount(&effectCount);
+    // Do waveform number checking
+    if ((effectCount > WAVEFORM_MAX_PHYSICAL_INDEX) &&
+        (!mHwApi->eraseOwtEffect(mInputFd, WAVEFORM_MAX_INDEX, &mFfEffects))) {
+        ALOGE("Failed to forcibly clean up all composed effect");
+    }
+
     mActiveId = -1;
 
     if (callback) {
