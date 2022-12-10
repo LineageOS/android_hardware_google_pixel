@@ -1082,14 +1082,14 @@ void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &
         return;
 
     int64_t max_latency;
-    if (!sscanf(data + offset, "Max Resume Latency: %ld\n%n", &max_latency, &bytes_read))
+    if (!sscanf(data + offset, "Max Resume Latency: %" PRId64 "\n%n", &max_latency, &bytes_read))
         return;
     offset += bytes_read;
     if (offset >= data_len)
         return;
 
     uint64_t sum_latency;
-    if (!sscanf(data + offset, "Sum Resume Latency: %lu\n%n", &sum_latency, &bytes_read))
+    if (!sscanf(data + offset, "Sum Resume Latency: %" PRIu64 "\n%n", &sum_latency, &bytes_read))
         return;
     offset += bytes_read;
     if (offset >= data_len)
@@ -1107,8 +1107,8 @@ void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &
     std::vector<VendorAtomValue> values(curr_bucket_cnt + 2);
     VendorAtomValue tmp;
     // Iterate over resume latency buckets to get latency count within some latency thresholds
-    while (sscanf(data + offset, "%*ld - %*ldms ====> %ld\n%n", &count, &bytes_read) == 1 ||
-           sscanf(data + offset, "%*ld - infms ====> %ld\n%n", &count, &bytes_read) == 1) {
+    while (sscanf(data + offset, "%*ld - %*ldms ====> %" PRId64 "\n%n", &count, &bytes_read) == 1 ||
+           sscanf(data + offset, "%*ld - infms ====> %" PRId64 "\n%n", &count, &bytes_read) == 1) {
         offset += bytes_read;
         if (offset >= data_len && (index + 1 < curr_bucket_cnt + 2))
             return;
@@ -1198,7 +1198,8 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     //  Get, process, store softirq stats
     std::vector<std::pair<int, int64_t>> sorted_softirq_pair;
     int64_t softirq_count;
-    if (sscanf(data + offset, "long SOFTIRQ count: %ld\n%n", &softirq_count, &bytes_read) != 1)
+    if (sscanf(data + offset, "long SOFTIRQ count: %" PRId64 "\n%n", &softirq_count, &bytes_read) !=
+        1)
         return;
     offset += bytes_read;
     if (offset >= data_len)
@@ -1222,7 +1223,8 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     //  Iterate over softirq stats and record top 5 long softirq
     int64_t softirq_latency;
     int softirq_num;
-    while (sscanf(data + offset, "%d %ld\n%n", &softirq_num, &softirq_latency, &bytes_read) == 2) {
+    while (sscanf(data + offset, "%d %" PRId64 "\n%n", &softirq_num, &softirq_latency,
+                  &bytes_read) == 2) {
         sorted_softirq_pair.push_back(std::make_pair(softirq_num, softirq_latency));
         offset += bytes_read;
         if (offset >= data_len)
@@ -1233,7 +1235,7 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     //  Get, process, store irq stats
     std::vector<std::pair<int, int64_t>> sorted_irq_pair;
     int64_t irq_count;
-    if (sscanf(data + offset, "long IRQ count: %ld\n%n", &irq_count, &bytes_read) != 1)
+    if (sscanf(data + offset, "long IRQ count: %" PRId64 "\n%n", &irq_count, &bytes_read) != 1)
         return;
     offset += bytes_read;
     if (offset >= data_len)
@@ -1256,7 +1258,7 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     int irq_num;
     int index = 0;
     //  Iterate over softirq stats and record top 5 long irq
-    while (sscanf(data + offset, "%d %ld\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
+    while (sscanf(data + offset, "%d %" PRId64 "\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
         sorted_irq_pair.push_back(std::make_pair(irq_num, irq_latency));
         offset += bytes_read;
         if (offset >= data_len && index < 5)
