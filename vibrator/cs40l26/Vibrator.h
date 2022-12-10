@@ -16,6 +16,7 @@
 #pragma once
 
 #include <aidl/android/hardware/vibrator/BnVibrator.h>
+#include <android-base/stringprintf.h>
 #include <android-base/unique_fd.h>
 #include <linux/input.h>
 #include <tinyalsa/asoundlib.h>
@@ -28,6 +29,8 @@ namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
+
+using ::android::base::StringPrintf;
 
 class Vibrator : public BnVibrator {
   public:
