@@ -25,8 +25,6 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "adaptivecpu/AdaptiveCpu.h"
-
 namespace aidl {
 namespace google {
 namespace hardware {
@@ -72,8 +70,8 @@ struct AppHintDesc {
 
 class PowerHintSession : public BnPowerHintSession {
   public:
-    explicit PowerHintSession(std::shared_ptr<AdaptiveCpu> adaptiveCpu, int32_t tgid, int32_t uid,
-                              const std::vector<int32_t> &threadIds, int64_t durationNanos);
+    explicit PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
+                              int64_t durationNanos);
     ~PowerHintSession();
     ndk::ScopedAStatus close() override;
     ndk::ScopedAStatus pause() override;
@@ -115,7 +113,6 @@ class PowerHintSession : public BnPowerHintSession {
     int setSessionUclampMin(int32_t min);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
     void traceSessionVal(char const *identifier, int64_t val) const;
-    const std::shared_ptr<AdaptiveCpu> mAdaptiveCpu;
     AppHintDesc *mDescriptor = nullptr;
     sp<StaleTimerHandler> mStaleTimerHandler;
     std::atomic<time_point<steady_clock>> mLastUpdatedTime;
