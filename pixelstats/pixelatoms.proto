@@ -29,9 +29,8 @@ import "frameworks/proto_logging/stats/atom_field_options.proto";
 /*
  * Please note that the following features are not currently supported by
  * the IStats->reportVendorAtom implementation:
- *   - types outside of int, long, float, and string (ex. uint)
+ *   - types outside of int, long, float, bool and string (ex. uint)
  *   - submessages within an atom
- *   - repeated fields - arrays must be unrolled
  *   - field # 1 - this will be occupied by the vendor namespace
  */
 
@@ -75,12 +74,16 @@ message Atom {
       CitadelEvent citadel_event = 100019;  // moved from vendor proprietary
       VendorSpeakerStatsReported vendor_speaker_stats_reported = 105030;
 
-      ChreHalNanoappLoadFailed chre_hal_nanoapp_load_failed = 105031;
-      ChrePalOpenFailed chre_pal_open_failed = 105032;
-      ChreApiErrorCodeDistributionTaken chre_api_error_code_distribution_taken = 105033;
-      ChreDynamicMemorySnapshotReported chre_dynamic_memory_snapshot_reported = 105034;
-      ChreEventQueueSnapshotReported chre_event_queue_snapshot_reported = 105035;
-      ChreApWakeUpOccurred chre_ap_wake_up_occurred = 105036;
+      ChreHalNanoappLoadFailed chre_hal_nanoapp_load_failed =
+                105031 [(android.os.statsd.module) = "chre"];
+      ChrePalOpenFailed chre_pal_open_failed = 105032 [(android.os.statsd.module) = "chre"];
+      ChreApiErrorCodeDistributionTaken chre_api_error_code_distribution_taken =
+                105033 [(android.os.statsd.module) = "chre"];
+      ChreDynamicMemorySnapshotReported chre_dynamic_memory_snapshot_reported =
+                105034 [(android.os.statsd.module) = "chre"];
+      ChreEventQueueSnapshotReported chre_event_queue_snapshot_reported =
+                105035 [(android.os.statsd.module) = "chre"];
+      ChreApWakeUpOccurred chre_ap_wake_up_occurred = 105036 [(android.os.statsd.module) = "chre"];
 
       BatteryHealthStatus battery_health_status = 105037;
       BatteryHealthUsage battery_health_usage = 105038;
