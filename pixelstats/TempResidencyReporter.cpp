@@ -67,11 +67,11 @@ bool parse_file_contents(std::string file_contents,
         if (offset >= data_len)
             return false;
         while (index < num_stats_buckets) {
-            if (sscanf(data + offset, "-inf - %*d ====> %ldms\n%n", &temp_res_value, &bytes_read) !=
-                        1 &&
-                sscanf(data + offset, "%*d - %*d ====> %ldms\n%n", &temp_res_value, &bytes_read) !=
-                        1 &&
-                sscanf(data + offset, "%*d - inf ====> %ldms\n\n%n", &temp_res_value,
+            if (sscanf(data + offset, "-inf - %*d ====> %" PRId64 "ms\n%n", &temp_res_value,
+                       &bytes_read) != 1 &&
+                sscanf(data + offset, "%*d - %*d ====> %" PRId64 "ms\n%n", &temp_res_value,
+                       &bytes_read) != 1 &&
+                sscanf(data + offset, "%*d - inf ====> %" PRId64 "ms\n\n%n", &temp_res_value,
                        &bytes_read) != 1)
                 return false;
 
@@ -154,7 +154,7 @@ void TempResidencyReporter::logTempResidencyStats(const std::shared_ptr<IStats> 
         }
         if (abs(since_last_update_ms - sum_residency) > kMaxResidencyDiffMs)
             ALOGI("Thermal zone: %s Temperature residency stats not good!\ndevice sum_residency: "
-                  "%ldms, since_last_update_ms %ldms\n",
+                  "%" PRId64 "ms, since_last_update_ms %" PRId64 "ms\n",
                   sensor_name_str.c_str(), sum_residency, since_last_update_ms);
 
         //  Send vendor atom to IStats HAL
