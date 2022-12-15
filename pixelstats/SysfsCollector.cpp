@@ -84,6 +84,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
       kEEPROMPath(sysfs_paths.EEPROMPath),
+      kBrownoutLogPath(sysfs_paths.BrownoutLogPath),
+      kBrownoutReasonProp(sysfs_paths.BrownoutReasonProp),
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
@@ -1318,6 +1320,21 @@ void SysfsCollector::aggregatePer5Min() {
     mm_metrics_reporter_.aggregatePixelMmMetricsPer5Min();
 }
 
+void SysfsCollector::logBrownout() {
+    const std::shared_ptr<IStats> stats_client = getStatsService();
+    if (!stats_client) {
+        ALOGE("Unable to get AIDL Stats service");
+        return;
+    }
+    if (kBrownoutLogPath != nullptr && strlen(kBrownoutLogPath) > 0)
+        brownout_detected_reporter_.logBrownout(stats_client, kBrownoutLogPath,
+                                                kBrownoutReasonProp);
+}
+
+void SysfsCollector::logOnce() {
+    logBrownout();
+}
+
 void SysfsCollector::logPerHour() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -1349,6 +1366,7 @@ void SysfsCollector::collect(void) {
     aggregatePer5Min();
 
     // Collect first set of stats on boot.
+    logOnce();
     logPerHour();
     logPerDay();
 
