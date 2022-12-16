@@ -22,6 +22,7 @@
 
 #include "BatteryEEPROMReporter.h"
 #include "BatteryHealthReporter.h"
+#include "BrownoutDetectedReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
 #include "TempResidencyReporter.h"
@@ -58,6 +59,8 @@ class SysfsCollector {
         const char *const ZramBdStatPath;
         const char *const EEPROMPath;
         const char *const MitigationPath;
+        const char *const BrownoutLogPath;
+        const char *const BrownoutReasonProp;
         const char *const SpeakerTemperaturePath;
         const char *const SpeakerExcursionPath;
         const char *const SpeakerHeartBeatPath;
@@ -78,6 +81,8 @@ class SysfsCollector {
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
     void aggregatePer5Min();
+    void logOnce();
+    void logBrownout();
     void logPerDay();
     void logPerHour();
 
@@ -130,6 +135,8 @@ class SysfsCollector {
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
+    const char *const kBrownoutLogPath;
+    const char *const kBrownoutReasonProp;
     const char *const kPowerMitigationStatsPath;
     const char *const kSpeakerTemperaturePath;
     const char *const kSpeakerExcursionPath;
@@ -146,6 +153,7 @@ class SysfsCollector {
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
+    BrownoutDetectedReporter brownout_detected_reporter_;
     ThermalStatsReporter thermal_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
     TempResidencyReporter temp_residency_reporter_;
