@@ -87,6 +87,7 @@ message Atom {
       VendorLongIRQStatsReported vendor_long_irq_stats_reported = 105043;
       VendorResumeLatencyStats vendor_resume_latency_stats = 105044;
       VendorTempResidencyStats vendor_temp_residency_stats = 105045;
+      BrownoutDetected brownout_detected = 105046;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1410,4 +1411,125 @@ message VendorResumeLatencyStats {
   optional int64 resume_count_bucket_34 = 37;
   optional int64 resume_count_bucket_35 = 38;
   optional int64 resume_count_bucket_36 = 39;
+}
+
+/*
+ * Log the Brownout events.
+ */
+message BrownoutDetected {
+    enum IRQType {
+        UVLO1 = 0;
+        SMPL_WARN = 1;
+        UVLO2 = 2;
+        BATOILO = 3;
+    }
+
+    enum BrownoutReason {
+        UNKNOWN = 0;
+        UVLO_IF = 1;
+        OCP_IF = 2;
+        UVLO_MAIN = 3;
+        UVLO_SUB = 4;
+        OCP_B1M = 5;
+        OCP_B2M = 6;
+        OCP_B3M = 7;
+        OCP_B4M = 8;
+        OCP_B5M = 9;
+        OCP_B6M = 10;
+        OCP_B7M = 11;
+        OCP_B8M = 12;
+        OCP_B9M = 13;
+        OCP_B10M = 14;
+        OCP_B1S = 15;
+        OCP_B2S = 16;
+        OCP_B3S = 17;
+        OCP_B4S = 18;
+        OCP_B5S = 19;
+        OCP_B6S = 20;
+        OCP_B7S = 21;
+        OCP_B8S = 22;
+        OCP_B9S = 23;
+        OCP_B10S = 24;
+        OCP_BAS = 25;
+        OCP_BBS = 26;
+        OCP_BCS = 27;
+        OCP_BDS = 28;
+    }
+
+    // Reverse domain name. (e.g. Pixel)
+    optional string reverse_domain_name = 1;
+    // Triggered mitigation IRQ
+    optional IRQType triggered_irq = 2;
+    // Triggered timestamp
+    optional int64 triggered_timestamp = 3;
+    // Triggered battery temperature
+    optional int32 battery_temp = 4;
+    // Triggered battery age
+    optional int32 battery_cycle = 5;
+    // Triggered battery soc
+    optional int32 battery_soc = 6;
+    // Triggered FG Reading: Voltage Now
+    optional int32 voltage_now = 7;
+    // Triggered ODPM Reading: Channel 1
+    optional int32 odpm_channel01 = 8;
+    // Triggered ODPM Reading: Channel 2
+    optional int32 odpm_channel02 = 9;
+    // Triggered ODPM Reading: Channel 3
+    optional int32 odpm_channel03 = 10;
+    // Triggered ODPM Reading: Channel 4
+    optional int32 odpm_channel04 = 11;
+    // Triggered ODPM Reading: Channel 5
+    optional int32 odpm_channel05 = 12;
+    // Triggered ODPM Reading: Channel 6
+    optional int32 odpm_channel06 = 13;
+    // Triggered ODPM Reading: Channel 7
+    optional int32 odpm_channel07 = 14;
+    // Triggered ODPM Reading: Channel 8
+    optional int32 odpm_channel08 = 15;
+    // Triggered ODPM Reading: Channel 9
+    optional int32 odpm_channel09 = 16;
+    // Triggered ODPM Reading: Channel 10
+    optional int32 odpm_channel10 = 17;
+    // Triggered ODPM Reading: Channel 11
+    optional int32 odpm_channel11 = 18;
+    // Triggered ODPM Reading: Channel 12
+    optional int32 odpm_channel12 = 19;
+    // Triggered ODPM Reading: Channel 13
+    optional int32 odpm_channel13 = 20;
+    // Triggered ODPM Reading: Channel 14
+    optional int32 odpm_channel14 = 21;
+    // Triggered ODPM Reading: Channel 15
+    optional int32 odpm_channel15 = 22;
+    // Triggered ODPM Reading: Channel 16
+    optional int32 odpm_channel16 = 23;
+    // Triggered ODPM Reading: Channel 17
+    optional int32 odpm_channel17 = 24;
+    // Triggered ODPM Reading: Channel 18
+    optional int32 odpm_channel18 = 25;
+    // Triggered ODPM Reading: Channel 19
+    optional int32 odpm_channel19 = 26;
+    // Triggered ODPM Reading: Channel 20
+    optional int32 odpm_channel20 = 27;
+    // Triggered ODPM Reading: Channel 21
+    optional int32 odpm_channel21 = 28;
+    // Triggered ODPM Reading: Channel 22
+    optional int32 odpm_channel22 = 29;
+    // Triggered ODPM Reading: Channel 23
+    optional int32 odpm_channel23 = 30;
+    // Triggered ODPM Reading: Channel 24
+    optional int32 odpm_channel24 = 31;
+    // Triggered DVFS State: Channel 1
+    optional int32 dvfs_channel1 = 32;
+    // Triggered DVFS State: Channel 2
+    optional int32 dvfs_channel2 = 33;
+    // Triggered DVFS State: Channel 3
+    optional int32 dvfs_channel3 = 34;
+    // Triggered DVFS State: Channel 4
+    optional int32 dvfs_channel4 = 35;
+    // Triggered DVFS State: Channel 5
+    optional int32 dvfs_channel5  = 36;
+    // Triggered DVFS State: Channel 6
+    optional int32 dvfs_channel6 = 37;
+    // brownout reason
+    optional int32 brownout_reason = 38;
 }
