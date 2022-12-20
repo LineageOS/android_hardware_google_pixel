@@ -74,9 +74,18 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
     case MiscWriterActions::kClearWristOrientationFlag:
       offset = override_offset.value_or(kWristOrientationFlagOffsetInVendorSpace);
       content = (action_ == MiscWriterActions::kSetWristOrientationFlag)
-                    ? std::string(kWristOrientationFlag) + orientation_
-                    : std::string(strlen(kWristOrientationFlag) + sizeof(orientation_), 0);
+                    ? std::string(kWristOrientationFlag) + chardata_
+                    : std::string(strlen(kWristOrientationFlag) + sizeof(chardata_), 0);
       break;
+    case MiscWriterActions::kWriteTimeFormat:
+        offset = override_offset.value_or(kTimeFormatValOffsetInVendorSpace);
+        content = std::string(kTimeFormat) + chardata_;
+        break;
+    case MiscWriterActions::kWriteTimeOffset:
+        offset = override_offset.value_or(kTimeOffsetValOffsetInVendorSpace);
+        content = std::string(kTimeOffset) + stringdata_;
+        content.resize(strlen(kTimeOffset) + std::to_string(kMinTimeOffset).size(), 0);
+        break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
       return false;

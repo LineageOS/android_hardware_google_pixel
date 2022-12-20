@@ -36,6 +36,8 @@ enum class MiscWriterActions : int32_t {
   kSetDisablePkvmFlag,
   kSetWristOrientationFlag,
   kClearWristOrientationFlag,
+  kWriteTimeFormat,
+  kWriteTimeOffset,
 
   kUnset = -1,
 };
@@ -51,6 +53,14 @@ class MiscWriter {
   static constexpr char kDisablePkvmFlag[] = "disable-pkvm";
   static constexpr uint32_t kWristOrientationFlagOffsetInVendorSpace = 96;
   static constexpr char kWristOrientationFlag[] = "wrist-orientation=";
+  static constexpr uint32_t kTimeFormatValOffsetInVendorSpace = 128;
+  static constexpr char kTimeFormat[] = "timeformat=";
+  static constexpr uint32_t kTimeOffsetValOffsetInVendorSpace = 160;
+  static constexpr char kTimeOffset[] = "timeoffset=";
+
+  // Minimum and maximum time zone are -12 and 14 hours from GMT
+  static constexpr int32_t kMinTimeOffset = -12 * 60 * 60 * 1000;
+  static constexpr int32_t kMaxTimeOffset = 14 * 60 * 60 * 1000;
 
   // Returns true of |size| bytes data starting from |offset| is fully inside the vendor space.
   static bool OffsetAndSizeInVendorSpace(size_t offset, size_t size);
@@ -60,8 +70,10 @@ class MiscWriter {
                                             std::string* err);
 
   explicit MiscWriter(const MiscWriterActions& action) : action_(action) {}
-  explicit MiscWriter(const MiscWriterActions &action, const char orientation)
-      : action_(action), orientation_(orientation) {}
+  explicit MiscWriter(const MiscWriterActions &action, const char data)
+      : action_(action), chardata_(data) {}
+  explicit MiscWriter(const MiscWriterActions &action, std::string data)
+      : action_(action), stringdata_(data) {}
 
   // Performs the stored MiscWriterActions. If |override_offset| is set, writes to the input offset
   // in the vendor space of /misc instead of the default offset.
@@ -69,7 +81,8 @@ class MiscWriter {
 
  private:
   MiscWriterActions action_{ MiscWriterActions::kUnset };
-  char orientation_{'0'};
+  char chardata_{'0'};
+  std::string stringdata_;
 };
 
 }  // namespace pixel
