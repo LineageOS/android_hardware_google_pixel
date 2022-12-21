@@ -46,6 +46,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --set-disable-pkvm   Write the disable pKVM flag\n";
   std::cerr << "  --set-wrist-orientation <0-3> Write the wrist orientation flag\n";
   std::cerr << "  --clear-wrist-orientation     Clear the wrist orientation flag\n";
+  std::cerr << "  --set-timeformat              Write the time format value (1=24hr, 0=12hr)\n";
+  std::cerr << "  --set-timeoffset              Write the time offset value (tz_time - utc_time)\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -64,6 +66,8 @@ int main(int argc, char** argv) {
     { "override-vendor-space-offset", required_argument, nullptr, 0 },
     { "set-enable-pkvm", no_argument, nullptr, 0 },
     { "set-disable-pkvm", no_argument, nullptr, 0 },
+    { "set-timeformat", required_argument, nullptr, 0},
+    { "set-timeoffset", required_argument, nullptr, 0},
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -112,6 +116,38 @@ int main(int argc, char** argv) {
       }
       misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kSetWristOrientationFlag,
                                                      '0' + orientation);
+    } else if (option_name == "set-timeformat"s) {
+      int timeformat;
+      if (!android::base::ParseInt(optarg, &timeformat)) {
+        LOG(ERROR) << "Failed to parse the timeformat: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (timeformat < 0 || timeformat > 1) {
+        LOG(ERROR) << "Time format out of range: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeFormat,
+                                                     '0' + timeformat);
+    } else if (option_name == "set-timeoffset"s) {
+      int timeoffset;
+      if (!android::base::ParseInt(optarg, &timeoffset)) {
+        LOG(ERROR) << "Failed to parse the timeoffset: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (timeoffset < MiscWriter::kMinTimeOffset || timeoffset > MiscWriter::kMaxTimeOffset) {
+        LOG(ERROR) << "Time offset out of range: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeOffset,
+                                                     std::to_string(timeoffset));
     } else if (auto iter = action_map.find(option_name); iter != action_map.end()) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";
