@@ -48,7 +48,6 @@ static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
 static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
-static constexpr uint32_t MIN_ON_OFF_INTERVAL_US = 8500;  // SVC initialization time
 static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;  // ALERT Irq Handling
 static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 
@@ -1277,10 +1276,20 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
+    uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
     if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
         (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
         ALOGE("Failed to clean up the composed effect %d", mActiveId);
+    } else {
+        ALOGD("waitForComplete: Vibrator is already off");
     }
+    mHwApi->getEffectCount(&effectCount);
+    // Do waveform number checking
+    if ((effectCount > WAVEFORM_MAX_PHYSICAL_INDEX) &&
+        (!mHwApi->eraseOwtEffect(mInputFd, WAVEFORM_MAX_INDEX, &mFfEffects))) {
+        ALOGE("Failed to forcibly clean up all composed effect");
+    }
+
     mActiveId = -1;
 
     if (callback) {
