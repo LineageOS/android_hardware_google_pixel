@@ -73,6 +73,10 @@ const std::map<std::string, TracingConfig> kTracingMap = {
                   {"thermal_exynos", false},
                   {"thermal_exynos_gpu", false}}},
         },
+        {
+                "camera",
+                {"Camera LWIS", {{"lwis", false}}},
+        },
 };
 
 // Methods from ::android::hardware::atrace::V1_0::IAtraceDevice follow.
