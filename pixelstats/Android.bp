@@ -58,7 +58,6 @@ cc_library {
 
   tidy_disabled_srcs: [
     "MmMetricsReporter.cpp", // b/215238264
-    "WlcReporter.cpp", // b/215238264
   ],
   srcs: [
     "BatteryCapacityReporter.cpp",
@@ -69,7 +68,6 @@ cc_library {
     "DropDetect.cpp",
     "MmMetricsReporter.cpp",
     "MitigationStatsReporter.cpp",
-    "OrientationCollector.cpp",
     "PcaChargeStats.cpp",
     "StatsHelper.cpp",
     "SysfsCollector.cpp",
@@ -77,7 +75,6 @@ cc_library {
     "TempResidencyReporter.cpp",
     "UeventListener.cpp",
     "WirelessChargeStats.cpp",
-    "WlcReporter.cpp",
   ],
   cflags: [
     "-Wall",
