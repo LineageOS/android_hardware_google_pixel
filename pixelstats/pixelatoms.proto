@@ -43,8 +43,7 @@ message Atom {
       ZramMmStat zram_mm_stat = 105005;
       ZramBdStat zram_bd_stat = 105006;
       BootStatsInfo boot_stats = 105007;
-      WirelessChargingStats wireless_charging_stats = 105008;
-      DeviceOrientation device_orientation = 105009;
+      // 105008 - 105009 is available.
       BatteryCapacityFG fg_capacity = 105010;
       PdVidPid pd_vid_pid = 105011;
       BatteryEEPROM battery_eeprom = 105012;
