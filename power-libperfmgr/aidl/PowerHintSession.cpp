@@ -115,10 +115,8 @@ int64_t PowerHintSession::convertWorkDurationToBoostByPid(
     return output;
 }
 
-PowerHintSession::PowerHintSession(std::shared_ptr<AdaptiveCpu> adaptiveCpu, int32_t tgid,
-                                   int32_t uid, const std::vector<int32_t> &threadIds,
-                                   int64_t durationNanos)
-    : mAdaptiveCpu(adaptiveCpu) {
+PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
+                                   int64_t durationNanos) {
     mDescriptor = new AppHintDesc(tgid, uid, threadIds);
     mDescriptor->duration = std::chrono::nanoseconds(durationNanos);
     mIdString = StringPrintf("%" PRId32 "-%" PRId32 "-%" PRIxPTR, mDescriptor->tgid,
@@ -321,8 +319,6 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
                             mDescriptor->current_min + static_cast<int>(output));
     next_min = std::max(static_cast<int>(adpfConfig->mUclampMinLow), next_min);
     setSessionUclampMin(next_min);
-
-    mAdaptiveCpu->ReportWorkDurations(actualDurations, mDescriptor->duration);
 
     return ndk::ScopedAStatus::ok();
 }
