@@ -44,7 +44,7 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(setGpioFallScale, bool(uint32_t value));
     MOCK_METHOD1(setGpioRiseIndex, bool(uint32_t value));
     MOCK_METHOD1(setGpioRiseScale, bool(uint32_t value));
-    MOCK_METHOD1(pollVibeState, bool(bool value));
+    MOCK_METHOD2(pollVibeState, bool(uint32_t value, int32_t timeoutMs));
     MOCK_METHOD1(setClabEnable, bool(bool value));
     MOCK_METHOD1(getAvailablePwleSegments, bool(uint32_t *value));
     MOCK_METHOD0(hasPwle, bool());

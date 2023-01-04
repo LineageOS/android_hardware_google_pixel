@@ -110,7 +110,7 @@ cc_binary {
     srcs: ["service.cpp"],
     shared_libs: ["android.hardware.vibrator-impl.cs40l25"],
     cflags: [
-        "-DLOG_TAG=\"android.hardware.vibrator-cs40l25\"",
+        "-DLOG_TAG=\"Vibrator\"",
     ],
     proprietary: true,
 }
