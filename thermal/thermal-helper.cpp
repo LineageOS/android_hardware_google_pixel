@@ -809,6 +809,10 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
     boot_clock::time_point now = boot_clock::now();
 
     ATRACE_NAME(StringPrintf("ThermalHelper::readThermalSensor - %s", sensor_name.data()).c_str());
+    if (!(sensor_info_map_.count(sensor_name.data()) &&
+          sensor_status_map_.count(sensor_name.data()))) {
+        return false;
+    }
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
