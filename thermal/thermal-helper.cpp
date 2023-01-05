@@ -107,8 +107,14 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
     bool thermal_throttling_disabled =
             ::android::base::GetBoolProperty(kThermalDisabledProperty.data(), false);
 
-    is_initialized_ = ParseCoolingDevice(config_path, &cooling_device_info_map_) &&
-                      ParseSensorInfo(config_path, &sensor_info_map_);
+    Json::Value config;
+    if (!ParseThermalConfig(config_path, &config)) {
+        LOG(FATAL) << "Failed to read JSON config";
+        return;
+    }
+
+    is_initialized_ = ParseCoolingDevice(config, &cooling_device_info_map_) &&
+                      ParseSensorInfo(config, &sensor_info_map_);
 
     if (thermal_throttling_disabled) {
         return;
@@ -127,7 +133,7 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         LOG(FATAL) << "ThermalHAL could not be initialized properly.";
     }
 
-    if (!power_files_.registerPowerRailsToWatch(config_path)) {
+    if (!power_files_.registerPowerRailsToWatch(config)) {
         LOG(FATAL) << "Failed to register power rails";
     }
 
