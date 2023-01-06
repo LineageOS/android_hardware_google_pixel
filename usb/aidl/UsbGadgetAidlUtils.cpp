@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "libpixelusb"
+#define LOG_TAG "libpixelusb-aidl"
 
-#include "include/pixelusb/UsbGadgetCommon.h"
+#include <aidl/android/hardware/usb/gadget/GadgetFunction.h>
+#include <android-base/file.h>
+#include <android-base/properties.h>
+#include <utils/Log.h>
+
+#include "aidl/include/pixelusb/UsbGadgetAidlCommon.h"
 
 namespace android {
 namespace hardware {
@@ -24,116 +29,17 @@ namespace google {
 namespace pixel {
 namespace usb {
 
-int unlinkFunctions(const char *path) {
-    DIR *config = opendir(path);
-    struct dirent *function;
-    char filepath[kMaxFilePathLength];
-    int ret = 0;
-
-    if (config == NULL)
-        return -1;
-
-    // d_type does not seems to be supported in /config
-    // so filtering by name.
-    while (((function = readdir(config)) != NULL)) {
-        if ((strstr(function->d_name, FUNCTION_NAME) == NULL))
-            continue;
-        // build the path for each file in the folder.
-        snprintf(filepath, kMaxFilePathLength, "%s/%s", path, function->d_name);
-        ret = remove(filepath);
-        if (ret) {
-            ALOGE("Unable  remove file %s errno:%d", filepath, errno);
-            break;
-        }
-    }
-
-    closedir(config);
-    return ret;
-}
-
-int addEpollFd(const unique_fd &epfd, const unique_fd &fd) {
-    struct epoll_event event;
-    int ret;
-
-    event.data.fd = fd;
-    event.events = EPOLLIN;
-
-    ret = epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &event);
-    if (ret)
-        ALOGE("epoll_ctl error %d", errno);
-
-    return ret;
-}
-
-int linkFunction(const char *function, int index) {
-    char functionPath[kMaxFilePathLength];
-    char link[kMaxFilePathLength];
-
-    snprintf(functionPath, kMaxFilePathLength, "%s%s", FUNCTIONS_PATH, function);
-    snprintf(link, kMaxFilePathLength, "%s%d", FUNCTION_PATH, index);
-    if (symlink(functionPath, link)) {
-        ALOGE("Cannot create symlink %s -> %s errno:%d", link, functionPath, errno);
-        return -1;
-    }
-    return 0;
-}
+using ::aidl::android::hardware::usb::gadget::GadgetFunction;
+using ::android::base::GetProperty;
+using ::android::base::SetProperty;
+using ::android::base::WriteStringToFile;
 
 Status setVidPid(const char *vid, const char *pid) {
-    if (!WriteStringToFile(vid, VENDOR_ID_PATH))
-        return Status::ERROR;
-
-    if (!WriteStringToFile(pid, PRODUCT_ID_PATH))
-        return Status::ERROR;
-
-    return Status::SUCCESS;
-}
-
-std::string getVendorFunctions() {
-    if (GetProperty(kBuildType, "") == "user")
-        return "user";
-
-    std::string bootMode = GetProperty(PERSISTENT_BOOT_MODE, "");
-    std::string persistVendorFunctions = GetProperty(kPersistentVendorConfig, "");
-    std::string vendorFunctions = GetProperty(kVendorConfig, "");
-    std::string ret = "";
-
-    if (vendorFunctions != "") {
-        ret = vendorFunctions;
-    } else if (bootMode == "usbradio" || bootMode == "factory" || bootMode == "ffbm-00" ||
-               bootMode == "ffbm-01" || bootMode == "usbuwb") {
-        if (persistVendorFunctions != "")
-            ret = persistVendorFunctions;
-        else
-            ret = "diag";
-        // vendor.usb.config will reflect the current configured functions
-        SetProperty(kVendorConfig, ret);
-    }
-
-    return ret;
+    return setVidPidCommon(vid, pid) ? Status::SUCCESS : Status::ERROR;
 }
 
 Status resetGadget() {
-    ALOGI("setCurrentUsbFunctions None");
-
-    if (!WriteStringToFile("none", PULLUP_PATH))
-        ALOGI("Gadget cannot be pulled down");
-
-    if (!WriteStringToFile("0", DEVICE_CLASS_PATH))
-        return Status::ERROR;
-
-    if (!WriteStringToFile("0", DEVICE_SUB_CLASS_PATH))
-        return Status::ERROR;
-
-    if (!WriteStringToFile("0", DEVICE_PROTOCOL_PATH))
-        return Status::ERROR;
-
-    if (!WriteStringToFile("0", DESC_USE_PATH))
-        return Status::ERROR;
-
-    if (unlinkFunctions(CONFIG_PATH))
-        return Status::ERROR;
-
-    return Status::SUCCESS;
+    return resetGadgetCommon() ? Status::SUCCESS : Status::ERROR;
 }
 
 Status addGenericAndroidFunctions(MonitorFfs *monitorFfs, uint64_t functions, bool *ffsEnabled,
@@ -216,6 +122,7 @@ Status addAdb(MonitorFfs *monitorFfs, int *functionCount) {
 
     if (linkFunction("ffs.adb", (*functionCount)++))
         return Status::ERROR;
+
     monitorFfs->addEndPoint("/dev/usb-ffs/adb/ep1");
     monitorFfs->addEndPoint("/dev/usb-ffs/adb/ep2");
     ALOGI("Service started");
