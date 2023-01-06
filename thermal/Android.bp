@@ -93,6 +93,57 @@ cc_binary {
   ],
 }
 
+cc_binary {
+  name: "android.hardware.thermal-service.pixel",
+  srcs: [
+    "aidl/service.cpp",
+    "aidl/Thermal.cpp",
+    "aidl/thermal-helper.cpp",
+    "aidl/utils/thermal_throttling.cpp",
+    "aidl/utils/thermal_info.cpp",
+    "aidl/utils/thermal_files.cpp",
+    "aidl/utils/power_files.cpp",
+    "aidl/utils/powerhal_helper.cpp",
+    "aidl/utils/thermal_watcher.cpp",
+  ],
+  vendor: true,
+  relative_install_path: "hw",
+  vintf_fragments: [
+    "aidl/android.hardware.thermal-service.pixel.xml"
+  ],
+  init_rc: [
+    "aidl/android.hardware.thermal-service.pixel.rc",
+  ],
+  shared_libs: [
+    "libbase",
+    "libcutils",
+    "libjsoncpp",
+    "libutils",
+    "libnl",
+    "libbinder_ndk",
+    "android.hardware.power-V1-ndk",
+    "android.hardware.thermal-V1-ndk",
+    "pixel-power-ext-V1-ndk"
+  ],
+  cflags: [
+    "-Wall",
+    "-Werror",
+    "-Wextra",
+    "-Wunused",
+  ],
+  tidy: true,
+  tidy_checks: [
+    "android-*",
+    "cert-*",
+    "clang-analyzer-security*",
+  ],
+  tidy_checks_as_errors: [
+    "android-*",
+    "clang-analyzer-security*",
+    "cert-*",
+  ],
+}
+
 sh_binary {
   name: "thermal_logd",
   src: "init.thermal.logging.sh",
