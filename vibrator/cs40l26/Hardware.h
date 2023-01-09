@@ -97,55 +97,65 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setMinOnOffInterval(uint32_t value) override { return set(value, &mMinOnOffInterval); }
     // TODO(b/234338136): Need to add the force feedback HW API test cases
     bool initFF() override {
-        const char *inputEventName = std::getenv("INPUT_EVENT_NAME");
-        const char *inputEventPathName = std::getenv("INPUT_EVENT_PATH");
-        if (strstr(inputEventName, "cs40l26") != nullptr) {
-            glob_t inputEventPaths;
-            int fd = -1;
-            int ret;
-            uint32_t val = 0;
-            char str[20] = {0x00};
-            for (uint8_t retry = 0; retry < 10; retry++) {
-                ret = glob(inputEventPathName, 0, nullptr, &inputEventPaths);
-                if (ret) {
-                    ALOGE("Fail to get input event paths (%d): %s", errno, strerror(errno));
-                } else {
-                    for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
-                        fd = TEMP_FAILURE_RETRY(::open(inputEventPaths.gl_pathv[i], O_RDWR));
-                        if (fd > 0) {
-                            if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 &&
-                                (val & (1 << EV_FF)) &&
-                                ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
-                                strstr(str, inputEventName) != nullptr) {
-                                mInputFd.reset(fd);
-                                ALOGI("Control %s through %s", inputEventName,
-                                      inputEventPaths.gl_pathv[i]);
-                                break;
-                            }
-                            close(fd);
-                        }
+        ATRACE_NAME(__func__);
+        const std::string INPUT_EVENT_NAME = std::getenv("INPUT_EVENT_NAME") ?: "";
+        if (INPUT_EVENT_NAME.find("cs40l26") == std::string::npos) {
+            ALOGE("Invalid input name: %s", INPUT_EVENT_NAME.c_str());
+            return false;
+        }
+
+        glob_t g = {};
+        const std::string INPUT_EVENT_PATH = "/dev/input/event*";
+        int fd = -1, ret;
+        uint32_t val = 0;
+        char str[256] = {0x00};
+        // Scan /dev/input/event* to get the correct input device path for FF effects manipulation.
+        // Then constructs the /sys/class/input/event*/../../../ for driver attributes accessing
+        // across different platforms and different kernels.
+        for (uint8_t retry = 1; retry < 11 && !mInputFd.ok(); retry++) {
+            ret = glob(INPUT_EVENT_PATH.c_str(), 0, nullptr, &g);
+            if (ret) {
+                ALOGE("Failed to get input event paths (%d): %s", errno, strerror(errno));
+            } else {
+                for (size_t i = 0; i < g.gl_pathc; i++) {
+                    fd = TEMP_FAILURE_RETRY(::open(g.gl_pathv[i], O_RDWR));
+                    if (fd < 0) {
+                        continue;
                     }
-                }
+                    // Determine the input device path:
+                    // 1. Check if EV_FF is flagged in event bits.
+                    // 2. Match device name(s) with this CS40L26 HAL instance.
+                    if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
+                        ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
+                        strcmp(str, INPUT_EVENT_NAME.c_str()) == 0) {
+                        mInputFd.reset(fd);  // mInputFd.ok() becomes true.
+                        ALOGI("Control %s through %s", INPUT_EVENT_NAME.c_str(), g.gl_pathv[i]);
 
-                if (ret == 0) {
-                    globfree(&inputEventPaths);
+                        // Construct the sysfs device path.
+                        std::string path = g.gl_pathv[i];
+                        path = "/sys/class/input/" +
+                               path.substr(path.find("event"), std::string::npos) + "/../../../";
+                        updatePathPrefix(path);
+                        break;
+                    }
+                    close(fd);
+                    memset(str, 0x00, sizeof(str));
+                    val = 0;
                 }
-                if (mInputFd.ok()) {
-                    break;
-                }
-
-                sleep(1);
-                ALOGW("Retry #%d to search in %zu input devices.", retry, inputEventPaths.gl_pathc);
             }
 
             if (!mInputFd.ok()) {
-                ALOGE("Fail to get an input event with name %s", inputEventName);
-                return false;
+                sleep(1);
+                ALOGW("Retry #%d to search in %zu input devices...", retry, g.gl_pathc);
             }
-        } else {
-            ALOGE("The input name %s is not cs40l26_input or cs40l26_dual_input", inputEventName);
+        }
+        globfree(&g);
+
+        if (!mInputFd.ok()) {
+            ALOGE("Failed to get an input event with name %s", INPUT_EVENT_NAME.c_str());
             return false;
         }
+
         return true;
     }
     bool setFFGain(uint16_t value) override {
