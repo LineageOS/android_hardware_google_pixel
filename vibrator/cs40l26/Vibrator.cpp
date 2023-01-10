@@ -48,7 +48,6 @@ static constexpr uint32_t WAVEFORM_LONG_VIBRATION_THRESHOLD_MS = 50;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
 static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
-static constexpr uint32_t MIN_ON_OFF_INTERVAL_US = 8500;  // SVC initialization time
 static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;  // ALERT Irq Handling
 static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 
@@ -100,11 +99,6 @@ static uint16_t amplitudeToScale(float amplitude, float maximum) {
     return std::round(ratio);
 }
 
-enum class AlwaysOnId : uint32_t {
-    GPIO_RISE,
-    GPIO_FALL,
-};
-
 enum WaveformBankID : uint8_t {
     RAM_WVFRM_BANK,
     ROM_WVFRM_BANK,
@@ -147,6 +141,8 @@ enum vibe_state {
     VIBE_STATE_HAPTIC,
     VIBE_STATE_ASP,
 };
+
+std::mutex mActiveId_mutex;  // protects mActiveId
 
 static int min(int x, int y) {
     return x < y ? x : y;
@@ -347,8 +343,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         ALOGD("Unsupported calibration version: %u!", calVer);
     }
 
-    mHwApi->setF0CompEnable(true);
-    mHwApi->setRedcCompEnable(true);
+    mHwApi->setF0CompEnable(mHwCal->isF0CompEnabled());
+    mHwApi->setRedcCompEnable(mHwCal->isRedcCompEnabled());
 
     mIsUnderExternalControl = false;
 
@@ -375,8 +371,8 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     ATRACE_NAME("Vibrator::getCapabilities");
 
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
-                  IVibrator::CAP_AMPLITUDE_CONTROL | IVibrator::CAP_ALWAYS_ON_CONTROL |
-                  IVibrator::CAP_GET_RESONANT_FREQUENCY | IVibrator::CAP_GET_Q_FACTOR;
+                  IVibrator::CAP_AMPLITUDE_CONTROL | IVibrator::CAP_GET_RESONANT_FREQUENCY |
+                  IVibrator::CAP_GET_Q_FACTOR;
     if (hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
     } else {
@@ -394,28 +390,36 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 
 ndk::ScopedAStatus Vibrator::off() {
     ATRACE_NAME("Vibrator::off");
-    if (mActiveId < 0) {
-        ALOGD("Vibrator is already off");
-        return ndk::ScopedAStatus::ok();
+    bool ret{true};
+    const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
+
+    if (mActiveId >= 0) {
+        /* Stop the active effect. */
+        if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
+            ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
+            ret = false;
+        }
+
+        if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
+            (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+            ALOGE("Failed to clean up the composed effect %d", mActiveId);
+            ret = false;
+        }
+    } else {
+        ALOGV("Vibrator is already off");
     }
 
-    /* Stop the active effect. */
-    if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
-        ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
-
-    if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
-        (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
     mActiveId = -1;
     setGlobalAmplitude(false);
     if (mF0Offset) {
         mHwApi->setF0Offset(0);
     }
 
-    return ndk::ScopedAStatus::ok();
+    if (ret) {
+        return ndk::ScopedAStatus::ok();
+    } else {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
 }
 
 ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
@@ -604,13 +608,11 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
 
     if (effectIndex >= FF_MAX_EFFECTS) {
         ALOGE("Invalid waveform index %d", effectIndex);
-        status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-        goto end;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
         ALOGE("Previous vibration pending: prev: %d, curr: %d", mActiveId, effectIndex);
-        status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-        goto end;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
     if (ch) {
@@ -647,23 +649,20 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
         if (!mHwApi->setFFEffect(mInputFd, &mFfEffects[effectIndex],
                                  static_cast<uint16_t>(timeoutMs))) {
             ALOGE("Failed to edit effect %d (%d): %s", effectIndex, errno, strerror(errno));
-            status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-            goto end;
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
         }
     }
 
+    const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     mActiveId = effectIndex;
     /* Play the event now. */
     if (!mHwApi->setFFPlay(mInputFd, effectIndex, true)) {
         ALOGE("Failed to play effect %d (%d): %s", effectIndex, errno, strerror(errno));
-        status = ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-        goto end;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
-
-end:
-    return status;
+    return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) {
@@ -683,47 +682,15 @@ ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
     return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX);
 }
 
-ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> *_aidl_return) {
-    *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK};
-    return ndk::ScopedAStatus::ok();
-}
-
-ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t id, Effect effect, EffectStrength strength) {
-    ndk::ScopedAStatus status;
-    uint32_t effectIndex;
-    uint32_t timeMs;
-    uint32_t volLevel;
-    uint16_t scale;
-    status = getSimpleDetails(effect, strength, &effectIndex, &timeMs, &volLevel);
-    if (!status.isOk()) {
-        return status;
-    }
-
-    scale = amplitudeToScale(volLevel, VOLTAGE_SCALE_MAX);
-
-    switch (static_cast<AlwaysOnId>(id)) {
-        case AlwaysOnId::GPIO_RISE:
-            // mHwApi->setGpioRiseIndex(effectIndex);
-            // mHwApi->setGpioRiseScale(scale);
-            return ndk::ScopedAStatus::ok();
-        case AlwaysOnId::GPIO_FALL:
-            // mHwApi->setGpioFallIndex(effectIndex);
-            // mHwApi->setGpioFallScale(scale);
-            return ndk::ScopedAStatus::ok();
-    }
-
+ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> * /*_aidl_return*/) {
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
-ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t id) {
-    switch (static_cast<AlwaysOnId>(id)) {
-        case AlwaysOnId::GPIO_RISE:
-            // mHwApi->setGpioRiseIndex(0);
-            return ndk::ScopedAStatus::ok();
-        case AlwaysOnId::GPIO_FALL:
-            // mHwApi->setGpioFallIndex(0);
-            return ndk::ScopedAStatus::ok();
-    }
 
+ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t /*id*/, Effect /*effect*/,
+                                            EffectStrength /*strength*/) {
+    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t /*id*/) {
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
@@ -1308,9 +1275,21 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     }
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
 
-    if (mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) {
-        mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects);
+    const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
+    uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
+    if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
+        (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+        ALOGE("Failed to clean up the composed effect %d", mActiveId);
+    } else {
+        ALOGD("waitForComplete: Vibrator is already off");
     }
+    mHwApi->getEffectCount(&effectCount);
+    // Do waveform number checking
+    if ((effectCount > WAVEFORM_MAX_PHYSICAL_INDEX) &&
+        (!mHwApi->eraseOwtEffect(mInputFd, WAVEFORM_MAX_INDEX, &mFfEffects))) {
+        ALOGE("Failed to forcibly clean up all composed effect");
+    }
+
     mActiveId = -1;
 
     if (callback) {

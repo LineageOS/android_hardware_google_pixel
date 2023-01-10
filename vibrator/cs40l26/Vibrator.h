@@ -110,6 +110,10 @@ class Vibrator : public BnVibrator {
         virtual bool isChirpEnabled() = 0;
         // Obtains the supported primitive effects.
         virtual bool getSupportedPrimitives(uint32_t *value) = 0;
+        // Checks if the f0 compensation feature needs to be enabled.
+        virtual bool isF0CompEnabled() = 0;
+        // Checks if the redc compensation feature needs to be enabled.
+        virtual bool isRedcCompEnabled() = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -149,6 +153,9 @@ class Vibrator : public BnVibrator {
                                    const std::shared_ptr<IVibratorCallback> &callback) override;
 
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
+
+    // SVC initialization time
+    static constexpr uint32_t MIN_ON_OFF_INTERVAL_US = 8500;
 
   private:
     ndk::ScopedAStatus on(uint32_t timeoutMs, uint32_t effectIndex, struct dspmem_chunk *ch,

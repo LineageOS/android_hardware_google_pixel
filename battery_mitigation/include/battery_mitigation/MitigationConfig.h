@@ -29,6 +29,7 @@ class MitigationConfig {
         const std::vector<std::string> FilteredZones;
         const std::vector<std::string> SystemName;
         const char *const LogFilePath;
+        const char *const TimestampFormat;
     };
 
     MitigationConfig(const struct Config &cfg);
@@ -38,6 +39,7 @@ class MitigationConfig {
     const std::vector<std::string> kFilteredZones;
     const std::vector<std::string> kSystemName;
     const char *const kLogFilePath;
+    const char *const kTimestampFormat;
 };
 
 }  // namespace pixel

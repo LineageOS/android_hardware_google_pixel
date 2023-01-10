@@ -296,11 +296,6 @@ void BatteryDefender::stateMachine_runAction(const state_E state, const HealthIn
             if (health_info.batteryLevel >= triggerLevel) {
                 mHasReachedHighCapacityLevel = true;
             }
-
-            /* Do the same as above when dock-defend triggers */
-            if (mIsDockDefendTrigger) {
-                mHasReachedHighCapacityLevel = true;
-            }
         } break;
 
         case STATE_ACTIVE:

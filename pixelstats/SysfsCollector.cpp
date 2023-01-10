@@ -43,20 +43,25 @@ using android::base::ReadFileToString;
 using android::base::StartsWith;
 using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
-using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
+using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
-using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
+using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
+using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
+using android::hardware::google::pixel::PixelAtoms::VendorLongIRQStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorResumeLatencyStats;
 using android::hardware::google::pixel::PixelAtoms::VendorSlowIo;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeechDspStat;
+using android::hardware::google::pixel::PixelAtoms::VendorTempResidencyStats;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 
@@ -84,7 +89,13 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
       kUFSErrStatsPath(sysfs_paths.UFSErrStatsPath),
-      kBlockStatsLength(sysfs_paths.BlockStatsLength) {}
+      kBlockStatsLength(sysfs_paths.BlockStatsLength),
+      kAmsRatePath(sysfs_paths.AmsRatePath),
+      kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
+      kCCARatePath(sysfs_paths.CCARatePath),
+      kTempResidencyPath(sysfs_paths.TempResidencyPath),
+      kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
+      kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -288,85 +299,82 @@ void SysfsCollector::logSpeakerImpedance(const std::shared_ptr<IStats> &stats_cl
  * Report the last-detected impedance, temperature and heartbeats of left & right speakers.
  */
 void SysfsCollector::logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client) {
-    std::string file_contents;
+    std::string file_contents_impedance;
+    std::string file_contents_temperature;
+    std::string file_contents_excursion;
+    std::string file_contents_heartbeat;
+    int count, i;
+    float impedance_ohm[4];
+    float temperature_C[4];
+    float excursion_mm[4];
+    float heartbeat[4];
 
     if (kImpedancePath == nullptr || strlen(kImpedancePath) == 0) {
         ALOGD("Audio impedance path not specified");
+        return;
+    } else if (!ReadFileToString(kImpedancePath, &file_contents_impedance)) {
+        ALOGD("Unable to read speaker impedance path %s", kImpedancePath);
         return;
     }
 
     if (kSpeakerTemperaturePath == nullptr || strlen(kSpeakerTemperaturePath) == 0) {
         ALOGD("Audio speaker temperature path not specified");
         return;
-    }
-
-    if (kSpeakerHeartbeatPath == nullptr || strlen(kSpeakerHeartbeatPath) == 0) {
-        ALOGD("Audio speaker heartbeat path not specified");
+    } else if (!ReadFileToString(kSpeakerTemperaturePath, &file_contents_temperature)) {
+        ALOGD("Unable to read speaker temperature path %s", kSpeakerTemperaturePath);
         return;
     }
 
     if (kSpeakerExcursionPath == nullptr || strlen(kSpeakerExcursionPath) == 0) {
         ALOGD("Audio speaker excursion path not specified");
         return;
-    }
-
-    float left_impedance_ohm, right_impedance_ohm;
-
-    if (!ReadFileToString(kImpedancePath, &file_contents)) {
-        ALOGE("Unable to read speaker impedance path %s", kImpedancePath);
-        return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_impedance_ohm, &right_impedance_ohm) != 2) {
-        ALOGE("Unable to parse speaker impedance %s", file_contents.c_str());
+    } else if (!ReadFileToString(kSpeakerExcursionPath, &file_contents_excursion)) {
+        ALOGD("Unable to read speaker excursion path %s", kSpeakerExcursionPath);
         return;
     }
 
-    float left_temperature_C, right_temperature_C;
-    if (!ReadFileToString(kSpeakerTemperaturePath, &file_contents)) {
-        ALOGE("Unable to read speaker temperature path %s", kSpeakerTemperaturePath);
+    if (kSpeakerHeartbeatPath == nullptr || strlen(kSpeakerHeartbeatPath) == 0) {
+        ALOGD("Audio speaker heartbeat path not specified");
         return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_temperature_C, &right_temperature_C) != 2) {
-        ALOGE("Unable to parse speaker temperature %s", file_contents.c_str());
-        return;
-    }
-
-    float left_excursion_mm, right_excursion_mm;
-    if (!ReadFileToString(kSpeakerExcursionPath, &file_contents)) {
-        ALOGE("Unable to read speaker excursion path %s", kSpeakerExcursionPath);
-        return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_excursion_mm, &right_excursion_mm) != 2) {
-        ALOGE("Unable to parse speaker excursion %s", file_contents.c_str());
+    } else if (!ReadFileToString(kSpeakerHeartbeatPath, &file_contents_heartbeat)) {
+        ALOGD("Unable to read speaker heartbeat path %s", kSpeakerHeartbeatPath);
         return;
     }
 
-    float left_heartbeat, right_heartbeat;
-    if (!ReadFileToString(kSpeakerHeartbeatPath, &file_contents)) {
-        ALOGE("Unable to read speaker heartbeat path %s", kSpeakerHeartbeatPath);
+    count = sscanf(file_contents_impedance.c_str(), "%g,%g,%g,%g", &impedance_ohm[0],
+                   &impedance_ohm[1], &impedance_ohm[2], &impedance_ohm[3]);
+    if (count <= 0)
         return;
-    }
-    if (sscanf(file_contents.c_str(), "%g,%g", &left_heartbeat, &right_heartbeat) != 2) {
-        ALOGE("Unable to parse speaker heartbeat %s", file_contents.c_str());
+
+    count = sscanf(file_contents_temperature.c_str(), "%g,%g,%g,%g", &temperature_C[0],
+                   &temperature_C[1], &temperature_C[2], &temperature_C[3]);
+    if (count <= 0)
         return;
+
+    count = sscanf(file_contents_excursion.c_str(), "%g,%g,%g,%g", &excursion_mm[0],
+                   &excursion_mm[1], &excursion_mm[2], &excursion_mm[3]);
+    if (count <= 0)
+        return;
+
+    count = sscanf(file_contents_heartbeat.c_str(), "%g,%g,%g,%g", &heartbeat[0], &heartbeat[1],
+                   &heartbeat[2], &heartbeat[3]);
+    if (count <= 0)
+        return;
+
+    VendorSpeakerStatsReported obj[4];
+    for (i = 0; i < count && i < 4; i++) {
+        obj[i].set_speaker_location(i);
+        obj[i].set_impedance(static_cast<int32_t>(impedance_ohm[i] * 1000));
+        obj[i].set_max_temperature(static_cast<int32_t>(temperature_C[i] * 1000));
+        obj[i].set_excursion(static_cast<int32_t>(excursion_mm[i] * 1000));
+        obj[i].set_heartbeat(static_cast<int32_t>(heartbeat[i]));
+
+        reportSpeakerHealthStat(stats_client, obj[i]);
     }
+}
 
-    VendorSpeakerStatsReported left_obj;
-    left_obj.set_speaker_location(0);
-    left_obj.set_impedance(static_cast<int32_t>(left_impedance_ohm * 1000));
-    left_obj.set_max_temperature(static_cast<int32_t>(left_temperature_C * 1000));
-    left_obj.set_excursion(static_cast<int32_t>(left_excursion_mm * 1000));
-    left_obj.set_heartbeat(static_cast<int32_t>(left_heartbeat));
-
-    VendorSpeakerStatsReported right_obj;
-    right_obj.set_speaker_location(1);
-    right_obj.set_impedance(static_cast<int32_t>(right_impedance_ohm * 1000));
-    right_obj.set_max_temperature(static_cast<int32_t>(right_temperature_C * 1000));
-    right_obj.set_excursion(static_cast<int32_t>(right_excursion_mm * 1000));
-    right_obj.set_heartbeat(static_cast<int32_t>(right_heartbeat));
-
-    reportSpeakerHealthStat(stats_client, left_obj);
-    reportSpeakerHealthStat(stats_client, right_obj);
+void SysfsCollector::logThermalStats(const std::shared_ptr<IStats> &stats_client) {
+    thermal_stats_reporter_.logThermalStats(stats_client, kThermalStatsPaths);
 }
 
 /**
@@ -718,7 +726,7 @@ void SysfsCollector::logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_c
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_low);
     values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(reclaimed_segments_urgent_mid);
-    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentLowFieldNumber - kVendorAtomOffset] = tmp;
+    values[F2fsGcSegmentInfo::kReclaimedSegmentsUrgentMidFieldNumber - kVendorAtomOffset] = tmp;
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
@@ -810,6 +818,10 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
     if (!ret.isOk()) {
         ALOGE("Unable to report block layer stats to Stats service");
     }
+}
+
+void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
+    temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPath);
 }
 
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
@@ -969,6 +981,301 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
     }
 }
 
+/**
+ * Report the AMS & CCA rate.
+ */
+void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    uint32_t milli_ams_rate, cca_active_rate, cca_enable_rate;
+    bool isAmsReady = false, isCCAReady = false;
+
+    if (kAmsRatePath == nullptr) {
+        ALOGD("Audio AMS Rate path not specified");
+    } else {
+        if (!ReadFileToString(kAmsRatePath, &file_contents)) {
+            ALOGD("Unable to read ams_rate path %s", kAmsRatePath);
+        } else {
+            if (sscanf(file_contents.c_str(), "%u", &milli_ams_rate) != 1) {
+                ALOGD("Unable to parse ams_rate %s", file_contents.c_str());
+            } else {
+                isAmsReady = true;
+                ALOGD("milli_ams_rate = %u", milli_ams_rate);
+            }
+        }
+    }
+
+    if (kCCARatePath == nullptr) {
+        ALOGD("Audio CCA Rate path not specified");
+    } else {
+        if (!ReadFileToString(kCCARatePath, &file_contents)) {
+            ALOGD("Unable to read cca_rate path %s", kCCARatePath);
+        } else {
+            if (sscanf(file_contents.c_str(), "%u,%u", &cca_active_rate, &cca_enable_rate) != 2) {
+                ALOGD("Unable to parse cca rates %s", file_contents.c_str());
+            } else {
+                isCCAReady = true;
+                ALOGD("cca_active_rate = %u, cca_enable_rate = %u", cca_active_rate,
+                      cca_enable_rate);
+            }
+        }
+    }
+
+    if (!(isAmsReady || isCCAReady)) {
+        ALOGD("no ams or cca data to report");
+        return;
+    }
+
+    std::vector<VendorAtomValue> values(3);
+    VendorAtomValue tmp;
+
+    if (isAmsReady) {
+        tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
+        values[VendorAudioHardwareStatsReported::kMilliRateOfAmsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+    }
+
+    if (isCCAReady) {
+        tmp.set<VendorAtomValue::intValue>(cca_active_rate);
+        values[VendorAudioHardwareStatsReported::kRateOfCcaActivePerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(cca_enable_rate);
+        values[VendorAudioHardwareStatsReported::kRateOfCcaEnablePerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+    }
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorAudioHardwareStatsReported,
+                        .values = std::move(values)};
+
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
+}
+
+/**
+ * Logs the Resume Latency stats.
+ */
+void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (!kResumeLatencyMetricsPath) {
+        ALOGE("ResumeLatencyMetrics path not specified");
+        return;
+    }
+    if (!ReadFileToString(kResumeLatencyMetricsPath, &file_contents)) {
+        ALOGE("Unable to ResumeLatencyMetric %s - %s", kResumeLatencyMetricsPath, strerror(errno));
+        return;
+    }
+
+    int offset = 0;
+    int bytes_read;
+    const char *data = file_contents.c_str();
+    int data_len = file_contents.length();
+
+    int curr_bucket_cnt;
+    if (!sscanf(data + offset, "Resume Latency Bucket Count: %d\n%n", &curr_bucket_cnt,
+                &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    int64_t max_latency;
+    if (!sscanf(data + offset, "Max Resume Latency: %ld\n%n", &max_latency, &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    uint64_t sum_latency;
+    if (!sscanf(data + offset, "Sum Resume Latency: %lu\n%n", &sum_latency, &bytes_read))
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    if (curr_bucket_cnt > kMaxResumeLatencyBuckets)
+        return;
+    if (curr_bucket_cnt != prev_data.bucket_cnt) {
+        prev_data.resume_latency_buckets.clear();
+    }
+
+    int64_t total_latency_cnt = 0;
+    int64_t count;
+    int index = 2;
+    std::vector<VendorAtomValue> values(curr_bucket_cnt + 2);
+    VendorAtomValue tmp;
+    // Iterate over resume latency buckets to get latency count within some latency thresholds
+    while (sscanf(data + offset, "%*ld - %*ldms ====> %ld\n%n", &count, &bytes_read) == 1 ||
+           sscanf(data + offset, "%*ld - infms ====> %ld\n%n", &count, &bytes_read) == 1) {
+        offset += bytes_read;
+        if (offset >= data_len && (index + 1 < curr_bucket_cnt + 2))
+            return;
+        if (curr_bucket_cnt == prev_data.bucket_cnt) {
+            tmp.set<VendorAtomValue::longValue>(count -
+                                                prev_data.resume_latency_buckets[index - 2]);
+            prev_data.resume_latency_buckets[index - 2] = count;
+        } else {
+            tmp.set<VendorAtomValue::longValue>(count);
+            prev_data.resume_latency_buckets.push_back(count);
+        }
+        if (index >= curr_bucket_cnt + 2)
+            return;
+        values[index] = tmp;
+        index += 1;
+        total_latency_cnt += count;
+    }
+    tmp.set<VendorAtomValue::longValue>(max_latency);
+    values[0] = tmp;
+    if ((sum_latency - prev_data.resume_latency_sum_ms < 0) ||
+        (total_latency_cnt - prev_data.resume_count <= 0)) {
+        tmp.set<VendorAtomValue::longValue>(-1);
+        ALOGI("average resume latency get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(
+                (int64_t)(sum_latency - prev_data.resume_latency_sum_ms) /
+                (total_latency_cnt - prev_data.resume_count));
+    }
+    values[1] = tmp;
+
+    prev_data.resume_latency_sum_ms = sum_latency;
+    prev_data.resume_count = total_latency_cnt;
+    prev_data.bucket_cnt = curr_bucket_cnt;
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorResumeLatencyStats,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorResumeLatencyStats to Stats service");
+}
+
+bool cmp(const std::pair<int, int64_t> &a, const std::pair<int, int64_t> &b) {
+    return a.second > b.second;
+}
+
+/**
+ * Sort irq stats by irq latency, and load top 5 irq stats.
+ */
+void process_irqatom_values(std::vector<std::pair<int, int64_t>> sorted_pair,
+                            std::vector<VendorAtomValue> *values) {
+    VendorAtomValue tmp;
+    sort(sorted_pair.begin(), sorted_pair.end(), cmp);
+    int irq_stats_size = sorted_pair.size();
+    for (int i = 0; i < 5; i++) {
+        if (irq_stats_size < 5 && i >= irq_stats_size) {
+            tmp.set<VendorAtomValue::longValue>(-1);
+            values->push_back(tmp);
+            tmp.set<VendorAtomValue::longValue>(0);
+            values->push_back(tmp);
+        } else {
+            tmp.set<VendorAtomValue::longValue>(sorted_pair[i].first);
+            values->push_back(tmp);
+            tmp.set<VendorAtomValue::longValue>(sorted_pair[i].second);
+            values->push_back(tmp);
+        }
+    }
+}
+
+/**
+ * Logs the Long irq stats.
+ */
+void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    if (!kLongIRQMetricsPath) {
+        ALOGV("LongIRQ path not specified");
+        return;
+    }
+    if (!ReadFileToString(kLongIRQMetricsPath, &file_contents)) {
+        ALOGE("Unable to LongIRQ %s - %s", kLongIRQMetricsPath, strerror(errno));
+        return;
+    }
+    int offset = 0;
+    int bytes_read;
+    const char *data = file_contents.c_str();
+    int data_len = file_contents.length();
+    //  Get, process, store softirq stats
+    std::vector<std::pair<int, int64_t>> sorted_softirq_pair;
+    int64_t softirq_count;
+    if (sscanf(data + offset, "long SOFTIRQ count: %ld\n%n", &softirq_count, &bytes_read) != 1)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+    std::vector<VendorAtomValue> values;
+    VendorAtomValue tmp;
+    if (softirq_count - prev_data.softirq_count < 0) {
+        tmp.set<VendorAtomValue::intValue>(-1);
+        ALOGI("long softirq count get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(softirq_count - prev_data.softirq_count);
+    }
+    values.push_back(tmp);
+
+    if (sscanf(data + offset, "long SOFTIRQ detail (num, latency):\n%n", &bytes_read) != 0)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    //  Iterate over softirq stats and record top 5 long softirq
+    int64_t softirq_latency;
+    int softirq_num;
+    while (sscanf(data + offset, "%d %ld\n%n", &softirq_num, &softirq_latency, &bytes_read) == 2) {
+        sorted_softirq_pair.push_back(std::make_pair(softirq_num, softirq_latency));
+        offset += bytes_read;
+        if (offset >= data_len)
+            return;
+    }
+    process_irqatom_values(sorted_softirq_pair, &values);
+
+    //  Get, process, store irq stats
+    std::vector<std::pair<int, int64_t>> sorted_irq_pair;
+    int64_t irq_count;
+    if (sscanf(data + offset, "long IRQ count: %ld\n%n", &irq_count, &bytes_read) != 1)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+    if (irq_count - prev_data.irq_count < 0) {
+        tmp.set<VendorAtomValue::intValue>(-1);
+        ALOGI("long irq count get overflow");
+    } else {
+        tmp.set<VendorAtomValue::longValue>(irq_count - prev_data.irq_count);
+    }
+    values.push_back(tmp);
+
+    if (sscanf(data + offset, "long IRQ detail (num, latency):\n%n", &bytes_read) != 0)
+        return;
+    offset += bytes_read;
+    if (offset >= data_len)
+        return;
+
+    int64_t irq_latency;
+    int irq_num;
+    int index = 0;
+    //  Iterate over softirq stats and record top 5 long irq
+    while (sscanf(data + offset, "%d %ld\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
+        sorted_irq_pair.push_back(std::make_pair(irq_num, irq_latency));
+        offset += bytes_read;
+        if (offset >= data_len && index < 5)
+            return;
+        index += 1;
+    }
+    process_irqatom_values(sorted_irq_pair, &values);
+
+    prev_data.softirq_count = softirq_count;
+    prev_data.irq_count = irq_count;
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorLongIrqStatsReported,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report kVendorLongIRQStatsReported to Stats service");
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -998,6 +1305,15 @@ void SysfsCollector::logPerDay() {
     logSpeakerHealthStats(stats_client);
     mm_metrics_reporter_.logCmaStatus(stats_client);
     mm_metrics_reporter_.logPixelMmMetricsPerDay(stats_client);
+    logVendorAudioHardwareStats(stats_client);
+    logThermalStats(stats_client);
+    logTempResidencyStats(stats_client);
+    logVendorLongIRQStatsReported(stats_client);
+    logVendorResumeLatencyStats(stats_client);
+}
+
+void SysfsCollector::aggregatePer5Min() {
+    mm_metrics_reporter_.aggregatePixelMmMetricsPer5Min();
 }
 
 void SysfsCollector::logPerHour() {
@@ -1027,17 +1343,29 @@ void SysfsCollector::collect(void) {
     // Sleep for 30 seconds on launch to allow codec driver to load.
     sleep(30);
 
+    // sample & aggregate for the first time.
+    aggregatePer5Min();
+
     // Collect first set of stats on boot.
     logPerHour();
     logPerDay();
 
-    // Set an one-hour timer.
     struct itimerspec period;
-    const int kSecondsPerHour = 60 * 60;
-    int hours = 0;
-    period.it_interval.tv_sec = kSecondsPerHour;
+
+    // gcd (greatest common divisor) of all the following timings
+    constexpr int kSecondsPerWake = 5 * 60;
+
+    constexpr int kWakesPer5Min = 5 * 60 / kSecondsPerWake;
+    constexpr int kWakesPerHour = 60 * 60 / kSecondsPerWake;
+    constexpr int kWakesPerDay = 24 * 60 * 60 / kSecondsPerWake;
+
+    int wake_5min = 0;
+    int wake_hours = 0;
+    int wake_days = 0;
+
+    period.it_interval.tv_sec = kSecondsPerWake;
     period.it_interval.tv_nsec = 0;
-    period.it_value.tv_sec = kSecondsPerHour;
+    period.it_value.tv_sec = kSecondsPerWake;
     period.it_value.tv_nsec = 0;
 
     if (timerfd_settime(timerfd, 0, &period, NULL)) {
@@ -1047,22 +1375,41 @@ void SysfsCollector::collect(void) {
 
     while (1) {
         int readval;
-        do {
+        union {
             char buf[8];
+            uint64_t count;
+        } expire;
+
+        do {
             errno = 0;
-            readval = read(timerfd, buf, sizeof(buf));
+            readval = read(timerfd, expire.buf, sizeof(expire.buf));
         } while (readval < 0 && errno == EINTR);
         if (readval < 0) {
             ALOGE("Timerfd error - %s\n", strerror(errno));
             return;
         }
 
-        hours++;
-        logPerHour();
-        if (hours == 24) {
-            // Collect stats every 24hrs after.
+        wake_5min += expire.count;
+        wake_hours += expire.count;
+        wake_days += expire.count;
+
+        if (wake_5min >= kWakesPer5Min) {
+            wake_5min %= kWakesPer5Min;
+            aggregatePer5Min();
+        }
+
+        if (wake_hours >= kWakesPerHour) {
+            if (wake_hours >= 2 * kWakesPerHour)
+                ALOGW("Hourly wake: sleep too much: expire.count=%" PRId64, expire.count);
+            wake_hours %= kWakesPerHour;
+            logPerHour();
+        }
+
+        if (wake_days >= kWakesPerDay) {
+            if (wake_hours >= 2 * kWakesPerDay)
+                ALOGW("Daily wake: sleep too much: expire.count=%" PRId64, expire.count);
+            wake_days %= kWakesPerDay;
             logPerDay();
-            hours = 0;
         }
     }
 }

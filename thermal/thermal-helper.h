@@ -150,7 +150,8 @@ class ThermalHelper {
             ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
             float value) const;
     // Read temperature data according to thermal sensor's info
-    bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs);
+    bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
+                           std::map<std::string, float> *sensor_log_map);
     bool connectToPowerHal();
     void updateSupportedPowerHints();
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
