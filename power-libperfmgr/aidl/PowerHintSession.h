@@ -111,6 +111,7 @@ class PowerHintSession : public BnPowerHintSession {
   private:
     void updateUniveralBoostMode();
     int setSessionUclampMin(int32_t min);
+    void setCpuLoadChangeHint(std::string hint);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
     void traceSessionVal(char const *identifier, int64_t val) const;
     AppHintDesc *mDescriptor = nullptr;
@@ -122,6 +123,8 @@ class PowerHintSession : public BnPowerHintSession {
     std::string mIdString;
     // Used when setting a temporary boost value to hold the true boost
     std::atomic<std::optional<int>> mNextUclampMin;
+    // Are cpu load change related hints are supported
+    std::unordered_map<std::string, std::optional<bool>> mSupportedHints;
 };
 
 }  // namespace pixel
