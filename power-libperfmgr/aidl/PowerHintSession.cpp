@@ -168,6 +168,15 @@ void PowerHintSession::updateUniveralBoostMode() {
     }
 }
 
+void PowerHintSession::setCpuLoadChangeHint(std::string hint) {
+    if (!mSupportedHints[hint].has_value()) {
+        mSupportedHints[hint] = HintManager::GetInstance()->IsHintSupported(hint);
+    }
+    if (mSupportedHints[hint]) {
+        HintManager::GetInstance()->DoHint(hint);
+    }
+}
+
 int PowerHintSession::setSessionUclampMin(int32_t min) {
     {
         std::lock_guard<std::mutex> guard(mSessionLock);
@@ -354,6 +363,7 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
             ALOGE("Error: hint is invalid");
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
+    setCpuLoadChangeHint(toString(hint));
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
     if (ATRACE_ENABLED()) {
         traceSessionVal("session_hint", static_cast<int>(hint));
