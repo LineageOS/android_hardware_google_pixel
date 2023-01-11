@@ -191,8 +191,11 @@ void Vibrator::createPwleMaxLevelLimitMap() {
             float pwleMaxLevelLimitMapIdx =
                     (itr0->first - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ;
 
+            // FixLater: avoid floating point loop counters
+            // NOLINTBEGIN(clang-analyzer-security.FloatLoopCounter,cert-flp30-c)
             for (float xp = x0; xp < (x1 + PWLE_FREQUENCY_RESOLUTION_HZ);
                  xp += PWLE_FREQUENCY_RESOLUTION_HZ) {
+                // NOLINTEND(clang-analyzer-security.FloatLoopCounter,cert-flp30-c)
                 float yp = y0 + ((y1 - y0) / (x1 - x0)) * (xp - x0);
 
                 pwleMaxLevelLimitMap[pwleMaxLevelLimitMapIdx++] = yp;
