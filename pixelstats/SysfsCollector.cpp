@@ -783,8 +783,8 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
     }
 
     if (stats.size() < kBlockStatsLength) {
-        ALOGE("block layer stat format is incorrect %s, length %lu/%d",
-            file_contents.c_str(), stats.size(), kBlockStatsLength);
+        ALOGE("block layer stat format is incorrect %s, length %zu/%d", file_contents.c_str(),
+              stats.size(), kBlockStatsLength);
         return;
     }
 
