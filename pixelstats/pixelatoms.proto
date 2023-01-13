@@ -19,8 +19,12 @@ syntax = "proto2";
 // C++ namespace: android::hardware::google::pixel::PixelAtoms
 package android.hardware.google.pixel.PixelAtoms;
 
+option optimize_for = LITE_RUNTIME;
+
 option java_package = "android.hardware.google.pixel";
 option java_outer_classname = "PixelAtoms";
+
+import "frameworks/proto_logging/stats/atom_field_options.proto";
 
 /*
  * Please note that the following features are not currently supported by
@@ -60,8 +64,10 @@ message Atom {
       VendorUsbPortOverheat vendor_usb_port_overheat = 105023; // moved from atoms.proto
       CmaStatus cma_status = 105024;
       CmaStatusExt cma_status_ext = 105025;
-      VendorBatteryHealthSnapshot vendor_battery_health_snapshot = 105026; // moved from atoms.proto
-      VendorBatteryCausedShutdown vendor_battery_caused_shutdown = 105027; // moved from atoms.proto
+      VendorBatteryHealthSnapshot vendor_battery_health_snapshot =
+                105026 [(android.os.statsd.module) = "pixelhealth"]; // moved from atoms.proto
+      VendorBatteryCausedShutdown vendor_battery_caused_shutdown =
+                105027 [(android.os.statsd.module) = "pixelhealth"]; // moved from atoms.proto
       F2fsGcSegmentInfo f2fs_gc_segment_info = 105028;
       PowerMitigationStats mitigation_stats = 105029; // moved from atoms.proto
 
