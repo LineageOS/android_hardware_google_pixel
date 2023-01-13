@@ -89,9 +89,9 @@ class Vibrator : public BnVibrator {
         // Indicates the number of 0.125-dB steps of attenuation to apply to
         // waveforms triggered in response to a GPIO1 rising edge.
         virtual bool setGpioRiseScale(uint32_t value) = 0;
-        // Blocks until vibrator reaches desired state
+        // Blocks until timeout or vibrator reaches desired state
         // (true = enabled, false = disabled).
-        virtual bool pollVibeState(bool value) = 0;
+        virtual bool pollVibeState(uint32_t value, int32_t timeoutMs = -1) = 0;
         // Enables/disables closed-loop active braking.
         virtual bool setClabEnable(bool value) = 0;
         // Reports the number of available PWLE segments.
@@ -232,6 +232,8 @@ class Vibrator : public BnVibrator {
     bool mIsChirpEnabled;
     std::vector<float> mBandwidthAmplitudeMap;
     bool mGenerateBandwidthAmplitudeMapDone;
+    uint32_t mTotalDuration{0};
+    std::mutex mTotalDurationMutex;
 };
 
 }  // namespace vibrator
