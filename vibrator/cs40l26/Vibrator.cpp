@@ -17,11 +17,9 @@
 #include "Vibrator.h"
 
 #include <android-base/properties.h>
-#include <glob.h>
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
 #include <log/log.h>
-#include <stdio.h>
 #include <utils/Trace.h>
 
 #include <cinttypes>
@@ -262,54 +260,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
     int32_t longFrequencyShift;
     std::string caldata{8, '0'};
     uint32_t calVer;
-
-    const char *inputEventName = std::getenv("INPUT_EVENT_NAME");
-    const char *inputEventPathName = std::getenv("INPUT_EVENT_PATH");
-    if ((strstr(inputEventName, "cs40l26") != nullptr) ||
-        (strstr(inputEventName, "cs40l26_dual_input") != nullptr)) {
-        glob_t inputEventPaths;
-        int fd = -1;
-        int ret;
-        uint32_t val = 0;
-        char str[20] = {0x00};
-        for (uint8_t retry = 0; retry < 10; retry++) {
-            ret = glob(inputEventPathName, 0, nullptr, &inputEventPaths);
-            if (ret) {
-                ALOGE("Fail to get input event paths (%d): %s", errno, strerror(errno));
-            } else {
-                for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
-                    fd = TEMP_FAILURE_RETRY(open(inputEventPaths.gl_pathv[i], O_RDWR));
-                    if (fd > 0) {
-                        if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 &&
-                            (val & (1 << EV_FF)) && ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
-                            strstr(str, inputEventName) != nullptr) {
-                            mInputFd.reset(fd);
-                            ALOGI("Control %s through %s", inputEventName,
-                                  inputEventPaths.gl_pathv[i]);
-                            break;
-                        }
-                        close(fd);
-                    }
-                }
-            }
-
-            if (ret == 0) {
-                globfree(&inputEventPaths);
-            }
-            if (mInputFd.ok()) {
-                break;
-            }
-
-            sleep(1);
-            ALOGW("Retry #%d to search in %zu input devices.", retry, inputEventPaths.gl_pathc);
-        }
-
-        if (!mInputFd.ok()) {
-            ALOGE("Fail to get an input event with name %s", inputEventName);
-        }
-    } else {
-        ALOGE("The input name %s is not cs40l26_input or cs40l26_dual_input", inputEventName);
-    }
+    const std::string INPUT_EVENT_NAME = std::getenv("INPUT_EVENT_NAME") ?: "";
 
     mFfEffects.resize(WAVEFORM_MAX_INDEX);
     mEffectDurations.resize(WAVEFORM_MAX_INDEX);
@@ -330,10 +281,9 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
                     .u.periodic.custom_len = FF_CUSTOM_DATA_LEN,
             };
             // Bypass the waveform update due to different input name
-            if ((strstr(inputEventName, "cs40l26") != nullptr) ||
-                (strstr(inputEventName, "cs40l26_dual_input") != nullptr)) {
+            if (INPUT_EVENT_NAME.find("cs40l26") != std::string::npos) {
                 if (!mHwApi->setFFEffect(
-                            mInputFd, &mFfEffects[effectIndex],
+                            &mFfEffects[effectIndex],
                             static_cast<uint16_t>(mFfEffects[effectIndex].replay.length))) {
                     ALOGE("Failed upload effect %d (%d): %s", effectIndex, errno, strerror(errno));
                 }
@@ -447,13 +397,13 @@ ndk::ScopedAStatus Vibrator::off() {
 
     if (mActiveId >= 0) {
         /* Stop the active effect. */
-        if (!mHwApi->setFFPlay(mInputFd, mActiveId, false)) {
+        if (!mHwApi->setFFPlay(mActiveId, false)) {
             ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
             ret = false;
         }
 
         if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
-            (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+            (!mHwApi->eraseOwtEffect(mActiveId, &mFfEffects))) {
             ALOGE("Failed to clean up the composed effect %d", mActiveId);
             ret = false;
         }
@@ -700,8 +650,8 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
         int errorStatus;
-        if (!mHwApi->uploadOwtEffect(mInputFd, ch->head, dspmem_chunk_bytes(ch),
-                                     &mFfEffects[effectIndex], &effectIndex, &errorStatus)) {
+        if (!mHwApi->uploadOwtEffect(ch->head, dspmem_chunk_bytes(ch), &mFfEffects[effectIndex],
+                                     &effectIndex, &errorStatus)) {
             delete ch;
             ALOGE("Invalid uploadOwtEffect");
             return ndk::ScopedAStatus::fromExceptionCode(errorStatus);
@@ -712,8 +662,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
                effectIndex == WAVEFORM_LONG_VIBRATION_EFFECT_INDEX) {
         /* Update duration for long/short vibration. */
         mFfEffects[effectIndex].replay.length = static_cast<uint16_t>(timeoutMs);
-        if (!mHwApi->setFFEffect(mInputFd, &mFfEffects[effectIndex],
-                                 static_cast<uint16_t>(timeoutMs))) {
+        if (!mHwApi->setFFEffect(&mFfEffects[effectIndex], static_cast<uint16_t>(timeoutMs))) {
             ALOGE("Failed to edit effect %d (%d): %s", effectIndex, errno, strerror(errno));
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
         }
@@ -722,7 +671,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     mActiveId = effectIndex;
     /* Play the event now. */
-    if (!mHwApi->setFFPlay(mInputFd, effectIndex, true)) {
+    if (!mHwApi->setFFPlay(effectIndex, true)) {
         ALOGE("Failed to play effect %d (%d): %s", effectIndex, errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -734,7 +683,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
 ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) {
     HAPTICS_TRACE("setEffectAmplitude(amplitude:%f, maximum:%f)", amplitude, maximum);
     uint16_t scale = amplitudeToScale(amplitude, maximum);
-    if (!mHwApi->setFFGain(mInputFd, scale)) {
+    if (!mHwApi->setFFGain(scale)) {
         ALOGE("Failed to set the gain to %u (%d): %s", scale, errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -1501,7 +1450,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
     if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
-        (!mHwApi->eraseOwtEffect(mInputFd, mActiveId, &mFfEffects))) {
+        (!mHwApi->eraseOwtEffect(mActiveId, &mFfEffects))) {
         ALOGE("Failed to clean up the composed effect %d", mActiveId);
     } else {
         ALOGD("waitForComplete: Vibrator is already off");
@@ -1509,7 +1458,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     mHwApi->getEffectCount(&effectCount);
     // Do waveform number checking
     if ((effectCount > WAVEFORM_MAX_PHYSICAL_INDEX) &&
-        (!mHwApi->eraseOwtEffect(mInputFd, WAVEFORM_MAX_INDEX, &mFfEffects))) {
+        (!mHwApi->eraseOwtEffect(WAVEFORM_MAX_INDEX, &mFfEffects))) {
         ALOGE("Failed to forcibly clean up all composed effect");
     }
 

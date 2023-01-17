@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <glob.h>
+
 #include <algorithm>
 
 #include "HardwareBase.h"
@@ -67,6 +69,7 @@ namespace vibrator {
 class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
     HwApi() {
+        initFF();
         open("calibration/f0_stored", &mF0);
         open("default/f0_offset", &mF0Offset);
         open("calibration/redc_stored", &mRedc);
@@ -93,35 +96,87 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setRedcCompEnable(bool value) override { return set(value, &mRedcCompEnable); }
     bool setMinOnOffInterval(uint32_t value) override { return set(value, &mMinOnOffInterval); }
     // TODO(b/234338136): Need to add the force feedback HW API test cases
-    bool setFFGain(int fd, uint16_t value) override {
+    bool initFF() override {
+        const char *inputEventName = std::getenv("INPUT_EVENT_NAME");
+        const char *inputEventPathName = std::getenv("INPUT_EVENT_PATH");
+        if (strstr(inputEventName, "cs40l26") != nullptr) {
+            glob_t inputEventPaths;
+            int fd = -1;
+            int ret;
+            uint32_t val = 0;
+            char str[20] = {0x00};
+            for (uint8_t retry = 0; retry < 10; retry++) {
+                ret = glob(inputEventPathName, 0, nullptr, &inputEventPaths);
+                if (ret) {
+                    ALOGE("Fail to get input event paths (%d): %s", errno, strerror(errno));
+                } else {
+                    for (int i = 0; i < inputEventPaths.gl_pathc; i++) {
+                        fd = TEMP_FAILURE_RETRY(::open(inputEventPaths.gl_pathv[i], O_RDWR));
+                        if (fd > 0) {
+                            if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 &&
+                                (val & (1 << EV_FF)) &&
+                                ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
+                                strstr(str, inputEventName) != nullptr) {
+                                mInputFd.reset(fd);
+                                ALOGI("Control %s through %s", inputEventName,
+                                      inputEventPaths.gl_pathv[i]);
+                                break;
+                            }
+                            close(fd);
+                        }
+                    }
+                }
+
+                if (ret == 0) {
+                    globfree(&inputEventPaths);
+                }
+                if (mInputFd.ok()) {
+                    break;
+                }
+
+                sleep(1);
+                ALOGW("Retry #%d to search in %zu input devices.", retry, inputEventPaths.gl_pathc);
+            }
+
+            if (!mInputFd.ok()) {
+                ALOGE("Fail to get an input event with name %s", inputEventName);
+                return false;
+            }
+        } else {
+            ALOGE("The input name %s is not cs40l26_input or cs40l26_dual_input", inputEventName);
+            return false;
+        }
+        return true;
+    }
+    bool setFFGain(uint16_t value) override {
         ATRACE_NAME(StringPrintf("%s %d%%", __func__, value).c_str());
         struct input_event gain = {
                 .type = EV_FF,
                 .code = FF_GAIN,
                 .value = value,
         };
-        if (write(fd, (const void *)&gain, sizeof(gain)) != sizeof(gain)) {
+        if (write(mInputFd, (const void *)&gain, sizeof(gain)) != sizeof(gain)) {
             return false;
         }
         return true;
     }
-    bool setFFEffect(int fd, struct ff_effect *effect, uint16_t timeoutMs) override {
+    bool setFFEffect(struct ff_effect *effect, uint16_t timeoutMs) override {
         ATRACE_NAME(StringPrintf("%s %dms", __func__, timeoutMs).c_str());
-        if (((*effect).replay.length != timeoutMs) || (ioctl(fd, EVIOCSFF, effect) < 0)) {
+        if (((*effect).replay.length != timeoutMs) || (ioctl(mInputFd, EVIOCSFF, effect) < 0)) {
             ALOGE("setFFEffect fail");
             return false;
         } else {
             return true;
         }
     }
-    bool setFFPlay(int fd, int8_t index, bool value) override {
+    bool setFFPlay(int8_t index, bool value) override {
         ATRACE_NAME(StringPrintf("%s index:%d %s", __func__, index, value ? "on" : "off").c_str());
         struct input_event play = {
                 .type = EV_FF,
                 .code = static_cast<uint16_t>(index),
                 .value = value,
         };
-        if (write(fd, (const void *)&play, sizeof(play)) != sizeof(play)) {
+        if (write(mInputFd, (const void *)&play, sizeof(play)) != sizeof(play)) {
             return false;
         } else {
             return true;
@@ -184,7 +239,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *haptic_pcm = NULL;
         return false;
     }
-    bool uploadOwtEffect(int fd, uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+    bool uploadOwtEffect(uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
                          uint32_t *outEffectIndex, int *status) override {
         ATRACE_NAME(__func__);
         (*effect).u.periodic.custom_len = numBytes / sizeof(uint16_t);
@@ -203,7 +258,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
 
         /* Create a new OWT waveform to update the PWLE or composite effect. */
         (*effect).id = -1;
-        if (ioctl(fd, EVIOCSFF, effect) < 0) {
+        if (ioctl(mInputFd, EVIOCSFF, effect) < 0) {
             ALOGE("Failed to upload effect %d (%d): %s", *outEffectIndex, errno, strerror(errno));
             delete[] ((*effect).u.periodic.custom_data);
             *status = EX_ILLEGAL_STATE;
@@ -219,7 +274,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *status = 0;
         return true;
     }
-    bool eraseOwtEffect(int fd, int8_t effectIndex, std::vector<ff_effect> *effect) override {
+    bool eraseOwtEffect(int8_t effectIndex, std::vector<ff_effect> *effect) override {
         ATRACE_NAME(__func__);
         uint32_t effectCountBefore, effectCountAfter, i, successFlush = 0;
 
@@ -233,7 +288,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         // Do erase flow
         if (effectIndex < WAVEFORM_MAX_INDEX) {
             /* Normal situation. Only erase the effect which we just played. */
-            if (ioctl(fd, EVIOCRMFF, effectIndex) < 0) {
+            if (ioctl(mInputFd, EVIOCRMFF, effectIndex) < 0) {
                 ALOGE("Failed to erase effect %d (%d): %s", effectIndex, errno, strerror(errno));
             }
             for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < WAVEFORM_MAX_INDEX; i++) {
@@ -246,7 +301,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
             /* Flush all non-prestored effects of ff-core and driver. */
             getEffectCount(&effectCountBefore);
             for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < FF_MAX_EFFECTS; i++) {
-                if (ioctl(fd, EVIOCRMFF, i) >= 0) {
+                if (ioctl(mInputFd, EVIOCRMFF, i) >= 0) {
                     successFlush++;
                 }
             }
@@ -276,6 +331,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mF0CompEnable;
     std::ofstream mRedcCompEnable;
     std::ofstream mMinOnOffInterval;
+    ::android::base::unique_fd mInputFd;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
