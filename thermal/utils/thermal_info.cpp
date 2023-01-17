@@ -191,6 +191,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     }
     float offset = 0;
     std::vector<std::string> linked_sensors;
+    std::vector<SensorFusionType> linked_sensors_type;
     std::vector<std::string> trigger_sensors;
     std::vector<float> coefficients;
     FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
@@ -200,11 +201,36 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         linked_sensors.reserve(values.size());
         for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
             linked_sensors.emplace_back(values[j].asString());
-            LOG(INFO) << "Sensor[" << name << "]'s combination[" << j << "]: " << linked_sensors[j];
+            LOG(INFO) << "Sensor[" << name << "]'s Combination[" << j << "]: " << linked_sensors[j];
         }
     } else {
-        LOG(ERROR) << "Sensor[" << name << "] has no combination setting";
+        LOG(ERROR) << "Sensor[" << name << "] has no Combination setting";
         return false;
+    }
+
+    values = sensor["CombinationType"];
+    if (!values.size()) {
+        linked_sensors_type.reserve(linked_sensors.size());
+        for (size_t j = 0; j < linked_sensors.size(); ++j) {
+            linked_sensors_type.emplace_back(SensorFusionType::SENSOR);
+        }
+    } else if (values.size() != linked_sensors.size()) {
+        LOG(ERROR) << "Sensor[" << name << "] has invalid CombinationType size";
+        return false;
+    } else {
+        for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
+            if (values[j].asString().compare("SENSOR") == 0) {
+                linked_sensors_type.emplace_back(SensorFusionType::SENSOR);
+            } else if (values[j].asString().compare("ODPM") == 0) {
+                linked_sensors_type.emplace_back(SensorFusionType::ODPM);
+            } else {
+                LOG(ERROR) << "Sensor[" << name << "] has invalid CombinationType settings "
+                           << values[j].asString();
+                return false;
+            }
+            LOG(INFO) << "Sensor[" << name << "]'s CombinationType[" << j
+                      << "]: " << linked_sensors_type[j];
+        }
     }
 
     values = sensor["Coefficient"];
@@ -215,12 +241,11 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             LOG(INFO) << "Sensor[" << name << "]'s coefficient[" << j << "]: " << coefficients[j];
         }
     } else {
-        LOG(ERROR) << "Sensor[" << name << "] has no coefficient setting";
+        LOG(ERROR) << "Sensor[" << name << "] has no Coefficient setting";
         return false;
     }
     if (linked_sensors.size() != coefficients.size()) {
-        LOG(ERROR) << "Sensor[" << name
-                   << "]'s combination size is not matched with coefficient size";
+        LOG(ERROR) << "Sensor[" << name << "] has invalid Coefficient size";
         return false;
     }
     if (!sensor["Offset"].empty()) {
@@ -261,8 +286,8 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         LOG(ERROR) << "Sensor[" << name << "]'s Formula is invalid";
         return false;
     }
-    virtual_sensor_info->reset(
-            new VirtualSensorInfo{linked_sensors, coefficients, offset, trigger_sensors, formula});
+    virtual_sensor_info->reset(new VirtualSensorInfo{
+            linked_sensors, linked_sensors_type, coefficients, offset, trigger_sensors, formula});
     return true;
 }
 
@@ -540,7 +565,6 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
 
     // Parse binded cooling device
     std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
-    Json::Value values = sensor["BindedCdevInfo"];
     if (!ParseBindedCdevInfo(sensor["BindedCdevInfo"], &binded_cdev_info_map, support_pid,
                              &support_hard_limit)) {
         LOG(ERROR) << "Sensor[" << name << "]: failed to parse BindedCdevInfo";
@@ -548,7 +572,7 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
     }
 
     std::unordered_map<std::string, ThrottlingArray> excluded_power_info_map;
-    values = sensor["ExcludedPowerInfo"];
+    Json::Value values = sensor["ExcludedPowerInfo"];
     for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
         Json::Value sub_values;
         const std::string &power_rail = values[j]["PowerRail"].asString();

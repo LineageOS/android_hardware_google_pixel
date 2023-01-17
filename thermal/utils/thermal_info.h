@@ -58,8 +58,14 @@ struct StatsInfo {
     std::vector<T> stats_threshold;
 };
 
+enum SensorFusionType : uint32_t {
+    SENSOR = 0,
+    ODPM,
+};
+
 struct VirtualSensorInfo {
     std::vector<std::string> linked_sensors;
+    std::vector<SensorFusionType> linked_sensors_type;
     std::vector<float> coefficients;
     float offset;
     std::vector<std::string> trigger_sensors;
