@@ -37,11 +37,6 @@
 #define PROC_SND_PCM "/proc/asound/pcm"
 #define HAPTIC_PCM_DEVICE_SYMBOL "haptic nohost playback"
 
-#ifdef LOG_TAG
-#undef LOG_TAG
-#define LOG_TAG "Vibrator"
-#endif
-
 namespace aidl {
 namespace android {
 namespace hardware {
