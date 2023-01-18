@@ -74,7 +74,7 @@ cc_binary {
     srcs: ["service.cpp"],
     shared_libs: ["android.hardware.vibrator-impl.cs40l25"],
     cflags: [
-        "-DLOG_TAG=\"android.hardware.vibrator-cs40l25\"",
+        "-DLOG_TAG=\"Vibrator\"",
     ],
     proprietary: true,
 }
@@ -88,7 +88,7 @@ cc_binary {
     shared_libs: ["android.hardware.vibrator-impl.cs40l25"],
     cflags: [
         "-DVIBRATOR_NAME=\"dual\"",
-        "-DLOG_TAG=\"android.hardware.vibrator-cs40l25-dual\"",
+        "-DLOG_TAG=\"VibratorDual\"",
     ],
     proprietary: true,
 }
