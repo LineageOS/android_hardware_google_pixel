@@ -35,11 +35,6 @@
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
 #endif
 
-#ifdef LOG_TAG
-#undef LOG_TAG
-#define LOG_TAG "Vibrator"
-#endif
-
 namespace aidl {
 namespace android {
 namespace hardware {
