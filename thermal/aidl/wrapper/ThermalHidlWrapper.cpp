@@ -192,6 +192,7 @@ Return<void> ThermalHidlWrapper::registerThermalChangedCallback(
         setFailureAndCallback(_hidl_cb, "Invalid nullptr callback");
         return Void();
     }
+    std::lock_guard<std::mutex> _lock(callback_wrappers_mutex_);
     for (const auto &callback_wrapper : callback_wrappers_) {
         if (::android::hardware::interfacesEqual(callback_wrapper->callback_2_0_.get(),
                                                  callback.get())) {
@@ -228,13 +229,16 @@ Return<void> ThermalHidlWrapper::unregisterThermalChangedCallback(
         setFailureAndCallback(_hidl_cb, "Invalid nullptr callback");
         return Void();
     }
-    for (const auto &callback_wrapper : callback_wrappers_) {
+    std::lock_guard<std::mutex> _lock(callback_wrappers_mutex_);
+    for (auto it = callback_wrappers_.begin(); it != callback_wrappers_.end(); it++) {
+        auto callback_wrapper = *it;
         if (::android::hardware::interfacesEqual(callback_wrapper->callback_2_0_.get(),
                                                  callback.get())) {
             ::ndk::ScopedAStatus a_status;
             ThermalStatus status;
             a_status = thermal_service_->unregisterThermalChangedCallback(callback_wrapper);
             if (a_status.isOk()) {
+                callback_wrappers_.erase(it);
                 _hidl_cb(status);
             } else {
                 setFailureAndCallback(_hidl_cb, a_status.getMessage());
