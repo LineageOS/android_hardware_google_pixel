@@ -72,6 +72,8 @@ class SysfsCollector {
         const char *const TempResidencyPath;
         const char *const LongIRQMetricsPath;
         const char *const ResumeLatencyMetricsPath;
+        const char *const ModemPcieLinkStatsPath;
+        const char *const WifiPcieLinkStatsPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -116,6 +118,7 @@ class SysfsCollector {
     void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
     void logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client);
     void logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client);
+    void logPcieLinkStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -149,6 +152,8 @@ class SysfsCollector {
     const char *const kTempResidencyPath;
     const char *const kLongIRQMetricsPath;
     const char *const kResumeLatencyMetricsPath;
+    const char *const kModemPcieLinkStatsPath;
+    const char *const kWifiPcieLinkStatsPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
