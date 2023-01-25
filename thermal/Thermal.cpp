@@ -195,14 +195,15 @@ Return<void> Thermal::registerThermalChangedCallback(const sp<IThermalChangedCal
         status.debugMessage = "Same callback registered already";
         LOG(ERROR) << status.debugMessage;
     } else {
-        callbacks_.emplace_back(callback, filterType, type);
-        LOG(INFO) << "a callback has been registered to ThermalHAL, isFilter: " << filterType
-                  << " Type: " << android::hardware::thermal::V2_0::toString(type);
+        auto c = callbacks_.emplace_back(callback, filterType, type);
+        LOG(INFO) << "a callback has been registered to ThermalHAL, isFilter: " << c.is_filter_type
+                  << " Type: " << android::hardware::thermal::V2_0::toString(c.type);
     }
     _hidl_cb(status);
 
-    // Send notification right away after thermal callback registration
-    if (thermal_helper_.fillCurrentTemperatures(filterType, true, type, &temperatures)) {
+    // Send notification right away after successful thermal callback registration
+    if (status.code == V1_0::ThermalStatusCode::SUCCESS &&
+        thermal_helper_.fillCurrentTemperatures(filterType, true, type, &temperatures)) {
         for (const auto &t : temperatures) {
             if (!filterType || t.type == type) {
                 LOG(INFO) << "Sending notification: "
