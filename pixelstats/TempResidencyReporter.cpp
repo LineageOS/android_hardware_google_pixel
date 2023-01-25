@@ -90,15 +90,14 @@ bool parse_file_contents(std::string file_contents,
  * Logs the Temperature residency stats for every thermal zone.
  */
 void TempResidencyReporter::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client,
-                                                  const char *const temperature_residency_path) {
-    if (!temperature_residency_path) {
+                                                  const std::string &temperature_residency_path) {
+    if (temperature_residency_path.empty()) {
         ALOGV("TempResidencyStatsPath path not specified");
         return;
     }
     std::string file_contents;
-    if (!ReadFileToString(temperature_residency_path, &file_contents)) {
-        ALOGE("Unable to read TempResidencyStatsPath %s - %s", temperature_residency_path,
-              strerror(errno));
+    if (!ReadFileToString(temperature_residency_path.c_str(), &file_contents)) {
+        ALOGE("Unable to read TempResidencyStatsPath");
         return;
     }
     std::map<std::string, std::vector<int64_t>> cur_stats_map;
