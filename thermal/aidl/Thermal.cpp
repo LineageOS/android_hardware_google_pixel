@@ -179,12 +179,11 @@ ndk::ScopedAStatus Thermal::registerThermalChangedCallback(
         })) {
         return ndk::ScopedAStatus::fromExceptionCodeWithMessage(EX_ILLEGAL_ARGUMENT,
                                                                 "Callback already registered");
-    } else {
-        callbacks_.emplace_back(callback, true, type);
-        LOG(INFO) << "a callback has been registered to ThermalHAL, isFilter: " << filterType
-                  << " Type: " << toString(type);
     }
-    // Send notification right away after thermal callback registration
+    auto c = callbacks_.emplace_back(callback, filterType, type);
+    LOG(INFO) << "a callback has been registered to ThermalHAL, isFilter: " << c.is_filter_type
+              << " Type: " << toString(c.type);
+    // Send notification right away after successful thermal callback registration
     if (thermal_helper_.fillCurrentTemperatures(filterType, true, type, &temperatures)) {
         for (const auto &t : temperatures) {
             if (!filterType || t.type == type) {
@@ -192,7 +191,7 @@ ndk::ScopedAStatus Thermal::registerThermalChangedCallback(
                           << " Type: " << toString(t.type) << " Name: " << t.name
                           << " CurrentValue: " << t.value
                           << " ThrottlingStatus: " << toString(t.throttlingStatus);
-                callback->notifyThrottling(t);
+                c.callback->notifyThrottling(t);
             }
         }
     }
