@@ -82,6 +82,9 @@ class ZoneInfo {
     ZoneInfo(const TemperatureType &type, const string &name, const ThrottlingSeverity &severity);
 };
 
+/**
+ * TODO: Create an AIDL version of this and move to hidl/
+ */
 class UsbOverheatEvent : public IServiceNotification, public IThermalChangedCallback {
   private:
     // To wake up thread to record max temperature
