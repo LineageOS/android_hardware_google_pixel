@@ -1058,6 +1058,10 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string uart_enabled = android::base::GetProperty("init.svc.console", "");
+    if (uart_enabled == "running") {
+        return;
+    }
     std::string file_contents;
     if (!kResumeLatencyMetricsPath) {
         ALOGE("ResumeLatencyMetrics path not specified");
@@ -1182,6 +1186,10 @@ void process_irqatom_values(std::vector<std::pair<int, int64_t>> sorted_pair,
  * Logs the Long irq stats.
  */
 void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string uart_enabled = android::base::GetProperty("init.svc.console", "");
+    if (uart_enabled == "running") {
+        return;
+    }
     std::string file_contents;
     if (!kLongIRQMetricsPath) {
         ALOGV("LongIRQ path not specified");
