@@ -25,6 +25,7 @@
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
+#include <android/binder_auto_utils.h>
 #include <android/hardware/thermal/2.0/IThermal.h>
 #include <android/hardware/thermal/2.0/IThermalChangedCallback.h>
 #include <android/hardware/thermal/2.0/types.h>
@@ -94,25 +95,32 @@ class MitigationThermalManager {
             MitigationThermalManager::getInstance().connectThermalHal();
         };
     };
+    static void onThermalAidlBinderDied(void *) {
+        LOG(ERROR) << "Thermal AIDL service died, trying to reconnect";
+        MitigationThermalManager::getInstance().connectThermalHal();
+    }
 
   public:
     MitigationThermalManager();
     ~MitigationThermalManager();
     bool connectThermalHal();
     bool isMitigationTemperature(const Temperature &temperature);
-    void registerCallback();
+    void registerCallback(AIBinder *thermal_aidl_binder);
     void remove();
     void updateConfig(const struct MitigationConfig::Config &cfg);
 
 
   private:
-    std::mutex mutex_;
+    std::mutex thermal_callback_mutex_;
+    std::mutex thermal_hal_mutex_;
     // Thermal hal interface.
     android::sp<IThermal> thermal;
     // Thermal hal callback object.
     android::sp<ThermalCallback> callback;
-    // Receiver when thermal hal restart.
-    android::sp<ThermalDeathRecipient> deathRecipient;
+    // Receiver when HIDL thermal hal restart.
+    android::sp<ThermalDeathRecipient> hidlDeathRecipient;
+    // Receiver when AIDL thermal hal restart.
+    ndk::ScopedAIBinder_DeathRecipient aidlDeathRecipient;
     std::vector<std::string> kSystemPath;
     std::vector<std::string> kFilteredZones;
     std::vector<std::string> kSystemName;
