@@ -94,6 +94,8 @@ class ThermalHidlWrapper : public IThermal_2_0 {
 
     // Reference to thermal service.
     ::std::shared_ptr<IThermal_Aidl> thermal_service_;
+    // Mutex lock for read/write on callback wrappers.
+    std::mutex callback_wrappers_mutex_;
     // All thermal changed callback wrappers registered.
     ::std::vector<std::shared_ptr<IThermalChangedCallbackWrapper>> callback_wrappers_;
 };
