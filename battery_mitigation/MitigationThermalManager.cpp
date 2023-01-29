@@ -15,15 +15,20 @@
  */
 #define LOG_TAG "mitigation-logger"
 
+#include <aidl/android/hardware/thermal/IThermal.h>
 #include <android-base/chrono_utils.h>
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
+#include <android/binder_manager.h>
+#include <android/binder_process.h>
 #include <battery_mitigation/MitigationThermalManager.h>
 #include <errno.h>
+#include <pixelthermalwrapper/ThermalHidlWrapper.h>
 #include <sys/time.h>
+#include <utils/Log.h>
 
 #include <chrono>
 #include <cmath>
@@ -31,6 +36,7 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <thread>
 
 #define NUM_OF_SAMPLES     20
 #define CAPTURE_INTERVAL_S 2     /* 2 seconds between new capture */
@@ -49,6 +55,7 @@ MitigationThermalManager &MitigationThermalManager::getInstance() {
 }
 
 void MitigationThermalManager::remove() {
+    const std::lock_guard<std::mutex> lock(thermal_hal_mutex_);
     if (!thermal) {
         return;
     }
@@ -60,8 +67,8 @@ void MitigationThermalManager::remove() {
             LOG(ERROR) << "Failed to release thermal callback!";
         }
     }
-    if (deathRecipient) {
-        auto ret = thermal->unlinkToDeath(deathRecipient);
+    if (hidlDeathRecipient) {
+        auto ret = thermal->unlinkToDeath(hidlDeathRecipient);
         if (!ret.isOk()) {
             LOG(ERROR) << "Failed to release thermal death notification!";
         }
@@ -69,6 +76,13 @@ void MitigationThermalManager::remove() {
 }
 
 MitigationThermalManager::MitigationThermalManager() {
+    if (!ABinderProcess_isThreadPoolStarted()) {
+        std::thread([]() {
+            ABinderProcess_joinThreadPool();
+            LOG(ERROR) << "SHOULD NOT EXIT";
+        }).detach();
+        LOG(ERROR) << "The user of MitigationThermalManager did not start a threadpool";
+    }
     if (!connectThermalHal()) {
         remove();
     }
@@ -87,10 +101,34 @@ void MitigationThermalManager::updateConfig(const struct MitigationConfig::Confi
 }
 
 bool MitigationThermalManager::connectThermalHal() {
-    thermal = IThermal::getService();
+    const std::string thermal_instance_name =
+            std::string(::aidl::android::hardware::thermal::IThermal::descriptor) + "/default";
+    std::shared_ptr<aidl::android::hardware::thermal::IThermal> thermal_aidl_service;
+    const std::lock_guard<std::mutex> lock(thermal_hal_mutex_);
+    if (AServiceManager_isDeclared(thermal_instance_name.c_str())) {
+        thermal_aidl_service = ::aidl::android::hardware::thermal::IThermal::fromBinder(
+                ndk::SpAIBinder(AServiceManager_waitForService(thermal_instance_name.c_str())));
+        if (thermal_aidl_service) {
+            thermal = sp<::aidl::android::hardware::thermal::ThermalHidlWrapper>::make(
+                    thermal_aidl_service);
+        } else {
+            LOG(ERROR) << "Unable to connect Thermal AIDL service, trying HIDL...";
+        }
+    } else {
+        LOG(WARNING) << "Thermal AIDL service is not declared, trying HIDL...";
+    }
+
+    if (!thermal) {
+        thermal = IThermal::getService();
+    }
+
     if (thermal) {
         lastCapturedTime = ::android::base::boot_clock::now();
-        registerCallback();
+        if (thermal_aidl_service) {
+            registerCallback(thermal_aidl_service->asBinder().get());
+        } else {
+            registerCallback(nullptr);
+        }
         return true;
     } else {
         LOG(ERROR) << "Cannot get IThermal service!";
@@ -152,35 +190,48 @@ void MitigationThermalManager::thermalCb(const Temperature &temperature) {
     fsync(fd);
 }
 
-void MitigationThermalManager::registerCallback() {
+void MitigationThermalManager::registerCallback(AIBinder *thermal_aidl_binder) {
     if (!thermal) {
         LOG(ERROR) << "Cannot register thermal callback!";
         return;
     }
     ThermalStatus returnStatus;
-    // Create thermal death recipient object.
-    if (deathRecipient == nullptr) {
-        deathRecipient = new MitigationThermalManager::ThermalDeathRecipient();
-    }
     // Create thermal callback recipient object.
     if (callback == nullptr) {
         callback = new MitigationThermalManager::ThermalCallback(
                 [this](const Temperature &temperature) {
-                    std::lock_guard api_lock(mutex_);
+                    std::lock_guard api_lock(thermal_callback_mutex_);
                     thermalCb(temperature);
                 });
     }
-    // Register thermal callback SKIN to thermal hal to cover all.  Cannot register twice.
+    // Register thermal callback to thermal hal to cover all.  Cannot register twice.
     auto ret_callback = thermal->registerThermalChangedCallback(
-            callback, false, TemperatureType::SKIN,
+            callback, false, TemperatureType::UNKNOWN,
             [&returnStatus](ThermalStatus status) { return returnStatus = status; });
     if (!ret_callback.isOk() || returnStatus.code != ThermalStatusCode::SUCCESS) {
         LOG(ERROR) << "Failed to register thermal callback!";
     }
+
     // Register thermal death notification to thermal hal.
-    auto retLink = thermal->linkToDeath(deathRecipient, 0);
-    if (!retLink.isOk()) {
-        LOG(ERROR) << "Failed to register thermal death notification!";
+    if (thermal_aidl_binder) {
+        // Create AIDL thermal death recipient object.
+        if (aidlDeathRecipient.get() == nullptr) {
+            aidlDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(
+                    AIBinder_DeathRecipient_new(onThermalAidlBinderDied));
+        }
+        auto linked = AIBinder_linkToDeath(thermal_aidl_binder, aidlDeathRecipient.get(), this);
+        if (linked != STATUS_OK) {
+            LOG(ERROR) << "Failed to register AIDL thermal death notification!";
+        }
+    } else {
+        // Create HIDL thermal death recipient object.
+        if (hidlDeathRecipient == nullptr) {
+            hidlDeathRecipient = new MitigationThermalManager::ThermalDeathRecipient();
+        }
+        auto retLink = thermal->linkToDeath(hidlDeathRecipient, 0);
+        if (!retLink.isOk()) {
+            LOG(ERROR) << "Failed to register HIDL thermal death notification!";
+        }
     }
 }
 
