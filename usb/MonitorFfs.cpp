@@ -26,7 +26,8 @@ namespace usb {
 
 static volatile bool gadgetPullup;
 
-MonitorFfs::MonitorFfs(const char *const gadget)
+MonitorFfs::MonitorFfs(const char *const gadget, const char *const extconTypecState,
+                       const char *const usbGadgetState)
     : mWatchFd(),
       mEndpointList(),
       mLock(),
@@ -37,6 +38,8 @@ MonitorFfs::MonitorFfs(const char *const gadget)
       mCallback(NULL),
       mPayload(NULL),
       mGadgetName(gadget),
+      mExtconTypecState(extconTypecState),
+      mUsbGadgetState(usbGadgetState),
       mMonitorRunning(false) {
     unique_fd eventFd(eventfd(0, 0));
     if (eventFd == -1) {
@@ -112,12 +115,26 @@ static void displayInotifyEvent(struct inotify_event *i) {
         ALOGE("        name = %s\n", i->name);
 }
 
+void updateState(const char *typecState, const char *usbGadgetState, std::string &typec_state,
+                 std::string &usb_gadget_state) {
+    if (ReadFileToString(typecState, &typec_state))
+        typec_state = Trim(typec_state);
+    else
+        typec_state = TYPEC_GADGET_MODE_ENABLE;
+
+    if (ReadFileToString(usbGadgetState, &usb_gadget_state))
+        usb_gadget_state = Trim(usb_gadget_state);
+    else
+        usb_gadget_state = "";
+}
+
 void *MonitorFfs::startMonitorFd(void *param) {
     MonitorFfs *monitorFfs = (MonitorFfs *)param;
     char buf[kBufferSize];
     bool writeUdc = true, stopMonitor = false;
     struct epoll_event events[kEpollEvents];
     steady_clock::time_point disconnect;
+    std::string typec_state, usb_gadget_state;
 
     bool descriptorWritten = true;
     for (int i = 0; i < static_cast<int>(monitorFfs->mEndpointList.size()); i++) {
@@ -127,8 +144,14 @@ void *MonitorFfs::startMonitorFd(void *param) {
         }
     }
 
+    updateState(monitorFfs->mExtconTypecState, monitorFfs->mUsbGadgetState, typec_state,
+                usb_gadget_state);
+
     // notify here if the endpoints are already present.
-    if (descriptorWritten) {
+    if (typec_state == TYPEC_GADGET_MODE_DISABLE && usb_gadget_state == GADGET_ACTIVATE) {
+        gadgetPullup = false;
+        ALOGI("pending GADGET pulled up due to USB disconnected");
+    } else if (descriptorWritten) {
         usleep(kPullUpDelay);
         if (!!WriteStringToFile(monitorFfs->mGadgetName, PULLUP_PATH)) {
             lock_guard<mutex> lock(monitorFfs->mLock);
@@ -172,7 +195,14 @@ void *MonitorFfs::startMonitorFd(void *param) {
                         }
                     }
 
-                    if (!descriptorPresent && !writeUdc) {
+                    updateState(monitorFfs->mExtconTypecState, monitorFfs->mUsbGadgetState,
+                                typec_state, usb_gadget_state);
+
+                    if (typec_state == TYPEC_GADGET_MODE_DISABLE &&
+                        usb_gadget_state == GADGET_ACTIVATE) {
+                        gadgetPullup = false;
+                        ALOGI("pending GADGET pulled up due to USB disconnected");
+                    } else if (!descriptorPresent && !writeUdc) {
                         if (kDebug)
                             ALOGI("endpoints not up");
                         writeUdc = true;
