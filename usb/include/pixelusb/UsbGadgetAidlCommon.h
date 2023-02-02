@@ -127,11 +127,16 @@ class MonitorFfs {
   void *mPayload;
   // Name of the USB gadget. Used for pullup.
   const char *const mGadgetName;
+  // Extcon USB state from Type-C notification.
+  const char *const mExtconTypecState;
+  // USB Gadget state from Dwc3 device.
+  const char *const mUsbGadgetState;
   // Monitor State
   bool mMonitorRunning;
 
  public:
-  MonitorFfs(const char *const gadget);
+  MonitorFfs(const char *const gadget, const char *const extconTypecState = "",
+             const char *const usbGadgetState = "");
   // Inits all the UniqueFds.
   void reset();
   // Starts monitoring endpoints and pullup the gadget when
@@ -173,6 +178,9 @@ Status addGenericAndroidFunctions(MonitorFfs *monitorFfs, uint64_t functions,
                                   bool *ffsEnabled, int *functionCount);
 // Pulls down USB gadget.
 Status resetGadget();
+// Update the state from typec and usb gadget
+void updateState(const char *typecState, const char *usbGadgetState, std::string &typec_state,
+                 std::string &usb_gadget_state);
 
 }  // namespace usb
 }  // namespace pixel
