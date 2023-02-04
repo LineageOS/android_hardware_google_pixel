@@ -50,7 +50,9 @@ class HwApiBase {
     class Record : public RecordInterface {
       public:
         Record(const char *func, const T &value, const std::ios *stream)
-            : mFunc(func), mValue(value), mStream(stream),
+            : mFunc(func),
+              mValue(value),
+              mStream(stream),
               mTp(std::chrono::system_clock::system_clock::now()) {}
         std::string toString(const NamesMap &names) override;
 
@@ -69,6 +71,10 @@ class HwApiBase {
     void debug(int fd);
 
   protected:
+    void updatePathPrefix(const std::string &prefix) {
+        ALOGI("Update HWAPI path prefix to %s", prefix.c_str());
+        mPathPrefix = prefix;
+    }
     void saveName(const std::string &name, const std::ios *stream);
     template <typename T>
     void open(const std::string &name, T *stream);
@@ -177,10 +183,12 @@ std::string HwApiBase::Record<T>::toString(const NamesMap &names) {
     using utils::operator<<;
     std::stringstream ret;
     auto lTp = std::chrono::system_clock::to_time_t(mTp);
-    auto lTime = localtime(&lTp);
+    struct tm buf;
+    auto lTime = localtime_r(&lTp, &buf);
 
     ret << std::put_time(lTime, "%Y-%m-%d %H:%M:%S.") << std::setfill('0') << std::setw(3)
-        << (std::chrono::duration_cast<std::chrono::milliseconds>(mTp.time_since_epoch()) % 1000).count()
+        << (std::chrono::duration_cast<std::chrono::milliseconds>(mTp.time_since_epoch()) % 1000)
+                    .count()
         << "    " << mFunc << " '" << names.at(mStream) << "' = '" << mValue << "'";
     return ret.str();
 }
