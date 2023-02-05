@@ -64,25 +64,26 @@ class Vibrator : public BnVibrator {
         virtual bool setRedcCompEnable(bool value) = 0;
         // Stores the minumun delay time between playback and stop effects.
         virtual bool setMinOnOffInterval(uint32_t value) = 0;
+        // Determine the /dev and /sys paths for input force-feedback control.
+        virtual bool initFF() = 0;
         // Indicates the number of 0.125-dB steps of attenuation to apply to
         // waveforms triggered in response to vibration calls from the
         // Android vibrator HAL.
-        virtual bool setFFGain(int fd, uint16_t value) = 0;
+        virtual bool setFFGain(uint16_t value) = 0;
         // Create/modify custom effects for all physical waveforms.
-        virtual bool setFFEffect(int fd, struct ff_effect *effect, uint16_t timeoutMs) = 0;
+        virtual bool setFFEffect(struct ff_effect *effect, uint16_t timeoutMs) = 0;
         // Activates/deactivates the effect index after setFFGain() and setFFEffect().
-        virtual bool setFFPlay(int fd, int8_t index, bool value) = 0;
+        virtual bool setFFPlay(int8_t index, bool value) = 0;
         // Get the Alsa device for the audio coupled haptics effect
         virtual bool getHapticAlsaDevice(int *card, int *device) = 0;
         // Set haptics PCM amplifier before triggering audio haptics feature
         virtual bool setHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card,
                                      int device) = 0;
         // Set OWT waveform for compose or compose PWLE request
-        virtual bool uploadOwtEffect(int fd, uint8_t *owtData, uint32_t numBytes,
-                                     struct ff_effect *effect, uint32_t *outEffectIndex,
-                                     int *status) = 0;
+        virtual bool uploadOwtEffect(uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+                                     uint32_t *outEffectIndex, int *status) = 0;
         // Erase OWT waveform
-        virtual bool eraseOwtEffect(int fd, int8_t effectIndex, std::vector<ff_effect> *effect) = 0;
+        virtual bool eraseOwtEffect(int8_t effectIndex, std::vector<ff_effect> *effect) = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -203,7 +204,6 @@ class Vibrator : public BnVibrator {
     std::vector<ff_effect> mFfEffects;
     std::vector<uint32_t> mEffectDurations;
     std::future<void> mAsyncHandle;
-    ::android::base::unique_fd mInputFd;
     int8_t mActiveId{-1};
     struct pcm *mHapticPcm;
     int mCard;

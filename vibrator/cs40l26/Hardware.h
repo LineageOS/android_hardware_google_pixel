@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <glob.h>
+
 #include <algorithm>
 
 #include "HardwareBase.h"
@@ -67,6 +69,7 @@ namespace vibrator {
 class HwApi : public Vibrator::HwApi, private HwApiBase {
   public:
     HwApi() {
+        initFF();
         open("calibration/f0_stored", &mF0);
         open("default/f0_offset", &mF0Offset);
         open("calibration/redc_stored", &mRedc);
@@ -93,35 +96,97 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     bool setRedcCompEnable(bool value) override { return set(value, &mRedcCompEnable); }
     bool setMinOnOffInterval(uint32_t value) override { return set(value, &mMinOnOffInterval); }
     // TODO(b/234338136): Need to add the force feedback HW API test cases
-    bool setFFGain(int fd, uint16_t value) override {
+    bool initFF() override {
+        ATRACE_NAME(__func__);
+        const std::string INPUT_EVENT_NAME = std::getenv("INPUT_EVENT_NAME") ?: "";
+        if (INPUT_EVENT_NAME.find("cs40l26") == std::string::npos) {
+            ALOGE("Invalid input name: %s", INPUT_EVENT_NAME.c_str());
+            return false;
+        }
+
+        glob_t g = {};
+        const std::string INPUT_EVENT_PATH = "/dev/input/event*";
+        int fd = -1, ret;
+        uint32_t val = 0;
+        char str[256] = {0x00};
+        // Scan /dev/input/event* to get the correct input device path for FF effects manipulation.
+        // Then constructs the /sys/class/input/event*/../../../ for driver attributes accessing
+        // across different platforms and different kernels.
+        for (uint8_t retry = 1; retry < 11 && !mInputFd.ok(); retry++) {
+            ret = glob(INPUT_EVENT_PATH.c_str(), 0, nullptr, &g);
+            if (ret) {
+                ALOGE("Failed to get input event paths (%d): %s", errno, strerror(errno));
+            } else {
+                for (size_t i = 0; i < g.gl_pathc; i++) {
+                    fd = TEMP_FAILURE_RETRY(::open(g.gl_pathv[i], O_RDWR));
+                    if (fd < 0) {
+                        continue;
+                    }
+                    // Determine the input device path:
+                    // 1. Check if EV_FF is flagged in event bits.
+                    // 2. Match device name(s) with this CS40L26 HAL instance.
+                    if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
+                        ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
+                        strcmp(str, INPUT_EVENT_NAME.c_str()) == 0) {
+                        mInputFd.reset(fd);  // mInputFd.ok() becomes true.
+                        ALOGI("Control %s through %s", INPUT_EVENT_NAME.c_str(), g.gl_pathv[i]);
+
+                        // Construct the sysfs device path.
+                        std::string path = g.gl_pathv[i];
+                        path = "/sys/class/input/" +
+                               path.substr(path.find("event"), std::string::npos) + "/../../../";
+                        updatePathPrefix(path);
+                        break;
+                    }
+                    close(fd);
+                    memset(str, 0x00, sizeof(str));
+                    val = 0;
+                }
+            }
+
+            if (!mInputFd.ok()) {
+                sleep(1);
+                ALOGW("Retry #%d to search in %zu input devices...", retry, g.gl_pathc);
+            }
+        }
+        globfree(&g);
+
+        if (!mInputFd.ok()) {
+            ALOGE("Failed to get an input event with name %s", INPUT_EVENT_NAME.c_str());
+            return false;
+        }
+
+        return true;
+    }
+    bool setFFGain(uint16_t value) override {
         ATRACE_NAME(StringPrintf("%s %d%%", __func__, value).c_str());
         struct input_event gain = {
                 .type = EV_FF,
                 .code = FF_GAIN,
                 .value = value,
         };
-        if (write(fd, (const void *)&gain, sizeof(gain)) != sizeof(gain)) {
+        if (write(mInputFd, (const void *)&gain, sizeof(gain)) != sizeof(gain)) {
             return false;
         }
         return true;
     }
-    bool setFFEffect(int fd, struct ff_effect *effect, uint16_t timeoutMs) override {
+    bool setFFEffect(struct ff_effect *effect, uint16_t timeoutMs) override {
         ATRACE_NAME(StringPrintf("%s %dms", __func__, timeoutMs).c_str());
-        if (((*effect).replay.length != timeoutMs) || (ioctl(fd, EVIOCSFF, effect) < 0)) {
+        if (((*effect).replay.length != timeoutMs) || (ioctl(mInputFd, EVIOCSFF, effect) < 0)) {
             ALOGE("setFFEffect fail");
             return false;
         } else {
             return true;
         }
     }
-    bool setFFPlay(int fd, int8_t index, bool value) override {
+    bool setFFPlay(int8_t index, bool value) override {
         ATRACE_NAME(StringPrintf("%s index:%d %s", __func__, index, value ? "on" : "off").c_str());
         struct input_event play = {
                 .type = EV_FF,
                 .code = static_cast<uint16_t>(index),
                 .value = value,
         };
-        if (write(fd, (const void *)&play, sizeof(play)) != sizeof(play)) {
+        if (write(mInputFd, (const void *)&play, sizeof(play)) != sizeof(play)) {
             return false;
         } else {
             return true;
@@ -184,7 +249,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *haptic_pcm = NULL;
         return false;
     }
-    bool uploadOwtEffect(int fd, uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+    bool uploadOwtEffect(uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
                          uint32_t *outEffectIndex, int *status) override {
         ATRACE_NAME(__func__);
         (*effect).u.periodic.custom_len = numBytes / sizeof(uint16_t);
@@ -203,7 +268,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
 
         /* Create a new OWT waveform to update the PWLE or composite effect. */
         (*effect).id = -1;
-        if (ioctl(fd, EVIOCSFF, effect) < 0) {
+        if (ioctl(mInputFd, EVIOCSFF, effect) < 0) {
             ALOGE("Failed to upload effect %d (%d): %s", *outEffectIndex, errno, strerror(errno));
             delete[] ((*effect).u.periodic.custom_data);
             *status = EX_ILLEGAL_STATE;
@@ -219,7 +284,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *status = 0;
         return true;
     }
-    bool eraseOwtEffect(int fd, int8_t effectIndex, std::vector<ff_effect> *effect) override {
+    bool eraseOwtEffect(int8_t effectIndex, std::vector<ff_effect> *effect) override {
         ATRACE_NAME(__func__);
         uint32_t effectCountBefore, effectCountAfter, i, successFlush = 0;
 
@@ -233,7 +298,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         // Do erase flow
         if (effectIndex < WAVEFORM_MAX_INDEX) {
             /* Normal situation. Only erase the effect which we just played. */
-            if (ioctl(fd, EVIOCRMFF, effectIndex) < 0) {
+            if (ioctl(mInputFd, EVIOCRMFF, effectIndex) < 0) {
                 ALOGE("Failed to erase effect %d (%d): %s", effectIndex, errno, strerror(errno));
             }
             for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < WAVEFORM_MAX_INDEX; i++) {
@@ -246,7 +311,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
             /* Flush all non-prestored effects of ff-core and driver. */
             getEffectCount(&effectCountBefore);
             for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < FF_MAX_EFFECTS; i++) {
-                if (ioctl(fd, EVIOCRMFF, i) >= 0) {
+                if (ioctl(mInputFd, EVIOCRMFF, i) >= 0) {
                     successFlush++;
                 }
             }
@@ -276,6 +341,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mF0CompEnable;
     std::ofstream mRedcCompEnable;
     std::ofstream mMinOnOffInterval;
+    ::android::base::unique_fd mInputFd;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
