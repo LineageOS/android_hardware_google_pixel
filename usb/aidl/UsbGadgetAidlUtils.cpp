@@ -30,6 +30,7 @@ namespace pixel {
 namespace usb {
 
 using ::aidl::android::hardware::usb::gadget::GadgetFunction;
+using ::android::base::GetBoolProperty;
 using ::android::base::GetProperty;
 using ::android::base::SetProperty;
 using ::android::base::WriteStringToFile;
@@ -106,6 +107,18 @@ Status addGenericAndroidFunctions(MonitorFfs *monitorFfs, uint64_t functions, bo
             // link gsi.rndis for older pixel projects
             if (linkFunction("gsi.rndis", (*functionCount)++))
                 return Status::ERROR;
+        }
+    }
+
+    if ((functions & GadgetFunction::UVC) != 0) {
+        if (!GetBoolProperty(kUvcEnabled, false)) {
+            ALOGE("UVC function disabled by config");
+            return Status::ERROR;
+        }
+
+        ALOGI("setCurrentUsbFunctions uvc");
+        if (linkFunction("uvc.0", (*functionCount)++)) {
+            return Status::ERROR;
         }
     }
 
