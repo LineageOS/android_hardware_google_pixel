@@ -220,12 +220,13 @@ class VibratorTest : public Test {
 
         ON_CALL(*mMockApi, destructor()).WillByDefault(Assign(&mMockApi, nullptr));
 
-        ON_CALL(*mMockApi, setFFGain(_, _)).WillByDefault(Return(true));
-        ON_CALL(*mMockApi, setFFEffect(_, _, _)).WillByDefault(Return(true));
-        ON_CALL(*mMockApi, setFFPlay(_, _, _)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, initFF()).WillByDefault(Return(false));
+        ON_CALL(*mMockApi, setFFGain(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setFFEffect(_, _)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, setFFPlay(_, _)).WillByDefault(Return(true));
         ON_CALL(*mMockApi, pollVibeState(_, _)).WillByDefault(Return(true));
-        ON_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _, _)).WillByDefault(Return(true));
-        ON_CALL(*mMockApi, eraseOwtEffect(_, _, _)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _)).WillByDefault(Return(true));
+        ON_CALL(*mMockApi, eraseOwtEffect(_, _)).WillByDefault(Return(true));
 
         ON_CALL(*mMockApi, getOwtFreeSpace(_))
                 .WillByDefault(DoAll(SetArgPointee<0>(11504), Return(true)));
@@ -280,9 +281,12 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockApi, setF0CompEnable(_)).Times(times);
         EXPECT_CALL(*mMockApi, setRedcCompEnable(_)).Times(times);
         EXPECT_CALL(*mMockApi, pollVibeState(_, _)).Times(times);
-        EXPECT_CALL(*mMockApi, setFFGain(_, _)).Times(times);
-        EXPECT_CALL(*mMockApi, setFFEffect(_, _, _)).Times(times);
-        EXPECT_CALL(*mMockApi, setFFPlay(_, _, _)).Times(times);
+        EXPECT_CALL(*mMockApi, initFF()).Times(times);
+        EXPECT_CALL(*mMockApi, setFFGain(_)).Times(times);
+        EXPECT_CALL(*mMockApi, setFFEffect(_, _)).Times(times);
+        EXPECT_CALL(*mMockApi, setFFPlay(_, _)).Times(times);
+        EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _)).Times(times);
+        EXPECT_CALL(*mMockApi, eraseOwtEffect(_, _)).Times(times);
         EXPECT_CALL(*mMockApi, setMinOnOffInterval(_)).Times(times);
         EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).Times(times);
         EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, _, _, _)).Times(times);
@@ -372,11 +376,11 @@ TEST_F(VibratorTest, on) {
     Sequence s1, s2;
     uint16_t duration = std::rand() + 1;
 
-    EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
-    EXPECT_CALL(*mMockApi, setFFEffect(_, _, duration + MAX_COLD_START_LATENCY_MS))
+    EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockApi, setFFEffect(_, duration + MAX_COLD_START_LATENCY_MS))
             .InSequence(s2)
             .WillOnce(DoDefault());
-    EXPECT_CALL(*mMockApi, setFFPlay(_, ON_EFFECT_INDEX, true))
+    EXPECT_CALL(*mMockApi, setFFPlay(ON_EFFECT_INDEX, true))
             .InSequence(s1, s2)
             .WillOnce(DoDefault());
     EXPECT_TRUE(mVibrator->on(duration, nullptr).isOk());
@@ -384,7 +388,7 @@ TEST_F(VibratorTest, on) {
 
 TEST_F(VibratorTest, off) {
     Sequence s1;
-    EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
     EXPECT_TRUE(mVibrator->off().isOk());
 }
 
@@ -409,7 +413,7 @@ TEST_F(VibratorTest, supportsExternalAmplitudeControl_unsupported) {
 TEST_F(VibratorTest, setAmplitude_supported) {
     EffectAmplitude amplitude = static_cast<float>(std::rand()) / RAND_MAX ?: 1.0f;
 
-    EXPECT_CALL(*mMockApi, setFFGain(_, amplitudeToScale(amplitude))).WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, setFFGain(amplitudeToScale(amplitude))).WillOnce(Return(true));
 
     EXPECT_TRUE(mVibrator->setAmplitude(amplitude).isOk());
 }
@@ -434,7 +438,7 @@ TEST_F(VibratorTest, supportsExternalControl_unsupported) {
 
 TEST_F(VibratorTest, setExternalControl_enable) {
     Sequence s1, s2;
-    EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
     EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).InSequence(s2).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, true, _, _))
             .InSequence(s1, s2)
@@ -448,7 +452,7 @@ TEST_F(VibratorTest, setExternalControl_disable) {
 
     // The default mIsUnderExternalControl is false, so it needs to turn on the External Control
     // to make mIsUnderExternalControl become true.
-    EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE))
+    EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE))
             .InSequence(s1)
             .InSequence(s1)
             .WillOnce(DoDefault());
@@ -457,7 +461,7 @@ TEST_F(VibratorTest, setExternalControl_disable) {
 
     EXPECT_TRUE(mVibrator->setExternalControl(true).isOk());
 
-    EXPECT_CALL(*mMockApi, setFFGain(_, levelToScale(VOLTAGE_SCALE_MAX)))
+    EXPECT_CALL(*mMockApi, setFFGain(levelToScale(VOLTAGE_SCALE_MAX)))
             .InSequence(s4)
             .WillOnce(DoDefault());
     EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, false, _, _))
@@ -500,21 +504,20 @@ TEST_P(EffectsTest, perform) {
         EffectIndex index = EFFECT_INDEX.at(effect);
         duration = EFFECT_DURATIONS[index];
 
-        eSetup += EXPECT_CALL(*mMockApi, setFFGain(_, levelToScale(scale->second)))
+        eSetup += EXPECT_CALL(*mMockApi, setFFGain(levelToScale(scale->second)))
                           .WillOnce(DoDefault());
-        eActivate = EXPECT_CALL(*mMockApi, setFFPlay(_, index, true))
-                            .After(eSetup)
-                            .WillOnce(DoDefault());
+        eActivate =
+                EXPECT_CALL(*mMockApi, setFFPlay(index, true)).After(eSetup).WillOnce(DoDefault());
     } else if (queue != EFFECT_QUEUE.end()) {
         duration = std::get<1>(queue->second);
-        eSetup += EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE))
+        eSetup += EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE))
                           .After(eSetup)
                           .WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, getOwtFreeSpace(_)).WillOnce(DoDefault());
-        eSetup += EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _, _))
+        eSetup += EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _))
                           .After(eSetup)
                           .WillOnce(DoDefault());
-        eActivate = EXPECT_CALL(*mMockApi, setFFPlay(_, WAVEFORM_COMPOSE, true))
+        eActivate = EXPECT_CALL(*mMockApi, setFFPlay(WAVEFORM_COMPOSE, true))
                             .After(eSetup)
                             .WillOnce(DoDefault());
         composeEffect = true;
@@ -530,7 +533,7 @@ TEST_P(EffectsTest, perform) {
                             .After(ePollHaptics)
                             .WillOnce(DoDefault());
         if (composeEffect) {
-            eEraseDone = EXPECT_CALL(*mMockApi, eraseOwtEffect(_, _, _))
+            eEraseDone = EXPECT_CALL(*mMockApi, eraseOwtEffect(_, _))
                                  .After(ePollStop)
                                  .WillOnce(DoDefault());
             EXPECT_CALL(*callback, onComplete()).After(eEraseDone).WillOnce(complete);
@@ -621,14 +624,13 @@ TEST_P(ComposeTest, compose) {
         return ndk::ScopedAStatus::ok();
     };
 
-    eSetup += EXPECT_CALL(*mMockApi, setFFGain(_, ON_GLOBAL_SCALE))
-                      .After(eSetup)
-                      .WillOnce(DoDefault());
+    eSetup +=
+            EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE)).After(eSetup).WillOnce(DoDefault());
     eSetup += EXPECT_CALL(*mMockApi, getOwtFreeSpace(_)).WillOnce(DoDefault());
-    eSetup += EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _, _))
+    eSetup += EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _))
                       .After(eSetup)
                       .WillOnce(DoDefault());
-    eActivate = EXPECT_CALL(*mMockApi, setFFPlay(_, WAVEFORM_COMPOSE, true))
+    eActivate = EXPECT_CALL(*mMockApi, setFFPlay(WAVEFORM_COMPOSE, true))
                         .After(eSetup)
                         .WillOnce(DoDefault());
 
@@ -638,7 +640,7 @@ TEST_P(ComposeTest, compose) {
     ePollStop =
             EXPECT_CALL(*mMockApi, pollVibeState(0, -1)).After(ePollHaptics).WillOnce(DoDefault());
     eEraseDone =
-            EXPECT_CALL(*mMockApi, eraseOwtEffect(_, _, _)).After(ePollStop).WillOnce(DoDefault());
+            EXPECT_CALL(*mMockApi, eraseOwtEffect(_, _)).After(ePollStop).WillOnce(DoDefault());
     EXPECT_CALL(*callback, onComplete()).After(eEraseDone).WillOnce(complete);
 
     EXPECT_EQ(EX_NONE, mVibrator->compose(composite, callback).getExceptionCode());
