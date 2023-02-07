@@ -100,7 +100,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAmsRatePath(sysfs_paths.AmsRatePath),
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
       kCCARatePath(sysfs_paths.CCARatePath),
-      kTempResidencyPath(sysfs_paths.TempResidencyPath),
+      kTempResidencyPaths(sysfs_paths.TempResidencyPaths),
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
@@ -830,7 +830,9 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
 }
 
 void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
-    temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPath);
+    for (int i = 0; i < kTempResidencyPaths.size(); i++) {
+        temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPaths[i]);
+    }
 }
 
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
