@@ -28,6 +28,9 @@ gfx
  mali/mali_total_alloc_pages_change
  mali/sysgraph
  mali/sysgraph_gpu
+ mali/mali_KCPU_CQS_SET
+ mali/mali_KCPU_CQS_WAIT_BEGIN
+ mali/mali_KCPU_CQS_WAIT_END
 memory
  fastrpc/fastrpc_dma_stat
  dmabuf_heap/dma_heap_stat
