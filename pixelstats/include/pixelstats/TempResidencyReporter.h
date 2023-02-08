@@ -34,7 +34,7 @@ using aidl::android::frameworks::stats::VendorAtomValue;
 class TempResidencyReporter {
   public:
     void logTempResidencyStats(const std::shared_ptr<IStats> &stats_client,
-                               const char *const temperature_residency_path);
+                               const std::string &temperature_residency_path);
 
   private:
     std::map<std::string, std::vector<int64_t>> prev_stats;
