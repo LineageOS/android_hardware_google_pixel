@@ -220,10 +220,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
             ALOGE("Invalid waveform index for OWT erase: %d", effectIndex);
             return false;
         }
-        // Turn off the waiting time for SVC init phase to complete since chip
-        // should already under STOP state
-        setMinOnOffInterval(0);
-        // Do erase flow
+
         if (effectIndex < WAVEFORM_MAX_INDEX) {
             /* Normal situation. Only erase the effect which we just played. */
             if (ioctl(fd, EVIOCRMFF, effectIndex) < 0) {
@@ -251,8 +248,6 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
                 (*effect)[i].id = -1;
             }
         }
-        // Turn on the waiting time for SVC init phase to complete
-        setMinOnOffInterval(Vibrator::MIN_ON_OFF_INTERVAL_US);
         return true;
     }
 
