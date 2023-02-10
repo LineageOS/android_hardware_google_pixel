@@ -249,7 +249,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *haptic_pcm = NULL;
         return false;
     }
-    bool uploadOwtEffect(uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+    bool uploadOwtEffect(const uint8_t *owtData, const uint32_t numBytes, struct ff_effect *effect,
                          uint32_t *outEffectIndex, int *status) override {
         ATRACE_NAME(__func__);
         (*effect).u.periodic.custom_len = numBytes / sizeof(uint16_t);
