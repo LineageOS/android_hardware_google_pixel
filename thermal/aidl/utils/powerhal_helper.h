@@ -46,7 +46,8 @@ class PowerHalService {
     bool isModeSupported(const std::string &type, const ThrottlingSeverity &t);
     bool isPowerHalConnected() { return power_hal_aidl_ != nullptr; }
     bool isPowerHalExtConnected() { return power_hal_ext_aidl_ != nullptr; }
-    void setMode(const std::string &type, const ThrottlingSeverity &t, const bool &enable);
+    void setMode(const std::string &type, const ThrottlingSeverity &t, const bool &enable,
+                 const bool error_on_exit = false);
 
   private:
     bool power_hal_aidl_exist_;
