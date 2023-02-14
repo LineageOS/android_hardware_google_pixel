@@ -20,6 +20,7 @@
 
 #include <array>
 #include <chrono>
+#include <map>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -141,7 +142,7 @@ class ThermalHelper {
             float value) const;
     // Read temperature data according to thermal sensor's info
     bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
-                           std::string *sensor_log);
+                           std::map<std::string, float> *sensor_log_map);
     bool connectToPowerHal();
     void updateSupportedPowerHints();
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
