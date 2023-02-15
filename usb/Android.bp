@@ -52,7 +52,7 @@ cc_library_static {
     ],
 
     static_libs: [
-        "libpixelthermalwrapper",
+        "libthermalutils",
     ]
 }
 
@@ -88,7 +88,7 @@ cc_library_static {
     ],
 
     static_libs: [
-        "libpixelthermalwrapper",
+        "libthermalutils",
     ]
 }
 
