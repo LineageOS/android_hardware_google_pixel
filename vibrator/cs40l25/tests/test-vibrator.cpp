@@ -68,8 +68,8 @@ static EffectScale Scale(float intensity);
 
 static constexpr uint32_t CAL_VERSION = 1;
 static constexpr std::array<EffectLevel, 6> V_LEVELS{40, 50, 60, 70, 80, 90};
-static constexpr std::array<EffectDuration, 10> EFFECT_DURATIONS{0,   0,   15,  0,   50,
-                                                                 100, 150, 200, 250, 8};
+static constexpr std::array<EffectDuration, 10> EFFECT_DURATIONS{0,   0,   11,  0,   300,
+                                                                 132, 150, 500, 101, 5};
 
 // Constants With Prescribed Values
 
@@ -84,6 +84,10 @@ static constexpr EffectIndex QUEUE_INDEX{65534};
 
 static const EffectScale ON_GLOBAL_SCALE{levelToScale(V_LEVELS[5])};
 static const EffectIndex ON_EFFECT_INDEX{0};
+static constexpr uint32_t WAVEFORM_DOUBLE_CLICK_SILENCE_MS = 100;
+static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
+static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;  // ALERT Irq Handling
+static constexpr auto POLLING_TIMEOUT = 20;
 
 static const std::map<EffectTuple, EffectScale> EFFECT_SCALE{
         {{Effect::CLICK, EffectStrength::LIGHT}, Scale(0.7f * 0.5f)},
@@ -102,13 +106,16 @@ static const std::map<EffectTuple, EffectScale> EFFECT_SCALE{
 
 static const std::map<EffectTuple, EffectQueue> EFFECT_QUEUE{
         {{Effect::DOUBLE_CLICK, EffectStrength::LIGHT},
-         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 0.5f)}, 100,
+         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 0.5f)},
+               WAVEFORM_DOUBLE_CLICK_SILENCE_MS,
                QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(1.0f * 0.5f)})},
         {{Effect::DOUBLE_CLICK, EffectStrength::MEDIUM},
-         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 0.7f)}, 100,
+         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 0.7f)},
+               WAVEFORM_DOUBLE_CLICK_SILENCE_MS,
                QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(1.0f * 0.7f)})},
         {{Effect::DOUBLE_CLICK, EffectStrength::STRONG},
-         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 1.0f)}, 100,
+         Queue(QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(0.7f * 1.0f)},
+               WAVEFORM_DOUBLE_CLICK_SILENCE_MS,
                QueueEffect{EFFECT_INDEX.at(Effect::CLICK), Level(1.0f * 1.0f)})},
 };
 
@@ -468,16 +475,17 @@ TEST_P(EffectsTest, perform) {
     };
 
     ExpectationSet eSetup;
-    Expectation eActivate, ePoll;
+    Expectation eActivate, ePollStop;
 
     if (scale != EFFECT_SCALE.end()) {
         EffectIndex index = EFFECT_INDEX.at(effect);
-        duration = EFFECT_DURATIONS[index];
+        duration = EFFECT_DURATIONS[index] + MAX_COLD_START_LATENCY_MS;
 
         eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(index)).WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, setEffectScale(scale->second)).WillOnce(Return(true));
     } else if (queue != EFFECT_QUEUE.end()) {
-        duration = std::get<1>(queue->second);
+        duration = std::get<1>(queue->second) + MAX_COLD_START_LATENCY_MS * 2 +
+                   MAX_PAUSE_TIMING_ERROR_MS;
 
         eSetup += EXPECT_CALL(*mMockApi, setEffectIndex(QUEUE_INDEX)).WillOnce(DoDefault());
         eSetup += EXPECT_CALL(*mMockApi, setEffectQueue(std::get<0>(queue->second)))
@@ -490,11 +498,12 @@ TEST_P(EffectsTest, perform) {
     if (duration) {
         eSetup += EXPECT_CALL(*mMockApi, setDuration(Ge(duration))).WillOnce(Return(true));
         eActivate = EXPECT_CALL(*mMockApi, setActivate(true)).After(eSetup).WillOnce(Return(true));
-        ePoll = EXPECT_CALL(*mMockApi, pollVibeState(false))
-                        .After(eActivate)
-                        .WillOnce(Return(true));
-        EXPECT_CALL(*mMockApi, setActivate(false)).After(ePoll).WillOnce(Return(true));
-        EXPECT_CALL(*callback, onComplete()).After(ePoll).WillOnce(complete);
+        ePollStop = EXPECT_CALL(*mMockApi, pollVibeState(false, duration + POLLING_TIMEOUT))
+                            .After(eActivate)
+                            .WillOnce(DoDefault());
+
+        EXPECT_CALL(*mMockApi, setActivate(false)).After(ePollStop).WillOnce(Return(true));
+        EXPECT_CALL(*callback, onComplete()).After(ePollStop).WillOnce(complete);
     }
 
     int32_t lengthMs;
@@ -589,8 +598,9 @@ TEST_P(ComposeTest, compose) {
     auto param = GetParam();
     auto composite = param.composite;
     auto queue = std::get<0>(param.queue);
+    auto duration = std::get<1>(param.queue);
     ExpectationSet eSetup;
-    Expectation eActivate, ePoll;
+    Expectation eActivate, ePollStop;
     auto callback = ndk::SharedRefBase::make<MockVibratorCallback>();
     std::promise<void> promise;
     std::future<void> future{promise.get_future()};
@@ -604,9 +614,11 @@ TEST_P(ComposeTest, compose) {
     eSetup += EXPECT_CALL(*mMockApi, setEffectScale(0)).WillOnce(Return(true));
     eSetup += EXPECT_CALL(*mMockApi, setDuration(UINT32_MAX)).WillOnce(Return(true));
     eActivate = EXPECT_CALL(*mMockApi, setActivate(true)).After(eSetup).WillOnce(Return(true));
-    ePoll = EXPECT_CALL(*mMockApi, pollVibeState(false)).After(eActivate).WillOnce(Return(true));
-    EXPECT_CALL(*mMockApi, setActivate(false)).After(ePoll).WillOnce(Return(true));
-    EXPECT_CALL(*callback, onComplete()).After(ePoll).WillOnce(complete);
+    ePollStop = EXPECT_CALL(*mMockApi, pollVibeState(false, duration + POLLING_TIMEOUT))
+                        .After(eActivate)
+                        .WillOnce(Return(true));
+    EXPECT_CALL(*mMockApi, setActivate(false)).After(ePollStop).WillOnce(Return(true));
+    EXPECT_CALL(*callback, onComplete()).After(ePollStop).WillOnce(complete);
 
     EXPECT_EQ(EX_NONE, mVibrator->compose(composite, callback).getExceptionCode());
 
