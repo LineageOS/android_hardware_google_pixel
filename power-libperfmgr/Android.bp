@@ -68,3 +68,20 @@ cc_binary {
         "aidl/PowerSessionManager.cpp",
     ],
 }
+
+cc_binary {
+    name: "sendhint",
+    vendor: true,
+    shared_libs: [
+        "android.hardware.power-V3-ndk",
+        "libbase",
+        "libcutils",
+        "liblog",
+        "libutils",
+        "libbinder_ndk",
+        "pixel-power-ext-V1-ndk",
+    ],
+    srcs: [
+        "utilities/sendhint.cc",
+    ],
+}
