@@ -541,6 +541,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     HAPTICS_TRACE("compose(composite, callback)");
     uint16_t size;
     uint16_t nextEffectDelay;
+    uint16_t totalDuration = 0;
 
     auto ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_COMP]{0x00},
                                   FF_CUSTOM_DATA_LEN_MAX_COMP);
@@ -551,6 +552,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
 
     /* Check if there is a wait before the first effect. */
     nextEffectDelay = composite.front().delayMs;
+    totalDuration += nextEffectDelay;
     if (nextEffectDelay > COMPOSE_DELAY_MAX_MS || nextEffectDelay < 0) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else if (nextEffectDelay > 0) {
@@ -585,6 +587,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
                 return status;
             }
             effectVolLevel = intensityToVolLevel(e_curr.scale, effectIndex);
+            totalDuration += mEffectDurations[effectIndex];
         }
 
         /* Fetch the next composite effect delay and fill into the current section */
@@ -597,6 +600,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
                 return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
             }
             nextEffectDelay = delay;
+            totalDuration += delay;
         }
 
         if (effectIndex == 0 && nextEffectDelay == 0) {
@@ -613,6 +617,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     if (header_count == dspmem_chunk_bytes(ch)) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
+        mFfEffects[WAVEFORM_COMPOSE].replay.length = totalDuration;
         return performEffect(WAVEFORM_MAX_INDEX /*ignored*/, VOLTAGE_SCALE_MAX /*ignored*/, ch,
                              callback);
     }
@@ -1142,6 +1147,8 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     if (totalDuration > 0x7FFFF) {
         ALOGE("Total duration is too long (%d)!", totalDuration);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    } else {
+        mFfEffects[WAVEFORM_PWLE].replay.length = totalDuration;
     }
     updateWLength(ch, totalDuration);
 
@@ -1341,6 +1348,7 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
     }
 
     *outTimeMs = timeMs;
+    mFfEffects[WAVEFORM_COMPOSE].replay.length = static_cast<uint16_t>(timeMs);
 
     return ndk::ScopedAStatus::ok();
 }
