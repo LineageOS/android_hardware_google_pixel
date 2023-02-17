@@ -71,7 +71,6 @@ static constexpr uint32_t WAVEFORM_LOW_TICK_INDEX = 10;
 
 static constexpr uint32_t WAVEFORM_UNSAVED_TRIGGER_QUEUE_INDEX = 65529;
 static constexpr uint32_t WAVEFORM_TRIGGER_QUEUE_INDEX = 65534;
-
 static constexpr uint32_t VOLTAGE_GLOBAL_SCALE_LEVEL = 5;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 
@@ -83,6 +82,7 @@ static constexpr float AMP_ATTENUATE_STEP_SIZE = 0.125f;
 static constexpr float EFFECT_FREQUENCY_KHZ = 48.0f;
 
 static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
+static constexpr auto POLLING_TIMEOUT = 20;
 
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 static constexpr int32_t COMPOSE_SIZE_MAX = 127;
@@ -315,6 +315,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 ndk::ScopedAStatus Vibrator::off() {
     HAPTICS_TRACE("off()");
     ATRACE_NAME("Vibrator::off");
+    ALOGD("Vibrator::off");
     setGlobalAmplitude(false);
     mHwApi->setF0Offset(0);
     if (!mHwApi->setActivate(0)) {
@@ -329,6 +330,7 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
     HAPTICS_TRACE("on(timeoutMs:%u, callback)", timeoutMs);
     ATRACE_NAME("Vibrator::on");
+    ALOGD("Vibrator::on");
     const uint32_t index = timeoutMs < WAVEFORM_LONG_VIBRATION_THRESHOLD_MS
                                    ? WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX
                                    : WAVEFORM_LONG_VIBRATION_EFFECT_INDEX;
@@ -346,6 +348,7 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
     HAPTICS_TRACE("perform(effect:%s, strength:%s, callback, _aidl_return)",
                   toString(effect).c_str(), toString(strength).c_str());
     ATRACE_NAME("Vibrator::perform");
+    ALOGD("Vibrator::perform");
     return performEffect(effect, strength, callback, _aidl_return);
 }
 
@@ -463,13 +466,17 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
                                      const std::shared_ptr<IVibratorCallback> &callback) {
     HAPTICS_TRACE("compose(composite, callback)");
     ATRACE_NAME("Vibrator::compose");
+    ALOGD("Vibrator::compose");
     std::ostringstream effectBuilder;
     std::string effectQueue;
 
     if (composite.size() > COMPOSE_SIZE_MAX) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
+    const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
 
+    // Reset the mTotalDuration
+    mTotalDuration = 0;
     for (auto &e : composite) {
         if (e.scale < 0.0f || e.scale > 1.0f) {
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -480,6 +487,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
                 return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
             }
             effectBuilder << e.delayMs << ",";
+            mTotalDuration += e.delayMs;
         }
         if (e.primitive != CompositePrimitive::NOOP) {
             ndk::ScopedAStatus status;
@@ -491,6 +499,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
             }
 
             effectBuilder << effectIndex << "." << intensityToVolLevel(e.scale, effectIndex) << ",";
+            mTotalDuration += mEffectDurations[effectIndex];
         }
     }
 
@@ -518,9 +527,17 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
+    ALOGD("Vibrator::on");
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);
     mHwApi->setActivate(1);
+    // Using the mToalDuration for composed effect.
+    // For composed effect, we set the UINT32_MAX to the duration sysfs node,
+    // but it not a practical way to use it to monitor the total duration time.
+    if (timeoutMs != UINT32_MAX) {
+        const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
+        mTotalDuration = timeoutMs;
+    }
 
     mActiveId = effectIndex;
 
@@ -946,7 +963,10 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 
     totalDuration += MAX_COLD_START_LATENCY_MS;
     mHwApi->setDuration(totalDuration);
-
+    {
+        const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
+        mTotalDuration = totalDuration;
+    }
     mHwApi->setActivate(1);
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
@@ -1048,6 +1068,10 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
 
     volLevel = intensityToVolLevel(intensity, effectIndex);
     timeMs = mEffectDurations[effectIndex] + MAX_COLD_START_LATENCY_MS;
+    {
+        const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
+        mTotalDuration = timeMs;
+    }
 
     *outEffectIndex = effectIndex;
     *outTimeMs = timeMs;
@@ -1094,6 +1118,10 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
             }
             effectBuilder << thisEffectIndex << "." << thisVolLevel;
             timeMs += thisTimeMs;
+            {
+                const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
+                mTotalDuration = timeMs;
+            }
 
             break;
         default:
@@ -1219,7 +1247,19 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     HAPTICS_TRACE("waitForComplete(callback)");
-    mHwApi->pollVibeState(false);
+    ALOGD("Vibrator::waitForComplete");
+    uint32_t duration;
+    {
+        const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
+        duration = ((mTotalDuration + POLLING_TIMEOUT) < UINT32_MAX)
+                           ? mTotalDuration + POLLING_TIMEOUT
+                           : UINT32_MAX;
+    }
+    if (!mHwApi->pollVibeState(false, duration)) {
+        ALOGE("Timeout(%u)! Fail to poll STOP state", duration);
+    } else {
+        ALOGD("Vibrator::waitForComplete: Get STOP! Set active to 0.");
+    }
     mHwApi->setActivate(false);
 
     if (callback) {
