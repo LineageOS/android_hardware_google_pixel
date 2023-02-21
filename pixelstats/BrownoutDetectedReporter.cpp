@@ -254,17 +254,21 @@ void BrownoutDetectedReporter::logBrownout(const std::shared_ptr<IStats> &stats_
                 return;
             }
             std::ssub_match irq = pattern_match[KEY_IDX];
-            if (!irq.str().compare("batoilo")) {
+            if (irq.str().find("batoilo") != std::string::npos) {
                 max_value.triggered_irq_ = BrownoutDetected::BATOILO;
+                continue;
             }
-            if (!irq.str().compare("vdroop1")) {
+            if (irq.str().find("vdroop1") != std::string::npos) {
                 max_value.triggered_irq_ = BrownoutDetected::UVLO1;
+                continue;
             }
-            if (!irq.str().compare("vdroop2")) {
+            if (irq.str().find("vdroop2") != std::string::npos) {
                 max_value.triggered_irq_ = BrownoutDetected::UVLO2;
+                continue;
             }
-            if (!irq.str().compare("smpl_gm")) {
+            if (irq.str().find("smpl_gm") != std::string::npos) {
                 max_value.triggered_irq_ = BrownoutDetected::SMPL_WARN;
+                continue;
             }
             continue;
         }
