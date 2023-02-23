@@ -28,7 +28,7 @@ cc_library {
     ],
     static_libs: [
         "libmath",
-        "libpixelthermalwrapper",
+        "libthermalutils",
     ],
 
     shared_libs: [
