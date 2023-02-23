@@ -26,8 +26,8 @@
 #include <android/binder_process.h>
 #include <battery_mitigation/MitigationThermalManager.h>
 #include <errno.h>
-#include <pixelthermalwrapper/ThermalHidlWrapper.h>
 #include <sys/time.h>
+#include <thermalutils/ThermalHidlWrapper.h>
 #include <utils/Log.h>
 
 #include <chrono>
