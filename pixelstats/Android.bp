@@ -71,7 +71,10 @@ java_library_host {
 genrule {
     name: "pixelatoms_defs.h",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
+    cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto $(in)",
+    srcs: [
+        "pixelatoms.proto",
+    ],
     out: [
         "pixelatoms_defs.h",
     ],
