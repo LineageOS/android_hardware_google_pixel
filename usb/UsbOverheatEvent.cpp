@@ -20,7 +20,7 @@
 
 #include <aidl/android/hardware/thermal/IThermal.h>
 #include <android/binder_manager.h>
-#include <pixelthermalwrapper/ThermalHidlWrapper.h>
+#include <thermalutils/ThermalHidlWrapper.h>
 #include <time.h>
 
 namespace android {
