@@ -97,8 +97,6 @@ message Atom {
       VendorTempResidencyStats vendor_temp_residency_stats = 105045;
       BrownoutDetected brownout_detected = 105046;
       PcieLinkStatsReported pcie_link_stats = 105047;
-      TestVendorAtomReported test_vendor_atom_reported =
-                105048 [(android.os.statsd.module) = "istatsvts"];
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1573,29 +1571,4 @@ message PcieLinkStatsReported {
     optional int32 wifi_pcie_pll_lock_avg = 10;
     /* Average time (uS) for successful PCIe Link Up on wifi interface */
     optional int32 wifi_pcie_link_up_avg = 11;
-}
-
-message TestVendorAtomNestedMessage {
-    optional int32 int_value = 1;
-    optional int64 long_value = 2;
-    optional float float_value = 3;
-}
-
-/**
- * Logs the test vendor atom for IStats VTS
- */
-message TestVendorAtomReported {
-    optional string reverse_domain_name = 1;
-    optional int32 int_value = 2;
-    optional int64 long_value = 3;
-    optional float float_value = 4;
-    optional string string_value = 5;
-    optional bool bool_value = 6;
-    repeated int32 repeated_int_value = 7;
-    repeated int64 repeated_long_value = 8;
-    repeated float repeated_float_value = 9;
-    repeated string repeated_string_value = 10;
-    repeated bool repeated_bool_value = 11;
-    optional TestVendorAtomNestedMessage byte_array_value =
-            12 [(android.os.statsd.log_mode) = MODE_BYTES];
 }
