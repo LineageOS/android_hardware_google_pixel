@@ -287,6 +287,12 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         LOG(FATAL) << "ThermalHAL could not start watching thread properly.";
     }
 
+    is_initialized_ =
+            thermal_stats_helper_.initializeStats(sensor_info_map_, cooling_device_info_map_);
+    if (!is_initialized_) {
+        LOG(FATAL) << "Failed to initialize thermal stats";
+    }
+
     if (!connectToPowerHal()) {
         LOG(ERROR) << "Fail to connect to Power Hal";
     } else {
@@ -410,6 +416,8 @@ bool ThermalHelper::readTemperature(
         for (const auto &sensor_log_pair : sensor_log_map) {
             sensor_log << sensor_log_pair.first << ":" << sensor_log_pair.second << " ";
         }
+        // Update sensor temperature time in state
+        thermal_stats_helper_.updateSensorStats(sensor_name, sensor_info.stats_info, *out);
         LOG(INFO) << sensor_name.data() << ":" << out->value << " raw data: " << sensor_log.str();
     }
 
@@ -1019,9 +1027,9 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
                     power_files_.GetPowerStatusMap(), cooling_device_info_map_);
         }
 
-        thermal_throttling_.computeCoolingDevicesRequest(name_status_pair.first, sensor_info,
-                                                         sensor_status.severity,
-                                                         &cooling_devices_to_update);
+        thermal_throttling_.computeCoolingDevicesRequest(
+                name_status_pair.first, sensor_info, sensor_status.severity,
+                &cooling_devices_to_update, &thermal_stats_helper_);
         if (min_sleep_ms > sleep_ms) {
             min_sleep_ms = sleep_ms;
         }
@@ -1046,7 +1054,10 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
             }
         }
     }
-
+    int count_failed_reporting = thermal_stats_helper_.reportStats();
+    if (count_failed_reporting != 0) {
+        LOG(ERROR) << "Failed to report " << count_failed_reporting << " thermal stats";
+    }
     return min_sleep_ms;
 }
 

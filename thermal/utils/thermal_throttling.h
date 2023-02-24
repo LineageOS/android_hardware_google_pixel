@@ -26,6 +26,7 @@
 
 #include "power_files.h"
 #include "thermal_info.h"
+#include "thermal_stats_helper.h"
 
 namespace android {
 namespace hardware {
@@ -90,7 +91,8 @@ class ThermalThrottling {
     // Compute the throttling target from all the sensors' request
     void computeCoolingDevicesRequest(std::string_view sensor_name, const SensorInfo &sensor_info,
                                       const ThrottlingSeverity curr_severity,
-                                      std::vector<std::string> *cooling_devices_to_update);
+                                      std::vector<std::string> *cooling_devices_to_update,
+                                      ThermalStatsHelper *thermal_stats_helper);
 
   private:
     // PID algo - get the total power budget

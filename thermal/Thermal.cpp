@@ -579,6 +579,86 @@ void Thermal::dumpPowerRailInfo(std::ostringstream *dump_buf) {
     }
 }
 
+void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
+    *dump_buf << "getThermalStatsInfo:" << std::endl;
+    *dump_buf << " Sensor Stats Info:" << std::endl;
+    const auto &sensor_info_map = thermal_helper_.GetSensorInfoMap();
+    for (const auto &name_info_pair : sensor_info_map) {
+        const auto &stats_info = name_info_pair.second.stats_info;
+        if (stats_info == nullptr || !stats_info->record_stats) {
+            continue;
+        }
+        *dump_buf << "  Name: " << name_info_pair.first << std::endl;
+        *dump_buf << "   Record Stats: " << stats_info->record_stats << std::endl;
+        *dump_buf << "   Stats Threshold: [";
+        for (const auto &threshold : stats_info->stats_threshold) {
+            *dump_buf << threshold << " ";
+        }
+        *dump_buf << "]" << std::endl;
+    }
+
+    *dump_buf << " Sensor Binded CDEV Info:" << std::endl;
+    for (const auto &name_info_pair : sensor_info_map) {
+        if (name_info_pair.second.throttling_info == nullptr) {
+            continue;
+        }
+        if (name_info_pair.second.throttling_info->binded_cdev_info_map.size()) {
+            *dump_buf << "  Sensor Name: " << name_info_pair.first << std::endl;
+            for (const auto &binded_cdev_info_pair :
+                 name_info_pair.second.throttling_info->binded_cdev_info_map) {
+                *dump_buf << "   Cooling device name: " << binded_cdev_info_pair.first << std::endl;
+                const auto &stats_info = binded_cdev_info_pair.second.stats_info;
+                if (stats_info == nullptr || !stats_info->record_stats) {
+                    continue;
+                }
+                *dump_buf << "    Record Stats: " << stats_info->record_stats << std::endl;
+                *dump_buf << "    Stats Threshold: [";
+                for (const auto &threshold : stats_info->stats_threshold) {
+                    *dump_buf << threshold << " ";
+                }
+                *dump_buf << "]" << std::endl;
+            }
+        }
+    }
+
+    *dump_buf << "getThermalStatsStatus:" << std::endl;
+    const auto thermal_stats_sensor_temp_map_ = thermal_helper_.GetSensorThermalStatsSnapshot();
+    *dump_buf << " Sensor Residency Stats:" << std::endl;
+    const auto now = boot_clock::now();
+    for (const auto &sensor_temp_stats_pair : thermal_stats_sensor_temp_map_) {
+        *dump_buf << "  Sensor Name: " << sensor_temp_stats_pair.first << std::endl;
+        *dump_buf << "   Time Since Last Stats Report: "
+                  << std::chrono::duration_cast<std::chrono::minutes>(
+                             now - sensor_temp_stats_pair.second.last_stats_report_time)
+                             .count()
+                  << " mins" << std::endl;
+        *dump_buf << "   Time in State ms: [";
+        for (const auto &time_in_state : sensor_temp_stats_pair.second.time_in_state_ms) {
+            *dump_buf << time_in_state.count() << " ";
+        }
+        *dump_buf << "]" << std::endl;
+    }
+    const auto thermal_stats_sensor_binded_cdev_state_map_ =
+            thermal_helper_.GetBindedCdevThermalStatsSnapshot();
+    *dump_buf << " Sensor Binded CDEV Stats:" << std::endl;
+    for (const auto &sensor_binded_cdev_stats_pair : thermal_stats_sensor_binded_cdev_state_map_) {
+        *dump_buf << "  Sensor Name: " << sensor_binded_cdev_stats_pair.first << std::endl;
+        for (const auto &binded_cdev_stats_pair : sensor_binded_cdev_stats_pair.second) {
+            *dump_buf << "   Cooling Device Name: " << binded_cdev_stats_pair.first << std::endl;
+            *dump_buf << "    Time Since Last Stats Report: "
+                      << std::chrono::duration_cast<std::chrono::minutes>(
+                                 now - binded_cdev_stats_pair.second.last_stats_report_time)
+                                 .count()
+                      << " mins" << std::endl;
+            *dump_buf << "    Time in State ms: [";
+            for (const auto &time_in_state : binded_cdev_stats_pair.second.time_in_state_ms) {
+                *dump_buf << time_in_state.count() << " ";
+            }
+            *dump_buf << "]" << std::endl;
+        }
+    }
+}
+
 Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_string> &) {
     if (handle != nullptr && handle->numFds >= 1) {
         int fd = handle->data[0];
@@ -662,7 +742,8 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
                     for (size_t i = 0; i < kThrottlingSeverityCount; ++i) {
                         dump_buf << name_info_pair.second.cold_thresholds[i] << " ";
                     }
-                    dump_buf << "] vrThrottlingThreshold: " << name_info_pair.second.vr_threshold;
+                    dump_buf << "]";
+                    dump_buf << " vrThrottlingThreshold: " << name_info_pair.second.vr_threshold;
                     dump_buf << std::endl;
                 }
                 dump_buf << "getHysteresis:" << std::endl;
@@ -730,6 +811,7 @@ Return<void> Thermal::debug(const hidl_handle &handle, const hidl_vec<hidl_strin
             dumpThrottlingInfo(&dump_buf);
             dumpThrottlingRequestStatus(&dump_buf);
             dumpPowerRailInfo(&dump_buf);
+            dumpThermalStats(&dump_buf);
             {
                 dump_buf << "getAIDLPowerHalInfo:" << std::endl;
                 dump_buf << " Exist: " << std::boolalpha << thermal_helper_.isAidlPowerHalExist()
