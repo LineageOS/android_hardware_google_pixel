@@ -99,6 +99,7 @@ message Atom {
       PcieLinkStatsReported pcie_link_stats = 105047;
     }
     // AOSP atom ID range ends at 109999
+    reserved 109999;
 }
 
 /* Supported reverse domain names. */
