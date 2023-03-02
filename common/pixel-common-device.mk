@@ -54,3 +54,7 @@ endif
 # Preopt SystemUI
 PRODUCT_DEXPREOPT_SPEED_APPS += \
     SystemUIGoogle
+
+# Virtual fingerprint HAL
+PRODUCT_PACKAGES_DEBUG += android.hardware.biometrics.fingerprint-service.example
+
