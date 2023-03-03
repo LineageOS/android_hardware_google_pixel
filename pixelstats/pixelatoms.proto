@@ -100,6 +100,7 @@ message Atom {
       VendorSensorCoolingDeviceStats vendor_sensor_cooling_device_stats = 105048;
     }
     // AOSP atom ID range ends at 109999
+    reserved 109999;
 }
 
 /* Supported reverse domain names. */
