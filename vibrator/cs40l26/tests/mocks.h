@@ -75,6 +75,19 @@ class MockCal : public ::aidl::android::hardware::vibrator::Vibrator::HwCal {
     bool getQ(std::string *value) { return getQ(*value); }
 };
 
+class MockStats : public ::aidl::android::hardware::vibrator::Vibrator::StatsApi {
+  public:
+    MOCK_METHOD0(destructor, void());
+    MOCK_METHOD1(logPrimitive, bool(uint16_t effectIndex));
+    MOCK_METHOD2(logWaveform, bool(uint16_t effectIndex, int32_t duration));
+    MOCK_METHOD1(logError, bool(uint16_t errorIndex));
+    MOCK_METHOD1(logLatencyStart, bool(uint16_t latencyIndex));
+    MOCK_METHOD0(logLatencyEnd, bool());
+    MOCK_METHOD1(debug, void(int fd));
+
+    ~MockStats() override { destructor(); };
+};
+
 class MockVibratorCallback : public aidl::android::hardware::vibrator::BnVibratorCallback {
   public:
     MOCK_METHOD(ndk::ScopedAStatus, onComplete, ());
