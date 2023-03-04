@@ -73,10 +73,7 @@ cc_binary {
     init_rc: ["android.hardware.vibrator-service.cs40l26.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l26.xml"],
     srcs: ["service.cpp"],
-    shared_libs: [
-        "android.hardware.vibrator-impl.cs40l26",
-        "PixelVibratorStats",
-    ],
+    shared_libs: ["android.hardware.vibrator-impl.cs40l26"],
     proprietary: true,
 }
 
@@ -86,10 +83,7 @@ cc_binary {
     init_rc: ["android.hardware.vibrator-service.cs40l26-dual.rc"],
     vintf_fragments: ["android.hardware.vibrator-service.cs40l26-dual.xml"],
     srcs: ["service.cpp"],
-    shared_libs: [
-        "android.hardware.vibrator-impl.cs40l26",
-        "PixelVibratorStats",
-    ],
+    shared_libs: ["android.hardware.vibrator-impl.cs40l26"],
     cflags: ["-DVIBRATOR_NAME=\"dual\""],
     proprietary: true,
 }
