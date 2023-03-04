@@ -23,6 +23,7 @@
 
 #include <future>
 
+#include "Stats.h"
 #include "Vibrator.h"
 #include "mocks.h"
 #include "types.h"
@@ -203,20 +204,24 @@ class VibratorTest : public Test {
         setenv("INPUT_EVENT_NAME", "CS40L26TestSuite", true);
         std::unique_ptr<MockApi> mockapi;
         std::unique_ptr<MockCal> mockcal;
+        std::unique_ptr<MockStats> mockstats;
 
-        createMock(&mockapi, &mockcal);
-        createVibrator(std::move(mockapi), std::move(mockcal));
+        createMock(&mockapi, &mockcal, &mockstats);
+        createVibrator(std::move(mockapi), std::move(mockcal), std::move(mockstats));
     }
 
     void TearDown() override { deleteVibrator(); }
 
   protected:
-    void createMock(std::unique_ptr<MockApi> *mockapi, std::unique_ptr<MockCal> *mockcal) {
+    void createMock(std::unique_ptr<MockApi> *mockapi, std::unique_ptr<MockCal> *mockcal,
+                    std::unique_ptr<MockStats> *mockstats) {
         *mockapi = std::make_unique<MockApi>();
         *mockcal = std::make_unique<MockCal>();
+        *mockstats = std::make_unique<MockStats>();
 
         mMockApi = mockapi->get();
         mMockCal = mockcal->get();
+        mMockStats = mockstats->get();
 
         ON_CALL(*mMockApi, destructor()).WillByDefault(Assign(&mMockApi, nullptr));
 
@@ -243,15 +248,22 @@ class VibratorTest : public Test {
         ON_CALL(*mMockCal, getLongVolLevels(_))
                 .WillByDefault(DoAll(SetArgPointee<0>(V_LONG_DEFAULT), Return(true)));
 
+        ON_CALL(*mMockStats, destructor()).WillByDefault(Assign(&mMockStats, nullptr));
+        ON_CALL(*mMockStats, logPrimitive(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockStats, logWaveform(_, _)).WillByDefault(Return(true));
+        ON_CALL(*mMockStats, logLatencyStart(_)).WillByDefault(Return(true));
+        ON_CALL(*mMockStats, logLatencyEnd()).WillByDefault(Return(true));
+
         relaxMock(false);
     }
 
     void createVibrator(std::unique_ptr<MockApi> mockapi, std::unique_ptr<MockCal> mockcal,
-                        bool relaxed = true) {
+                        std::unique_ptr<MockStats> mockstats, bool relaxed = true) {
         if (relaxed) {
             relaxMock(true);
         }
-        mVibrator = ndk::SharedRefBase::make<Vibrator>(std::move(mockapi), std::move(mockcal));
+        mVibrator = ndk::SharedRefBase::make<Vibrator>(std::move(mockapi), std::move(mockcal),
+                                                       std::move(mockstats));
         if (relaxed) {
             relaxMock(false);
         }
@@ -270,6 +282,7 @@ class VibratorTest : public Test {
 
         Mock::VerifyAndClearExpectations(mMockApi);
         Mock::VerifyAndClearExpectations(mMockCal);
+        Mock::VerifyAndClearExpectations(mMockStats);
 
         EXPECT_CALL(*mMockApi, destructor()).Times(times);
         EXPECT_CALL(*mMockApi, setF0(_)).Times(times);
@@ -305,11 +318,18 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockCal, isF0CompEnabled()).Times(times);
         EXPECT_CALL(*mMockCal, isRedcCompEnabled()).Times(times);
         EXPECT_CALL(*mMockCal, debug(_)).Times(times);
+
+        EXPECT_CALL(*mMockStats, destructor()).Times(times);
+        EXPECT_CALL(*mMockStats, logPrimitive(_)).Times(times);
+        EXPECT_CALL(*mMockStats, logWaveform(_, _)).Times(times);
+        EXPECT_CALL(*mMockStats, logLatencyStart(_)).Times(times);
+        EXPECT_CALL(*mMockStats, logLatencyEnd()).Times(times);
     }
 
   protected:
     MockApi *mMockApi;
     MockCal *mMockCal;
+    MockStats *mMockStats;
     std::shared_ptr<IVibrator> mVibrator;
     uint32_t mEffectIndex;
 };
@@ -317,6 +337,7 @@ class VibratorTest : public Test {
 TEST_F(VibratorTest, Constructor) {
     std::unique_ptr<MockApi> mockapi;
     std::unique_ptr<MockCal> mockcal;
+    std::unique_ptr<MockStats> mockstats;
     std::string f0Val = std::to_string(std::rand());
     std::string redcVal = std::to_string(std::rand());
     std::string qVal = std::to_string(std::rand());
@@ -327,10 +348,11 @@ TEST_F(VibratorTest, Constructor) {
 
     EXPECT_CALL(*mMockApi, destructor()).WillOnce(DoDefault());
     EXPECT_CALL(*mMockCal, destructor()).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockStats, destructor()).WillOnce(DoDefault());
 
     deleteVibrator(false);
 
-    createMock(&mockapi, &mockcal);
+    createMock(&mockapi, &mockcal, &mockstats);
 
     EXPECT_CALL(*mMockCal, getF0(_))
             .InSequence(f0Seq)
@@ -369,17 +391,22 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockApi, setMinOnOffInterval(MIN_ON_OFF_INTERVAL_US)).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, hasOwtFreeSpace()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).WillOnce(Return(true));
-    createVibrator(std::move(mockapi), std::move(mockcal), false);
+    createVibrator(std::move(mockapi), std::move(mockcal), std::move(mockstats), false);
 }
 
 TEST_F(VibratorTest, on) {
     Sequence s1, s2;
     uint16_t duration = std::rand() + 1;
 
+    EXPECT_CALL(*mMockStats, logLatencyStart(kWaveformEffectLatency))
+            .InSequence(s1, s2)
+            .WillOnce(DoDefault());
     EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE)).InSequence(s1).WillOnce(DoDefault());
+    EXPECT_CALL(*mMockStats, logWaveform(_, _)).InSequence(s1).WillOnce(DoDefault());
     EXPECT_CALL(*mMockApi, setFFEffect(_, duration + MAX_COLD_START_LATENCY_MS))
             .InSequence(s2)
             .WillOnce(DoDefault());
+    EXPECT_CALL(*mMockStats, logLatencyEnd()).InSequence(s1, s2).WillOnce(DoDefault());
     EXPECT_CALL(*mMockApi, setFFPlay(ON_EFFECT_INDEX, true))
             .InSequence(s1, s2)
             .WillOnce(DoDefault());
@@ -500,12 +527,16 @@ TEST_P(EffectsTest, perform) {
     ExpectationSet eSetup;
     Expectation eActivate, ePollHaptics, ePollStop, eEraseDone;
 
+    eSetup +=
+            EXPECT_CALL(*mMockStats, logLatencyStart(kPrebakedEffectLatency)).WillOnce(DoDefault());
+
     if (scale != EFFECT_SCALE.end()) {
         EffectIndex index = EFFECT_INDEX.at(effect);
         duration = EFFECT_DURATIONS[index];
 
         eSetup += EXPECT_CALL(*mMockApi, setFFGain(levelToScale(scale->second)))
                           .WillOnce(DoDefault());
+        eSetup += EXPECT_CALL(*mMockStats, logLatencyEnd()).WillOnce(DoDefault());
         eActivate =
                 EXPECT_CALL(*mMockApi, setFFPlay(index, true)).After(eSetup).WillOnce(DoDefault());
     } else if (queue != EFFECT_QUEUE.end()) {
@@ -517,6 +548,7 @@ TEST_P(EffectsTest, perform) {
         eSetup += EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _))
                           .After(eSetup)
                           .WillOnce(DoDefault());
+        eSetup += EXPECT_CALL(*mMockStats, logLatencyEnd()).After(eSetup).WillOnce(DoDefault());
         eActivate = EXPECT_CALL(*mMockApi, setFFPlay(WAVEFORM_COMPOSE, true))
                             .After(eSetup)
                             .WillOnce(DoDefault());
@@ -624,12 +656,18 @@ TEST_P(ComposeTest, compose) {
         return ndk::ScopedAStatus::ok();
     };
 
+    eSetup += EXPECT_CALL(*mMockStats, logLatencyStart(kCompositionEffectLatency))
+                      .WillOnce(DoDefault());
+    for (auto &primitive : composite) {
+        eSetup += EXPECT_CALL(*mMockStats, logPrimitive(_)).After(eSetup).WillOnce(DoDefault());
+    }
     eSetup +=
             EXPECT_CALL(*mMockApi, setFFGain(ON_GLOBAL_SCALE)).After(eSetup).WillOnce(DoDefault());
     eSetup += EXPECT_CALL(*mMockApi, getOwtFreeSpace(_)).WillOnce(DoDefault());
     eSetup += EXPECT_CALL(*mMockApi, uploadOwtEffect(_, _, _, _, _))
                       .After(eSetup)
                       .WillOnce(DoDefault());
+    eSetup += EXPECT_CALL(*mMockStats, logLatencyEnd()).WillOnce(DoDefault());
     eActivate = EXPECT_CALL(*mMockApi, setFFPlay(WAVEFORM_COMPOSE, true))
                         .After(eSetup)
                         .WillOnce(DoDefault());

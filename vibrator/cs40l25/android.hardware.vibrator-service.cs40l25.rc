@@ -75,4 +75,6 @@ service vendor.vibrator.cs40l25 /vendor/bin/hw/android.hardware.vibrator-service
         state
         "
 
+    setenv STATS_INSTANCE default
+
     disabled
