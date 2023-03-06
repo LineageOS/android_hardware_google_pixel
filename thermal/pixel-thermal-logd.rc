@@ -26,7 +26,7 @@ on property:persist.vendor.disable.bcl.control=*
 on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_ready=1
     # common
     stop vendor.thermal-engine
-    restart vendor.thermal-hal-2-0
+    restart vendor.thermal-hal
     # sdm845
     write /dev/thermal/tz-by-name/quiet-therm-adc/mode disabled
     write /dev/thermal/tz-by-name/quiet-therm-monitor/mode disabled
@@ -68,7 +68,7 @@ on property:vendor.disable.thermal.control=1 && property:vendor.thermal.link_rea
 on property:vendor.disable.thermal.control=0 && property:vendor.thermal.link_ready=1
     # common
     start vendor.thermal-engine
-    restart vendor.thermal-hal-2-0
+    restart vendor.thermal-hal
     # sdm845
     write /dev/thermal/tz-by-name/quiet-therm-adc/mode enabled
     write /dev/thermal/tz-by-name/quiet-therm-monitor/mode enabled
