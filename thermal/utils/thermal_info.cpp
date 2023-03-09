@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,26 +25,22 @@
 #include <cmath>
 #include <unordered_set>
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
 
 constexpr std::string_view kPowerLinkDisabledProperty("vendor.disable.thermal.powerlink");
-
-using ::android::hardware::hidl_enum_range;
-using ::android::hardware::thermal::V2_0::toString;
-using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
 
 namespace {
 
 template <typename T>
 // Return false when failed parsing
 bool getTypeFromString(std::string_view str, T *out) {
-    auto types = hidl_enum_range<T>();
+    auto types = ::ndk::enum_range<T>();
     for (const auto &type : types) {
-        if (toString(type) == str) {
+        if (::aidl::android::hardware::thermal::toString(type) == str) {
             *out = type;
             return true;
         }
@@ -134,7 +130,6 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
     *out = ret;
     return true;
 }
-
 }  // namespace
 
 template <typename T>
@@ -347,7 +342,7 @@ bool ParseBindedCdevInfo(const Json::Value &values,
         cdev_floor_with_power_link.fill(0);
 
         const bool power_link_disabled =
-                android::base::GetBoolProperty(kPowerLinkDisabledProperty.data(), false);
+                ::android::base::GetBoolProperty(kPowerLinkDisabledProperty.data(), false);
         if (!power_link_disabled) {
             power_rail = values[j]["BindedPowerRail"].asString();
 
@@ -406,6 +401,7 @@ bool ParseBindedCdevInfo(const Json::Value &values,
             binded_cdev_info_map->clear();
             return false;
         }
+
         (*binded_cdev_info_map)[cdev_name] = {
                 .limit_info = limit_info,
                 .power_thresholds = power_thresholds,
@@ -582,7 +578,7 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
 bool ParseSensorInfo(std::string_view config_path,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed) {
     std::string json_doc;
-    if (!android::base::ReadFileToString(config_path.data(), &json_doc)) {
+    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
         LOG(ERROR) << "Failed to read JSON config from " << config_path;
         return false;
     }
@@ -604,8 +600,7 @@ bool ParseSensorInfo(std::string_view config_path,
         const std::string &name = sensors[i]["Name"].asString();
         LOG(INFO) << "Sensor[" << i << "]'s Name: " << name;
         if (name.empty()) {
-            LOG(ERROR) << "Failed to read "
-                       << "Sensor[" << i << "]'s Name";
+            LOG(ERROR) << "Failed to read Sensor[" << i << "]'s Name";
             sensors_parsed->clear();
             return false;
         }
@@ -619,11 +614,10 @@ bool ParseSensorInfo(std::string_view config_path,
 
         std::string sensor_type_str = sensors[i]["Type"].asString();
         LOG(INFO) << "Sensor[" << name << "]'s Type: " << sensor_type_str;
-        TemperatureType_2_0 sensor_type;
+        TemperatureType sensor_type;
 
         if (!getTypeFromString(sensor_type_str, &sensor_type)) {
-            LOG(ERROR) << "Invalid "
-                       << "Sensor[" << name << "]'s Type: " << sensor_type_str;
+            LOG(ERROR) << "Invalid Sensor[" << name << "]'s Type: " << sensor_type_str;
             sensors_parsed->clear();
             return false;
         }
@@ -663,12 +657,12 @@ bool ParseSensorInfo(std::string_view config_path,
         hot_hysteresis.fill(0.0);
         std::array<float, kThrottlingSeverityCount> cold_hysteresis;
         cold_hysteresis.fill(0.0);
+
         Json::Value values = sensors[i]["HotThreshold"];
         if (!values.size()) {
             LOG(INFO) << "Sensor[" << name << "]'s HotThreshold, default all to NAN";
         } else if (values.size() != kThrottlingSeverityCount) {
-            LOG(ERROR) << "Invalid "
-                       << "Sensor[" << name << "]'s HotThreshold count:" << values.size();
+            LOG(ERROR) << "Invalid Sensor[" << name << "]'s HotThreshold count:" << values.size();
             sensors_parsed->clear();
             return false;
         } else {
@@ -694,16 +688,15 @@ bool ParseSensorInfo(std::string_view config_path,
         if (!values.size()) {
             LOG(INFO) << "Sensor[" << name << "]'s HotHysteresis, default all to 0.0";
         } else if (values.size() != kThrottlingSeverityCount) {
-            LOG(ERROR) << "Invalid "
-                       << "Sensor[" << name << "]'s HotHysteresis, count:" << values.size();
+            LOG(ERROR) << "Invalid Sensor[" << name << "]'s HotHysteresis, count:" << values.size();
             sensors_parsed->clear();
             return false;
         } else {
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
                 hot_hysteresis[j] = getFloatFromValue(values[j]);
                 if (std::isnan(hot_hysteresis[j])) {
-                    LOG(ERROR) << "Invalid "
-                               << "Sensor[" << name << "]'s HotHysteresis: " << hot_hysteresis[j];
+                    LOG(ERROR) << "Invalid Sensor[" << name
+                               << "]'s HotHysteresis: " << hot_hysteresis[j];
                     sensors_parsed->clear();
                     return false;
                 }
@@ -734,8 +727,7 @@ bool ParseSensorInfo(std::string_view config_path,
         if (!values.size()) {
             LOG(INFO) << "Sensor[" << name << "]'s ColdThreshold, default all to NAN";
         } else if (values.size() != kThrottlingSeverityCount) {
-            LOG(ERROR) << "Invalid "
-                       << "Sensor[" << name << "]'s ColdThreshold count:" << values.size();
+            LOG(ERROR) << "Invalid Sensor[" << name << "]'s ColdThreshold count:" << values.size();
             sensors_parsed->clear();
             return false;
         } else {
@@ -761,16 +753,15 @@ bool ParseSensorInfo(std::string_view config_path,
         if (!values.size()) {
             LOG(INFO) << "Sensor[" << name << "]'s ColdHysteresis, default all to 0.0";
         } else if (values.size() != kThrottlingSeverityCount) {
-            LOG(ERROR) << "Invalid "
-                       << "Sensor[" << name << "]'s ColdHysteresis count:" << values.size();
+            LOG(ERROR) << "Invalid Sensor[" << name << "]'s ColdHysteresis count:" << values.size();
             sensors_parsed->clear();
             return false;
         } else {
             for (Json::Value::ArrayIndex j = 0; j < kThrottlingSeverityCount; ++j) {
                 cold_hysteresis[j] = getFloatFromValue(values[j]);
                 if (std::isnan(cold_hysteresis[j])) {
-                    LOG(ERROR) << "Invalid "
-                               << "Sensor[" << name << "]'s ColdHysteresis: " << cold_hysteresis[j];
+                    LOG(ERROR) << "Invalid Sensor[" << name
+                               << "]'s ColdHysteresis: " << cold_hysteresis[j];
                     sensors_parsed->clear();
                     return false;
                 }
@@ -899,7 +890,7 @@ bool ParseSensorInfo(std::string_view config_path,
 bool ParseCoolingDevice(std::string_view config_path,
                         std::unordered_map<std::string, CdevInfo> *cooling_devices_parsed) {
     std::string json_doc;
-    if (!android::base::ReadFileToString(config_path.data(), &json_doc)) {
+    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
         LOG(ERROR) << "Failed to read JSON config from " << config_path;
         return false;
     }
@@ -921,8 +912,7 @@ bool ParseCoolingDevice(std::string_view config_path,
         const std::string &name = cooling_devices[i]["Name"].asString();
         LOG(INFO) << "CoolingDevice[" << i << "]'s Name: " << name;
         if (name.empty()) {
-            LOG(ERROR) << "Failed to read "
-                       << "CoolingDevice[" << i << "]'s Name";
+            LOG(ERROR) << "Failed to read CoolingDevice[" << i << "]'s Name";
             cooling_devices_parsed->clear();
             return false;
         }
@@ -939,8 +929,8 @@ bool ParseCoolingDevice(std::string_view config_path,
         CoolingType cooling_device_type;
 
         if (!getTypeFromString(cooling_device_type_str, &cooling_device_type)) {
-            LOG(ERROR) << "Invalid "
-                       << "CoolingDevice[" << name << "]'s Type: " << cooling_device_type_str;
+            LOG(ERROR) << "Invalid CoolingDevice[" << name
+                       << "]'s Type: " << cooling_device_type_str;
             cooling_devices_parsed->clear();
             return false;
         }
@@ -983,7 +973,7 @@ bool ParseCoolingDevice(std::string_view config_path,
 bool ParsePowerRailInfo(std::string_view config_path,
                         std::unordered_map<std::string, PowerRailInfo> *power_rails_parsed) {
     std::string json_doc;
-    if (!android::base::ReadFileToString(config_path.data(), &json_doc)) {
+    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
         LOG(ERROR) << "Failed to read JSON config from " << config_path;
         return false;
     }
@@ -1005,8 +995,7 @@ bool ParsePowerRailInfo(std::string_view config_path,
         const std::string &name = power_rails[i]["Name"].asString();
         LOG(INFO) << "PowerRail[" << i << "]'s Name: " << name;
         if (name.empty()) {
-            LOG(ERROR) << "Failed to read "
-                       << "PowerRail[" << i << "]'s Name";
+            LOG(ERROR) << "Failed to read PowerRail[" << i << "]'s Name";
             power_rails_parsed->clear();
             return false;
         }
@@ -1124,7 +1113,7 @@ bool ParsePowerRailInfo(std::string_view config_path,
 }
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
