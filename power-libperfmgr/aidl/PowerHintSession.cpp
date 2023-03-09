@@ -174,7 +174,7 @@ void PowerHintSession::tryToSendPowerHint(std::string hint) {
     if (!mSupportedHints[hint].has_value()) {
         mSupportedHints[hint] = HintManager::GetInstance()->IsHintSupported(hint);
     }
-    if (mSupportedHints[hint]) {
+    if (mSupportedHints[hint].value()) {
         HintManager::GetInstance()->DoHint(hint);
     }
 }
