@@ -79,10 +79,11 @@ class ThermalStatsHelper {
      *  >0, count represents the number of stats failed to report.
      */
     int reportStats();
-    void updateSensorStats(std::string_view sensor, const SensorInfo &sensor_info,
+    void updateSensorStats(std::string_view sensor,
+                           const std::shared_ptr<StatsInfo<float>> &stats_info,
                            const Temperature &t);
     void updateBindedCdevStats(std::string_view trigger_sensor, std::string_view cdev,
-                               const BindedCdevInfo &binded_cdev_info, int new_state);
+                               const std::shared_ptr<StatsInfo<int>> &stats_info, int new_state);
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
     std::unordered_map<std::string, ThermalStats> GetSensorThermalStatsSnapshot();
     // Get a snapshot of Thermal Stats Sensor Map till that point in time

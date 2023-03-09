@@ -300,7 +300,7 @@ bool ThermalHelper::readTemperature(
             sensor_log << sensor_log_pair.first << ":" << sensor_log_pair.second << " ";
         }
         // Update sensor temperature time in state
-        thermal_stats_helper_.updateSensorStats(sensor_name, sensor_info, *out);
+        thermal_stats_helper_.updateSensorStats(sensor_name, sensor_info.stats_info, *out);
         LOG(INFO) << sensor_name.data() << ":" << out->value << " raw data: " << sensor_log.str();
     }
     return true;

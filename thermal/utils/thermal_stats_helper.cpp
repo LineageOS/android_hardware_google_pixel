@@ -48,6 +48,11 @@ std::shared_ptr<IStats> getStatsService() {
     });
     return stats_client;
 }
+
+template <typename T>
+static bool isRecordStats(const std::shared_ptr<StatsInfo<T>> &stats_info) {
+    return stats_info != nullptr && stats_info->record_stats;
+}
 }  // namespace
 
 bool ThermalStatsHelper::initializeStats(
@@ -66,11 +71,12 @@ bool ThermalStatsHelper::initializeSensorStats(
         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_) {
     std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_temp_map_mutex_);
     for (const auto &name_info_pair : sensor_info_map_) {
-        if (name_info_pair.second.is_watch) {
+        auto &sensor_info = name_info_pair.second;
+        if (isRecordStats(sensor_info.stats_info)) {
             const size_t time_in_state_size =
-                    name_info_pair.second.stats_threshold.empty()
+                    sensor_info.stats_info->stats_threshold.empty()
                             ? kThrottlingSeverityCount  // if default, use severity as bucket
-                            : (name_info_pair.second.stats_threshold.size() + 1);
+                            : (sensor_info.stats_info->stats_threshold.size() + 1);
             thermal_stats_sensor_temp_map_[name_info_pair.first] = ThermalStats(time_in_state_size);
             LOG(INFO) << "Thermal Sensor stats initialized for sensor: " << name_info_pair.first;
         }
@@ -85,11 +91,12 @@ bool ThermalStatsHelper::initializeBindedCdevStats(
     for (const auto &sensor_info_pair : sensor_info_map_) {
         for (const auto &binded_cdev_info_pair :
              sensor_info_pair.second.throttling_info->binded_cdev_info_map) {
-            LOG(VERBOSE) << "Initializing stats for sensor: " << sensor_info_pair.first << " "
-                         << binded_cdev_info_pair.first;
+            if (!isRecordStats(binded_cdev_info_pair.second.stats_info)) {
+                continue;
+            }
             const auto &max_state =
                     cooling_device_info_map_.at(binded_cdev_info_pair.first).max_state;
-            const auto &stats_threshold = binded_cdev_info_pair.second.stats_threshold;
+            const auto &stats_threshold = binded_cdev_info_pair.second.stats_info->stats_threshold;
             size_t time_in_state_size;
             // if default, use each state as bucket
             if (stats_threshold.empty()) {
@@ -116,32 +123,36 @@ bool ThermalStatsHelper::initializeBindedCdevStats(
     return true;
 }
 
-void ThermalStatsHelper::updateStats(ThermalStats *thermal_stats_info, int new_state) {
+void ThermalStatsHelper::updateStats(ThermalStats *thermal_stats, int new_state) {
     const auto now = boot_clock::now();
     const auto prev_state_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - thermal_stats_info->prev_update_time);
+            now - thermal_stats->prev_update_time);
     LOG(VERBOSE) << "Adding duration " << prev_state_duration.count()
-                 << " for prev_state: " << thermal_stats_info->prev_state << " with value: "
-                 << thermal_stats_info->time_in_state_ms[thermal_stats_info->prev_state].count();
+                 << " for prev_state: " << thermal_stats->prev_state << " with value: "
+                 << thermal_stats->time_in_state_ms[thermal_stats->prev_state].count();
     // Update last record end time
-    thermal_stats_info->time_in_state_ms[thermal_stats_info->prev_state] += prev_state_duration;
-    thermal_stats_info->prev_update_time = now;
-    thermal_stats_info->prev_state = new_state;
+    thermal_stats->time_in_state_ms[thermal_stats->prev_state] += prev_state_duration;
+    thermal_stats->prev_update_time = now;
+    thermal_stats->prev_state = new_state;
 }
 
-void ThermalStatsHelper::closePrevStateStat(ThermalStats *thermal_stats_info) {
+void ThermalStatsHelper::closePrevStateStat(ThermalStats *thermal_stats) {
     // updateStats will close last state stat and update time_in_state
     // use prev_state as the new state to continue recording same state
-    updateStats(thermal_stats_info, thermal_stats_info->prev_state);
+    updateStats(thermal_stats, thermal_stats->prev_state);
 }
 
-void ThermalStatsHelper::updateSensorStats(std::string_view sensor, const SensorInfo &sensor_info,
+void ThermalStatsHelper::updateSensorStats(std::string_view sensor,
+                                           const std::shared_ptr<StatsInfo<float>> &stats_info,
                                            const Temperature_2_0 &t) {
+    if (!isRecordStats(stats_info)) {
+        return;
+    }
     int new_value;
-    if (sensor_info.stats_threshold.empty()) {
+    if (stats_info->stats_threshold.empty()) {
         new_value = static_cast<int>(t.throttlingStatus);
     } else {
-        const auto &thresholds = sensor_info.stats_threshold;
+        const auto &thresholds = stats_info->stats_threshold;
         auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), t.value);
         new_value = (threshold_idx - thresholds.begin());
     }
@@ -154,10 +165,13 @@ void ThermalStatsHelper::updateSensorStats(std::string_view sensor, const Sensor
 
 void ThermalStatsHelper::updateBindedCdevStats(std::string_view trigger_sensor,
                                                std::string_view cdev,
-                                               const BindedCdevInfo &binded_cdev_info,
+                                               const std::shared_ptr<StatsInfo<int>> &stats_info,
                                                int new_value) {
-    if (!binded_cdev_info.stats_threshold.empty()) {
-        const auto &thresholds = binded_cdev_info.stats_threshold;
+    if (!isRecordStats(stats_info)) {
+        return;
+    }
+    if (!stats_info->stats_threshold.empty()) {
+        const auto &thresholds = stats_info->stats_threshold;
         auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), new_value);
         new_value = (threshold_idx - thresholds.begin());
     }
