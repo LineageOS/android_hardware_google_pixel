@@ -40,12 +40,22 @@ constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::millisec
 // Max number of time_in_state buckets is 20 in atoms
 // VendorSensorCoolingDeviceStats, VendorTempResidencyStats
 constexpr size_t kMaxStatsThresholdCount = 19;
+constexpr bool kIsDefaultEnableBindedCdevStats = true;
+constexpr bool kIsDefaultEnableSensorStats = false;
 
 enum FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
     WEIGHTED_AVG,
     MAXIMUM,
     MINIMUM,
+};
+
+template <typename T>
+struct StatsInfo {
+    // The flag to indicate if stats to be recorded
+    bool record_stats;
+    // List of upper_bounds of buckets into which to split state requests.
+    std::vector<T> stats_threshold;
 };
 
 struct VirtualSensorInfo {
@@ -82,13 +92,11 @@ struct BindedCdevInfo {
     int max_throttle_step;
     CdevArray cdev_floor_with_power_link;
     std::string power_rail;
-    // List of upper_bounds of buckets into which to split state requests. If not present use each
-    // state as bucket
-    std::vector<int> stats_threshold;
     // The flag for activate release logic when power is higher than power threshold
     bool high_power_check;
     // The flag for only triggering throttling until all power samples are collected
     bool throttling_with_power_link;
+    std::shared_ptr<StatsInfo<int>> stats_info;
 };
 
 struct ThrottlingInfo {
@@ -125,9 +133,7 @@ struct SensorInfo {
     bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::shared_ptr<ThrottlingInfo> throttling_info;
-    // List of bounds of buckets (inclusive) into which to split temperature. If not present use
-    // severity as bucket.
-    std::vector<float> stats_threshold;
+    std::shared_ptr<StatsInfo<float>> stats_info;
 };
 
 struct CdevInfo {
