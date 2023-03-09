@@ -88,9 +88,9 @@ UsbOverheatEvent::UsbOverheatEvent(const ZoneInfo &monitored_zone,
         abort();
     }
 
-    epoll_fd_ = move(epollFd);
-    timer_fd_ = move(timerFd);
-    event_fd_ = move(eventFd);
+    epoll_fd_ = std::move(epollFd);
+    timer_fd_ = std::move(timerFd);
+    event_fd_ = std::move(eventFd);
 
     monitor_ = unique_ptr<thread>(new thread(this->monitorThread, this));
     registerListener();
