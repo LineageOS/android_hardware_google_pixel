@@ -33,6 +33,7 @@
 #include "utils/powerhal_helper.h"
 #include "utils/thermal_files.h"
 #include "utils/thermal_info.h"
+#include "utils/thermal_stats_helper.h"
 #include "utils/thermal_throttling.h"
 #include "utils/thermal_watcher.h"
 
@@ -119,6 +120,17 @@ class ThermalHelper {
     const std::unordered_map<std::string, PowerStatus> &GetPowerStatusMap() const {
         return power_files_.GetPowerStatusMap();
     }
+
+    // Get Thermal Stats Sensor Map
+    const std::unordered_map<std::string, ThermalStats> GetSensorThermalStatsSnapshot() {
+        return thermal_stats_helper_.GetSensorThermalStatsSnapshot();
+    }
+    // Get Thermal Stats Sensor, Binded Cdev State Request Map
+    const std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats>>
+    GetBindedCdevThermalStatsSnapshot() {
+        return thermal_stats_helper_.GetBindedCdevThermalStatsSnapshot();
+    }
+
     void sendPowerExtHint(const Temperature &t);
     bool isAidlPowerHalExist() { return power_hal_service_.isAidlPowerHalExist(); }
     bool isPowerHalConnected() { return power_hal_service_.isPowerHalConnected(); }
@@ -158,6 +170,7 @@ class ThermalHelper {
     std::unordered_map<std::string, std::unordered_map<ThrottlingSeverity, ThrottlingSeverity>>
             supported_powerhint_map_;
     PowerHalService power_hal_service_;
+    ThermalStatsHelper thermal_stats_helper_;
 
     mutable std::shared_mutex sensor_status_map_mutex_;
     std::unordered_map<std::string, SensorStatus> sensor_status_map_;

@@ -37,12 +37,25 @@ using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverit
 using CdevArray = std::array<int, static_cast<size_t>(kThrottlingSeverityCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
 constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
+// Max number of time_in_state buckets is 20 in atoms
+// VendorSensorCoolingDeviceStats, VendorTempResidencyStats
+constexpr size_t kMaxStatsThresholdCount = 19;
+constexpr bool kIsDefaultEnableBindedCdevStats = true;
+constexpr bool kIsDefaultEnableSensorStats = false;
 
 enum FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
     WEIGHTED_AVG,
     MAXIMUM,
     MINIMUM,
+};
+
+template <typename T>
+struct StatsInfo {
+    // The flag to indicate if stats to be recorded
+    bool record_stats;
+    // List of upper_bounds of buckets into which to split state requests.
+    std::vector<T> stats_threshold;
 };
 
 struct VirtualSensorInfo {
@@ -83,6 +96,7 @@ struct BindedCdevInfo {
     bool high_power_check;
     // The flag for only triggering throttling until all power samples are collected
     bool throttling_with_power_link;
+    std::shared_ptr<StatsInfo<int>> stats_info;
 };
 
 struct ThrottlingInfo {
@@ -119,6 +133,7 @@ struct SensorInfo {
     bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::shared_ptr<ThrottlingInfo> throttling_info;
+    std::shared_ptr<StatsInfo<float>> stats_info;
 };
 
 struct CdevInfo {
@@ -136,6 +151,7 @@ struct PowerRailInfo {
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
 };
 
+// ToDo: combine each parser into one single call to avoid parsing same config_path multiple times.
 bool ParseSensorInfo(std::string_view config_path,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed);
 bool ParseCoolingDevice(std::string_view config_path,
