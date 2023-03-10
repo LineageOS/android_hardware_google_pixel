@@ -22,6 +22,7 @@ cc_binary {
     "utils/thermal_files.cpp",
     "utils/power_files.cpp",
     "utils/powerhal_helper.cpp",
+    "utils/thermal_stats_helper.cpp",
     "utils/thermal_watcher.cpp",
   ],
   shared_libs: [
@@ -32,10 +33,19 @@ cc_binary {
     "libutils",
     "libnl",
     "libbinder_ndk",
+    "android.frameworks.stats-V1-ndk",
     "android.hardware.thermal@1.0",
     "android.hardware.thermal@2.0",
     "android.hardware.power-V1-ndk",
-    "pixel-power-ext-V1-ndk"
+    "pixel-power-ext-V1-ndk",
+    "pixelatoms-cpp",
+  ],
+  static_libs: [
+    "libpixelstats",
+  ],
+  export_shared_lib_headers: [
+    "android.frameworks.stats-V1-ndk",
+    "pixelatoms-cpp",
   ],
   cflags: [
     "-Wall",
@@ -67,6 +77,7 @@ cc_binary {
     "aidl/utils/thermal_files.cpp",
     "aidl/utils/power_files.cpp",
     "aidl/utils/powerhal_helper.cpp",
+    "aidl/utils/thermal_stats_helper.cpp",
     "aidl/utils/thermal_watcher.cpp",
   ],
   vendor: true,
@@ -84,10 +95,19 @@ cc_binary {
     "libutils",
     "libnl",
     "libbinder_ndk",
+     "android.frameworks.stats-V1-ndk",
     "android.hardware.power-V1-ndk",
     "android.hardware.thermal-V1-ndk",
-    "pixel-power-ext-V1-ndk"
-  ],
+    "pixel-power-ext-V1-ndk",
+                                "pixelatoms-cpp",
+                              ],
+                              static_libs: [
+                                "libpixelstats",
+                              ],
+                              export_shared_lib_headers: [
+                                "android.frameworks.stats-V1-ndk",
+                                "pixelatoms-cpp",
+                              ],
   cflags: [
     "-Wall",
     "-Werror",

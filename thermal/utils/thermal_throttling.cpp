@@ -427,7 +427,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
                 if (binded_cdev_info_pair.second.max_release_step !=
                             std::numeric_limits<int>::max() &&
-                    cdev_power_adjustment > 0) {
+                    (power_data_invalid || cdev_power_adjustment > 0)) {
                     auto target_state =
                             std::max(curr_state - binded_cdev_info_pair.second.max_release_step, 0);
                     cdev_power_budget =
@@ -436,7 +436,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
                 if (binded_cdev_info_pair.second.max_throttle_step !=
                             std::numeric_limits<int>::max() &&
-                    cdev_power_adjustment < 0) {
+                    (power_data_invalid || cdev_power_adjustment < 0)) {
                     auto target_state =
                             std::min(curr_state + binded_cdev_info_pair.second.max_throttle_step,
                                      cdev_info.max_state);
@@ -641,8 +641,8 @@ void ThermalThrottling::thermalThrottlingUpdate(
 
 void ThermalThrottling::computeCoolingDevicesRequest(
         std::string_view sensor_name, const SensorInfo &sensor_info,
-        const ThrottlingSeverity curr_severity,
-        std::vector<std::string> *cooling_devices_to_update) {
+        const ThrottlingSeverity curr_severity, std::vector<std::string> *cooling_devices_to_update,
+        ThermalStatsHelper *thermal_stats_helper) {
     int release_step = 0;
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
 
@@ -707,6 +707,10 @@ void ThermalThrottling::computeCoolingDevicesRequest(
         if (cdev_request_pair.second != request_state) {
             cdev_request_pair.second = request_state;
             cooling_devices_to_update->emplace_back(cdev_request_pair.first);
+            // Update sensor cdev request time in state
+            thermal_stats_helper->updateBindedCdevStats(sensor_name, cdev_request_pair.first,
+                                                        binded_cdev_info.stats_info,
+                                                        cdev_request_pair.second);
         }
     }
 }
