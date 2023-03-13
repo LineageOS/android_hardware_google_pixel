@@ -119,6 +119,7 @@ class SysfsCollector {
     void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
     void logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client);
     void logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client);
+    void logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_client);
     void logPcieLinkStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;

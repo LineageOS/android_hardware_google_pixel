@@ -29,6 +29,7 @@
 
 #include <mntent.h>
 #include <sys/timerfd.h>
+#include <sys/vfs.h>
 #include <cinttypes>
 #include <string>
 
@@ -54,6 +55,7 @@ using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::PartitionsUsedSpaceReported;
 using android::hardware::google::pixel::PixelAtoms::PcieLinkStatsReported;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
@@ -1360,6 +1362,35 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
         ALOGE("Unable to report kVendorLongIRQStatsReported to Stats service");
 }
 
+void SysfsCollector::logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_client) {
+    struct statfs fs_info;
+    char path[] = "/mnt/vendor/persist";
+
+    if (statfs(path, &fs_info) == -1) {
+        ALOGE("statfs: %s", strerror(errno));
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(3);
+    values[PartitionsUsedSpaceReported::kDirectoryFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::intValue>
+                        (PixelAtoms::PartitionsUsedSpaceReported::PERSIST);
+    values[PartitionsUsedSpaceReported::kFreeBytesFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_bfree);
+    values[PartitionsUsedSpaceReported::kTotalBytesFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_blocks);
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kPartitionUsedSpaceReported,
+                        .values = std::move(values)};
+
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report Partitions Used Space Reported to stats service");
+    }
+}
+
 void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_client) {
     struct sysfs_map {
         const char *sysfs_path;
@@ -1508,6 +1539,7 @@ void SysfsCollector::logPerDay() {
     logTempResidencyStats(stats_client);
     logVendorLongIRQStatsReported(stats_client);
     logVendorResumeLatencyStats(stats_client);
+    logPartitionUsedSpace(stats_client);
     logPcieLinkStats(stats_client);
 }
 
