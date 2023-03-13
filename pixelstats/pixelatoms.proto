@@ -98,6 +98,10 @@ message Atom {
       BrownoutDetected brownout_detected = 105046;
       PcieLinkStatsReported pcie_link_stats = 105047;
       VendorSensorCoolingDeviceStats vendor_sensor_cooling_device_stats = 105048;
+
+      VibratorPlaycountReported vibrator_playcount_reported = 105049;
+      VibratorLatencyReported vibrator_latency_reported = 105050;
+      VibratorErrorsReported vibrator_errors_reported = 105051;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1610,4 +1614,76 @@ message VendorSensorCoolingDeviceStats {
  optional int64 time_in_state_ms_bucket_18 = 22;
  optional int64 time_in_state_ms_bucket_19 = 23;
  optional int64 time_in_state_ms_bucket_20 = 24;
+}
+
+/* Log playcount of effects in Vibrator HAL
+ *
+ * Logged from:
+ *     hardware/google/pixel/vibrator/
+ */
+message VibratorPlaycountReported {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // Playcount for each primitive
+  // Each index tracks the count for that index in the waveform
+  repeated int32 waveform_counts = 2;
+
+  // Playcount for each 50ms range.
+  // Each index tracks [50ms * i, 50ms * (i + 1))
+  repeated int32 duration_counts = 3;
+}
+
+/* Log latency encountered in Vibrator HAL
+ *
+ * Logged from:
+ *     hardware/google/pixel/vibrator/
+ */
+message VibratorLatencyReported {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // Minimum latency seen
+  // 0 Prebaked and primitives
+  // 1 Composed effects
+  // 2 PWLE effects
+  repeated int32 min_latencies = 2;
+
+  // Maximum latency seen
+  // 0 Prebaked and primitives
+  // 1 Composed effects
+  // 2 PWLE effects
+  repeated int32 max_latencies = 3;
+
+  // Average latency seen
+  // 0 Prebaked and primitives
+  // 1 Composed effects
+  // 2 PWLE effects
+  repeated int32 avg_latencies = 4;
+}
+
+/* Log errors encountered in Vibrator HAL
+ *
+ * Logged from:
+ *     hardware/google/pixel/vibrator/
+ */
+message VibratorErrorsReported {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // Count for each error
+  // 0 HwAPI Error
+  // 1 HwCAL Error
+  // 2 Compose Fail Error
+  // 3 ALSA Fail Error
+  // 4 Async Fail Error
+  // 5 Bad Timeout Error
+  // 6 Bad Amplitude Error
+  // 7 Bad Effect Error
+  // 8 Bad Effect Strength Error
+  // 9 Bad Primitive Error
+  // 10 Bad Composite Error
+  // 11 PWLE Construction Fail Error
+  // 12 Unsupported Method Error
+  repeated int32 error_counts = 2;
 }
