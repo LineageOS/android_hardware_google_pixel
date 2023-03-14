@@ -23,14 +23,14 @@
 #include <algorithm>
 #include <string_view>
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
 
 using aidl::android::frameworks::stats::VendorAtom;
-namespace PixelAtoms = android::hardware::google::pixel::PixelAtoms;
+namespace PixelAtoms = ::android::hardware::google::pixel::PixelAtoms;
 
 namespace {
 static std::shared_ptr<IStats> stats_client = nullptr;
@@ -144,7 +144,7 @@ void ThermalStatsHelper::closePrevStateStat(ThermalStats *thermal_stats) {
 
 void ThermalStatsHelper::updateSensorStats(std::string_view sensor,
                                            const std::shared_ptr<StatsInfo<float>> &stats_info,
-                                           const Temperature_2_0 &t) {
+                                           const Temperature &t) {
     if (!isRecordStats(stats_info)) {
         return;
     }
@@ -327,7 +327,7 @@ ThermalStatsHelper::GetBindedCdevThermalStatsSnapshot() {
 }
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
