@@ -24,6 +24,7 @@
 #include "BatteryHealthReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
+#include "TempResidencyReporter.h"
 #include "ThermalStatsReporter.h"
 
 namespace android {
@@ -64,6 +65,10 @@ class SysfsCollector {
         const int BlockStatsLength;
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
+        const char *const CCARatePath;
+        const char *const TempResidencyPath;
+        const char *const LongIRQMetricsPath;
+        const char *const ResumeLatencyMetricsPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -99,10 +104,13 @@ class SysfsCollector {
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
+    void logTempResidencyStats(const std::shared_ptr<IStats> &stats_client);
     void reportZramMmStat(const std::shared_ptr<IStats> &stats_client);
     void reportZramBdStat(const std::shared_ptr<IStats> &stats_client);
     int getReclaimedSegments(const std::string &mode);
     void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
+    void logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client);
+    void logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -130,13 +138,17 @@ class SysfsCollector {
     const int kBlockStatsLength;
     const char *const kAmsRatePath;
     const std::vector<std::string> kThermalStatsPaths;
+    const char *const kCCARatePath;
+    const char *const kTempResidencyPath;
+    const char *const kLongIRQMetricsPath;
+    const char *const kResumeLatencyMetricsPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
     ThermalStatsReporter thermal_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
-
+    TempResidencyReporter temp_residency_reporter_;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
     // -2.
@@ -144,6 +156,17 @@ class SysfsCollector {
 
     bool log_once_reported = false;
     int64_t prev_huge_pages_since_boot_ = -1;
+
+    struct perf_metrics_data {
+        int64_t softirq_count;
+        int64_t irq_count;
+        uint64_t resume_latency_sum_ms;
+        int64_t resume_count;
+        std::vector<int64_t> resume_latency_buckets;
+        int bucket_cnt;
+    };
+    struct perf_metrics_data prev_data;
+    const int kMaxResumeLatencyBuckets = 36;
 };
 
 }  // namespace pixel

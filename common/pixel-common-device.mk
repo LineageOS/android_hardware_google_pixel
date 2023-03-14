@@ -21,6 +21,14 @@ PRODUCT_PACKAGES += \
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
 
 # Pixel Experience
+
+ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
+ifeq (,$(filter aosp_%,$(TARGET_PRODUCT)))
+PRODUCT_PACKAGES_DEBUG += wifi_diagnostic
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_diagnostic
+endif
+endif
+
 PRODUCT_PACKAGES_DEBUG += wifi_sniffer
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
 
