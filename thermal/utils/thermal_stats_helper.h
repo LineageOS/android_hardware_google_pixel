@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aidl/android/frameworks/stats/IStats.h>
+#include <aidl/android/hardware/thermal/Temperature.h>
 #include <android-base/chrono_utils.h>
 
 #include <chrono>
@@ -25,19 +26,17 @@
 #include <unordered_map>
 #include <vector>
 
-#include "utils/thermal_info.h"
+#include "thermal_info.h"
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
 
 using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtomValue;
-using android::base::boot_clock;
-using Temperature_2_0 = ::android::hardware::thermal::V2_0::Temperature;
-using android::hardware::thermal::V2_0::ThrottlingSeverity;
+using ::android::base::boot_clock;
 
 constexpr int kMaxStatsReportingFailCount = 3;
 
@@ -82,7 +81,7 @@ class ThermalStatsHelper {
     int reportStats();
     void updateSensorStats(std::string_view sensor,
                            const std::shared_ptr<StatsInfo<float>> &stats_info,
-                           const Temperature_2_0 &t);
+                           const Temperature &t);
     void updateBindedCdevStats(std::string_view trigger_sensor, std::string_view cdev,
                                const std::shared_ptr<StatsInfo<int>> &stats_info, int new_state);
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
@@ -118,7 +117,7 @@ class ThermalStatsHelper {
 };
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl

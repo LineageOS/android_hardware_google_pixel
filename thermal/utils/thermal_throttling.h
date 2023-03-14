@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <android/hardware/thermal/2.0/IThermal.h>
+#include <aidl/android/hardware/thermal/Temperature.h>
 
 #include <queue>
 #include <shared_mutex>
@@ -28,17 +28,11 @@
 #include "thermal_info.h"
 #include "thermal_stats_helper.h"
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
-
-using ::android::hardware::hidl_vec;
-using ::android::hardware::thermal::V2_0::IThermal;
-using Temperature_2_0 = ::android::hardware::thermal::V2_0::Temperature;
-using ::android::hardware::thermal::V2_0::TemperatureThreshold;
-using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
 
 struct ThermalThrottlingStatus {
     std::unordered_map<std::string, int> pid_power_budget_map;
@@ -83,7 +77,7 @@ class ThermalThrottling {
     }
     // Update thermal throttling request for the specific sensor
     void thermalThrottlingUpdate(
-            const Temperature_2_0 &temp, const SensorInfo &sensor_info,
+            const Temperature &temp, const SensorInfo &sensor_info,
             const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
             const std::unordered_map<std::string, PowerStatus> &power_status_map,
             const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map);
@@ -96,7 +90,7 @@ class ThermalThrottling {
 
   private:
     // PID algo - get the total power budget
-    float updatePowerBudget(const Temperature_2_0 &temp, const SensorInfo &sensor_info,
+    float updatePowerBudget(const Temperature &temp, const SensorInfo &sensor_info,
                             std::chrono::milliseconds time_elapsed_ms,
                             ThrottlingSeverity curr_severity);
 
@@ -108,7 +102,7 @@ class ThermalThrottling {
 
     // PID algo - allocate the power to target CDEV according to the ODPM
     bool allocatePowerToCdev(
-            const Temperature_2_0 &temp, const SensorInfo &sensor_info,
+            const Temperature &temp, const SensorInfo &sensor_info,
             const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
             const std::unordered_map<std::string, PowerStatus> &power_status_map,
             const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map);
@@ -130,11 +124,10 @@ class ThermalThrottling {
     mutable std::shared_mutex thermal_throttling_status_map_mutex_;
     // Thermal throttling status from each sensor
     std::unordered_map<std::string, ThermalThrottlingStatus> thermal_throttling_status_map_;
-    std::vector<std::string> cooling_devices_to_update;
 };
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl

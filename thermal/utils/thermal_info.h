@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,23 @@
 
 #pragma once
 
-#include <android/hardware/thermal/2.0/IThermal.h>
+#include <aidl/android/hardware/thermal/CoolingType.h>
+#include <aidl/android/hardware/thermal/TemperatureType.h>
+#include <aidl/android/hardware/thermal/ThrottlingSeverity.h>
 
+#include <chrono>
 #include <string>
 #include <unordered_map>
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
 
-using ::android::hardware::hidl_enum_range;
-using CoolingType_2_0 = ::android::hardware::thermal::V2_0::CoolingType;
-using TemperatureType_2_0 = ::android::hardware::thermal::V2_0::TemperatureType;
-using ::android::hardware::thermal::V2_0::ThrottlingSeverity;
-constexpr size_t kThrottlingSeverityCount = std::distance(
-        hidl_enum_range<ThrottlingSeverity>().begin(), hidl_enum_range<ThrottlingSeverity>().end());
+constexpr size_t kThrottlingSeverityCount =
+        std::distance(::ndk::enum_range<ThrottlingSeverity>().begin(),
+                      ::ndk::enum_range<ThrottlingSeverity>().end());
 using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverityCount)>;
 using CdevArray = std::array<int, static_cast<size_t>(kThrottlingSeverityCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
@@ -116,7 +116,7 @@ struct ThrottlingInfo {
 };
 
 struct SensorInfo {
-    TemperatureType_2_0 type;
+    TemperatureType type;
     ThrottlingArray hot_thresholds;
     ThrottlingArray cold_thresholds;
     ThrottlingArray hot_hysteresis;
@@ -137,7 +137,7 @@ struct SensorInfo {
 };
 
 struct CdevInfo {
-    CoolingType_2_0 type;
+    CoolingType type;
     std::string read_path;
     std::string write_path;
     std::vector<float> state2power;
@@ -151,7 +151,6 @@ struct PowerRailInfo {
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
 };
 
-// ToDo: combine each parser into one single call to avoid parsing same config_path multiple times.
 bool ParseSensorInfo(std::string_view config_path,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed);
 bool ParseCoolingDevice(std::string_view config_path,
@@ -160,7 +159,7 @@ bool ParsePowerRailInfo(std::string_view config_path,
                         std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
