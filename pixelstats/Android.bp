@@ -104,6 +104,7 @@ cc_library {
     "StatsHelper.cpp",
     "SysfsCollector.cpp",
     "ThermalStatsReporter.cpp",
+    "TempResidencyReporter.cpp",
     "UeventListener.cpp",
     "WirelessChargeStats.cpp",
   ],

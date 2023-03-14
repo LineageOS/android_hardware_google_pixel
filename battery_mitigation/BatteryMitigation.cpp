@@ -16,6 +16,10 @@
 
 #include <battery_mitigation/BatteryMitigation.h>
 
+#include <sstream>
+
+#define MAX_BROWNOUT_DATA_AGE_SECONDS 300
+
 namespace android {
 namespace hardware {
 namespace google {
@@ -24,6 +28,37 @@ namespace pixel {
 BatteryMitigation::BatteryMitigation(const struct MitigationConfig::Config &cfg) {
         mThermalMgr = &MitigationThermalManager::getInstance();
         mThermalMgr->updateConfig(cfg);
+}
+
+bool BatteryMitigation::isMitigationLogTimeValid(std::chrono::system_clock::time_point startTime,
+                                                 const char *const logFilePath,
+                                                 const char *const timestampFormat,
+                                                 const std::regex pattern) {
+    std::string logFile;
+    if (!android::base::ReadFileToString(logFilePath, &logFile)) {
+        return false;
+    }
+    std::istringstream content(logFile);
+    std::string line;
+    int counter = 0;
+    std::smatch pattern_match;
+    while (std::getline(content, line)) {
+        if (std::regex_match(line, pattern_match, pattern)) {
+            std::tm triggeredTimestamp = {};
+            std::istringstream ss(pattern_match.str());
+            ss >> std::get_time(&triggeredTimestamp, timestampFormat);
+            auto logFileTime = std::chrono::system_clock::from_time_t(mktime(&triggeredTimestamp));
+            auto delta = std::chrono::duration_cast<std::chrono::seconds>(startTime - logFileTime);
+            if ((delta.count() < MAX_BROWNOUT_DATA_AGE_SECONDS) && (delta.count() > 0)) {
+                return true;
+            }
+        }
+        counter += 1;
+        if (counter > 5) {
+            break;
+        }
+    }
+    return false;
 }
 
 }  // namespace pixel

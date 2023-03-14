@@ -334,8 +334,8 @@ bool ThermalHelper::readCoolingDevice(std::string_view cooling_device,
 bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_0 *out) {
     // Return fail if the thermal sensor cannot be read.
     float temp;
-    std::string sensor_log;
-    if (!readThermalSensor(sensor_name, &temp, false, &sensor_log)) {
+    std::map<std::string, float> sensor_log_map;
+    if (!readThermalSensor(sensor_name, &temp, false, &sensor_log_map)) {
         LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
         return false;
     }
@@ -355,8 +355,12 @@ bool ThermalHelper::readTemperature(std::string_view sensor_name, Temperature_1_
     out->vrThrottlingThreshold = sensor_info.vr_threshold;
 
     if (sensor_info.is_watch) {
-        LOG(INFO) << sensor_name.data() << ":" << out->currentValue << " raw data:[" << sensor_log
-                  << "]";
+        std::ostringstream sensor_log;
+        for (const auto &sensor_log_pair : sensor_log_map) {
+            sensor_log << sensor_log_pair.first << ":" << sensor_log_pair.second << " ";
+        }
+        LOG(INFO) << sensor_name.data() << ":" << out->currentValue
+                  << " raw data: " << sensor_log.str();
     }
     return true;
 }
@@ -367,9 +371,9 @@ bool ThermalHelper::readTemperature(
         const bool force_no_cache) {
     // Return fail if the thermal sensor cannot be read.
     float temp;
-    std::string sensor_log;
+    std::map<std::string, float> sensor_log_map;
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log)) {
+    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
         LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
         return false;
     }
@@ -402,8 +406,13 @@ bool ThermalHelper::readTemperature(
                                     ? status.first
                                     : status.second;
     if (sensor_info.is_watch) {
-        LOG(INFO) << sensor_name.data() << ":" << out->value << " raw data:[" << sensor_log << "]";
+        std::ostringstream sensor_log;
+        for (const auto &sensor_log_pair : sensor_log_map) {
+            sensor_log << sensor_log_pair.first << ":" << sensor_log_pair.second << " ";
+        }
+        LOG(INFO) << sensor_name.data() << ":" << out->value << " raw data: " << sensor_log.str();
     }
+
     return true;
 }
 
@@ -446,6 +455,7 @@ void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated
             }
         }
         if (cooling_devices_.writeCdevFile(target_cdev, std::to_string(max_state))) {
+            ATRACE_INT(target_cdev.c_str(), max_state);
             LOG(INFO) << "Successfully update cdev " << target_cdev << " sysfs to " << max_state;
         } else {
             LOG(ERROR) << "Failed to update cdev " << target_cdev << " sysfs to " << max_state;
@@ -792,10 +802,10 @@ bool ThermalHelper::fillCpuUsages(hidl_vec<CpuUsage> *cpu_usages) const {
 }
 
 bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
-                                      const bool force_no_cache, std::string *sensor_log) {
+                                      const bool force_no_cache,
+                                      std::map<std::string, float> *sensor_log_map) {
     float temp_val = 0.0;
     std::string file_reading;
-    std::string sub_sensor_log;
     boot_clock::time_point now = boot_clock::now();
 
     ATRACE_NAME(StringPrintf("ThermalHelper::readThermalSensor - %s", sensor_name.data()).c_str());
@@ -807,15 +817,15 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
-    // Check if thermal data need to be read from buffer
+    // Check if thermal data need to be read from cache
     if (!force_no_cache &&
         (sensor_status.thermal_cached.timestamp != boot_clock::time_point::min()) &&
         (std::chrono::duration_cast<std::chrono::milliseconds>(
                  now - sensor_status.thermal_cached.timestamp) < sensor_info.time_resolution) &&
         !isnan(sensor_status.thermal_cached.temp)) {
         *temp = sensor_status.thermal_cached.temp;
-        sensor_log->append(StringPrintf("%s:%0.f ", sensor_name.data(), *temp));
-        LOG(VERBOSE) << "read " << sensor_name.data() << " from buffer, value:" << *temp;
+        (*sensor_log_map)[sensor_name.data()] = *temp;
+        ATRACE_INT((sensor_name.data() + std::string("-cached")).c_str(), static_cast<int>(*temp));
         return true;
     }
 
@@ -830,12 +840,11 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
             return false;
         }
         *temp = std::stof(::android::base::Trim(file_reading));
-        sensor_log->append(StringPrintf("%s:%0.f ", sensor_name.data(), *temp));
     } else {
         for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
             float sensor_reading = 0.0;
             if (!readThermalSensor(sensor_info.virtual_sensor_info->linked_sensors[i],
-                                   &sensor_reading, force_no_cache, &sub_sensor_log)) {
+                                   &sensor_reading, force_no_cache, sensor_log_map)) {
                 return false;
             }
             if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
@@ -869,9 +878,9 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
             }
         }
         *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
-        sensor_log->append(
-                StringPrintf("%s:%0.f(%s) ", sensor_name.data(), *temp, sub_sensor_log.data()));
     }
+    (*sensor_log_map)[sensor_name.data()] = *temp;
+    ATRACE_INT(sensor_name.data(), static_cast<int>(*temp));
 
     {
         std::unique_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
