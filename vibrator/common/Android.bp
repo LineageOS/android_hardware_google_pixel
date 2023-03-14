@@ -71,3 +71,26 @@ cc_library {
     export_include_dirs: ["."],
     vendor_available: true,
 }
+
+cc_library {
+    name: "PixelVibratorStats",
+    vendor: true,
+    srcs: ["StatsBase.cpp"],
+    cflags: [
+        "-Werror",
+        "-Wall",
+        "-Wextra",
+        "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
+        "-DLOG_TAG=\"VibratorStats\"",
+    ],
+    shared_libs: [
+        "android.frameworks.stats-V2-ndk",
+        "libbase",
+        "libcutils",
+        "libbinder_ndk",
+        "liblog",
+        "libprotobuf-cpp-lite",
+        "libutils",
+        "pixelatoms-cpp",
+    ],
+}
