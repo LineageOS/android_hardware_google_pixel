@@ -29,6 +29,8 @@
 #include <map>
 #include <sstream>
 
+#include "Stats.h"
+
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
 #endif
@@ -256,8 +258,12 @@ static float redcToFloat(std::string *caldata) {
     return static_cast<float>(std::stoul(*caldata, nullptr, 16)) / (1 << Q15_BIT_SHIFT);
 }
 
-Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
-    : mHwApi(std::move(hwapi)), mHwCal(std::move(hwcal)), mAsyncHandle(std::async([] {})) {
+Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
+                   std::unique_ptr<StatsApi> statsapi)
+    : mHwApi(std::move(hwapi)),
+      mHwCal(std::move(hwcal)),
+      mStatsApi(std::move(statsapi)),
+      mAsyncHandle(std::async([] {})) {
     int32_t longFrequencyShift;
     std::string caldata{8, '0'};
     uint32_t calVer;
@@ -286,6 +292,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
                 if (!mHwApi->setFFEffect(
                             &mFfEffects[effectIndex],
                             static_cast<uint16_t>(mFfEffects[effectIndex].replay.length))) {
+                    mStatsApi->logError(kHwApiError);
                     ALOGE("Failed upload effect %d (%d): %s", effectIndex, errno, strerror(errno));
                 }
             }
@@ -310,6 +317,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal)
         mResonantFrequency =
                 static_cast<float>(std::stoul(caldata, nullptr, 16)) / (1 << Q14_BIT_SHIFT);
     } else {
+        mStatsApi->logError(kHwCalError);
         ALOGE("Failed to get resonant frequency (%d): %s, using default resonant HZ: %f", errno,
               strerror(errno), RESONANT_FREQUENCY_DEFAULT);
         mResonantFrequency = RESONANT_FREQUENCY_DEFAULT;
@@ -378,6 +386,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     if (hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
     } else {
+        mStatsApi->logError(kAlsaFailError);
         ALOGE("No haptics ALSA device");
     }
     if (mHwApi->hasOwtFreeSpace()) {
@@ -399,12 +408,14 @@ ndk::ScopedAStatus Vibrator::off() {
     if (mActiveId >= 0) {
         /* Stop the active effect. */
         if (!mHwApi->setFFPlay(mActiveId, false)) {
+            mStatsApi->logError(kHwApiError);
             ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
             ret = false;
         }
 
         if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
             (!mHwApi->eraseOwtEffect(mActiveId, &mFfEffects))) {
+            mStatsApi->logError(kHwApiError);
             ALOGE("Failed to clean up the composed effect %d", mActiveId);
             ret = false;
         }
@@ -428,8 +439,11 @@ ndk::ScopedAStatus Vibrator::off() {
 ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
     ATRACE_NAME(StringPrintf("Vibrator::on %dms", timeoutMs).c_str());
-    HAPTICS_TRACE("on(timeoutMs:%u, callback)", timeoutMs);
+    HAPTICS_TRACE("on(timeoutMs:%d, callback)", timeoutMs);
+
+    mStatsApi->logLatencyStart(kWaveformEffectLatency);
     if (timeoutMs > MAX_TIME_MS) {
+        mStatsApi->logError(kBadTimeoutError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     const uint16_t index = (timeoutMs < WAVEFORM_LONG_VIBRATION_THRESHOLD_MS)
@@ -442,6 +456,8 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
     if (mF0Offset) {
         mHwApi->setF0Offset(mF0Offset);
     }
+
+    mStatsApi->logWaveform(index, timeoutMs);
     return on(timeoutMs, index, nullptr /*ignored*/, callback);
 }
 
@@ -453,6 +469,9 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
                         .c_str());
     HAPTICS_TRACE("perform(effect:%s, strength:%s, callback, _aidl_return)",
                   toString(effect).c_str(), toString(strength).c_str());
+
+    mStatsApi->logLatencyStart(kPrebakedEffectLatency);
+
     return performEffect(effect, strength, callback, _aidl_return);
 }
 
@@ -467,6 +486,7 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
     HAPTICS_TRACE("setAmplitude(amplitude:%f)", amplitude);
     ATRACE_NAME("Vibrator::setAmplitude");
     if (amplitude <= 0.0f || amplitude > 1.0f) {
+        mStatsApi->logError(kBadAmplitudeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
@@ -474,6 +494,7 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
     if (!isUnderExternalControl()) {
         return setGlobalAmplitude(true);
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -485,10 +506,12 @@ ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
 
     if (mHasHapticAlsaDevice || mConfigHapticAlsaDeviceDone || hasHapticAlsaDevice()) {
         if (!mHwApi->setHapticPcmAmp(&mHapticPcm, enabled, mCard, mDevice)) {
+            mStatsApi->logError(kHwApiError);
             ALOGE("Failed to %s haptic pcm device: %d", (enabled ? "enable" : "disable"), mDevice);
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
         }
     } else {
+        mStatsApi->logError(kAlsaFailError);
         ALOGE("No haptics ALSA device");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -543,10 +566,13 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     uint16_t nextEffectDelay;
     uint16_t totalDuration = 0;
 
+    mStatsApi->logLatencyStart(kCompositionEffectLatency);
+
     auto ch = dspmem_chunk_create(new uint8_t[FF_CUSTOM_DATA_LEN_MAX_COMP]{0x00},
                                   FF_CUSTOM_DATA_LEN_MAX_COMP);
 
     if (composite.size() > COMPOSE_SIZE_MAX || composite.empty()) {
+        mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
@@ -554,6 +580,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     nextEffectDelay = composite.front().delayMs;
     totalDuration += nextEffectDelay;
     if (nextEffectDelay > COMPOSE_DELAY_MAX_MS || nextEffectDelay < 0) {
+        mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else if (nextEffectDelay > 0) {
         size = composite.size() + 1;
@@ -577,6 +604,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         uint32_t effectIndex = 0;
         uint32_t effectVolLevel = 0;
         if (e_curr.scale < 0.0f || e_curr.scale > 1.0f) {
+            mStatsApi->logError(kBadCompositeError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
 
@@ -597,6 +625,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
             int32_t delay = e_next.delayMs;
 
             if (delay > COMPOSE_DELAY_MAX_MS || delay < 0) {
+                mStatsApi->logError(kBadCompositeError);
                 return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
             }
             nextEffectDelay = delay;
@@ -604,8 +633,10 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         }
 
         if (effectIndex == 0 && nextEffectDelay == 0) {
+            mStatsApi->logError(kBadCompositeError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
+        mStatsApi->logPrimitive(effectIndex);
 
         dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & effectVolLevel));      /* amplitude */
         dspmem_chunk_write(ch, 8, (uint8_t)(0xFF & effectIndex));         /* index */
@@ -615,6 +646,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     }
     dspmem_chunk_flush(ch);
     if (header_count == dspmem_chunk_bytes(ch)) {
+        mStatsApi->logError(kComposeFailError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
         mFfEffects[WAVEFORM_COMPOSE].replay.length = totalDuration;
@@ -629,10 +661,12 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
     ndk::ScopedAStatus status = ndk::ScopedAStatus::ok();
 
     if (effectIndex >= FF_MAX_EFFECTS) {
+        mStatsApi->logError(kBadEffectError);
         ALOGE("Invalid waveform index %d", effectIndex);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (mAsyncHandle.wait_for(ASYNC_COMPLETION_TIMEOUT) != std::future_status::ready) {
+        mStatsApi->logError(kAsyncFailError);
         ALOGE("Previous vibration pending: prev: %d, curr: %d", mActiveId, effectIndex);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -640,6 +674,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
     if (ch) {
         /* Upload OWT effect. */
         if (ch->head == nullptr) {
+            mStatsApi->logError(kBadCompositeError);
             ALOGE("Invalid OWT bank");
             delete ch;
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -650,6 +685,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
         uint32_t freeBytes;
         mHwApi->getOwtFreeSpace(&freeBytes);
         if (dspmem_chunk_bytes(ch) > freeBytes) {
+            mStatsApi->logError(kBadCompositeError);
             ALOGE("Invalid OWT length: Effect %d: %d > %d!", effectIndex, dspmem_chunk_bytes(ch),
                   freeBytes);
             delete ch;
@@ -659,6 +695,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
         if (!mHwApi->uploadOwtEffect(ch->head, dspmem_chunk_bytes(ch), &mFfEffects[effectIndex],
                                      &effectIndex, &errorStatus)) {
             delete ch;
+            mStatsApi->logError(kHwApiError);
             ALOGE("Invalid uploadOwtEffect");
             return ndk::ScopedAStatus::fromExceptionCode(errorStatus);
         }
@@ -669,6 +706,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
         /* Update duration for long/short vibration. */
         mFfEffects[effectIndex].replay.length = static_cast<uint16_t>(timeoutMs);
         if (!mHwApi->setFFEffect(&mFfEffects[effectIndex], static_cast<uint16_t>(timeoutMs))) {
+            mStatsApi->logError(kHwApiError);
             ALOGE("Failed to edit effect %d (%d): %s", effectIndex, errno, strerror(errno));
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
         }
@@ -677,7 +715,9 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, dspmem
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     mActiveId = effectIndex;
     /* Play the event now. */
+    mStatsApi->logLatencyEnd();
     if (!mHwApi->setFFPlay(effectIndex, true)) {
+        mStatsApi->logError(kHwApiError);
         ALOGE("Failed to play effect %d (%d): %s", effectIndex, errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -690,6 +730,7 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum) 
     HAPTICS_TRACE("setEffectAmplitude(amplitude:%f, maximum:%f)", amplitude, maximum);
     uint16_t scale = amplitudeToScale(amplitude, maximum);
     if (!mHwApi->setFFGain(scale)) {
+        mStatsApi->logError(kHwApiError);
         ALOGE("Failed to set the gain to %u (%d): %s", scale, errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -706,14 +747,17 @@ ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> * /*_aidl_return*/) {
+    mStatsApi->logError(kUnsupportedOpError);
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t /*id*/, Effect /*effect*/,
                                             EffectStrength /*strength*/) {
+    mStatsApi->logError(kUnsupportedOpError);
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t /*id*/) {
+    mStatsApi->logError(kUnsupportedOpError);
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
@@ -728,6 +772,7 @@ ndk::ScopedAStatus Vibrator::getQFactor(float *qFactor) {
     HAPTICS_TRACE("getQFactor(qFactor)");
     std::string caldata{8, '0'};
     if (!mHwCal->getQ(&caldata)) {
+        mStatsApi->logError(kHwCalError);
         ALOGE("Failed to get q factor (%d): %s", errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
@@ -744,6 +789,7 @@ ndk::ScopedAStatus Vibrator::getFrequencyResolution(float *freqResolutionHz) {
         *freqResolutionHz = PWLE_FREQUENCY_RESOLUTION_HZ;
         return ndk::ScopedAStatus::ok();
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -756,6 +802,7 @@ ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
         *freqMinimumHz = PWLE_FREQUENCY_MIN_HZ;
         return ndk::ScopedAStatus::ok();
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -764,11 +811,13 @@ void Vibrator::createPwleMaxLevelLimitMap() {
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (!(capabilities & IVibrator::CAP_FREQUENCY_CONTROL)) {
+        mStatsApi->logError(kUnsupportedOpError);
         ALOGE("Frequency control not support.");
         return;
     }
 
     if (discretePwleMaxLevels.empty()) {
+        mStatsApi->logError(kInitError);
         ALOGE("Discrete PWLE max level maps are empty.");
         return;
     }
@@ -820,6 +869,7 @@ void Vibrator::createBandwidthAmplitudeMap() {
     mHwCal->getDeviceMass(&deviceMass);
     mHwCal->getLocCoeff(&locCoeff);
     if (!deviceMass || !locCoeff) {
+        mStatsApi->logError(kInitError);
         ALOGE("Failed to get Device Mass: %f and Loc Coeff: %f", deviceMass, locCoeff);
         return;
     }
@@ -831,6 +881,7 @@ void Vibrator::createBandwidthAmplitudeMap() {
             mHwApi->setRedc(caldata);
             mRedc = redcToFloat(&caldata);
         } else {
+            mStatsApi->logError(kHwCalError);
             ALOGE("Failed to get resistance value from calibration file");
             return;
         }
@@ -895,6 +946,7 @@ ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_
                        ? ndk::ScopedAStatus::ok()
                        : ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -907,6 +959,7 @@ ndk::ScopedAStatus Vibrator::getPwlePrimitiveDurationMax(int32_t *durationMs) {
         *durationMs = COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS;
         return ndk::ScopedAStatus::ok();
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -919,6 +972,7 @@ ndk::ScopedAStatus Vibrator::getPwleCompositionSizeMax(int32_t *maxSize) {
         *maxSize = COMPOSE_PWLE_SIZE_MAX_DEFAULT;
         return ndk::ScopedAStatus::ok();
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -933,6 +987,7 @@ ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported
         };
         return ndk::ScopedAStatus::ok();
     } else {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 }
@@ -1028,12 +1083,16 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     HAPTICS_TRACE("composePwle(composite, callback)");
     int32_t capabilities;
 
+    mStatsApi->logLatencyStart(kPwleEffectLatency);
+
     Vibrator::getCapabilities(&capabilities);
     if ((capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) == 0) {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
     if (composite.empty() || composite.size() > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
+        mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
@@ -1062,11 +1121,13 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 auto active = e.get<PrimitivePwle::active>();
                 if (active.duration < 0 ||
                     active.duration > COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) {
+                    mStatsApi->logError(kBadPrimitiveError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 if (active.startAmplitude < PWLE_LEVEL_MIN ||
                     active.startAmplitude > PWLE_LEVEL_MAX ||
                     active.endAmplitude < PWLE_LEVEL_MIN || active.endAmplitude > PWLE_LEVEL_MAX) {
+                    mStatsApi->logError(kBadPrimitiveError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 if (active.startAmplitude > CS40L26_PWLE_LEVEL_MAX) {
@@ -1080,6 +1141,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     active.startFrequency > PWLE_FREQUENCY_MAX_HZ ||
                     active.endFrequency < PWLE_FREQUENCY_MIN_HZ ||
                     active.endFrequency > PWLE_FREQUENCY_MAX_HZ) {
+                    mStatsApi->logError(kBadPrimitiveError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
@@ -1087,6 +1149,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                       (active.startFrequency == prevEndFrequency))) {
                     if (constructActiveSegment(ch, 0, active.startAmplitude, active.startFrequency,
                                                false) < 0) {
+                        mStatsApi->logError(kPwleConstructionFailError);
                         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                     }
                     incrementIndex(&segmentIdx);
@@ -1097,6 +1160,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 }
                 if (constructActiveSegment(ch, active.duration, active.endAmplitude,
                                            active.endFrequency, chirp) < 0) {
+                    mStatsApi->logError(kPwleConstructionFailError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
@@ -1110,21 +1174,26 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
             case PrimitivePwle::braking: {
                 auto braking = e.get<PrimitivePwle::braking>();
                 if (braking.braking > Braking::CLAB) {
+                    mStatsApi->logError(kBadPrimitiveError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 } else if (!isClabSupported && (braking.braking == Braking::CLAB)) {
+                    mStatsApi->logError(kBadPrimitiveError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
                 if (braking.duration > COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) {
+                    mStatsApi->logError(kBadPrimitiveError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
                 if (constructBrakingSegment(ch, 0, braking.braking) < 0) {
+                    mStatsApi->logError(kPwleConstructionFailError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
 
                 if (constructBrakingSegment(ch, braking.duration, braking.braking) < 0) {
+                    mStatsApi->logError(kPwleConstructionFailError);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
@@ -1136,6 +1205,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
         }
 
         if (segmentIdx > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
+            mStatsApi->logError(kPwleConstructionFailError);
             ALOGE("Too many PrimitivePwle section!");
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
@@ -1145,6 +1215,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     /* Update wlength */
     totalDuration += MAX_COLD_START_LATENCY_MS;
     if (totalDuration > 0x7FFFF) {
+        mStatsApi->logError(kPwleConstructionFailError);
         ALOGE("Total duration is too long (%d)!", totalDuration);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
@@ -1220,6 +1291,10 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     mHwCal->debug(fd);
 
+    dprintf(fd, "\n");
+
+    mStatsApi->debug(fd);
+
     fsync(fd);
     return STATUS_OK;
 }
@@ -1234,6 +1309,7 @@ bool Vibrator::hasHapticAlsaDevice() {
             mHasHapticAlsaDevice = true;
             mConfigHapticAlsaDeviceDone = true;
         } else {
+            mStatsApi->logError(kAlsaFailError);
             ALOGE("Haptic ALSA device not supported");
         }
     } else {
@@ -1264,6 +1340,7 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
             intensity = 1.0f;
             break;
         default:
+            mStatsApi->logError(kUnsupportedOpError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
@@ -1285,6 +1362,7 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
             intensity *= 1.0f;
             break;
         default:
+            mStatsApi->logError(kUnsupportedOpError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
@@ -1315,6 +1393,7 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
             status = getSimpleDetails(Effect::CLICK, strength, &thisEffectIndex, &thisTimeMs,
                                       &thisVolLevel);
             if (!status.isOk()) {
+                mStatsApi->logError(kBadEffectError);
                 return status;
             }
             timeMs += thisTimeMs;
@@ -1331,6 +1410,7 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
             status = getSimpleDetails(Effect::HEAVY_CLICK, strength, &thisEffectIndex, &thisTimeMs,
                                       &thisVolLevel);
             if (!status.isOk()) {
+                mStatsApi->logError(kBadEffectError);
                 return status;
             }
             timeMs += thisTimeMs;
@@ -1344,6 +1424,7 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
 
             break;
         default:
+            mStatsApi->logError(kUnsupportedOpError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
@@ -1359,6 +1440,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
     uint32_t effectIndex;
     uint32_t primitiveBit = 1 << int32_t(primitive);
     if ((primitiveBit & mSupportedPrimitivesBits) == 0x0) {
+        mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
@@ -1390,6 +1472,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
             effectIndex = WAVEFORM_LOW_TICK_INDEX;
             break;
         default:
+            mStatsApi->logError(kUnsupportedOpError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
@@ -1425,6 +1508,7 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
             volLevel = VOLTAGE_SCALE_MAX;
             break;
         default:
+            mStatsApi->logError(kUnsupportedOpError);
             status = ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
             break;
     }
@@ -1445,7 +1529,6 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
     HAPTICS_TRACE("performEffect(effectIndex:%u, volLevel:%u, ch, callback)", effectIndex,
                   volLevel);
     setEffectAmplitude(volLevel, VOLTAGE_SCALE_MAX);
-
     return on(MAX_TIME_MS, effectIndex, ch, callback);
 }
 
@@ -1463,6 +1546,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
     if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
         (!mHwApi->eraseOwtEffect(mActiveId, &mFfEffects))) {
+        mStatsApi->logError(kHwApiError);
         ALOGE("Failed to clean up the composed effect %d", mActiveId);
     } else {
         ALOGD("waitForComplete: Vibrator is already off");
@@ -1471,6 +1555,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     // Do waveform number checking
     if ((effectCount > WAVEFORM_MAX_PHYSICAL_INDEX) &&
         (!mHwApi->eraseOwtEffect(WAVEFORM_MAX_INDEX, &mFfEffects))) {
+        mStatsApi->logError(kHwApiError);
         ALOGE("Failed to forcibly clean up all composed effect");
     }
 
