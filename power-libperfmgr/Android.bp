@@ -48,7 +48,10 @@ cc_test {
     vendor: true,
     require_root: true,
     srcs: [
+        "aidl/tests/SessionTaskMapTest.cpp",
         "aidl/tests/UClampVoterTest.cpp",
+        "aidl/SessionTaskMap.cpp",
+        "aidl/SessionValueEntry.cpp",
         "aidl/UClampVoter.cpp",
     ],
     cpp_std: "gnu++20",
@@ -91,6 +94,8 @@ cc_binary {
         "aidl/PowerHintSession.cpp",
         "aidl/PowerSessionManager.cpp",
         "aidl/UClampVoter.cpp",
+        "aidl/SessionTaskMap.cpp",
+        "aidl/SessionValueEntry.cpp",
     ],
     cpp_std: "gnu++20",
 }
