@@ -33,18 +33,18 @@
 #include "power_files.h"
 #include "thermal_info.h"
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
-using android::base::StringPrintf;
+using ::android::base::StringPrintf;
 
 // To find the next PID target state according to the current thermal severity
 size_t getTargetStateOfPID(const SensorInfo &sensor_info, const ThrottlingSeverity curr_severity) {
     size_t target_state = 0;
 
-    for (const auto &severity : hidl_enum_range<ThrottlingSeverity>()) {
+    for (const auto &severity : ::ndk::enum_range<ThrottlingSeverity>()) {
         size_t state = static_cast<size_t>(severity);
         if (std::isnan(sensor_info.throttling_info->s_power[state])) {
             continue;
@@ -160,8 +160,7 @@ bool ThermalThrottling::registerThermalThrottling(
 }
 
 // return power budget based on PID algo
-float ThermalThrottling::updatePowerBudget(const Temperature_2_0 &temp,
-                                           const SensorInfo &sensor_info,
+float ThermalThrottling::updatePowerBudget(const Temperature &temp, const SensorInfo &sensor_info,
                                            std::chrono::milliseconds time_elapsed_ms,
                                            ThrottlingSeverity curr_severity) {
     float p = 0, d = 0;
@@ -284,7 +283,7 @@ float ThermalThrottling::computeExcludedPower(
 
 // Allocate power budget to binded cooling devices base on the real ODPM power data
 bool ThermalThrottling::allocatePowerToCdev(
-        const Temperature_2_0 &temp, const SensorInfo &sensor_info,
+        const Temperature &temp, const SensorInfo &sensor_info,
         const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
         const std::unordered_map<std::string, PowerStatus> &power_status_map,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map) {
@@ -302,7 +301,6 @@ bool ThermalThrottling::allocatePowerToCdev(
     auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity);
 
     if (sensor_info.throttling_info->excluded_power_info_map.size()) {
-        std::string log_buf;
         total_power_budget -=
                 computeExcludedPower(sensor_info, curr_severity, power_status_map, &log_buf);
         total_power_budget = std::max(total_power_budget, 0.0f);
@@ -427,7 +425,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
                 if (binded_cdev_info_pair.second.max_release_step !=
                             std::numeric_limits<int>::max() &&
-                    (power_data_invalid || cdev_power_adjustment > 0)) {
+                    cdev_power_adjustment > 0) {
                     auto target_state =
                             std::max(curr_state - binded_cdev_info_pair.second.max_release_step, 0);
                     cdev_power_budget =
@@ -436,7 +434,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
                 if (binded_cdev_info_pair.second.max_throttle_step !=
                             std::numeric_limits<int>::max() &&
-                    (power_data_invalid || cdev_power_adjustment < 0)) {
+                    cdev_power_adjustment < 0) {
                     auto target_state =
                             std::min(curr_state + binded_cdev_info_pair.second.max_throttle_step,
                                      cdev_info.max_state);
@@ -608,7 +606,7 @@ bool ThermalThrottling::throttlingReleaseUpdate(
 }
 
 void ThermalThrottling::thermalThrottlingUpdate(
-        const Temperature_2_0 &temp, const SensorInfo &sensor_info,
+        const Temperature &temp, const SensorInfo &sensor_info,
         const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
         const std::unordered_map<std::string, PowerStatus> &power_status_map,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map) {
@@ -716,7 +714,7 @@ void ThermalThrottling::computeCoolingDevicesRequest(
 }
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl
