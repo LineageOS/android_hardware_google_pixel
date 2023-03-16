@@ -49,6 +49,7 @@ using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsAtomicWriteInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
@@ -618,6 +619,68 @@ void SysfsCollector::logF2fsStats(const std::shared_ptr<IStats> &stats_client) {
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report F2fs stats to Stats service");
+    }
+}
+
+void SysfsCollector::logF2fsAtomicWriteInfo(const std::shared_ptr<IStats> &stats_client) {
+    int peak_atomic_write, committed_atomic_block, revoked_atomic_block;
+
+    if (kF2fsStatsPath == nullptr) {
+        ALOGV("F2fs stats path not specified");
+        return;
+    }
+
+    std::string userdataBlock = getUserDataBlock();
+
+    std::string path = kF2fsStatsPath + (userdataBlock + "/peak_atomic_write");
+    if (!ReadFileToInt(path, &peak_atomic_write)) {
+        ALOGE("Unable to read peak_atomic_write");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    path = kF2fsStatsPath + (userdataBlock + "/committed_atomic_block");
+    if (!ReadFileToInt(path, &committed_atomic_block)) {
+        ALOGE("Unable to read committed_atomic_block");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    path = kF2fsStatsPath + (userdataBlock + "/revoked_atomic_block");
+    if (!ReadFileToInt(path, &revoked_atomic_block)) {
+        ALOGE("Unable to read revoked_atomic_block");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(3);
+    values[F2fsAtomicWriteInfo::kPeakAtomicWriteFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::longValue>(peak_atomic_write);
+    values[F2fsAtomicWriteInfo::kCommittedAtomicBlockFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::longValue>(committed_atomic_block);
+    values[F2fsAtomicWriteInfo::kRevokedAtomicBlockFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::longValue>(revoked_atomic_block);
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kF2FsAtomicWriteInfo,
+                        .values = values};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report F2fs Atomic Write info to Stats service");
     }
 }
 
@@ -1428,6 +1491,7 @@ void SysfsCollector::logPerDay() {
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
     logF2fsStats(stats_client);
+    logF2fsAtomicWriteInfo(stats_client);
     logF2fsCompressionInfo(stats_client);
     logF2fsGcSegmentInfo(stats_client);
     logF2fsSmartIdleMaintEnabled(stats_client);
