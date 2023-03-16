@@ -20,6 +20,10 @@ PRODUCT_PACKAGES += \
 # Common ramdump file type.
 BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/ramdump/common
 
+# Enable RKP support
+PRODUCT_PRODUCT_PROPERTIES += \
+    remote_provisioning.hostname=remoteprovisioning.googleapis.com
+
 # Pixel Experience
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
