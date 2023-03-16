@@ -708,7 +708,7 @@ void ThermalThrottling::computeCoolingDevicesRequest(
             }
             cdev_request_pair.second = request_state;
             // Update sensor cdev request time in state
-            thermal_stats_helper->updateBindedCdevStats(
+            thermal_stats_helper->updateSensorCdevRequestStats(
                     sensor_name, cdev_name, binded_cdev_info.stats_info, cdev_request_pair.second);
         }
     }
