@@ -48,6 +48,8 @@ thermal_tj
  lmh/lmh_dcvs_freq
  thermal_exynos/thermal_cpu_pressure
  thermal_exynos/thermal_exynos_allow_max_power
+ thermal_exynos/thermal_exynos_acpm_bulk
+ thermal_exynos/thermal_exynos_acpm_high_overhead
  thermal_exynos/thermal_exynos_arm_update
  thermal_exynos/thermal_exynos_cpu_pause
  thermal_exynos/thermal_exynos_hard_limit_cdev_update
