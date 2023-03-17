@@ -102,6 +102,9 @@ message Atom {
       VibratorPlaycountReported vibrator_playcount_reported = 105049;
       VibratorLatencyReported vibrator_latency_reported = 105050;
       VibratorErrorsReported vibrator_errors_reported = 105051;
+
+      F2fsAtomicWriteInfo f2fs_atomic_write_info = 105052;
+      PartitionsUsedSpaceReported partition_used_space_reported = 105053;
     }
     // AOSP atom ID range ends at 109999
 }
@@ -1686,4 +1689,31 @@ message VibratorErrorsReported {
   // 11 PWLE Construction Fail Error
   // 12 Unsupported Method Error
   repeated int32 error_counts = 2;
+}
+
+/* A message containing F2FS Atomic Write information */
+message F2fsAtomicWriteInfo {
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+    /* Show the peak value of total current atomic write block count after boot */
+    optional int32 peak_atomic_write = 2;
+    /* Show the accumulated total committed atomic write block count after boot */
+    optional int32 committed_atomic_block = 3;
+    /* Show the accumulated total revoked atomic write block count after boot */
+    optional int32 revoked_atomic_block = 4;
+}
+
+/* A message containing Partition Used Spaced information */
+message PartitionsUsedSpaceReported {
+    enum Directory {
+        UNKNOWN = 0;
+        PERSIST = 1;
+    }
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+
+    /* used space of directory information */
+    optional Directory directory = 2;
+    optional int64 free_bytes = 3;
+    optional int64 total_bytes = 4;
 }

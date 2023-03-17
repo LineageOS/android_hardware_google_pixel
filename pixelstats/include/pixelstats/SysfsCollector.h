@@ -100,6 +100,7 @@ class SysfsCollector {
     void logUFSLifetime(const std::shared_ptr<IStats> &stats_client);
     void logUFSErrorStats(const std::shared_ptr<IStats> &stats_client);
     void logF2fsStats(const std::shared_ptr<IStats> &stats_client);
+    void logF2fsAtomicWriteInfo(const std::shared_ptr<IStats> &stats_client);
     void logF2fsCompressionInfo(const std::shared_ptr<IStats> &stats_client);
     void logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_client);
     void logZramStats(const std::shared_ptr<IStats> &stats_client);
@@ -118,6 +119,7 @@ class SysfsCollector {
     void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
     void logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client);
     void logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client);
+    void logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_client);
     void logPcieLinkStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
