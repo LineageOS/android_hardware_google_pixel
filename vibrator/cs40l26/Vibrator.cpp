@@ -716,6 +716,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     mStatsApi->logLatencyStart(kCompositionEffectLatency);
 
     if (composite.size() > COMPOSE_SIZE_MAX || composite.empty()) {
+        ALOGE("%s: Invalid size", __func__);
         mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
@@ -724,6 +725,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
     nextEffectDelay = composite.front().delayMs;
     totalDuration += nextEffectDelay;
     if (nextEffectDelay > COMPOSE_DELAY_MAX_MS || nextEffectDelay < 0) {
+        ALOGE("%s: Invalid delay %u", __func__, nextEffectDelay);
         mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else if (nextEffectDelay > 0) {
@@ -746,6 +748,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         uint32_t effectIndex = 0;
         uint32_t effectVolLevel = 0;
         if (e_curr.scale < 0.0f || e_curr.scale > 1.0f) {
+            ALOGE("%s: #%u: Invalid scale %f", __func__, i_curr, e_curr.scale);
             mStatsApi->logError(kBadCompositeError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
@@ -767,6 +770,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
             int32_t delay = e_next.delayMs;
 
             if (delay > COMPOSE_DELAY_MAX_MS || delay < 0) {
+                ALOGE("%s: #%u: Invalid delay %d", __func__, i_next, delay);
                 mStatsApi->logError(kBadCompositeError);
                 return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
             }
@@ -775,6 +779,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         }
 
         if (effectIndex == 0 && nextEffectDelay == 0) {
+            ALOGE("%s: #%u: Invalid results", __func__, i_curr);
             mStatsApi->logError(kBadCompositeError);
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
@@ -790,6 +795,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (header_count == ch.size()) {
+        ALOGE("%s: Failed to append effects", __func__);
         mStatsApi->logError(kComposeFailError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
@@ -1158,11 +1164,13 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 
     Vibrator::getCapabilities(&capabilities);
     if ((capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) == 0) {
+        ALOGE("%s: Not supported", __func__);
         mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
     if (composite.empty() || composite.size() > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
+        ALOGE("%s: Invalid size", __func__);
         mStatsApi->logError(kBadCompositeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
@@ -1179,6 +1187,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
     resetPreviousEndAmplitudeEndFrequency(&prevEndAmplitude, &prevEndFrequency);
     DspMemChunk ch(WAVEFORM_PWLE, FF_CUSTOM_DATA_LEN_MAX_PWLE);
     bool chirp = false;
+    uint16_t c = 0;
 
     for (auto &e : composite) {
         switch (e.getTag()) {
@@ -1187,19 +1196,24 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 if (active.duration < 0 ||
                     active.duration > COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) {
                     mStatsApi->logError(kBadPrimitiveError);
+                    ALOGE("%s: #%u: active: Invalid duration %d", __func__, c, active.duration);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 if (active.startAmplitude < PWLE_LEVEL_MIN ||
                     active.startAmplitude > PWLE_LEVEL_MAX ||
                     active.endAmplitude < PWLE_LEVEL_MIN || active.endAmplitude > PWLE_LEVEL_MAX) {
                     mStatsApi->logError(kBadPrimitiveError);
+                    ALOGE("%s: #%u: active: Invalid scale %f, %f", __func__, c,
+                          active.startAmplitude, active.endAmplitude);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 if (active.startAmplitude > CS40L26_PWLE_LEVEL_MAX) {
                     active.startAmplitude = CS40L26_PWLE_LEVEL_MAX;
+                    ALOGD("%s: #%u: active: trim the start scale", __func__, c);
                 }
                 if (active.endAmplitude > CS40L26_PWLE_LEVEL_MAX) {
                     active.endAmplitude = CS40L26_PWLE_LEVEL_MAX;
+                    ALOGD("%s: #%u: active: trim the end scale", __func__, c);
                 }
 
                 if (active.startFrequency < PWLE_FREQUENCY_MIN_HZ ||
@@ -1207,14 +1221,22 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                     active.endFrequency < PWLE_FREQUENCY_MIN_HZ ||
                     active.endFrequency > PWLE_FREQUENCY_MAX_HZ) {
                     mStatsApi->logError(kBadPrimitiveError);
+                    ALOGE("%s: #%u: active: Invalid frequency %f, %f", __func__, c,
+                          active.startFrequency, active.endFrequency);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
+                /* Append a new segment if current and previous amplitude and
+                 * frequency are not all the same.
+                 */
                 if (!((active.startAmplitude == prevEndAmplitude) &&
                       (active.startFrequency == prevEndFrequency))) {
                     if (ch.constructActiveSegment(0, active.startAmplitude, active.startFrequency,
                                                   false) < 0) {
                         mStatsApi->logError(kPwleConstructionFailError);
+                        ALOGE("%s: #%u: active: Failed to construct for the start scale and "
+                              "frequency %f, %f",
+                              __func__, c, active.startAmplitude, active.startFrequency);
                         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                     }
                     incrementIndex(&segmentIdx);
@@ -1226,6 +1248,9 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 if (ch.constructActiveSegment(active.duration, active.endAmplitude,
                                               active.endFrequency, chirp) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
+                    ALOGE("%s: #%u: active: Failed to construct for the end scale and frequency "
+                          "%f, %f",
+                          __func__, c, active.startAmplitude, active.startFrequency);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
@@ -1240,25 +1265,33 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 auto braking = e.get<PrimitivePwle::braking>();
                 if (braking.braking > Braking::CLAB) {
                     mStatsApi->logError(kBadPrimitiveError);
+                    ALOGE("%s: #%u: braking: Invalid braking type %d", __func__, c,
+                          braking.braking);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 } else if (!isClabSupported && (braking.braking == Braking::CLAB)) {
                     mStatsApi->logError(kBadPrimitiveError);
+                    ALOGE("%s: #%u: braking: Unsupported CLAB braking", __func__, c);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
                 if (braking.duration > COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) {
                     mStatsApi->logError(kBadPrimitiveError);
+                    ALOGE("%s: #%u: braking: Invalid duration %d", __func__, c, braking.duration);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
 
                 if (ch.constructBrakingSegment(0, braking.braking) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
+                    ALOGE("%s: #%u: braking: Failed to construct for type %d", __func__, c,
+                          braking.braking);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
 
                 if (ch.constructBrakingSegment(braking.duration, braking.braking) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
+                    ALOGE("%s: #%u: braking: Failed to construct for type %d with duration %d",
+                          __func__, c, braking.braking, braking.duration);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
@@ -1274,6 +1307,8 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
             ALOGE("Too many PrimitivePwle section!");
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
         }
+
+        c++;
     }
     ch.flush();
 
