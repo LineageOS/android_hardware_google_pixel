@@ -139,6 +139,7 @@ class ThermalHelper {
   private:
     bool initializeSensorMap(const std::unordered_map<std::string, std::string> &path_map);
     bool initializeCoolingDevices(const std::unordered_map<std::string, std::string> &path_map);
+    bool isSubSensorValid(std::string_view sensor_data, const SensorFusionType sensor_fusion_type);
     void setMinTimeout(SensorInfo *sensor_info);
     void initializeTrip(const std::unordered_map<std::string, std::string> &path_map,
                         std::set<std::string> *monitored_sensors, bool thermal_genl_enabled);
@@ -152,6 +153,10 @@ class ThermalHelper {
             const ThrottlingArray &hot_hysteresis, const ThrottlingArray &cold_hysteresis,
             ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
             float value) const;
+    // Read sensor data according to the type
+    bool readDataByType(std::string_view sensor_data, float *reading_value,
+                        const SensorFusionType type, const bool force_no_cache,
+                        std::map<std::string, float> *sensor_log_map);
     // Read temperature data according to thermal sensor's info
     bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
                            std::map<std::string, float> *sensor_log_map);
