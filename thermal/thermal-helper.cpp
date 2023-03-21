@@ -167,21 +167,36 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
             }
         }
 
-        if (name_status_pair.second.virtual_sensor_info != nullptr &&
-            !name_status_pair.second.virtual_sensor_info->trigger_sensors.empty() &&
-            name_status_pair.second.is_watch) {
+        // Check the virtual sensor settings are valid
+        if (name_status_pair.second.virtual_sensor_info != nullptr) {
+            // Check if sub sensor setting is valid
             for (size_t i = 0;
-                 i < name_status_pair.second.virtual_sensor_info->trigger_sensors.size(); i++) {
-                if (sensor_info_map_.find(
-                            name_status_pair.second.virtual_sensor_info->trigger_sensors[i]) !=
-                    sensor_info_map_.end()) {
-                    sensor_info_map_[name_status_pair.second.virtual_sensor_info
-                                             ->trigger_sensors[i]]
-                            .is_watch = true;
-                } else {
-                    LOG(FATAL) << name_status_pair.first << "'s trigger sensor: "
-                               << name_status_pair.second.virtual_sensor_info->trigger_sensors[i]
+                 i < name_status_pair.second.virtual_sensor_info->linked_sensors.size(); i++) {
+                if (!isSubSensorValid(
+                            name_status_pair.second.virtual_sensor_info->linked_sensors[i],
+                            name_status_pair.second.virtual_sensor_info->linked_sensors_type[i])) {
+                    LOG(FATAL) << name_status_pair.first << "'s link sensor "
+                               << name_status_pair.second.virtual_sensor_info->linked_sensors[i]
                                << " is invalid";
+                }
+            }
+
+            // Check if the trigger sensor is valid
+            if (!name_status_pair.second.virtual_sensor_info->trigger_sensors.empty() &&
+                name_status_pair.second.is_watch) {
+                for (size_t i = 0;
+                     i < name_status_pair.second.virtual_sensor_info->trigger_sensors.size(); i++) {
+                    if (sensor_info_map_.count(
+                                name_status_pair.second.virtual_sensor_info->trigger_sensors[i])) {
+                        sensor_info_map_[name_status_pair.second.virtual_sensor_info
+                                                 ->trigger_sensors[i]]
+                                .is_watch = true;
+                    } else {
+                        LOG(FATAL)
+                                << name_status_pair.first << "'s trigger sensor: "
+                                << name_status_pair.second.virtual_sensor_info->trigger_sensors[i]
+                                << " is invalid";
+                    }
                 }
             }
         }
@@ -393,6 +408,27 @@ std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFrom
     }
 
     return std::make_pair(ret_hot, ret_cold);
+}
+
+bool ThermalHelper::isSubSensorValid(std::string_view sensor_data,
+                                     const SensorFusionType sensor_fusion_type) {
+    switch (sensor_fusion_type) {
+        case SensorFusionType::SENSOR:
+            if (!sensor_info_map_.count(sensor_data.data())) {
+                LOG(ERROR) << "Cannot find " << sensor_data.data() << " from sensor info map";
+                return false;
+            }
+            break;
+        case SensorFusionType::ODPM:
+            if (!GetPowerStatusMap().count(sensor_data.data())) {
+                LOG(ERROR) << "Cannot find " << sensor_data.data() << " from power status map";
+                return false;
+            }
+            break;
+        default:
+            break;
+    }
+    return true;
 }
 
 bool ThermalHelper::initializeSensorMap(
@@ -659,6 +695,31 @@ bool ThermalHelper::fillCurrentCoolingDevices(bool filterType, CoolingType type,
     return ret.size() > 0;
 }
 
+bool ThermalHelper::readDataByType(std::string_view sensor_data, float *reading_value,
+                                   const SensorFusionType type, const bool force_no_cache,
+                                   std::map<std::string, float> *sensor_log_map) {
+    switch (type) {
+        case SensorFusionType::SENSOR:
+            if (!readThermalSensor(sensor_data.data(), reading_value, force_no_cache,
+                                   sensor_log_map)) {
+                LOG(ERROR) << "Failed to get " << sensor_data.data() << " data";
+                return false;
+            }
+            break;
+        case SensorFusionType::ODPM:
+            *reading_value = GetPowerStatusMap().at(sensor_data.data()).last_updated_avg_power;
+            if (std::isnan(*reading_value)) {
+                LOG(INFO) << "Power data " << sensor_data.data() << " is under collecting";
+                return false;
+            }
+            (*sensor_log_map)[sensor_data.data()] = *reading_value;
+            break;
+        default:
+            break;
+    }
+    return true;
+}
+
 bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                                       const bool force_no_cache,
                                       std::map<std::string, float> *sensor_log_map) {
@@ -701,14 +762,16 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
     } else {
         for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
             float sensor_reading = 0.0;
-            if (!readThermalSensor(sensor_info.virtual_sensor_info->linked_sensors[i],
-                                   &sensor_reading, force_no_cache, sensor_log_map)) {
-                return false;
+            // Get the sensor reading data
+            if (!readDataByType(sensor_info.virtual_sensor_info->linked_sensors[i], &sensor_reading,
+                                sensor_info.virtual_sensor_info->linked_sensors_type[i],
+                                force_no_cache, sensor_log_map)) {
+                LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s linked sensor "
+                           << sensor_info.virtual_sensor_info->linked_sensors[i];
             }
             if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
                 return false;
             }
-
             float coefficient = sensor_info.virtual_sensor_info->coefficients[i];
             switch (sensor_info.virtual_sensor_info->formula) {
                 case FormulaOption::COUNT_THRESHOLD:
@@ -789,6 +852,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
                         sensor_status_map_.at(sensor_info.virtual_sensor_info->trigger_sensors[i]);
                 if (trigger_sensor_status.severity != ThrottlingSeverity::NONE) {
                     sleep_ms = sensor_info.passive_delay;
+                    break;
                 }
             }
         }
@@ -808,6 +872,7 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
                             uevent_sensors.end()) {
                             force_update = true;
                             force_no_cache = true;
+                            break;
                         }
                     }
                 } else if (uevent_sensors.find(name_status_pair.first) != uevent_sensors.end()) {
