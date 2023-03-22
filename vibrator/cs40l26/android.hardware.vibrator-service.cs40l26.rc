@@ -1,7 +1,7 @@
 service vendor.vibrator.cs40l26 /vendor/bin/hw/android.hardware.vibrator-service.cs40l26
     class hal
     user system
-    group system input
+    group system input context_hub
 
     setenv INPUT_EVENT_NAME cs40l26_input
     setenv PROPERTY_PREFIX ro.vendor.vibrator.hal.
@@ -23,3 +23,10 @@ service vendor.vibrator.cs40l26 /vendor/bin/hw/android.hardware.vibrator-service
     setenv STATS_INSTANCE default
 
     disabled
+
+# Route vibrator.adaptive_haptics.enabled to persist
+on property:vibrator.adaptive_haptics.enabled=0
+    setprop persist.vendor.vibrator.hal.context.enable false
+
+on property:vibrator.adaptive_haptics.enabled=1
+    setprop persist.vendor.vibrator.hal.context.enable true
