@@ -23,6 +23,7 @@ soong_config_module_type {
     config_namespace: "haptics",
     variables: [
         "actuator_model",
+        "adaptive_haptics_feature",
     ],
     properties: ["cflags"],
 }
@@ -32,6 +33,13 @@ soong_config_string_variable {
     values: [
         "luxshare_ict_081545",
         "luxshare_ict_lt_xlra1906d",
+    ],
+}
+
+soong_config_string_variable {
+    name: "adaptive_haptics_feature",
+    values: [
+        "adaptive_haptics_v1",
     ],
 }
 
@@ -50,7 +58,77 @@ haptics_feature_cc_defaults {
                 ],
             },
         },
+        adaptive_haptics_feature: {
+            adaptive_haptics_v1: {
+                cflags: [
+                    "-DADAPTIVE_HAPTICS_V1",
+                ],
+            },
+            conditions_default: {
+                cflags: [
+                    "-DDISABLE_ADAPTIVE_HAPTICS_FEATURE",
+                ],
+            },
+        }
     },
+}
+
+cc_library {
+    name: "libvibecapo_proto",
+    vendor_available: true,
+    owner: "google",
+    defaults: [
+        "VibratorHalCs40l26BinaryDefaults",
+    ],
+    srcs: [
+        "proto/capo.proto",
+    ],
+    export_include_dirs: [
+        "proto",
+    ],
+    proto: {
+        type: "lite",
+        export_proto_headers: true,
+    },
+}
+
+cc_library {
+    name: "VibratorCapo",
+    defaults: [
+        "PixelVibratorBinaryDefaults",
+        "haptics_feature_defaults",
+    ],
+    srcs: [
+        "CapoDetector.cpp",
+    ],
+    shared_libs: [
+        "libcutils",
+        "libprotobuf-cpp-full",
+    ],
+    static_libs: [
+        "chre_client",
+        "libvibecapo_proto",
+    ],
+    export_include_dirs: [
+        "proto",
+        ".",
+    ],
+    export_static_lib_headers: [
+        "libvibecapo_proto",
+    ],
+    vendor_available: true,
+}
+
+cc_defaults {
+    name: "VibratorCapoDefaults",
+    static_libs: [
+        "chre_client",
+        "libvibecapo_proto",
+        "VibratorCapo",
+    ],
+    shared_libs: [
+        "libprotobuf-cpp-full",
+    ],
 }
 
 cc_library {
