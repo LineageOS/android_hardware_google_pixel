@@ -19,6 +19,8 @@
 #ifndef MITIGATION_THERMAL_MANAGER_H_
 #define MITIGATION_THERMAL_MANAGER_H_
 
+#include <aidl/android/hardware/thermal/BnThermalChangedCallback.h>
+#include <aidl/android/hardware/thermal/IThermal.h>
 #include <android-base/chrono_utils.h>
 #include <android-base/file.h>
 #include <android-base/logging.h>
@@ -26,9 +28,6 @@
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/binder_auto_utils.h>
-#include <android/hardware/thermal/2.0/IThermal.h>
-#include <android/hardware/thermal/2.0/IThermalChangedCallback.h>
-#include <android/hardware/thermal/2.0/types.h>
 #include <unistd.h>
 #include <utils/Mutex.h>
 
@@ -43,16 +42,12 @@ namespace hardware {
 namespace google {
 namespace pixel {
 
+using ::aidl::android::hardware::thermal::BnThermalChangedCallback;
+using ::aidl::android::hardware::thermal::IThermal;
+using ::aidl::android::hardware::thermal::Temperature;
+using ::aidl::android::hardware::thermal::TemperatureType;
+using ::aidl::android::hardware::thermal::ThrottlingSeverity;
 using android::hardware::google::pixel::MitigationConfig;
-using android::hardware::hidl_death_recipient;
-using android::hardware::hidl_string;
-using android::hardware::Return;
-using android::hardware::thermal::V2_0::IThermal;
-using android::hardware::thermal::V2_0::IThermalChangedCallback;
-using android::hardware::thermal::V2_0::Temperature;
-using android::hardware::thermal::V2_0::TemperatureType;
-using android::hardware::thermal::V2_0::ThrottlingSeverity;
-using android::hardware::Void;
 
 class MitigationThermalManager {
   public:
@@ -70,31 +65,24 @@ class MitigationThermalManager {
     void thermalCb(const Temperature &temperature);
     android::base::boot_clock::time_point lastCapturedTime;
 
-    class ThermalCallback : public IThermalChangedCallback {
+    class ThermalCallback : public BnThermalChangedCallback {
       public:
         ThermalCallback(std::function<void(const Temperature &)> notify_function)
             : notifyFunction(notify_function) {}
 
         // Callback function. thermal service will call this.
-        Return<void> notifyThrottling(const Temperature &temperature) override {
+        ndk::ScopedAStatus notifyThrottling(const Temperature &temperature) override {
             if ((temperature.type == TemperatureType::BCL_VOLTAGE) ||
                 (temperature.type == TemperatureType::BCL_CURRENT)) {
                 notifyFunction(temperature);
             }
-            return ::android::hardware::Void();
+            return ndk::ScopedAStatus::ok();
         }
 
       private:
         std::function<void(const Temperature &)> notifyFunction;
     };
 
-    class ThermalDeathRecipient : virtual public hidl_death_recipient {
-      public:
-        void serviceDied(uint64_t /*cookie*/,
-                         const android::wp<::android::hidl::base::V1_0::IBase> & /*who*/) override {
-            MitigationThermalManager::getInstance().connectThermalHal();
-        };
-    };
     static void onThermalAidlBinderDied(void *) {
         LOG(ERROR) << "Thermal AIDL service died, trying to reconnect";
         MitigationThermalManager::getInstance().connectThermalHal();
@@ -105,7 +93,7 @@ class MitigationThermalManager {
     ~MitigationThermalManager();
     bool connectThermalHal();
     bool isMitigationTemperature(const Temperature &temperature);
-    void registerCallback(AIBinder *thermal_aidl_binder);
+    bool registerCallback();
     void remove();
     void updateConfig(const struct MitigationConfig::Config &cfg);
 
@@ -114,11 +102,9 @@ class MitigationThermalManager {
     std::mutex thermal_callback_mutex_;
     std::mutex thermal_hal_mutex_;
     // Thermal hal interface.
-    android::sp<IThermal> thermal;
+    std::shared_ptr<IThermal> thermal;
     // Thermal hal callback object.
-    android::sp<ThermalCallback> callback;
-    // Receiver when HIDL thermal hal restart.
-    android::sp<ThermalDeathRecipient> hidlDeathRecipient;
+    std::shared_ptr<ThermalCallback> callback;
     // Receiver when AIDL thermal hal restart.
     ndk::ScopedAIBinder_DeathRecipient aidlDeathRecipient;
     std::vector<std::string> kSystemPath;
