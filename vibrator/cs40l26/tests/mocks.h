@@ -35,13 +35,18 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(setRedcCompEnable, bool(bool value));
     MOCK_METHOD1(setMinOnOffInterval, bool(uint32_t value));
     MOCK_METHOD0(initFF, bool());
+    MOCK_METHOD0(getContextScale, uint32_t());
+    MOCK_METHOD0(getContextEnable, bool());
+    MOCK_METHOD0(getContextSettlingTime, uint32_t());
+    MOCK_METHOD0(getContextCooldownTime, uint32_t());
+    MOCK_METHOD0(getContextFadeEnable, bool());
     MOCK_METHOD1(setFFGain, bool(uint16_t value));
     MOCK_METHOD2(setFFEffect, bool(struct ff_effect *effect, uint16_t timeoutMs));
     MOCK_METHOD2(setFFPlay, bool(int8_t index, bool value));
     MOCK_METHOD2(getHapticAlsaDevice, bool(int *card, int *device));
     MOCK_METHOD4(setHapticPcmAmp, bool(struct pcm **haptic_pcm, bool enable, int card, int device));
     MOCK_METHOD5(uploadOwtEffect,
-                 bool(uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+                 bool(const uint8_t *owtData, const uint32_t numBytes, struct ff_effect *effect,
                       uint32_t *outEffectIndex, int *status));
     MOCK_METHOD2(eraseOwtEffect, bool(int8_t effectIndex, std::vector<ff_effect> *effect));
     MOCK_METHOD1(debug, void(int fd));
