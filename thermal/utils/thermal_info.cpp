@@ -20,7 +20,6 @@
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <json/reader.h>
-#include <json/value.h>
 
 #include <cmath>
 #include <unordered_set>
@@ -131,6 +130,22 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
     return true;
 }
 }  // namespace
+
+bool ParseThermalConfig(std::string_view config_path, Json::Value *config) {
+    std::string json_doc;
+    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
+        LOG(ERROR) << "Failed to read JSON config from " << config_path;
+        return false;
+    }
+    Json::CharReaderBuilder builder;
+    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    std::string errorMessage;
+    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), config, &errorMessage)) {
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
+        return false;
+    }
+    return true;
+}
 
 template <typename T>
 bool ParseStatsInfo(const Json::Value &values, std::shared_ptr<StatsInfo<T>> *stats_info,
@@ -599,24 +614,9 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
     return true;
 }
 
-bool ParseSensorInfo(std::string_view config_path,
+bool ParseSensorInfo(const Json::Value &config,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed) {
-    std::string json_doc;
-    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
-        LOG(ERROR) << "Failed to read JSON config from " << config_path;
-        return false;
-    }
-    Json::Value root;
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-    std::string errorMessage;
-
-    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
-        return false;
-    }
-
-    Json::Value sensors = root["Sensors"];
+    Json::Value sensors = config["Sensors"];
     std::size_t total_parsed = 0;
     std::unordered_set<std::string> sensors_name_parsed;
 
@@ -911,24 +911,9 @@ bool ParseSensorInfo(std::string_view config_path,
     return true;
 }
 
-bool ParseCoolingDevice(std::string_view config_path,
+bool ParseCoolingDevice(const Json::Value &config,
                         std::unordered_map<std::string, CdevInfo> *cooling_devices_parsed) {
-    std::string json_doc;
-    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
-        LOG(ERROR) << "Failed to read JSON config from " << config_path;
-        return false;
-    }
-    Json::Value root;
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-    std::string errorMessage;
-
-    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
-        return false;
-    }
-
-    Json::Value cooling_devices = root["CoolingDevices"];
+    Json::Value cooling_devices = config["CoolingDevices"];
     std::size_t total_parsed = 0;
     std::unordered_set<std::string> cooling_devices_name_parsed;
 
@@ -994,24 +979,9 @@ bool ParseCoolingDevice(std::string_view config_path,
     return true;
 }
 
-bool ParsePowerRailInfo(std::string_view config_path,
+bool ParsePowerRailInfo(const Json::Value &config,
                         std::unordered_map<std::string, PowerRailInfo> *power_rails_parsed) {
-    std::string json_doc;
-    if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
-        LOG(ERROR) << "Failed to read JSON config from " << config_path;
-        return false;
-    }
-    Json::Value root;
-    Json::CharReaderBuilder builder;
-    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-    std::string errorMessage;
-
-    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
-        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
-        return false;
-    }
-
-    Json::Value power_rails = root["PowerRails"];
+    Json::Value power_rails = config["PowerRails"];
     std::size_t total_parsed = 0;
     std::unordered_set<std::string> power_rails_name_parsed;
 
