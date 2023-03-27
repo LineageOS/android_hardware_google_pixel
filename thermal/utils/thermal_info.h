@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/thermal/CoolingType.h>
 #include <aidl/android/hardware/thermal/TemperatureType.h>
 #include <aidl/android/hardware/thermal/ThrottlingSeverity.h>
+#include <json/value.h>
 
 #include <chrono>
 #include <string>
@@ -157,13 +158,13 @@ struct PowerRailInfo {
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
 };
 
-bool ParseSensorInfo(std::string_view config_path,
+bool ParseThermalConfig(std::string_view config_path, Json::Value *config);
+bool ParseSensorInfo(const Json::Value &config,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed);
-bool ParseCoolingDevice(std::string_view config_path,
+bool ParseCoolingDevice(const Json::Value &config,
                         std::unordered_map<std::string, CdevInfo> *cooling_device_parsed);
-bool ParsePowerRailInfo(std::string_view config_path,
+bool ParsePowerRailInfo(const Json::Value &config,
                         std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
-
 }  // namespace implementation
 }  // namespace thermal
 }  // namespace hardware
