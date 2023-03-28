@@ -29,4 +29,5 @@ rust_binary {
   ],
   shared_libs: ["libdl"],
   vendor: true,
+  init_rc: [ "gpu_probe.rc" ],
 }
