@@ -39,8 +39,8 @@ constexpr std::string_view kEnergyValueNode("energy_value");
 using ::android::base::ReadFileToString;
 using ::android::base::StringPrintf;
 
-bool PowerFiles::registerPowerRailsToWatch(std::string_view config_path) {
-    if (!ParsePowerRailInfo(config_path, &power_rail_info_map_)) {
+bool PowerFiles::registerPowerRailsToWatch(const Json::Value &config) {
+    if (!ParsePowerRailInfo(config, &power_rail_info_map_)) {
         LOG(ERROR) << "Failed to parse power rail info config";
         return false;
     }
