@@ -1,7 +1,6 @@
 soong_namespace {
     imports: [
         "hardware/google/interfaces",
-        "vendor/google_nos/host/android",
     ],
 }
 
