@@ -131,6 +131,19 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
 }
 }  // namespace
 
+std::ostream &operator<<(std::ostream &stream, const SensorFusionType &sensor_fusion_type) {
+    switch (sensor_fusion_type) {
+        case SensorFusionType::SENSOR:
+            return stream << "SENSOR";
+        case SensorFusionType::ODPM:
+            return stream << "ODPM";
+        case SensorFusionType::CONSTANT:
+            return stream << "CONSTANT";
+        default:
+            return stream << "UNDEFINED";
+    }
+}
+
 bool ParseThermalConfig(std::string_view config_path, Json::Value *config) {
     std::string json_doc;
     if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
