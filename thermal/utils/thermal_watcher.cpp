@@ -440,7 +440,7 @@ void ThermalWatcher::parseUevent(std::set<std::string> *sensors_set) {
             std::string uevent = cp;
             auto findSubSystemThermal = uevent.find("SUBSYSTEM=thermal");
             if (!thermal_event) {
-                if (!uevent.find("SUBSYSTEM=")) {
+                if (::android::base::StartsWith(uevent, "SUBSYSTEM=")) {
                     if (findSubSystemThermal != std::string::npos) {
                         thermal_event = true;
                     } else {
