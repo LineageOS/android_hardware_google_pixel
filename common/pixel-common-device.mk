@@ -62,3 +62,10 @@ PRODUCT_DEXPREOPT_SPEED_APPS += \
 # Virtual fingerprint HAL
 PRODUCT_PACKAGES_DEBUG += android.hardware.biometrics.fingerprint-service.example
 
+# Check if has vendor directory or not
+ifeq ($(wildcard vendor),)
+    BUILD_WITHOUT_VENDOR := true
+    $(call soong_config_set,build,config,without_vendor)
+else
+    $(call soong_config_set,build,config,with_vendor)
+endif
