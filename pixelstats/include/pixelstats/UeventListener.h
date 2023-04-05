@@ -88,6 +88,8 @@ class UeventListener {
     void ReportBatteryCapacityFGEvent(const std::shared_ptr<IStats> &stats_client,
                                       const char *subsystem);
     void ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_client);
+    void ReportGpuEvent(const std::shared_ptr<IStats> &stats_client, const char *driver,
+                        const char *gpu_event_type, const char *gpu_event_info);
 
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
@@ -96,6 +98,47 @@ class UeventListener {
     const std::string kTypeCPartnerUevent;
     const std::string kTypeCPartnerVidPath;
     const std::string kTypeCPartnerPidPath;
+
+    const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventType>
+            kGpuEventTypeStrToEnum{
+                    {"KMD_ERROR",
+                     PixelAtoms::GpuEvent::GpuEventType::GpuEvent_GpuEventType_MALI_KMD_ERROR},
+                    {"GPU_RESET",
+                     PixelAtoms::GpuEvent::GpuEventType::GpuEvent_GpuEventType_MALI_GPU_RESET}};
+
+    const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventInfo>
+            kGpuEventInfoStrToEnum{
+                    {"CSG_REQ_STATUS_UPDATE",
+                     PixelAtoms::GpuEvent::GpuEventInfo::
+                             GpuEvent_GpuEventInfo_MALI_CSG_REQ_STATUS_UPDATE},
+                    {"CSG_SUSPEND",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSG_SUSPEND},
+                    {"CSG_SLOTS_SUSPEND", PixelAtoms::GpuEvent::GpuEventInfo::
+                                                  GpuEvent_GpuEventInfo_MALI_CSG_SLOTS_SUSPEND},
+                    {"CSG_GROUP_SUSPEND", PixelAtoms::GpuEvent::GpuEventInfo::
+                                                  GpuEvent_GpuEventInfo_MALI_CSG_GROUP_SUSPEND},
+                    {"CSG_EP_CFG",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSG_EP_CFG},
+                    {"CSG_SLOTS_START", PixelAtoms::GpuEvent::GpuEventInfo::
+                                                GpuEvent_GpuEventInfo_MALI_CSG_SLOTS_START},
+                    {"GROUP_TERM",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_GROUP_TERM},
+                    {"QUEUE_START",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_QUEUE_START},
+                    {"QUEUE_STOP",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_QUEUE_STOP},
+                    {"QUEUE_STOP_ACK",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_QUEUE_STOP_ACK},
+                    {"CSG_SLOT_READY",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSG_SLOT_READY},
+                    {"L2_PM_TIMEOUT",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_L2_PM_TIMEOUT},
+                    {"PM_TIMEOUT",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_PM_TIMEOUT},
+                    {"CSF_RESET_OK",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSF_RESET_OK},
+                    {"CSF_RESET_FAILED", PixelAtoms::GpuEvent::GpuEventInfo::
+                                                 GpuEvent_GpuEventInfo_MALI_CSF_RESET_FAILED}};
 
     BatteryCapacityReporter battery_capacity_reporter_;
     ChargeStatsReporter charge_stats_reporter_;
