@@ -425,7 +425,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
                 if (binded_cdev_info_pair.second.max_release_step !=
                             std::numeric_limits<int>::max() &&
-                    cdev_power_adjustment > 0) {
+                    (power_data_invalid || cdev_power_adjustment > 0)) {
                     auto target_state =
                             std::max(curr_state - binded_cdev_info_pair.second.max_release_step, 0);
                     cdev_power_budget =
@@ -434,7 +434,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
                 if (binded_cdev_info_pair.second.max_throttle_step !=
                             std::numeric_limits<int>::max() &&
-                    cdev_power_adjustment < 0) {
+                    (power_data_invalid || cdev_power_adjustment < 0)) {
                     auto target_state =
                             std::min(curr_state + binded_cdev_info_pair.second.max_throttle_step,
                                      cdev_info.max_state);
