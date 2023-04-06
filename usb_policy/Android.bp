@@ -1,0 +1,11 @@
+//
+// SPDX-FileCopyrightText: The Calyx Institute
+// SPDX-License-Identifier: Apache-2.0
+//
+
+prebuilt_etc {
+    name: "init.pixel.usb-policy.rc",
+    src: "init.pixel.usb-policy.rc",
+    sub_dir: "init",
+    vendor: true,
+}
