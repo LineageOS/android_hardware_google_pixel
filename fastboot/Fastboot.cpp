@@ -32,10 +32,12 @@
 #include <fs_mgr.h>
 #include <fs_mgr/roots.h>
 
+#ifdef HAS_LIBNOS
 // Nugget headers
 #include <app_nugget.h>
 #include <nos/NuggetClient.h>
 #include <nos/debug.h>
+#endif
 
 namespace android {
 namespace hardware {
@@ -199,6 +201,7 @@ Return<void> Fastboot::doOemSpecificErase(V1_1::IFastboot::doOemSpecificErase_cb
 
     bool dck_wipe_success = WipeDigitalCarKeys();
 
+#ifdef HAS_LIBNOS
     // Connect to Titan M
     ::nos::NuggetClient client;
     client.Open();
@@ -240,7 +243,25 @@ Return<void> Fastboot::doOemSpecificErase(V1_1::IFastboot::doOemSpecificErase_cb
         else  // Should not reach here, but handle it anyway
             _hidl_cb({Status::FAILURE_UNKNOWN, "Unknown failure"});
     }
-
+#else
+    // Return exactly what happened
+    if (wipe_status != WIPE_OK && !dck_wipe_success) {
+        _hidl_cb({Status::FAILURE_UNKNOWN, "Fail on wiping metadata and DCK"});
+    } else if (wipe_status != WIPE_OK) {
+        _hidl_cb({Status::FAILURE_UNKNOWN, "Fail on wiping metadata"});
+    } else if (!dck_wipe_success) {
+        _hidl_cb({Status::FAILURE_UNKNOWN, "DCK wipe failed"});
+    } else if (wipe_status != WIPE_OK && !dck_wipe_success) {
+        _hidl_cb({Status::FAILURE_UNKNOWN, "Fail on wiping metadata and DCK"});
+    } else if (!dck_wipe_success) {
+        _hidl_cb({Status::FAILURE_UNKNOWN, "DCK wipe failed"});
+    } else {
+        if (wipe_vol_ret_msg.find(wipe_status) != wipe_vol_ret_msg.end())
+            _hidl_cb({Status::FAILURE_UNKNOWN, wipe_vol_ret_msg[wipe_status]});
+        else  // Should not reach here, but handle it anyway
+            _hidl_cb({Status::FAILURE_UNKNOWN, "Unknown failure"});
+    }
+#endif
     return Void();
 }
 
