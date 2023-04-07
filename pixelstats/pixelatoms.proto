@@ -94,6 +94,9 @@ message Atom {
       VendorTempResidencyStats vendor_temp_residency_stats = 105045;
     }
     // AOSP atom ID range ends at 109999
+    reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
+    reserved 109998; // reserved for VtsVendorAtomJavaTest test atom
+    reserved 109999; // reserved for VtsVendorAtomJavaTest test atom
 }
 
 /* Supported reverse domain names. */
