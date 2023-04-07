@@ -103,7 +103,7 @@ cc_library {
     ],
     shared_libs: [
         "libcutils",
-        "libprotobuf-cpp-full",
+        "libprotobuf-cpp-lite",
     ],
     static_libs: [
         "chre_client",
@@ -127,7 +127,7 @@ cc_defaults {
         "VibratorCapo",
     ],
     shared_libs: [
-        "libprotobuf-cpp-full",
+        "libprotobuf-cpp-lite",
     ],
 }
 
