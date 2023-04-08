@@ -25,12 +25,15 @@
 #include <android-base/endian.h>
 #include <android-base/logging.h>
 #include <android-base/strings.h>
-#include <app_nugget.h>
 #include <misc_writer/misc_writer.h>
-#include <nos/NuggetClient.h>
-#include <nos/debug.h>
 #include <recovery_ui/device.h>
 #include <recovery_ui/screen_ui.h>
+
+#ifdef HAS_LIBNOS
+#include <app_nugget.h>
+#include <nos/NuggetClient.h>
+#include <nos/debug.h>
+#endif
 
 namespace android {
 namespace hardware {
@@ -39,6 +42,7 @@ namespace pixel {
 
 namespace {
 
+#ifdef HAS_LIBNOS
 /** Wipe user data from Titan M. */
 bool WipeTitanM() {
     // Connect to Titan M
@@ -64,6 +68,7 @@ bool WipeTitanM() {
     LOG(INFO) << "Titan M wipe successful";
     return true;
 }
+#endif
 
 /** Call device-specifc WipeKeys function, if any. */
 bool WipeKeysHook(::RecoveryUI *const ui) {
@@ -113,7 +118,7 @@ class PixelDevice : public ::Device {
         // Try to do everything but report a failure if anything wasn't successful
         bool totalSuccess = false;
         ::RecoveryUI* const ui = GetUI();
-
+#ifdef HAS_LIBNOS
         ui->Print("Wiping Titan M...\n");
 
         uint32_t retries = 5;
@@ -123,7 +128,7 @@ class PixelDevice : public ::Device {
                 break;
             }
         }
-
+#endif
         if (!WipeKeysHook(ui)) {
             totalSuccess = false;
         }
