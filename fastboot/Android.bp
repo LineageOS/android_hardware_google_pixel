@@ -17,42 +17,6 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-soong_config_module_type {
-    name: "build_fastboot_cc_defaults",
-    module_type: "cc_defaults",
-    config_namespace: "build",
-    variables: ["config"],
-    properties: ["cflags", "srcs", "static_libs"],
-}
-
-soong_config_string_variable {
-    name: "config",
-    values: ["without_vendor", "with_vendor"],
-}
-
-build_fastboot_cc_defaults {
-    name: "build_fastboot_pixel_defaults",
-    soong_config_variables: {
-        config: {
-            without_vendor: {
-                static_libs: [
-                    "libfstab",
-                ],
-            },
-            with_vendor: {
-                static_libs: [
-                    "libnos_for_fastboot",
-                    "libnos_citadel_for_fastboot",
-                    "libfstab",
-                ],
-                cflags: [
-                    "-DHAS_LIBNOS=1",
-                ],
-            },
-        },
-    },
-}
-
 cc_library {
     name: "android.hardware.fastboot@1.1-impl.pixel",
     recovery: true,
@@ -61,7 +25,6 @@ cc_library {
     ],
     relative_install_path: "hw",
     export_include_dirs: ["include"],
-    defaults: ["build_fastboot_pixel_defaults"],
     shared_libs: [
         "android.hardware.fastboot@1.0",
         "android.hardware.fastboot@1.1",
@@ -73,7 +36,13 @@ cc_library {
         "liblog",
         "libutils",
     ],
+    static_libs: [
+        "libnos_for_fastboot",
+        "libnos_citadel_for_fastboot",
+        "libfstab",
+    ],
 }
+
 
 cc_binary {
     name: "android.hardware.fastboot-service.pixel_recovery",
@@ -85,7 +54,6 @@ cc_binary {
         "main.cpp",
     ],
     relative_install_path: "hw",
-    defaults: ["build_fastboot_pixel_defaults"],
     shared_libs: [
         "android.hardware.fastboot-V1-ndk",
         "libbinder_ndk",
@@ -95,5 +63,10 @@ cc_binary {
         "libfs_mgr",
         "liblog",
         "libutils",
+    ],
+    static_libs: [
+        "libnos_for_fastboot",
+        "libnos_citadel_for_fastboot",
+        "libfstab",
     ],
 }
