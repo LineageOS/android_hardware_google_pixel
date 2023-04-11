@@ -32,12 +32,10 @@
 #include <fs_mgr.h>
 #include <fs_mgr/roots.h>
 
-#ifdef HAS_LIBNOS
 // Nugget headers
 #include <app_nugget.h>
 #include <nos/NuggetClient.h>
 #include <nos/debug.h>
-#endif
 
 using ndk::ScopedAStatus;
 
@@ -220,7 +218,6 @@ ScopedAStatus Fastboot::doOemSpecificErase() {
 
     bool dck_wipe_success = WipeDigitalCarKeys();
 
-#ifdef HAS_LIBNOS
     // Connect to Titan M
     ::nos::NuggetClient client;
     client.Open();
@@ -286,46 +283,7 @@ ScopedAStatus Fastboot::doOemSpecificErase() {
             return ScopedAStatus::fromServiceSpecificErrorWithMessage(BnFastboot::FAILURE_UNKNOWN,
                                                                       "Unknown failure");
     }
-#else
-    // Return exactly what happened
-    if (wipe_status != WIPE_OK && !dck_wipe_success) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                BnFastboot::FAILURE_UNKNOWN, "Fail on wiping metadata, and DCK");
-    } else if (wipe_status != WIPE_OK) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                BnFastboot::FAILURE_UNKNOWN, "Fail on wiping metadata");
-    } else if (!dck_wipe_success) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                BnFastboot::FAILURE_UNKNOWN, "DCK wipe failed");
-    } else if (wipe_status != WIPE_OK && !dck_wipe_success) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                BnFastboot::FAILURE_UNKNOWN, "Fail on wiping metadata and DCK");
-    } else if (!dck_wipe_success) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(BnFastboot::FAILURE_UNKNOWN,
-                                                                  "DCK wipe failed");
-    } else {
-        if (wipe_vol_ret_msg.find(wipe_status) != wipe_vol_ret_msg.end())
-            return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                    BnFastboot::FAILURE_UNKNOWN, wipe_vol_ret_msg[wipe_status].c_str());
-        else  // Should not reach here, but handle it anyway
-            return ScopedAStatus::fromServiceSpecificErrorWithMessage(BnFastboot::FAILURE_UNKNOWN,
-                                                                      "Unknown failure");
-    }
 
-    // Return exactly what happened
-    if (wipe_status != WIPE_OK) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                BnFastboot::FAILURE_UNKNOWN, "Fail on wiping metadata");
-
-    } else {
-        if (wipe_vol_ret_msg.find(wipe_status) != wipe_vol_ret_msg.end())
-            return ScopedAStatus::fromServiceSpecificErrorWithMessage(
-                    BnFastboot::FAILURE_UNKNOWN, wipe_vol_ret_msg[wipe_status].c_str());
-        else  // Should not reach here, but handle it anyway
-            return ScopedAStatus::fromServiceSpecificErrorWithMessage(BnFastboot::FAILURE_UNKNOWN,
-                                                                      "Unknown failure");
-    }
-#endif
     return ScopedAStatus::ok();
 }
 
