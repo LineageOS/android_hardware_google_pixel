@@ -107,6 +107,7 @@ message Atom {
       PartitionsUsedSpaceReported partition_used_space_reported = 105053;
     }
     // AOSP atom ID range ends at 109999
+    reserved 109999;
 }
 
 /* Supported reverse domain names. */
