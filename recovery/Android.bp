@@ -2,61 +2,26 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-soong_config_module_type {
-    name: "build_librecovery_cc_defaults",
-    module_type: "cc_defaults",
-    config_namespace: "build",
-    variables: ["config"],
-    properties: ["cflags", "srcs", "whole_static_libs"],
-}
-
-soong_config_string_variable {
-    name: "config",
-    values: ["without_vendor", "with_vendor"],
-}
-
-build_librecovery_cc_defaults {
-    name: "build_librecovery_ui_pixel_defaults",
-    soong_config_variables: {
-        config: {
-            without_vendor: {
-                whole_static_libs: [
-                    "libmisc_writer",
-                    "libbootloader_message",
-                ],
-                cflags: [
-                    "-Wall",
-                    "-Wextra",
-                    "-Werror",
-                    "-pedantic",
-                ],
-            },
-            with_vendor: {
-                whole_static_libs: [
-                    "libnos_for_recovery",
-                    "libnos_citadel_for_recovery",
-                    "libmisc_writer",
-                    "libbootloader_message",
-                ],
-                cflags: [
-                    "-Wall",
-                    "-Wextra",
-                    "-Werror",
-                    "-pedantic",
-                    "-DHAS_LIBNOS=1",
-                ],
-            },
-        },
-    },
-}
-
 cc_library_static {
     name: "librecovery_ui_pixel",
     owner: "google",
-    defaults: ["build_librecovery_ui_pixel_defaults"],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+    ],
     srcs: [
         "recovery_ui.cpp",
     ],
+
+    whole_static_libs: [
+        "libmisc_writer",
+        "libbootloader_message",
+        "libnos_for_recovery",
+        "libnos_citadel_for_recovery",
+    ],
+
     shared_libs: [
         "libbase",
         "librecovery_ui",

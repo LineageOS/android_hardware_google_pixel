@@ -1,4 +1,3 @@
-ifneq ($(wildcard vendor),)
 PRODUCT_SOONG_NAMESPACES += vendor/google_nos/init/citadel
 # Citadel
 PRODUCT_PACKAGES += \
@@ -38,14 +37,12 @@ PRODUCT_PACKAGES_DEBUG += CitadelProvision
 CITADEL_LAZY_PSK_SYNC := false
 endif
 
+# Sepolicy
+BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/citadel
+
 # USERDEBUG ONLY: Install test packages
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
 PRODUCT_PACKAGES_DEBUG += citadel_integration_tests \
                           pwntest \
                           nugget_targeted_tests
 endif
-
-endif
-
-# Sepolicy
-BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/citadel
