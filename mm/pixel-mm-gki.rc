@@ -46,6 +46,10 @@ on property:sys.boot_completed=1
     write /sys/kernel/tracing/instances/pixel/events/cma/cma_alloc_busy_retry/enable 1
     write /sys/kernel/tracing/instances/pixel/events/cma/cma_alloc_start/enable 1
     write /sys/kernel/tracing/instances/pixel/events/cma/cma_alloc_info/enable 1
+    write /sys/kernel/tracing/instances/pixel/events/cma/cma_release/enable 1
+    write /sys/kernel/tracing/instances/pixel/events/chunk_heap/enable 1
+    write /sys/kernel/tracing/instances/pixel/events/dmabuf_heap/dma_buf_release/enable 1
+    write /sys/kernel/tracing/instances/pixel/events/trusty/trusty_dma_buf_put/enable 1
 
 # turns off tracing right before bugreporting to keep more traces
 on property:init.svc.dumpstatez=running
