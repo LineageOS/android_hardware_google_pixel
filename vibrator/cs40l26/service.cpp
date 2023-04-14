@@ -15,8 +15,6 @@
  */
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
-#include <binder/IServiceManager.h>
-#include <binder/ProcessState.h>
 #include <log/log.h>
 
 #include "Hardware.h"
@@ -27,10 +25,6 @@ using ::aidl::android::hardware::vibrator::HwApi;
 using ::aidl::android::hardware::vibrator::HwCal;
 using ::aidl::android::hardware::vibrator::StatsApi;
 using ::aidl::android::hardware::vibrator::Vibrator;
-using ::android::defaultServiceManager;
-using ::android::ProcessState;
-using ::android::sp;
-using ::android::String16;
 
 #if !defined(VIBRATOR_NAME)
 #define VIBRATOR_NAME "default"
@@ -41,14 +35,9 @@ int main() {
             std::make_unique<HwApi>(), std::make_unique<HwCal>(), std::make_unique<StatsApi>());
     const auto svcName = std::string() + svc->descriptor + "/" + VIBRATOR_NAME;
 
-    ProcessState::initWithDriver("/dev/vndbinder");
-
     auto svcBinder = svc->asBinder();
     binder_status_t status = AServiceManager_addService(svcBinder.get(), svcName.c_str());
     LOG_ALWAYS_FATAL_IF(status != STATUS_OK);
-
-    ProcessState::self()->setThreadPoolMaxThreadCount(1);
-    ProcessState::self()->startThreadPool();
 
     ABinderProcess_setThreadPoolMaxThreadCount(0);
     ABinderProcess_joinThreadPool();
