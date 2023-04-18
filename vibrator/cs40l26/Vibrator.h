@@ -154,9 +154,6 @@ class Vibrator : public BnVibrator {
 
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
-    // SVC initialization time
-    static constexpr uint32_t MIN_ON_OFF_INTERVAL_US = 8500;
-
   private:
     ndk::ScopedAStatus on(uint32_t timeoutMs, uint32_t effectIndex, struct dspmem_chunk *ch,
                           const std::shared_ptr<IVibratorCallback> &callback);
