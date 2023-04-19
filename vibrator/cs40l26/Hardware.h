@@ -318,7 +318,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
             ALOGE("Invalid waveform index for OWT erase: %d", effectIndex);
             return false;
         }
-        if ((*effect).empty() || effect == nullptr) {
+        if (effect == nullptr || (*effect).empty()) {
             ALOGE("Invalid argument effect");
             return false;
         }
