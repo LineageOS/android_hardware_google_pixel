@@ -244,6 +244,7 @@ class Vibrator : public BnVibrator {
     std::array<uint32_t, 2> mLongEffectVol;
     std::vector<ff_effect> mFfEffects;
     std::vector<uint32_t> mEffectDurations;
+    std::vector<std::vector<int16_t>> mEffectCustomData;
     std::future<void> mAsyncHandle;
     int8_t mActiveId{-1};
     struct pcm *mHapticPcm;
