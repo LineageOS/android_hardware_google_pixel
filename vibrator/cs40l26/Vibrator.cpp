@@ -980,7 +980,7 @@ ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
     if (!set) {
         mLongEffectScale = 1.0;  // Reset the scale for the later new effect.
     }
-    return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX, true);
+    return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX, set);
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> * /*_aidl_return*/) {
