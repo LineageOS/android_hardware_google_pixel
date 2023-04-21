@@ -324,7 +324,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 ndk::ScopedAStatus Vibrator::off() {
     HAPTICS_TRACE("off()");
     ATRACE_NAME("Vibrator::off");
-    ALOGD("Vibrator::off");
+    ALOGD("off");
     setGlobalAmplitude(false);
     mHwApi->setF0Offset(0);
     if (!mHwApi->setActivate(0)) {
@@ -340,7 +340,7 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
     HAPTICS_TRACE("on(timeoutMs:%u, callback)", timeoutMs);
     ATRACE_NAME("Vibrator::on");
-    ALOGD("Vibrator::on");
+    ALOGD("on");
     mStatsApi->logLatencyStart(kWaveformEffectLatency);
     const uint32_t index = timeoutMs < WAVEFORM_LONG_VIBRATION_THRESHOLD_MS
                                    ? WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX
@@ -360,7 +360,7 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
     HAPTICS_TRACE("perform(effect:%s, strength:%s, callback, _aidl_return)",
                   toString(effect).c_str(), toString(strength).c_str());
     ATRACE_NAME("Vibrator::perform");
-    ALOGD("Vibrator::perform");
+    ALOGD("perform");
 
     mStatsApi->logLatencyStart(kPrebakedEffectLatency);
 
@@ -486,7 +486,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
                                      const std::shared_ptr<IVibratorCallback> &callback) {
     HAPTICS_TRACE("compose(composite, callback)");
     ATRACE_NAME("Vibrator::compose");
-    ALOGD("Vibrator::compose");
+    ALOGD("compose");
     std::ostringstream effectBuilder;
     std::string effectQueue;
 
@@ -544,7 +544,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
 
 ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
-    HAPTICS_TRACE("on(timeoutMs:%u, effectIndex:%u, ch, callback)", timeoutMs, effectIndex);
+    HAPTICS_TRACE("on(timeoutMs:%u, effectIndex:%u, callback)", timeoutMs, effectIndex);
     if (isUnderExternalControl()) {
         setExternalControl(false);
         ALOGE("Device is under external control mode. Force to disable it to prevent chip hang "
@@ -556,7 +556,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex,
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
-    ALOGD("Vibrator::on");
+    ALOGD("on");
     mHwApi->setEffectIndex(effectIndex);
     mHwApi->setDuration(timeoutMs);
     mStatsApi->logLatencyEnd();
@@ -841,7 +841,7 @@ ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported
 }
 
 ndk::ScopedAStatus Vibrator::setPwle(const std::string &pwleQueue) {
-    HAPTICS_TRACE("setPwle(pwleQueue:%s)", pwleQueue);
+    HAPTICS_TRACE("setPwle(pwleQueue:%s)", pwleQueue.c_str());
     if (!mHwApi->setPwle(pwleQueue)) {
         mStatsApi->logError(kHwApiError);
         ALOGE("Failed to write \"%s\" to pwle (%d): %s", pwleQueue.c_str(), errno, strerror(errno));
@@ -1147,8 +1147,9 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
 ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength strength,
                                                 uint32_t *outTimeMs, uint32_t * /*outVolLevel*/,
                                                 std::string *outEffectQueue) {
-    HAPTICS_TRACE("getCompoundDetails(effect:%s, strength:%s, outTimeMs, outCh)",
-                  toString(effect).c_str(), toString(strength).c_str());
+    HAPTICS_TRACE(
+            "getCompoundDetails(effect:%s, strength:%s, outTimeMs, outVolLevel, outEffectQueue)",
+            toString(effect).c_str(), toString(strength).c_str());
     ndk::ScopedAStatus status;
     uint32_t timeMs;
     std::ostringstream effectBuilder;
@@ -1242,7 +1243,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
 }
 
 ndk::ScopedAStatus Vibrator::setEffectQueue(const std::string &effectQueue) {
-    HAPTICS_TRACE("setEffectQueue(effectQueue:%s)", effectQueue);
+    HAPTICS_TRACE("setEffectQueue(effectQueue:%s)", effectQueue.c_str());
     if (!mHwApi->setEffectQueue(effectQueue)) {
         ALOGE("Failed to write \"%s\" to effect queue (%d): %s", effectQueue.c_str(), errno,
               strerror(errno));
@@ -1298,7 +1299,7 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
                                            const std::string *effectQueue,
                                            const std::shared_ptr<IVibratorCallback> &callback) {
     HAPTICS_TRACE("performEffect(effectIndex:%u, volLevel:%u, effectQueue:%s, callback)",
-                  effectIndex, volLevel, effectQueue);
+                  effectIndex, volLevel, effectQueue->c_str());
     if (effectQueue && !effectQueue->empty()) {
         ndk::ScopedAStatus status = setEffectQueue(*effectQueue);
         if (!status.isOk()) {
@@ -1315,7 +1316,7 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     HAPTICS_TRACE("waitForComplete(callback)");
-    ALOGD("Vibrator::waitForComplete");
+    ALOGD("waitForComplete");
     uint32_t duration;
     {
         const std::scoped_lock<std::mutex> lock(mTotalDurationMutex);
@@ -1326,7 +1327,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     if (!mHwApi->pollVibeState(false, duration)) {
         ALOGE("Timeout(%u)! Fail to poll STOP state", duration);
     } else {
-        ALOGD("Vibrator::waitForComplete: Get STOP! Set active to 0.");
+        ALOGD("waitForComplete: Get STOP! Set active to 0.");
     }
     mHwApi->setActivate(false);
 
