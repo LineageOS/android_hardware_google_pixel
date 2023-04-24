@@ -56,6 +56,12 @@ struct ThermalSample {
     boot_clock::time_point timestamp;
 };
 
+struct EmulSetting {
+    float emul_temp;
+    int emul_severity;
+    bool pending_update;
+};
+
 struct SensorStatus {
     ThrottlingSeverity severity;
     ThrottlingSeverity prev_hot_severity;
@@ -63,6 +69,7 @@ struct SensorStatus {
     ThrottlingSeverity prev_hint_severity;
     boot_clock::time_point last_update_time;
     ThermalSample thermal_cached;
+    std::unique_ptr<EmulSetting> emul_setting;
 };
 
 class ThermalHelper {
@@ -76,6 +83,9 @@ class ThermalHelper {
                                    std::vector<TemperatureThreshold> *thresholds) const;
     bool fillCurrentCoolingDevices(bool filterType, CoolingType type,
                                    std::vector<CoolingDevice> *coolingdevices) const;
+    bool emulTemp(std::string_view target_sensor, const float temp);
+    bool emulSeverity(std::string_view target_sensor, const int severity);
+    bool emulClear(std::string_view target_sensor);
 
     // Disallow copy and assign.
     ThermalHelper(const ThermalHelper &) = delete;
@@ -176,7 +186,6 @@ class ThermalHelper {
             supported_powerhint_map_;
     PowerHalService power_hal_service_;
     ThermalStatsHelper thermal_stats_helper_;
-
     mutable std::shared_mutex sensor_status_map_mutex_;
     std::unordered_map<std::string, SensorStatus> sensor_status_map_;
 };
