@@ -600,16 +600,16 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     }
 }
 
-binder_status_t Thermal::dump(int fd, const char **, uint32_t) {
+void Thermal::dumpThermalData(int fd) {
     std::ostringstream dump_buf;
 
     if (!thermal_helper_.isInitializedOk()) {
         dump_buf << "ThermalHAL not initialized properly." << std::endl;
     } else {
+        const auto &sensor_status_map = thermal_helper_.GetSensorStatusMap();
         {
             dump_buf << "getCachedTemperatures:" << std::endl;
             boot_clock::time_point now = boot_clock::now();
-            const auto &sensor_status_map = thermal_helper_.GetSensorStatusMap();
             for (const auto &sensor_status_pair : sensor_status_map) {
                 if ((sensor_status_pair.second.thermal_cached.timestamp) ==
                     boot_clock::time_point::min()) {
@@ -622,6 +622,18 @@ binder_status_t Thermal::dump(int fd, const char **, uint32_t) {
                                     now - sensor_status_pair.second.thermal_cached.timestamp)
                                     .count()
                          << "ms" << std::endl;
+            }
+        }
+        {
+            dump_buf << "getEmulTemperatures:" << std::endl;
+            for (const auto &sensor_status_pair : sensor_status_map) {
+                if (sensor_status_pair.second.emul_setting == nullptr) {
+                    continue;
+                }
+                dump_buf << " Name: " << sensor_status_pair.first
+                         << " EmulTemp: " << sensor_status_pair.second.emul_setting->emul_temp
+                         << " EmulSeverity: "
+                         << sensor_status_pair.second.emul_setting->emul_severity << std::endl;
             }
         }
         {
@@ -733,7 +745,28 @@ binder_status_t Thermal::dump(int fd, const char **, uint32_t) {
         PLOG(ERROR) << "Failed to dump state to fd";
     }
     fsync(fd);
-    return STATUS_OK;
+}
+
+binder_status_t Thermal::dump(int fd, const char **args, uint32_t numArgs) {
+    if (numArgs == 0) {
+        dumpThermalData(fd);
+        return STATUS_OK;
+    }
+
+    if (std::string(args[0]) == "emul_temp") {
+        return (numArgs != 3 || !thermal_helper_.emulTemp(std::string(args[1]), std::atof(args[2])))
+                       ? STATUS_BAD_VALUE
+                       : STATUS_OK;
+    } else if (std::string(args[0]) == "emul_severity") {
+        return (numArgs != 3 ||
+                !thermal_helper_.emulSeverity(std::string(args[1]), std::atoi(args[2])))
+                       ? STATUS_BAD_VALUE
+                       : STATUS_OK;
+    } else if (std::string(args[0]) == "emul_clear") {
+        return (numArgs != 2 || !thermal_helper_.emulClear(std::string(args[1]))) ? STATUS_BAD_VALUE
+                                                                                  : STATUS_OK;
+    }
+    return STATUS_BAD_VALUE;
 }
 
 }  // namespace implementation
