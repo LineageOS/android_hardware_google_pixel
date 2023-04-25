@@ -111,6 +111,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kCCARatePath(sysfs_paths.CCARatePath),
       kTempResidencyAndResetPaths(sysfs_paths.TempResidencyAndResetPaths),
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
+      kStormIRQMetricsPath(sysfs_paths.StormIRQMetricsPath),
+      kIRQStatsResetPath(sysfs_paths.IRQStatsResetPath),
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
       kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath),
@@ -1582,18 +1584,24 @@ void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &
         ALOGE("Unable to report VendorResumeLatencyStats to Stats service");
 }
 
-bool cmp(const std::pair<int, int64_t> &a, const std::pair<int, int64_t> &b) {
-    return a.second > b.second;
-}
-
 /**
- * Sort irq stats by irq latency, and load top 5 irq stats.
+ * Read and store top 5 irq stats.
  */
-void process_irqatom_values(std::vector<std::pair<int, int64_t>> sorted_pair,
+void process_irqatom_values(std::string file_contents, int *offset,
                             std::vector<VendorAtomValue> *values) {
+    const char *data = file_contents.c_str();
+    int bytes_read;
+    int64_t irq_data;
+    int irq_num;
+
+    std::vector<std::pair<int, int64_t>> irq_pair;
+
+    while (sscanf(data + *offset, "%d %" PRId64 "\n%n", &irq_num, &irq_data, &bytes_read) == 2) {
+        irq_pair.push_back(std::make_pair(irq_num, irq_data));
+        *offset += bytes_read;
+    }
     VendorAtomValue tmp;
-    sort(sorted_pair.begin(), sorted_pair.end(), cmp);
-    int irq_stats_size = sorted_pair.size();
+    int irq_stats_size = irq_pair.size();
     for (int i = 0; i < 5; i++) {
         if (irq_stats_size < 5 && i >= irq_stats_size) {
             tmp.set<VendorAtomValue::longValue>(-1);
@@ -1601,9 +1609,9 @@ void process_irqatom_values(std::vector<std::pair<int, int64_t>> sorted_pair,
             tmp.set<VendorAtomValue::longValue>(0);
             values->push_back(tmp);
         } else {
-            tmp.set<VendorAtomValue::longValue>(sorted_pair[i].first);
+            tmp.set<VendorAtomValue::longValue>(irq_pair[i].first);
             values->push_back(tmp);
-            tmp.set<VendorAtomValue::longValue>(sorted_pair[i].second);
+            tmp.set<VendorAtomValue::longValue>(irq_pair[i].second);
             values->push_back(tmp);
         }
     }
@@ -1617,93 +1625,66 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     if (uart_enabled == "running") {
         return;
     }
-    std::string file_contents;
-    if (!kLongIRQMetricsPath) {
+    std::string irq_file_contents, storm_file_contents;
+    if (kLongIRQMetricsPath == nullptr || strlen(kLongIRQMetricsPath) == 0) {
         ALOGV("LongIRQ path not specified");
         return;
     }
-    if (!ReadFileToString(kLongIRQMetricsPath, &file_contents)) {
-        ALOGE("Unable to LongIRQ %s - %s", kLongIRQMetricsPath, strerror(errno));
+    if (!ReadFileToString(kLongIRQMetricsPath, &irq_file_contents)) {
+        ALOGE("Unable to read LongIRQ %s - %s", kLongIRQMetricsPath, strerror(errno));
+        return;
+    }
+    if (kStormIRQMetricsPath == nullptr || strlen(kStormIRQMetricsPath) == 0) {
+        ALOGV("StormIRQ path not specified");
+        return;
+    }
+    if (!ReadFileToString(kStormIRQMetricsPath, &storm_file_contents)) {
+        ALOGE("Unable to read StormIRQ %s - %s", kStormIRQMetricsPath, strerror(errno));
+        return;
+    }
+    if (kIRQStatsResetPath == nullptr || strlen(kIRQStatsResetPath) == 0) {
+        ALOGV("IRQStatsReset path not specified");
         return;
     }
     int offset = 0;
     int bytes_read;
-    const char *data = file_contents.c_str();
-    int data_len = file_contents.length();
-    //  Get, process, store softirq stats
-    std::vector<std::pair<int, int64_t>> sorted_softirq_pair;
-    int64_t softirq_count;
-    if (sscanf(data + offset, "long SOFTIRQ count: %" PRId64 "\n%n", &softirq_count, &bytes_read) !=
-        1)
+    const char *data = irq_file_contents.c_str();
+
+    // Get, process softirq stats
+    int64_t irq_count;
+    if (sscanf(data + offset, "long SOFTIRQ count: %" PRId64 "\n%n", &irq_count, &bytes_read) != 1)
         return;
     offset += bytes_read;
-    if (offset >= data_len)
-        return;
     std::vector<VendorAtomValue> values;
     VendorAtomValue tmp;
-    if (softirq_count - prev_data.softirq_count < 0) {
-        tmp.set<VendorAtomValue::intValue>(-1);
-        ALOGI("long softirq count get overflow");
-    } else {
-        tmp.set<VendorAtomValue::longValue>(softirq_count - prev_data.softirq_count);
-    }
+    tmp.set<VendorAtomValue::longValue>(irq_count);
     values.push_back(tmp);
 
     if (sscanf(data + offset, "long SOFTIRQ detail (num, latency):\n%n", &bytes_read) != 0)
         return;
     offset += bytes_read;
-    if (offset >= data_len)
-        return;
+    process_irqatom_values(data, &offset, &values);
 
-    //  Iterate over softirq stats and record top 5 long softirq
-    int64_t softirq_latency;
-    int softirq_num;
-    while (sscanf(data + offset, "%d %" PRId64 "\n%n", &softirq_num, &softirq_latency,
-                  &bytes_read) == 2) {
-        sorted_softirq_pair.push_back(std::make_pair(softirq_num, softirq_latency));
-        offset += bytes_read;
-        if (offset >= data_len)
-            return;
-    }
-    process_irqatom_values(sorted_softirq_pair, &values);
-
-    //  Get, process, store irq stats
-    std::vector<std::pair<int, int64_t>> sorted_irq_pair;
-    int64_t irq_count;
+    // Get, process irq stats
     if (sscanf(data + offset, "long IRQ count: %" PRId64 "\n%n", &irq_count, &bytes_read) != 1)
         return;
     offset += bytes_read;
-    if (offset >= data_len)
-        return;
-    if (irq_count - prev_data.irq_count < 0) {
-        tmp.set<VendorAtomValue::intValue>(-1);
-        ALOGI("long irq count get overflow");
-    } else {
-        tmp.set<VendorAtomValue::longValue>(irq_count - prev_data.irq_count);
-    }
+    tmp.set<VendorAtomValue::longValue>(irq_count);
     values.push_back(tmp);
 
     if (sscanf(data + offset, "long IRQ detail (num, latency):\n%n", &bytes_read) != 0)
         return;
     offset += bytes_read;
-    if (offset >= data_len)
+    process_irqatom_values(data, &offset, &values);
+
+    // Get, process storm irq stats
+    offset = 0;
+    data = storm_file_contents.c_str();
+    if (sscanf(data + offset, "storm IRQ detail (num, storm_count):\n%n", &bytes_read) != 0)
         return;
+    offset += bytes_read;
+    process_irqatom_values(data, &offset, &values);
 
-    int64_t irq_latency;
-    int irq_num;
-    int index = 0;
-    //  Iterate over softirq stats and record top 5 long irq
-    while (sscanf(data + offset, "%d %" PRId64 "\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
-        sorted_irq_pair.push_back(std::make_pair(irq_num, irq_latency));
-        offset += bytes_read;
-        if (offset >= data_len && index < 5)
-            return;
-        index += 1;
-    }
-    process_irqatom_values(sorted_irq_pair, &values);
-
-    prev_data.softirq_count = softirq_count;
-    prev_data.irq_count = irq_count;
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kVendorLongIrqStatsReported,
@@ -1711,6 +1692,12 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report kVendorLongIRQStatsReported to Stats service");
+
+    // Reset irq stats
+    if (!WriteStringToFile(std::to_string(1), kIRQStatsResetPath)) {
+        ALOGE("Failed to write to stats_reset");
+        return;
+    }
 }
 
 void SysfsCollector::logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_client) {
