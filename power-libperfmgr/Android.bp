@@ -17,8 +17,15 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+cc_defaults {
+    name: "libdisppower_defaults",
+    local_include_dirs: ["disp-power"],
+}
+
 cc_library {
     name: "libdisppower-pixel",
+    defaults: ["libdisppower_defaults"],
+    export_include_dirs: ["disp-power"],
     proprietary: true,
     srcs: [
         "disp-power/DisplayLowPower.cpp",
@@ -33,8 +40,15 @@ cc_library {
     ],
 }
 
+cc_defaults {
+    name: "libadaptivecpu_defaults",
+    local_include_dirs: ["adaptivecpu"],
+}
+
 cc_library {
     name: "libadaptivecpu",
+    defaults: ["libadaptivecpu_defaults"],
+    export_include_dirs: ["adaptivecpu"],
     proprietary: true,
     vendor: true,
     srcs: [
