@@ -95,6 +95,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kBrownoutLogPath(sysfs_paths.BrownoutLogPath),
       kBrownoutReasonProp(sysfs_paths.BrownoutReasonProp),
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
+      kPowerMitigationDurationPath(sysfs_paths.MitigationDurationPath),
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
@@ -1377,9 +1378,9 @@ void SysfsCollector::logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_
                     VendorAtomValue::make<VendorAtomValue::intValue>
                         (PixelAtoms::PartitionsUsedSpaceReported::PERSIST);
     values[PartitionsUsedSpaceReported::kFreeBytesFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_bfree);
+            VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_bfree);
     values[PartitionsUsedSpaceReported::kTotalBytesFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_blocks);
+            VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_blocks);
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kPartitionUsedSpaceReported,
@@ -1432,8 +1433,8 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
         ALOGD("Modem PCIe stats path not specified");
     } else {
         for (i=0; i < ARRAY_SIZE(datamap); i++) {
-            std::string modempath = std::string (kModemPcieLinkStatsPath) + \
-                                    "/" + datamap[i].sysfs_path;
+            std::string modempath =
+                    std::string(kModemPcieLinkStatsPath) + "/" + datamap[i].sysfs_path;
 
             if (ReadFileToInt(modempath, &(datamap[i].modem_val))) {
                 reportPcieLinkStats = true;
@@ -1455,8 +1456,8 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
         ALOGD("Wifi PCIe stats path not specified");
     } else {
         for (i=0; i < ARRAY_SIZE(datamap); i++) {
-            std::string wifipath = std::string (kWifiPcieLinkStatsPath) + \
-                                   "/" + datamap[i].sysfs_path;
+            std::string wifipath =
+                    std::string(kWifiPcieLinkStatsPath) + "/" + datamap[i].sysfs_path;
 
             if (ReadFileToInt(wifipath, &(datamap[i].wifi_val))) {
                 reportPcieLinkStats = true;
@@ -1504,6 +1505,17 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
     }
 }
 
+/**
+ * Read the contents of kPowerMitigationDurationPath and report them.
+ */
+void SysfsCollector::logMitigationDurationCounts(const std::shared_ptr<IStats> &stats_client) {
+    if (kPowerMitigationDurationPath == nullptr || strlen(kPowerMitigationDurationPath) == 0) {
+        ALOGE("Mitigation Duration path is invalid!");
+        return;
+    }
+    mitigation_duration_reporter_.logMitigationDuration(stats_client, kPowerMitigationDurationPath);
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -1541,6 +1553,7 @@ void SysfsCollector::logPerDay() {
     logVendorResumeLatencyStats(stats_client);
     logPartitionUsedSpace(stats_client);
     logPcieLinkStats(stats_client);
+    logMitigationDurationCounts(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
