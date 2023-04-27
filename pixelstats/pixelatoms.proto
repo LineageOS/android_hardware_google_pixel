@@ -105,6 +105,7 @@ message Atom {
 
       F2fsAtomicWriteInfo f2fs_atomic_write_info = 105052;
       PartitionsUsedSpaceReported partition_used_space_reported = 105053;
+      PowerMitigationDurationCounts mitigation_duration = 105054; // moved from atoms.proto
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1720,3 +1721,57 @@ message PartitionsUsedSpaceReported {
     optional int64 free_bytes = 3;
     optional int64 total_bytes = 4;
 }
+
+/**
+ * Log mitigation duration.
+ */
+message PowerMitigationDurationCounts {
+ optional string reverse_domain_name = 1;
+ // Count of UVLO1 greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_uvlo1_none = 2;
+ // Count of UVLO1 IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo1_mmwave = 3;
+ // Count of UVLO1 IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo1_rffe = 4;
+ // Count of UVLO2 greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_uvlo2_none = 5;
+ // Count of UVLO2 IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo2_mmwave = 6;
+ // Count of UVLO2 IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo2_rffe = 7;
+ // Count of BATOILO greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_batoilo_none = 8;
+ // Count of BATOILO IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_batoilo_mmwave = 9;
+ // Count of BATOILO IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_batoilo_rffe = 10;
+
+ // IRQ duration of main regulator indices 0-11 greater than threshold.
+ optional int32 greater_than_thresh_main_0 = 11;
+ optional int32 greater_than_thresh_main_1 = 12;
+ optional int32 greater_than_thresh_main_2 = 13;
+ optional int32 greater_than_thresh_main_3 = 14;
+ optional int32 greater_than_thresh_main_4 = 15;
+ optional int32 greater_than_thresh_main_5 = 16;
+ optional int32 greater_than_thresh_main_6 = 17;
+ optional int32 greater_than_thresh_main_7 = 18;
+ optional int32 greater_than_thresh_main_8 = 19;
+ optional int32 greater_than_thresh_main_9 = 20;
+ optional int32 greater_than_thresh_main_10 = 21;
+ optional int32 greater_than_thresh_main_11 = 22;
+
+ // IRQ duration of sub regulator indices 0-11 greater than threshold.
+ optional int32 greater_than_thresh_sub_0 = 23;
+ optional int32 greater_than_thresh_sub_1 = 24;
+ optional int32 greater_than_thresh_sub_2 = 25;
+ optional int32 greater_than_thresh_sub_3 = 26;
+ optional int32 greater_than_thresh_sub_4 = 27;
+ optional int32 greater_than_thresh_sub_5 = 28;
+ optional int32 greater_than_thresh_sub_6 = 29;
+ optional int32 greater_than_thresh_sub_7 = 30;
+ optional int32 greater_than_thresh_sub_8 = 31;
+ optional int32 greater_than_thresh_sub_9 = 32;
+ optional int32 greater_than_thresh_sub_10 = 33;
+ optional int32 greater_than_thresh_sub_11 = 34;
+}
+
