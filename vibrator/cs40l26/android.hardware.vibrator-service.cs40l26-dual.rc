@@ -20,4 +20,6 @@ service vendor.vibrator.cs40l26-dual /vendor/bin/hw/android.hardware.vibrator-se
         default/delay_before_stop_playback_us
         "
 
+    setenv STATS_INSTANCE default
+
     disabled
