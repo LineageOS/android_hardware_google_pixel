@@ -132,6 +132,7 @@ bool ThermalThrottling::registerThermalThrottling(
                         .pid_cdev_request_map[binded_cdev_pair.first] = 0;
                 thermal_throttling_status_map_[sensor_name.data()]
                         .cdev_status_map[binded_cdev_pair.first] = 0;
+                cdev_all_request_map_[binded_cdev_pair.first].insert(0);
                 break;
             }
         }
@@ -142,6 +143,7 @@ bool ThermalThrottling::registerThermalThrottling(
                         .hardlimit_cdev_request_map[binded_cdev_pair.first] = 0;
                 thermal_throttling_status_map_[sensor_name.data()]
                         .cdev_status_map[binded_cdev_pair.first] = 0;
+                cdev_all_request_map_[binded_cdev_pair.first].insert(0);
                 break;
             }
         }
@@ -654,41 +656,39 @@ void ThermalThrottling::computeCoolingDevicesRequest(
     for (auto &cdev_request_pair : thermal_throttling_status.cdev_status_map) {
         int pid_cdev_request = 0;
         int hardlimit_cdev_request = 0;
+        const auto &cdev_name = cdev_request_pair.first;
         const auto &binded_cdev_info =
-                sensor_info.throttling_info->binded_cdev_info_map.at(cdev_request_pair.first);
+                sensor_info.throttling_info->binded_cdev_info_map.at(cdev_name);
         const auto cdev_ceiling = binded_cdev_info.cdev_ceiling[static_cast<size_t>(curr_severity)];
         const auto cdev_floor =
                 binded_cdev_info.cdev_floor_with_power_link[static_cast<size_t>(curr_severity)];
         release_step = 0;
 
-        if (thermal_throttling_status.pid_cdev_request_map.count(cdev_request_pair.first)) {
-            pid_cdev_request =
-                    thermal_throttling_status.pid_cdev_request_map.at(cdev_request_pair.first);
+        if (thermal_throttling_status.pid_cdev_request_map.count(cdev_name)) {
+            pid_cdev_request = thermal_throttling_status.pid_cdev_request_map.at(cdev_name);
         }
 
-        if (thermal_throttling_status.hardlimit_cdev_request_map.count(cdev_request_pair.first)) {
-            hardlimit_cdev_request = thermal_throttling_status.hardlimit_cdev_request_map.at(
-                    cdev_request_pair.first);
+        if (thermal_throttling_status.hardlimit_cdev_request_map.count(cdev_name)) {
+            hardlimit_cdev_request =
+                    thermal_throttling_status.hardlimit_cdev_request_map.at(cdev_name);
         }
 
-        if (cdev_release_map.count(cdev_request_pair.first)) {
-            release_step = cdev_release_map.at(cdev_request_pair.first);
+        if (cdev_release_map.count(cdev_name)) {
+            release_step = cdev_release_map.at(cdev_name);
         }
 
-        LOG(VERBOSE) << sensor_name.data() << " binded cooling device " << cdev_request_pair.first
+        LOG(VERBOSE) << sensor_name.data() << " binded cooling device " << cdev_name
                      << "'s pid_request=" << pid_cdev_request
                      << " hardlimit_cdev_request=" << hardlimit_cdev_request
                      << " release_step=" << release_step
                      << " cdev_floor_with_power_link=" << cdev_floor
                      << " cdev_ceiling=" << cdev_ceiling;
 
-        ATRACE_INT((cdev_request_pair.first + std::string("-pid_request")).c_str(),
-                   pid_cdev_request);
-        ATRACE_INT((cdev_request_pair.first + std::string("-hardlimit_request")).c_str(),
-                   hardlimit_cdev_request);
-        ATRACE_INT((cdev_request_pair.first + std::string("-release_step")).c_str(), release_step);
-        ATRACE_INT((cdev_request_pair.first + std::string("-cdev_floor")).c_str(), cdev_floor);
-        ATRACE_INT((cdev_request_pair.first + std::string("-cdev_ceiling")).c_str(), cdev_ceiling);
+        ATRACE_INT((cdev_name + std::string("-pid_request")).c_str(), pid_cdev_request);
+        ATRACE_INT((cdev_name + std::string("-hardlimit_request")).c_str(), hardlimit_cdev_request);
+        ATRACE_INT((cdev_name + std::string("-release_step")).c_str(), release_step);
+        ATRACE_INT((cdev_name + std::string("-cdev_floor")).c_str(), cdev_floor);
+        ATRACE_INT((cdev_name + std::string("-cdev_ceiling")).c_str(), cdev_ceiling);
 
         auto request_state = std::max(pid_cdev_request, hardlimit_cdev_request);
         if (release_step) {
@@ -701,16 +701,44 @@ void ThermalThrottling::computeCoolingDevicesRequest(
             request_state = std::max(request_state, cdev_floor);
         }
         request_state = std::min(request_state, cdev_ceiling);
-
         if (cdev_request_pair.second != request_state) {
+            if (updateCdevMaxRequestAndNotifyIfChange(cdev_name, cdev_request_pair.second,
+                                                      request_state)) {
+                cooling_devices_to_update->emplace_back(cdev_name);
+            }
             cdev_request_pair.second = request_state;
-            cooling_devices_to_update->emplace_back(cdev_request_pair.first);
             // Update sensor cdev request time in state
-            thermal_stats_helper->updateBindedCdevStats(sensor_name, cdev_request_pair.first,
-                                                        binded_cdev_info.stats_info,
-                                                        cdev_request_pair.second);
+            thermal_stats_helper->updateBindedCdevStats(
+                    sensor_name, cdev_name, binded_cdev_info.stats_info, cdev_request_pair.second);
         }
     }
+}
+
+bool ThermalThrottling::updateCdevMaxRequestAndNotifyIfChange(std::string_view cdev_name,
+                                                              int cur_request, int new_request) {
+    std::unique_lock<std::shared_mutex> _lock(cdev_all_request_map_mutex_);
+    auto &request_set = cdev_all_request_map_.at(cdev_name.data());
+    int cur_max_request = (*request_set.begin());
+    // Remove old cdev request and add the new one.
+    request_set.erase(request_set.find(cur_request));
+    request_set.insert(new_request);
+    // Check if there is any change in aggregated max cdev request.
+    int new_max_request = (*request_set.begin());
+    LOG(VERBOSE) << "For cooling device [" << cdev_name.data()
+                 << "] cur_max_request is: " << cur_max_request
+                 << " new_max_request is: " << new_max_request;
+    return new_max_request != cur_max_request;
+}
+
+bool ThermalThrottling::getCdevMaxRequest(std::string_view cdev_name, int *max_state) {
+    std::shared_lock<std::shared_mutex> _lock(cdev_all_request_map_mutex_);
+    if (!cdev_all_request_map_.count(cdev_name.data())) {
+        LOG(ERROR) << "Cooling device [" << cdev_name.data()
+                   << "] not present in cooling device request map";
+        return false;
+    }
+    *max_state = *cdev_all_request_map_.at(cdev_name.data()).begin();
+    return true;
 }
 
 }  // namespace implementation
