@@ -23,9 +23,6 @@ cc_defaults {
         "-DATRACE_TAG=(ATRACE_TAG_VIBRATOR | ATRACE_TAG_HAL)",
         "-DLOG_TAG=\"Vibrator\"",
     ],
-    shared_libs: [
-        "libbinder",
-    ],
 }
 
 cc_defaults {

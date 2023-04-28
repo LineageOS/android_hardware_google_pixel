@@ -48,7 +48,6 @@ namespace vibrator {
 #define HAPTICS_TRACE(...)
 #endif
 
-static constexpr uint8_t FF_CUSTOM_DATA_LEN = 2;
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 2044;  // (COMPOSE_SIZE_MAX + 1) * 8 + 4
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_PWLE = 2302;
 
@@ -410,18 +409,22 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
     mEffectDurations = {
             1000, 100, 12, 1000, 300, 130, 150, 500, 100, 5, 12, 1000, 1000, 1000,
     }; /* 11+3 waveforms. The duration must < UINT16_MAX */
+    mEffectCustomData.reserve(WAVEFORM_MAX_INDEX);
 
     uint8_t effectIndex;
+    uint16_t numBytes = 0;
     for (effectIndex = 0; effectIndex < WAVEFORM_MAX_INDEX; effectIndex++) {
         if (effectIndex < WAVEFORM_MAX_PHYSICAL_INDEX) {
             /* Initialize physical waveforms. */
+            mEffectCustomData.push_back({RAM_WVFRM_BANK, effectIndex});
             mFfEffects[effectIndex] = {
                     .type = FF_PERIODIC,
                     .id = -1,
                     .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
                     .u.periodic.waveform = FF_CUSTOM,
-                    .u.periodic.custom_data = new int16_t[2]{RAM_WVFRM_BANK, effectIndex},
-                    .u.periodic.custom_len = FF_CUSTOM_DATA_LEN,
+                    .u.periodic.custom_data = mEffectCustomData[effectIndex].data(),
+                    .u.periodic.custom_len =
+                            static_cast<uint32_t>(mEffectCustomData[effectIndex].size()),
             };
             // Bypass the waveform update due to different input name
             if (INPUT_EVENT_NAME.find("cs40l26") != std::string::npos) {
@@ -437,12 +440,16 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
             }
         } else {
             /* Initiate placeholders for OWT effects. */
+            numBytes = effectIndex == WAVEFORM_COMPOSE ? FF_CUSTOM_DATA_LEN_MAX_COMP
+                                                       : FF_CUSTOM_DATA_LEN_MAX_PWLE;
+            std::vector<int16_t> tempVec(numBytes, 0);
+            mEffectCustomData.push_back(std::move(tempVec));
             mFfEffects[effectIndex] = {
                     .type = FF_PERIODIC,
                     .id = -1,
                     .replay.length = 0,
                     .u.periodic.waveform = FF_CUSTOM,
-                    .u.periodic.custom_data = nullptr,
+                    .u.periodic.custom_data = mEffectCustomData[effectIndex].data(),
                     .u.periodic.custom_len = 0,
             };
         }
@@ -973,7 +980,7 @@ ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
     if (!set) {
         mLongEffectScale = 1.0;  // Reset the scale for the later new effect.
     }
-    return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX, true);
+    return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX, set);
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> * /*_aidl_return*/) {
