@@ -448,25 +448,15 @@ bool ThermalHelper::readTemperatureThreshold(std::string_view sensor_name,
 void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated_cdev) {
     int max_state;
 
-    const auto &thermal_throttling_status_map = thermal_throttling_.GetThermalThrottlingStatusMap();
-
     for (const auto &target_cdev : updated_cdev) {
-        max_state = 0;
-        for (const auto &thermal_throttling_status_pair : thermal_throttling_status_map) {
-            if (!thermal_throttling_status_pair.second.cdev_status_map.count(target_cdev)) {
-                continue;
+        if (thermal_throttling_.getCdevMaxRequest(target_cdev, &max_state)) {
+            if (cooling_devices_.writeCdevFile(target_cdev, std::to_string(max_state))) {
+                ATRACE_INT(target_cdev.c_str(), max_state);
+                LOG(INFO) << "Successfully update cdev " << target_cdev << " sysfs to "
+                          << max_state;
+            } else {
+                LOG(ERROR) << "Failed to update cdev " << target_cdev << " sysfs to " << max_state;
             }
-            const auto state =
-                    thermal_throttling_status_pair.second.cdev_status_map.at(target_cdev);
-            if (state > max_state) {
-                max_state = state;
-            }
-        }
-        if (cooling_devices_.writeCdevFile(target_cdev, std::to_string(max_state))) {
-            ATRACE_INT(target_cdev.c_str(), max_state);
-            LOG(INFO) << "Successfully update cdev " << target_cdev << " sysfs to " << max_state;
-        } else {
-            LOG(ERROR) << "Failed to update cdev " << target_cdev << " sysfs to " << max_state;
         }
     }
 }
