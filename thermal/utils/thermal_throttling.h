@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/thermal/Temperature.h>
 
 #include <queue>
+#include <set>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -87,6 +88,8 @@ class ThermalThrottling {
                                       const ThrottlingSeverity curr_severity,
                                       std::vector<std::string> *cooling_devices_to_update,
                                       ThermalStatsHelper *thermal_stats_helper);
+    // Get the aggregated (from all sensor) max request for a cooling device
+    bool getCdevMaxRequest(std::string_view cdev_name, int *max_state);
 
   private:
     // PID algo - get the total power budget
@@ -120,10 +123,16 @@ class ThermalThrottling {
             const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map,
             const std::unordered_map<std::string, PowerStatus> &power_status_map,
             const ThrottlingSeverity severity, const SensorInfo &sensor_info);
-
+    // Update the cooling device request set for new request and notify the caller if there is
+    // change in max_request for the cooling device.
+    bool updateCdevMaxRequestAndNotifyIfChange(std::string_view cdev_name, int cur_request,
+                                               int new_request);
     mutable std::shared_mutex thermal_throttling_status_map_mutex_;
     // Thermal throttling status from each sensor
     std::unordered_map<std::string, ThermalThrottlingStatus> thermal_throttling_status_map_;
+    std::shared_mutex cdev_all_request_map_mutex_;
+    // Set of all request for a cooling device from each sensor
+    std::unordered_map<std::string, std::multiset<int, std::greater<int>>> cdev_all_request_map_;
 };
 
 }  // namespace implementation

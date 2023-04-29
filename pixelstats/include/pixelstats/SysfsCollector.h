@@ -23,6 +23,7 @@
 #include "BatteryEEPROMReporter.h"
 #include "BatteryHealthReporter.h"
 #include "BrownoutDetectedReporter.h"
+#include "MitigationDurationReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
 #include "TempResidencyReporter.h"
@@ -59,6 +60,7 @@ class SysfsCollector {
         const char *const ZramBdStatPath;
         const char *const EEPROMPath;
         const char *const MitigationPath;
+        const char *const MitigationDurationPath;
         const char *const BrownoutLogPath;
         const char *const BrownoutReasonProp;
         const char *const SpeakerTemperaturePath;
@@ -109,6 +111,7 @@ class SysfsCollector {
     void logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_client);
     void logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> &stats_client);
     void logThermalStats(const std::shared_ptr<IStats> &stats_client);
+    void logMitigationDurationCounts(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
@@ -143,6 +146,7 @@ class SysfsCollector {
     const char *const kBrownoutLogPath;
     const char *const kBrownoutReasonProp;
     const char *const kPowerMitigationStatsPath;
+    const char *const kPowerMitigationDurationPath;
     const char *const kSpeakerTemperaturePath;
     const char *const kSpeakerExcursionPath;
     const char *const kSpeakerHeartbeatPath;
@@ -160,6 +164,7 @@ class SysfsCollector {
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
+    MitigationDurationReporter mitigation_duration_reporter_;
     BrownoutDetectedReporter brownout_detected_reporter_;
     ThermalStatsReporter thermal_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
