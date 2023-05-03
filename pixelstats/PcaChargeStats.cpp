@@ -38,7 +38,11 @@ bool PcaChargeStats::CheckPcaContentsAndAck(std::string *file_contents) {
     std::istringstream ss;
 
     if (!ReadFileToString(path.c_str(), file_contents)) {
-        path = kPca94xxChargeMetricsPath;
+        if (!ReadFileToString(kPca94xxChargeMetricsPath.c_str(), file_contents)) {
+            path = kDcChargeMetricsPath;
+        } else {
+            path = kPca94xxChargeMetricsPath;
+        }
         if (!ReadFileToString(path.c_str(), file_contents)) {
             return false;
         }
@@ -58,9 +62,11 @@ bool PcaChargeStats::CheckPcaContentsAndAck(std::string *file_contents) {
 }
 
 PcaChargeStats::PcaChargeStats(const std::string pca_charge_metrics_path,
-                               const std::string pca94xx_charge_metrics_path)
+                               const std::string pca94xx_charge_metrics_path,
+                               const std::string dc_charge_metrics_path)
     : kPcaChargeMetricsPath(pca_charge_metrics_path),
-      kPca94xxChargeMetricsPath(pca94xx_charge_metrics_path) {}
+      kPca94xxChargeMetricsPath(pca94xx_charge_metrics_path),
+      kDcChargeMetricsPath(dc_charge_metrics_path) {}
 
 }  // namespace pixel
 }  // namespace google
