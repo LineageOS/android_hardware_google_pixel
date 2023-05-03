@@ -1552,7 +1552,7 @@ message BrownoutDetected {
     // Triggered DVFS State: Channel 6
     optional int32 dvfs_channel6 = 37;
     // brownout reason
-    optional int32 brownout_reason = 38;
+    optional BrownoutReason brownout_reason = 38;
 }
 
 /*
