@@ -452,8 +452,7 @@ void ThermalWatcher::parseUevent(std::set<std::string> *sensors_set) {
                 if (start_pos != std::string::npos) {
                     start_pos += 5;
                     std::string name = uevent.substr(start_pos);
-                    if (std::find(monitored_sensors_.begin(), monitored_sensors_.end(), name) !=
-                        monitored_sensors_.end()) {
+                    if (monitored_sensors_.find(name) != monitored_sensors_.end()) {
                         sensors_set->insert(name);
                     }
                     break;
@@ -487,8 +486,7 @@ void ThermalWatcher::parseGenlink(std::set<std::string> *sensors_set) {
 
         std::string name;
         if (getThermalZoneTypeById(tz_id, &name) &&
-            std::find(monitored_sensors_.begin(), monitored_sensors_.end(), name) !=
-                    monitored_sensors_.end()) {
+            monitored_sensors_.find(name) != monitored_sensors_.end()) {
             sensors_set->insert(name);
         }
     }
