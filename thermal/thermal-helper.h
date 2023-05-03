@@ -46,7 +46,6 @@ namespace implementation {
 using ::android::sp;
 
 using NotificationCallback = std::function<void(const Temperature &t)>;
-using NotificationTime = std::chrono::time_point<std::chrono::steady_clock>;
 
 // Get thermal_zone type
 bool getThermalZoneTypeById(int tz_id, std::string *);
