@@ -249,6 +249,7 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
 
     ATRACE_INT((sensor_name + std::string("-err")).c_str(), static_cast<int>(err));
     ATRACE_INT((sensor_name + std::string("-p")).c_str(), static_cast<int>(p));
+    ATRACE_INT((sensor_name + std::string("-d")).c_str(), static_cast<int>(d));
     ATRACE_INT((sensor_name + std::string("-temp")).c_str(), static_cast<int>(temp.value));
 
     throttling_status.prev_power_budget = power_budget;
