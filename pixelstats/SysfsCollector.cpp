@@ -670,11 +670,11 @@ void SysfsCollector::logF2fsAtomicWriteInfo(const std::shared_ptr<IStats> &stats
     // Load values array
     std::vector<VendorAtomValue> values(3);
     values[F2fsAtomicWriteInfo::kPeakAtomicWriteFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(peak_atomic_write);
+                    VendorAtomValue::make<VendorAtomValue::intValue>(peak_atomic_write);
     values[F2fsAtomicWriteInfo::kCommittedAtomicBlockFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(committed_atomic_block);
+                    VendorAtomValue::make<VendorAtomValue::intValue>(committed_atomic_block);
     values[F2fsAtomicWriteInfo::kRevokedAtomicBlockFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(revoked_atomic_block);
+                    VendorAtomValue::make<VendorAtomValue::intValue>(revoked_atomic_block);
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
