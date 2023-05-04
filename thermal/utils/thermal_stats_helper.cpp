@@ -58,8 +58,9 @@ static bool isRecordStats(const std::shared_ptr<StatsInfo<T>> &stats_info) {
 bool ThermalStatsHelper::initializeStats(
         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_) {
-    bool is_initialized_ = initializeSensorStats(sensor_info_map_) &&
-                           initializeBindedCdevStats(sensor_info_map_, cooling_device_info_map_);
+    bool is_initialized_ =
+            initializeSensorTempStats(sensor_info_map_) &&
+            initializeSensorCdevRequestStats(sensor_info_map_, cooling_device_info_map_);
     if (is_initialized_) {
         last_total_stats_report_time = boot_clock::now();
         LOG(INFO) << "Thermal Stats Initialized Successfully";
@@ -67,9 +68,9 @@ bool ThermalStatsHelper::initializeStats(
     return is_initialized_;
 }
 
-bool ThermalStatsHelper::initializeSensorStats(
+bool ThermalStatsHelper::initializeSensorTempStats(
         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_) {
-    std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_temp_map_mutex_);
+    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
     for (const auto &name_info_pair : sensor_info_map_) {
         auto &sensor_info = name_info_pair.second;
         if (isRecordStats(sensor_info.stats_info)) {
@@ -77,17 +78,17 @@ bool ThermalStatsHelper::initializeSensorStats(
                     sensor_info.stats_info->stats_threshold.empty()
                             ? kThrottlingSeverityCount  // if default, use severity as bucket
                             : (sensor_info.stats_info->stats_threshold.size() + 1);
-            thermal_stats_sensor_temp_map_[name_info_pair.first] = ThermalStats(time_in_state_size);
+            sensor_temp_stats_map_[name_info_pair.first] = StatsRecord(time_in_state_size);
             LOG(INFO) << "Thermal Sensor stats initialized for sensor: " << name_info_pair.first;
         }
     }
     return true;
 }
 
-bool ThermalStatsHelper::initializeBindedCdevStats(
+bool ThermalStatsHelper::initializeSensorCdevRequestStats(
         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_) {
-    std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_binded_cdev_state_map_mutex_);
+    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
     for (const auto &sensor_info_pair : sensor_info_map_) {
         for (const auto &binded_cdev_info_pair :
              sensor_info_pair.second.throttling_info->binded_cdev_info_map) {
@@ -113,9 +114,8 @@ bool ThermalStatsHelper::initializeBindedCdevStats(
                         stats_threshold.size() +
                         1;  // +1 for bucket to include values greater than last threshold
             }
-            thermal_stats_sensor_binded_cdev_state_map_[sensor_info_pair.first]
-                                                       [binded_cdev_info_pair.first] =
-                                                               ThermalStats(time_in_state_size);
+            sensor_cdev_request_stats_map_[sensor_info_pair.first][binded_cdev_info_pair.first] =
+                    StatsRecord(time_in_state_size);
             LOG(INFO) << "Thermal BindedCdev stats initialized for sensor: "
                       << sensor_info_pair.first << " " << binded_cdev_info_pair.first;
         }
@@ -123,28 +123,22 @@ bool ThermalStatsHelper::initializeBindedCdevStats(
     return true;
 }
 
-void ThermalStatsHelper::updateStats(ThermalStats *thermal_stats, int new_state) {
+void ThermalStatsHelper::updateStatsRecord(StatsRecord *stats_record, int new_state) {
     const auto now = boot_clock::now();
-    const auto prev_state_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - thermal_stats->prev_update_time);
-    LOG(VERBOSE) << "Adding duration " << prev_state_duration.count()
-                 << " for prev_state: " << thermal_stats->prev_state << " with value: "
-                 << thermal_stats->time_in_state_ms[thermal_stats->prev_state].count();
+    const auto cur_state_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - stats_record->cur_state_start_time);
+    LOG(VERBOSE) << "Adding duration " << cur_state_duration.count()
+                 << " for cur_state: " << stats_record->cur_state << " with value: "
+                 << stats_record->time_in_state_ms[stats_record->cur_state].count();
     // Update last record end time
-    thermal_stats->time_in_state_ms[thermal_stats->prev_state] += prev_state_duration;
-    thermal_stats->prev_update_time = now;
-    thermal_stats->prev_state = new_state;
+    stats_record->time_in_state_ms[stats_record->cur_state] += cur_state_duration;
+    stats_record->cur_state_start_time = now;
+    stats_record->cur_state = new_state;
 }
 
-void ThermalStatsHelper::closePrevStateStat(ThermalStats *thermal_stats) {
-    // updateStats will close last state stat and update time_in_state
-    // use prev_state as the new state to continue recording same state
-    updateStats(thermal_stats, thermal_stats->prev_state);
-}
-
-void ThermalStatsHelper::updateSensorStats(std::string_view sensor,
-                                           const std::shared_ptr<StatsInfo<float>> &stats_info,
-                                           const Temperature &t) {
+void ThermalStatsHelper::updateSensorTempStats(std::string_view sensor,
+                                               const std::shared_ptr<StatsInfo<float>> &stats_info,
+                                               const Temperature &t) {
     if (!isRecordStats(stats_info)) {
         return;
     }
@@ -156,17 +150,16 @@ void ThermalStatsHelper::updateSensorStats(std::string_view sensor,
         auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), t.value);
         new_value = (threshold_idx - thresholds.begin());
     }
-    std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_temp_map_mutex_);
-    ThermalStats &thermal_stats = thermal_stats_sensor_temp_map_.at(sensor.data());
+    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
+    StatsRecord &stats_record = sensor_temp_stats_map_.at(sensor.data());
     LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
                  << " with new value: " << new_value;
-    updateStats(&thermal_stats, new_value);
+    updateStatsRecord(&stats_record, new_value);
 }
 
-void ThermalStatsHelper::updateBindedCdevStats(std::string_view trigger_sensor,
-                                               std::string_view cdev,
-                                               const std::shared_ptr<StatsInfo<int>> &stats_info,
-                                               int new_value) {
+void ThermalStatsHelper::updateSensorCdevRequestStats(
+        std::string_view trigger_sensor, std::string_view cdev,
+        const std::shared_ptr<StatsInfo<int>> &stats_info, int new_value) {
     if (!isRecordStats(stats_info)) {
         return;
     }
@@ -175,12 +168,12 @@ void ThermalStatsHelper::updateBindedCdevStats(std::string_view trigger_sensor,
         auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), new_value);
         new_value = (threshold_idx - thresholds.begin());
     }
-    std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_binded_cdev_state_map_mutex_);
-    ThermalStats &thermal_stats =
-            thermal_stats_sensor_binded_cdev_state_map_.at(trigger_sensor.data()).at(cdev.data());
+    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
+    StatsRecord &stats_record =
+            sensor_cdev_request_stats_map_.at(trigger_sensor.data()).at(cdev.data());
     LOG(VERBOSE) << "Updating bindedCdev stats for trigger_sensor: " << trigger_sensor.data()
                  << " , cooling_device: " << cdev.data() << " with new value: " << new_value;
-    updateStats(&thermal_stats, new_value);
+    updateStatsRecord(&stats_record, new_value);
 }
 
 int ThermalStatsHelper::reportStats() {
@@ -201,15 +194,15 @@ int ThermalStatsHelper::reportStats() {
         return -1;
     }
     int count_failed_reporting =
-            reportSensorStats(stats_client) + reportBindedCdevStats(stats_client);
+            reportSensorTempStats(stats_client) + reportSensorCdevRequestStats(stats_client);
     last_total_stats_report_time = curTime;
     return count_failed_reporting;
 }
 
-int ThermalStatsHelper::reportSensorStats(const std::shared_ptr<IStats> &stats_client) {
+int ThermalStatsHelper::reportSensorTempStats(const std::shared_ptr<IStats> &stats_client) {
     int count_failed_reporting = 0;
-    std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_temp_map_mutex_);
-    for (auto &sensor_temp_stats_pair : thermal_stats_sensor_temp_map_) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
+    for (auto &sensor_temp_stats_pair : sensor_temp_stats_map_) {
         LOG(VERBOSE) << "Reporting sensor stats for " << sensor_temp_stats_pair.first;
         // Load values array
         std::vector<VendorAtomValue> values(1);
@@ -225,10 +218,10 @@ int ThermalStatsHelper::reportSensorStats(const std::shared_ptr<IStats> &stats_c
     return count_failed_reporting;
 }
 
-int ThermalStatsHelper::reportBindedCdevStats(const std::shared_ptr<IStats> &stats_client) {
+int ThermalStatsHelper::reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client) {
     int count_failed_reporting = 0;
-    std::unique_lock<std::shared_mutex> _lock(thermal_stats_sensor_binded_cdev_state_map_mutex_);
-    for (auto &sensor_binded_cdev_stats_pair : thermal_stats_sensor_binded_cdev_state_map_) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
+    for (auto &sensor_binded_cdev_stats_pair : sensor_cdev_request_stats_map_) {
         for (auto &cdev_stats_pair : sensor_binded_cdev_stats_pair.second) {
             LOG(VERBOSE) << "Reporting bindedCdev stats for sensor: "
                          << sensor_binded_cdev_stats_pair.first
@@ -253,12 +246,12 @@ int ThermalStatsHelper::reportBindedCdevStats(const std::shared_ptr<IStats> &sta
 bool ThermalStatsHelper::reportThermalStats(const std::shared_ptr<IStats> &stats_client,
                                             const int32_t &atom_id,
                                             std::vector<VendorAtomValue> values,
-                                            ThermalStats *thermal_stats) {
+                                            StatsRecord *stats_record) {
     // maintain a copy in case reporting fails
-    ThermalStats thermal_stats_before_reporting = *thermal_stats;
-    std::vector<int64_t> time_in_state_ms = processStatsBeforeReporting(thermal_stats);
+    StatsRecord thermal_stats_before_reporting = *stats_record;
+    std::vector<int64_t> time_in_state_ms = processStatsRecordForReporting(stats_record);
     const auto since_last_update_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            thermal_stats->prev_update_time - thermal_stats->last_stats_report_time);
+            stats_record->cur_state_start_time - stats_record->last_stats_report_time);
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::longValue>(since_last_update_ms.count());
     values.push_back(tmp);
@@ -273,19 +266,19 @@ bool ThermalStatsHelper::reportThermalStats(const std::shared_ptr<IStats> &stats
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         LOG(ERROR) << "Unable to report to Stats service for atom " << atom_id;
-        *thermal_stats = restoreThermalStatOnFailure(std::move(thermal_stats_before_reporting));
+        *stats_record = restoreStatsRecordOnFailure(std::move(thermal_stats_before_reporting));
         return false;
     } else {
         // Update last time of stats reporting
-        thermal_stats->last_stats_report_time = boot_clock::now();
+        stats_record->last_stats_report_time = boot_clock::now();
     }
     return true;
 }
 
-std::vector<int64_t> ThermalStatsHelper::processStatsBeforeReporting(ThermalStats *thermal_stats) {
-    // update the last unclosed entry
-    closePrevStateStat(thermal_stats);
-    std::vector<std::chrono::milliseconds> &time_in_state_ms = thermal_stats->time_in_state_ms;
+std::vector<int64_t> ThermalStatsHelper::processStatsRecordForReporting(StatsRecord *stats_record) {
+    // update the last unclosed entry and start new record with same state
+    updateStatsRecord(stats_record, stats_record->cur_state);
+    std::vector<std::chrono::milliseconds> &time_in_state_ms = stats_record->time_in_state_ms;
     // convert std::chrono::milliseconds time_in_state to int64_t vector for reporting
     std::vector<int64_t> stats_residency(time_in_state_ms.size());
     std::transform(time_in_state_ms.begin(), time_in_state_ms.end(), stats_residency.begin(),
@@ -295,32 +288,36 @@ std::vector<int64_t> ThermalStatsHelper::processStatsBeforeReporting(ThermalStat
     return stats_residency;
 }
 
-ThermalStats ThermalStatsHelper::restoreThermalStatOnFailure(
-        ThermalStats &&thermal_stats_before_failure) {
-    thermal_stats_before_failure.report_fail_count += 1;
+StatsRecord ThermalStatsHelper::restoreStatsRecordOnFailure(
+        StatsRecord &&stats_record_before_failure) {
+    stats_record_before_failure.report_fail_count += 1;
     // If consecutive count of failure is high, reset stat to avoid overflow
-    if (thermal_stats_before_failure.report_fail_count >= kMaxStatsReportingFailCount) {
-        return ThermalStats(thermal_stats_before_failure.time_in_state_ms.size(),
-                            thermal_stats_before_failure.prev_state);
+    if (stats_record_before_failure.report_fail_count >= kMaxStatsReportingFailCount) {
+        return StatsRecord(stats_record_before_failure.time_in_state_ms.size(),
+                           stats_record_before_failure.cur_state);
     } else {
-        return thermal_stats_before_failure;
+        return stats_record_before_failure;
     }
 }
 
-std::unordered_map<std::string, ThermalStats> ThermalStatsHelper::GetSensorThermalStatsSnapshot() {
-    auto sensor_stats_snapshot = thermal_stats_sensor_temp_map_;
+std::unordered_map<std::string, StatsRecord> ThermalStatsHelper::GetSensorTempStatsSnapshot() {
+    auto sensor_stats_snapshot = sensor_temp_stats_map_;
     for (auto &sensor_temp_stats_pair : sensor_stats_snapshot) {
-        closePrevStateStat(&sensor_temp_stats_pair.second);
+        auto &temp_stats = sensor_temp_stats_pair.second;
+        // update the last unclosed entry
+        updateStatsRecord(&temp_stats, temp_stats.cur_state);
     }
     return sensor_stats_snapshot;
 }
 
-std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats>>
-ThermalStatsHelper::GetBindedCdevThermalStatsSnapshot() {
-    auto binded_cdev_stats_snapshot = thermal_stats_sensor_binded_cdev_state_map_;
+std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
+ThermalStatsHelper::GetSensorCoolingDeviceRequestStatsSnapshot() {
+    auto binded_cdev_stats_snapshot = sensor_cdev_request_stats_map_;
     for (auto &sensor_binded_cdev_stats_pair : binded_cdev_stats_snapshot) {
         for (auto &cdev_stats_pair : sensor_binded_cdev_stats_pair.second) {
-            closePrevStateStat(&cdev_stats_pair.second);
+            auto &request_stats = cdev_stats_pair.second;
+            // update the last unclosed entry
+            updateStatsRecord(&request_stats, request_stats.cur_state);
         }
     }
     return binded_cdev_stats_snapshot;
