@@ -140,6 +140,11 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         ret = false;
     }
 
+    if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
+                                               cooling_device_info_map_)) {
+        LOG(FATAL) << "Failed to initialize thermal stats";
+    }
+
     for (auto const &name_status_pair : sensor_info_map_) {
         sensor_status_map_[name_status_pair.first] = {
                 .severity = ThrottlingSeverity::NONE,
@@ -256,10 +261,10 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         LOG(FATAL) << "ThermalHAL could not start watching thread properly.";
     }
 
-    is_initialized_ =
-            thermal_stats_helper_.initializeStats(sensor_info_map_, cooling_device_info_map_);
-    if (!is_initialized_) {
-        LOG(FATAL) << "Failed to initialize thermal stats";
+    if (!connectToPowerHal()) {
+        LOG(ERROR) << "Fail to connect to Power Hal";
+    } else {
+        updateSupportedPowerHints();
     }
 }
 
@@ -416,7 +421,7 @@ bool ThermalHelper::readTemperature(
             sensor_log << sensor_log_pair.first << ":" << sensor_log_pair.second << " ";
         }
         // Update sensor temperature time in state
-        thermal_stats_helper_.updateSensorStats(sensor_name, sensor_info.stats_info, *out);
+        thermal_stats_helper_.updateSensorTempStatsBySeverity(sensor_name, out->throttlingStatus);
         LOG(INFO) << sensor_name.data() << ":" << out->value << " raw data: " << sensor_log.str();
     }
 
@@ -940,6 +945,7 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
         sensor_status.thermal_cached.timestamp = now;
     }
 
+    thermal_stats_helper_.updateSensorTempStatsByThreshold(sensor_name, *temp);
     return true;
 }
 
