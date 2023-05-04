@@ -29,6 +29,8 @@ namespace hardware {
 namespace thermal {
 namespace implementation {
 
+constexpr std::string_view kCustomThresholdSetSuffix("-THRESHOLD-LIST-");
+
 using aidl::android::frameworks::stats::VendorAtom;
 namespace PixelAtoms = ::android::hardware::google::pixel::PixelAtoms;
 
@@ -117,23 +119,18 @@ bool ThermalStatsHelper::initializeSensorCdevRequestStats(
 
             // Record by custom threshold
             if (request_stats_info.record_by_threshold.count(cdev)) {
-                const auto &thresholds_list = request_stats_info.record_by_threshold.at(cdev);
-                for (const auto &thresholds : thresholds_list) {
+                for (const auto &threshold_list : request_stats_info.record_by_threshold.at(cdev)) {
                     // check last threshold value(which is >= number of buckets as numbers in
                     // threshold are strictly increasing from 0) is less than max_state
-                    if (thresholds.back() >= max_state) {
+                    if (threshold_list.thresholds.back() >= max_state) {
                         LOG(ERROR) << "For sensor " << sensor << " bindedCdev: " << cdev
-                                   << "Invalid bindedCdev stats threshold: " << thresholds.back()
-                                   << " >= " << max_state;
+                                   << "Invalid bindedCdev stats threshold: "
+                                   << threshold_list.thresholds.back() << " >= " << max_state;
                         sensor_cdev_request_stats_map_.clear();
                         return false;
                     }
-                    // number of states = number of thresholds + 1
-                    // e.g. threshold: [2, 5, 8]
-                    //      buckets: [0 - 2, 2 - 5, 5-8, 8-MAX STATE]
-                    const int time_in_state_size = thresholds.size() + 1;
                     sensor_cdev_request_stats_map_[sensor][cdev]
-                            .stats_by_custom_threshold.emplace_back(time_in_state_size, thresholds);
+                            .stats_by_custom_threshold.emplace_back(threshold_list);
                     LOG(INFO)
                             << "Sensor Cdev user vote stats on basis of threshold initialized for ["
                             << sensor << "-" << cdev << "]";
@@ -163,14 +160,9 @@ bool ThermalStatsHelper::initializeSensorTempStats(
 
         // Record by custom threshold
         if (sensor_stats_info.record_by_threshold.count(sensor)) {
-            const auto &thresholds_list = sensor_stats_info.record_by_threshold.at(sensor);
-            for (const auto &thresholds : thresholds_list) {
-                // number of states = number of thresholds + 1
-                // e.g. threshold: [30, 50, 60]
-                //      buckets: [-INF - 30, 30 - 50, 50-60, 60-INF]
-                int time_in_state_size = thresholds.size() + 1;
+            for (const auto &threshold_list : sensor_stats_info.record_by_threshold.at(sensor)) {
                 sensor_temp_stats_map_[sensor].stats_by_custom_threshold.emplace_back(
-                        time_in_state_size, thresholds);
+                        threshold_list);
                 LOG(INFO) << "Sensor temp stats on basis of threshold initialized for [" << sensor
                           << "]";
             }
@@ -269,8 +261,13 @@ int ThermalStatsHelper::reportAllSensorTempStats(const std::shared_ptr<IStats> &
     int count_failed_reporting = 0;
     std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
     for (auto &[sensor, temp_stats] : sensor_temp_stats_map_) {
-        for (auto &stats_by_threshold : temp_stats.stats_by_custom_threshold) {
-            if (!reportSensorTempStats(stats_client, sensor, &stats_by_threshold.stats_record)) {
+        for (size_t threshold_set_idx = 0;
+             threshold_set_idx < temp_stats.stats_by_custom_threshold.size(); threshold_set_idx++) {
+            auto &stats_by_threshold = temp_stats.stats_by_custom_threshold[threshold_set_idx];
+            std::string sensor_name = stats_by_threshold.logging_name.value_or(
+                    sensor + kCustomThresholdSetSuffix.data() + std::to_string(threshold_set_idx));
+            if (!reportSensorTempStats(stats_client, sensor_name,
+                                       &stats_by_threshold.stats_record)) {
                 count_failed_reporting++;
             }
         }
@@ -306,8 +303,15 @@ int ThermalStatsHelper::reportAllSensorCdevRequestStats(
     std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
     for (auto &[sensor, cdev_request_stats_map] : sensor_cdev_request_stats_map_) {
         for (auto &[cdev, request_stats] : cdev_request_stats_map) {
-            for (auto &stats_by_threshold : request_stats.stats_by_custom_threshold) {
-                if (!reportSensorCdevRequestStats(stats_client, sensor, cdev,
+            for (size_t threshold_set_idx = 0;
+                 threshold_set_idx < request_stats.stats_by_custom_threshold.size();
+                 threshold_set_idx++) {
+                auto &stats_by_threshold =
+                        request_stats.stats_by_custom_threshold[threshold_set_idx];
+                std::string cdev_name = stats_by_threshold.logging_name.value_or(
+                        cdev + kCustomThresholdSetSuffix.data() +
+                        std::to_string(threshold_set_idx));
+                if (!reportSensorCdevRequestStats(stats_client, sensor, cdev_name,
                                                   &stats_by_threshold.stats_record)) {
                     count_failed_reporting++;
                 }
