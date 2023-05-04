@@ -1082,7 +1082,7 @@ bool ParseStatsInfo(const Json::Value &stats_config,
         LOG(INFO) << "No stat by default threshold enabled.";
     }
 
-    std::unordered_map<std::string, std::vector<std::vector<T>>> record_by_threshold;
+    std::unordered_map<std::string, std::vector<ThresholdList<T>>> record_by_threshold;
     values = stats_config["RecordWithThreshold"];
     if (values.size()) {
         Json::Value threshold_values;
@@ -1092,7 +1092,15 @@ bool ParseStatsInfo(const Json::Value &stats_config,
                 LOG(ERROR) << "Unknown name [" << name << "] not present in entity_info.";
                 return false;
             }
-            LOG(INFO) << "Start to parse stats info for [" << name << "]";
+
+            std::optional<std::string> logging_name;
+            if (!values[i]["LoggingName"].empty()) {
+                logging_name = values[i]["LoggingName"].asString();
+                LOG(INFO) << "For [" << name << "]"
+                          << ", stats logging name is [" << logging_name.value() << "]";
+            }
+
+            LOG(INFO) << "Start to parse stats threshold for [" << name << "]";
             threshold_values = values[i]["Thresholds"];
             if (threshold_values.empty()) {
                 LOG(ERROR) << "Empty stats threshold not valid.";
@@ -1119,7 +1127,7 @@ bool ParseStatsInfo(const Json::Value &stats_config,
                 prev_value = stats_threshold[i];
                 LOG(INFO) << "[" << i << "]: " << stats_threshold[i];
             }
-            record_by_threshold[name].push_back(stats_threshold);
+            record_by_threshold[name].emplace_back(logging_name, stats_threshold);
         }
     } else {
         LOG(INFO) << "No stat by threshold enabled.";

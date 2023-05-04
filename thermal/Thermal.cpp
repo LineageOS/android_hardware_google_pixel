@@ -539,17 +539,20 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     *dump_buf << "getThermalStatsInfo:" << std::endl;
     *dump_buf << " Sensor Temp Stats Info:" << std::endl;
     const auto &sensor_temp_stats_map_ = thermal_helper_.GetSensorTempStatsSnapshot();
-    const std::string sensor_temp_stats_line_prefix("   ");
+    const std::string sensor_temp_stats_line_prefix("    ");
     for (const auto &sensor_temp_stats_pair : sensor_temp_stats_map_) {
         *dump_buf << "  Sensor Name: " << sensor_temp_stats_pair.first << std::endl;
         const auto &sensor_temp_stats = sensor_temp_stats_pair.second;
         for (const auto &stats_by_threshold : sensor_temp_stats.stats_by_custom_threshold) {
-            const auto &thresholds = stats_by_threshold.thresholds;
             *dump_buf << "   Record by Threshold: [";
-            for (const auto &threshold : thresholds) {
+            for (const auto &threshold : stats_by_threshold.thresholds) {
                 *dump_buf << threshold << " ";
             }
             *dump_buf << "]" << std::endl;
+            if (stats_by_threshold.logging_name.has_value()) {
+                *dump_buf << "    Logging Name: " << stats_by_threshold.logging_name.value()
+                          << std::endl;
+            }
             dumpStatsRecord(dump_buf, stats_by_threshold.stats_record,
                             sensor_temp_stats_line_prefix);
         }
@@ -563,19 +566,22 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     *dump_buf << " Sensor Cdev Request Stats Info:" << std::endl;
     const auto &sensor_cdev_request_stats_map_ =
             thermal_helper_.GetSensorCoolingDeviceRequestStatsSnapshot();
-    const std::string sensor_cdev_request_stats_line_prefix("    ");
+    const std::string sensor_cdev_request_stats_line_prefix("     ");
     for (const auto &sensor_cdev_request_stats_pair : sensor_cdev_request_stats_map_) {
         *dump_buf << "  Sensor Name: " << sensor_cdev_request_stats_pair.first << std::endl;
         for (const auto &cdev_request_stats_pair : sensor_cdev_request_stats_pair.second) {
             *dump_buf << "   Cooling Device Name: " << cdev_request_stats_pair.first << std::endl;
             const auto &request_stats = cdev_request_stats_pair.second;
             for (const auto &stats_by_threshold : request_stats.stats_by_custom_threshold) {
-                const auto &thresholds = stats_by_threshold.thresholds;
                 *dump_buf << "    Record by Threshold: [";
-                for (const auto &threshold : thresholds) {
+                for (const auto &threshold : stats_by_threshold.thresholds) {
                     *dump_buf << threshold << " ";
                 }
                 *dump_buf << "]" << std::endl;
+                if (stats_by_threshold.logging_name.has_value()) {
+                    *dump_buf << "     Logging Name: " << stats_by_threshold.logging_name.value()
+                              << std::endl;
+                }
                 dumpStatsRecord(dump_buf, stats_by_threshold.stats_record,
                                 sensor_cdev_request_stats_line_prefix);
             }
