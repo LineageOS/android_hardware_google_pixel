@@ -24,6 +24,8 @@
 #include <chrono>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <variant>
 
 namespace aidl {
 namespace android {
@@ -41,8 +43,6 @@ constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::millisec
 // Max number of time_in_state buckets is 20 in atoms
 // VendorSensorCoolingDeviceStats, VendorTempResidencyStats
 constexpr size_t kMaxStatsThresholdCount = 19;
-constexpr bool kIsDefaultEnableBindedCdevStats = true;
-constexpr bool kIsDefaultEnableSensorStats = false;
 
 enum FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
@@ -52,11 +52,41 @@ enum FormulaOption : uint32_t {
 };
 
 template <typename T>
+struct ThresholdList {
+    std::optional<std::string> logging_name;
+    std::vector<T> thresholds;
+    explicit ThresholdList(std::optional<std::string> logging_name, std::vector<T> thresholds)
+        : logging_name(logging_name), thresholds(thresholds) {}
+
+    ThresholdList() = default;
+    ThresholdList(const ThresholdList &) = default;
+    ThresholdList &operator=(const ThresholdList &) = default;
+    ThresholdList(ThresholdList &&) = default;
+    ThresholdList &operator=(ThresholdList &&) = default;
+    ~ThresholdList() = default;
+};
+
+template <typename T>
 struct StatsInfo {
-    // The flag to indicate if stats to be recorded
-    bool record_stats;
-    // List of upper_bounds of buckets into which to split state requests.
-    std::vector<T> stats_threshold;
+    // if bool, record all or none depending on flag
+    // if set, check name present in set
+    std::variant<bool, std::unordered_set<std::string> >
+            record_by_default_threshold_all_or_name_set_;
+    // map name to list of thresholds
+    std::unordered_map<std::string, std::vector<ThresholdList<T> > > record_by_threshold;
+    void clear() {
+        record_by_default_threshold_all_or_name_set_ = false;
+        record_by_threshold.clear();
+    }
+};
+
+struct StatsConfig {
+    StatsInfo<float> sensor_stats_info;
+    StatsInfo<int> cooling_device_request_info;
+    void clear() {
+        sensor_stats_info.clear();
+        cooling_device_request_info.clear();
+    }
 };
 
 enum SensorFusionType : uint32_t {
@@ -103,7 +133,6 @@ struct BindedCdevInfo {
     bool high_power_check;
     // The flag for only triggering throttling until all power samples are collected
     bool throttling_with_power_link;
-    std::shared_ptr<StatsInfo<int>> stats_info;
 };
 
 struct ThrottlingInfo {
@@ -140,7 +169,6 @@ struct SensorInfo {
     bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::shared_ptr<ThrottlingInfo> throttling_info;
-    std::shared_ptr<StatsInfo<float>> stats_info;
 };
 
 struct CdevInfo {
@@ -165,6 +193,10 @@ bool ParseCoolingDevice(const Json::Value &config,
                         std::unordered_map<std::string, CdevInfo> *cooling_device_parsed);
 bool ParsePowerRailInfo(const Json::Value &config,
                         std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
+bool ParseStatsConfig(const Json::Value &config,
+                      const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
+                      const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
+                      StatsConfig *stats_config);
 }  // namespace implementation
 }  // namespace thermal
 }  // namespace hardware
