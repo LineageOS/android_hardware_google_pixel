@@ -563,10 +563,10 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     }
 
     *dump_buf << "getThermalStatsStatus:" << std::endl;
-    const auto thermal_stats_sensor_temp_map_ = thermal_helper_.GetSensorThermalStatsSnapshot();
+    const auto sensor_temp_stats_map_ = thermal_helper_.GetSensorTempStatsSnapshot();
     *dump_buf << " Sensor Residency Stats:" << std::endl;
     const auto now = boot_clock::now();
-    for (const auto &sensor_temp_stats_pair : thermal_stats_sensor_temp_map_) {
+    for (const auto &sensor_temp_stats_pair : sensor_temp_stats_map_) {
         *dump_buf << "  Sensor Name: " << sensor_temp_stats_pair.first << std::endl;
         *dump_buf << "   Time Since Last Stats Report: "
                   << std::chrono::duration_cast<std::chrono::minutes>(
@@ -579,20 +579,23 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
         }
         *dump_buf << "]" << std::endl;
     }
-    const auto thermal_stats_sensor_binded_cdev_state_map_ =
-            thermal_helper_.GetBindedCdevThermalStatsSnapshot();
+    const auto sensor_cdev_request_stats_map_ =
+            thermal_helper_.GetSensorCoolingDeviceRequestStatsSnapshot();
     *dump_buf << " Sensor Binded CDEV Stats:" << std::endl;
-    for (const auto &sensor_binded_cdev_stats_pair : thermal_stats_sensor_binded_cdev_state_map_) {
-        *dump_buf << "  Sensor Name: " << sensor_binded_cdev_stats_pair.first << std::endl;
-        for (const auto &binded_cdev_stats_pair : sensor_binded_cdev_stats_pair.second) {
-            *dump_buf << "   Cooling Device Name: " << binded_cdev_stats_pair.first << std::endl;
+    for (const auto &sensor_binded_cdev_request_stats_pair : sensor_cdev_request_stats_map_) {
+        *dump_buf << "  Sensor Name: " << sensor_binded_cdev_request_stats_pair.first << std::endl;
+        for (const auto &binded_cdev_request_stats_pair :
+             sensor_binded_cdev_request_stats_pair.second) {
+            *dump_buf << "   Cooling Device Name: " << binded_cdev_request_stats_pair.first
+                      << std::endl;
             *dump_buf << "    Time Since Last Stats Report: "
                       << std::chrono::duration_cast<std::chrono::minutes>(
-                                 now - binded_cdev_stats_pair.second.last_stats_report_time)
+                                 now - binded_cdev_request_stats_pair.second.last_stats_report_time)
                                  .count()
                       << " mins" << std::endl;
             *dump_buf << "    Time in State ms: [";
-            for (const auto &time_in_state : binded_cdev_stats_pair.second.time_in_state_ms) {
+            for (const auto &time_in_state :
+                 binded_cdev_request_stats_pair.second.time_in_state_ms) {
                 *dump_buf << time_in_state.count() << " ";
             }
             *dump_buf << "]" << std::endl;
