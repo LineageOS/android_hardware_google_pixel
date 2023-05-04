@@ -37,13 +37,14 @@ using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtom;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
+using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 
 /**
- * Parse file_contents and read residency stats into cur_stats.
+ * Parse file_contents and read residency stats into stats.
  */
 bool parse_file_contents(std::string file_contents,
-                         std::map<std::string, std::vector<int64_t>> *cur_stats) {
+                         std::map<std::string, std::vector<int64_t>> *stats) {
     const char *data = file_contents.c_str();
     int data_len = file_contents.length();
     char sensor_name[32];
@@ -75,7 +76,7 @@ bool parse_file_contents(std::string file_contents,
                        &bytes_read) != 1)
                 return false;
 
-            (*cur_stats)[sensor_name_str].push_back(temp_res_value);
+            (*stats)[sensor_name_str].push_back(temp_res_value);
             index++;
 
             offset += bytes_read;
@@ -89,73 +90,58 @@ bool parse_file_contents(std::string file_contents,
 /**
  * Logs the Temperature residency stats for every thermal zone.
  */
-void TempResidencyReporter::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client,
-                                                  const std::string &temperature_residency_path) {
-    if (temperature_residency_path.empty()) {
-        ALOGV("TempResidencyStatsPath path not specified");
+void TempResidencyReporter::logTempResidencyStats(
+        const std::shared_ptr<IStats> &stats_client, std::string_view temperature_residency_path,
+        std::string_view temperature_residency_reset_path) {
+    if (temperature_residency_path.empty() || temperature_residency_reset_path.empty()) {
+        ALOGV("TempResidency Stats/Reset path not specified");
         return;
     }
     std::string file_contents;
-    if (!ReadFileToString(temperature_residency_path.c_str(), &file_contents)) {
+    if (!ReadFileToString(temperature_residency_path.data(), &file_contents)) {
         ALOGE("Unable to read TempResidencyStatsPath");
         return;
     }
-    std::map<std::string, std::vector<int64_t>> cur_stats_map;
-    if (!parse_file_contents(file_contents, &cur_stats_map)) {
+    std::map<std::string, std::vector<int64_t>> stats_map;
+    if (!parse_file_contents(file_contents, &stats_map)) {
         ALOGE("Fail to parse TempResidencyStatsPath");
         return;
     }
-    if (!cur_stats_map.size())
+    if (!stats_map.size())
         return;
     ::android::base::boot_clock::time_point curTime = ::android::base::boot_clock::now();
     int64_t since_last_update_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(curTime - prevTime).count();
 
-    auto cur_stats_map_iterator = cur_stats_map.begin();
+    // Reset the stats for next day collection and if failed return without reporting to report the
+    // combined residency next day.
+    if (!WriteStringToFile(std::to_string(1), temperature_residency_reset_path.data())) {
+        ALOGE("Failed to reset TempResidencyStats");
+        return;
+    }
+
+    auto stats_map_iterator = stats_map.begin();
     VendorAtomValue tmp_atom_value;
 
-    // Iterate through cur_stats_map by sensor_name
-    while (cur_stats_map_iterator != cur_stats_map.end()) {
+    // Iterate through stats_map by sensor_name
+    while (stats_map_iterator != stats_map.end()) {
         std::vector<VendorAtomValue> values;
-        std::string sensor_name_str = cur_stats_map_iterator->first;
-        std::vector<int64_t> residency_stats = cur_stats_map_iterator->second;
+        std::string sensor_name_str = stats_map_iterator->first;
+        std::vector<int64_t> residency_stats = stats_map_iterator->second;
         tmp_atom_value.set<VendorAtomValue::stringValue>(sensor_name_str);
         values.push_back(tmp_atom_value);
         tmp_atom_value.set<VendorAtomValue::longValue>(since_last_update_ms);
         values.push_back(tmp_atom_value);
 
-        bool key_in_map = (prev_stats.find(sensor_name_str)) != prev_stats.end();
-        bool stat_len_match = (residency_stats.size() == prev_stats[sensor_name_str].size());
-        if (key_in_map && !stat_len_match)
-            prev_stats[sensor_name_str].clear();
-
-        int64_t sum_residency = 0;
         if (residency_stats.size() > kMaxBucketLen) {
-            cur_stats_map_iterator++;
+            stats_map_iterator++;
             continue;
         }
         // Iterate over every temperature residency buckets
         for (int index = 0; index < residency_stats.size(); index++) {
-            //  Get diff if stats arr length match previous stats
-            //  Otherwise use raw stats as temperature residency stats per day
-            if (key_in_map && stat_len_match) {
-                int64_t diff_residency =
-                        residency_stats[index] - prev_stats[sensor_name_str][index];
-                tmp_atom_value.set<VendorAtomValue::longValue>(diff_residency);
-                sum_residency += diff_residency;
-                prev_stats[sensor_name_str][index] = residency_stats[index];
-            } else {
-                tmp_atom_value.set<VendorAtomValue::longValue>(residency_stats[index]);
-                sum_residency += residency_stats[index];
-                prev_stats[sensor_name_str].push_back(residency_stats[index]);
-            }
+            tmp_atom_value.set<VendorAtomValue::longValue>(residency_stats[index]);
             values.push_back(tmp_atom_value);
         }
-        if (abs(since_last_update_ms - sum_residency) > kMaxResidencyDiffMs)
-            ALOGI("Thermal zone: %s Temperature residency stats not good!\ndevice sum_residency: "
-                  "%" PRId64 "ms, since_last_update_ms %" PRId64 "ms\n",
-                  sensor_name_str.c_str(), sum_residency, since_last_update_ms);
-
         //  Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = "",
                             .atomId = PixelAtoms::Atom::kVendorTempResidencyStats,
@@ -164,7 +150,7 @@ void TempResidencyReporter::logTempResidencyStats(const std::shared_ptr<IStats> 
         if (!ret.isOk())
             ALOGE("Unable to report VendorTempResidencyStats to Stats service");
 
-        cur_stats_map_iterator++;
+        stats_map_iterator++;
     }
     prevTime = curTime;
 }
