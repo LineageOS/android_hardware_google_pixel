@@ -40,25 +40,26 @@ using ::android::base::boot_clock;
 
 constexpr int kMaxStatsReportingFailCount = 3;
 
-struct ThermalStats {
-    int prev_state; /* temperature / cdev state at prev_update_time */
-    std::vector<std::chrono::milliseconds> time_in_state_ms; /* stats array */
-    boot_clock::time_point prev_update_time;
+struct StatsRecord {
+    int cur_state; /* temperature / cdev state at current time */
+    boot_clock::time_point cur_state_start_time;
     boot_clock::time_point last_stats_report_time = boot_clock::time_point::min();
+    std::vector<std::chrono::milliseconds> time_in_state_ms; /* stats array */
     int report_fail_count = 0; /* Number of times failed to report stats */
-
-    ThermalStats() = default;
-    explicit ThermalStats(const size_t &time_in_state_size, int state = 0) : prev_state(state) {
-        prev_update_time = last_stats_report_time = boot_clock::now();
-        report_fail_count = 0;
+    explicit StatsRecord(const size_t &time_in_state_size, int state = 0)
+        : cur_state(state),
+          cur_state_start_time(boot_clock::now()),
+          last_stats_report_time(boot_clock::now()),
+          report_fail_count(0) {
         time_in_state_ms = std::vector<std::chrono::milliseconds>(
                 time_in_state_size, std::chrono::milliseconds::zero());
     }
-    ThermalStats(const ThermalStats &) = default;
-    ThermalStats(ThermalStats &&) = default;
-    ThermalStats &operator=(const ThermalStats &) = default;
-    ThermalStats &operator=(ThermalStats &&) = default;
-    ~ThermalStats() = default;
+    StatsRecord() = default;
+    StatsRecord(const StatsRecord &) = default;
+    StatsRecord &operator=(const StatsRecord &) = default;
+    StatsRecord(StatsRecord &&) = default;
+    StatsRecord &operator=(StatsRecord &&) = default;
+    ~StatsRecord() = default;
 };
 
 class ThermalStatsHelper {
@@ -79,41 +80,43 @@ class ThermalStatsHelper {
      *  >0, count represents the number of stats failed to report.
      */
     int reportStats();
-    void updateSensorStats(std::string_view sensor,
-                           const std::shared_ptr<StatsInfo<float>> &stats_info,
-                           const Temperature &t);
-    void updateBindedCdevStats(std::string_view trigger_sensor, std::string_view cdev,
-                               const std::shared_ptr<StatsInfo<int>> &stats_info, int new_state);
+    void updateSensorTempStats(std::string_view sensor,
+                               const std::shared_ptr<StatsInfo<float>> &stats_info,
+                               const Temperature &t);
+    void updateSensorCdevRequestStats(std::string_view trigger_sensor, std::string_view cdev,
+                                      const std::shared_ptr<StatsInfo<int>> &stats_info,
+                                      int new_state);
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
-    std::unordered_map<std::string, ThermalStats> GetSensorThermalStatsSnapshot();
+    std::unordered_map<std::string, StatsRecord> GetSensorTempStatsSnapshot();
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
-    std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats>>
-    GetBindedCdevThermalStatsSnapshot();
+    std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
+    GetSensorCoolingDeviceRequestStatsSnapshot();
 
   private:
     static constexpr std::chrono::milliseconds kUpdateIntervalMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(24h);
     boot_clock::time_point last_total_stats_report_time = boot_clock::time_point::min();
-    mutable std::shared_mutex thermal_stats_sensor_temp_map_mutex_;
+    mutable std::shared_mutex sensor_temp_stats_map_mutex_;
     // Temperature stats for each sensor being watched
-    std::unordered_map<std::string, ThermalStats> thermal_stats_sensor_temp_map_;
-    mutable std::shared_mutex thermal_stats_sensor_binded_cdev_state_map_mutex_;
-    // Cdev request stat for each cdev binded to a sensor (sensor -> cdev -> ThermalStats)
-    std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats>>
-            thermal_stats_sensor_binded_cdev_state_map_;
+    std::unordered_map<std::string, StatsRecord> sensor_temp_stats_map_;
+    mutable std::shared_mutex sensor_cdev_request_stats_map_mutex_;
+    // userVote request stat for the sensor to the corresponding cdev (sensor -> cdev ->
+    // StatsRecord)
+    std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
+            sensor_cdev_request_stats_map_;
 
-    bool initializeSensorStats(const std::unordered_map<std::string, SensorInfo> &sensor_info_map_);
-    bool initializeBindedCdevStats(
+    bool initializeSensorTempStats(
+            const std::unordered_map<std::string, SensorInfo> &sensor_info_map_);
+    bool initializeSensorCdevRequestStats(
             const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
             const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_);
-    int reportSensorStats(const std::shared_ptr<IStats> &stats_client);
-    int reportBindedCdevStats(const std::shared_ptr<IStats> &stats_client);
+    void updateStatsRecord(StatsRecord *stats_record, int new_state);
+    int reportSensorTempStats(const std::shared_ptr<IStats> &stats_client);
+    int reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client);
     bool reportThermalStats(const std::shared_ptr<IStats> &stats_client, const int32_t &atom_id,
-                            std::vector<VendorAtomValue> values, ThermalStats *thermal_stats);
-    void updateStats(ThermalStats *thermal_stats, int new_state);
-    void closePrevStateStat(ThermalStats *thermal_stats);
-    std::vector<int64_t> processStatsBeforeReporting(ThermalStats *thermal_stats);
-    ThermalStats restoreThermalStatOnFailure(ThermalStats &&thermal_stats_before_failure);
+                            std::vector<VendorAtomValue> values, StatsRecord *stats_record);
+    std::vector<int64_t> processStatsRecordForReporting(StatsRecord *stats_record);
+    StatsRecord restoreStatsRecordOnFailure(StatsRecord &&stats_record_before_failure);
 };
 
 }  // namespace implementation
