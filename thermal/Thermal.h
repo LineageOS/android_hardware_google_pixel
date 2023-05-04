@@ -86,6 +86,8 @@ class Thermal : public BnThermal {
     void dumpThrottlingInfo(std::ostringstream *dump_buf);
     void dumpThrottlingRequestStatus(std::ostringstream *dump_buf);
     void dumpPowerRailInfo(std::ostringstream *dump_buf);
+    void dumpStatsRecord(std::ostringstream *dump_buf, const StatsRecord &stats_record,
+                         std::string_view line_prefix);
     void dumpThermalStats(std::ostringstream *dump_buf);
     void dumpThermalData(int fd);
 };
