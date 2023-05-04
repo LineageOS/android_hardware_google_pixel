@@ -52,13 +52,28 @@ enum FormulaOption : uint32_t {
 };
 
 template <typename T>
+struct ThresholdList {
+    std::optional<std::string> logging_name;
+    std::vector<T> thresholds;
+    explicit ThresholdList(std::optional<std::string> logging_name, std::vector<T> thresholds)
+        : logging_name(logging_name), thresholds(thresholds) {}
+
+    ThresholdList() = default;
+    ThresholdList(const ThresholdList &) = default;
+    ThresholdList &operator=(const ThresholdList &) = default;
+    ThresholdList(ThresholdList &&) = default;
+    ThresholdList &operator=(ThresholdList &&) = default;
+    ~ThresholdList() = default;
+};
+
+template <typename T>
 struct StatsInfo {
     // if bool, record all or none depending on flag
     // if set, check name present in set
     std::variant<bool, std::unordered_set<std::string> >
             record_by_default_threshold_all_or_name_set_;
     // map name to list of thresholds
-    std::unordered_map<std::string, std::vector<std::vector<T> > > record_by_threshold;
+    std::unordered_map<std::string, std::vector<ThresholdList<T> > > record_by_threshold;
     void clear() {
         record_by_default_threshold_all_or_name_set_ = false;
         record_by_threshold.clear();

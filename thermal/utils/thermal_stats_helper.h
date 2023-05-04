@@ -65,10 +65,16 @@ struct StatsRecord {
 template <typename ValueType>
 struct StatsByThreshold {
     std::vector<ValueType> thresholds;
+    std::optional<std::string> logging_name;
     StatsRecord stats_record;
-    explicit StatsByThreshold(const size_t &time_in_state_size,
-                              std::vector<ValueType> threshold_list)
-        : thresholds(threshold_list), stats_record(time_in_state_size) {}
+    explicit StatsByThreshold(ThresholdList<ValueType> threshold_list)
+        : thresholds(threshold_list.thresholds), logging_name(threshold_list.logging_name) {
+        // number of states = number of thresholds + 1
+        // e.g. threshold: [30, 50, 60]
+        //      buckets: [MIN - 30, 30 - 50, 50-60, 60-MAX]
+        int time_in_state_size = threshold_list.thresholds.size() + 1;
+        stats_record = StatsRecord(time_in_state_size);
+    }
     StatsByThreshold() = default;
     StatsByThreshold(const StatsByThreshold &) = default;
     StatsByThreshold &operator=(const StatsByThreshold &) = default;
