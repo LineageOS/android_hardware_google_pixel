@@ -65,7 +65,7 @@ int calculateThresholdBucket(const std::vector<T> &thresholds, T value) {
         LOG(VERBOSE) << "No threshold present, so bucket is " << value << " as int.";
         return static_cast<int>(value);
     }
-    auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), value);
+    auto threshold_idx = std::upper_bound(thresholds.begin(), thresholds.end(), value);
     int bucket = (threshold_idx - thresholds.begin());
     LOG(VERBOSE) << "For value: " << value << " bucket is: " << bucket;
     return bucket;
