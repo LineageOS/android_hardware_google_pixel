@@ -194,15 +194,21 @@ void ThermalStatsHelper::updateSensorCdevRequestStats(std::string_view sensor,
     auto &request_stats = sensor_cdev_request_stats_map_[sensor.data()][cdev.data()];
     for (auto &stats_by_threshold : request_stats.stats_by_custom_threshold) {
         int value = calculateThresholdBucket(stats_by_threshold.thresholds, new_value);
-        LOG(VERBOSE) << "Updating bindedCdev stats for sensor: " << sensor.data()
-                     << " , cooling_device: " << cdev.data() << " with new value: " << value;
-        updateStatsRecord(&stats_by_threshold.stats_record, value);
+        if (value != stats_by_threshold.stats_record.cur_state) {
+            LOG(VERBOSE) << "Updating bindedCdev stats for sensor: " << sensor.data()
+                         << " , cooling_device: " << cdev.data() << " with new value: " << value;
+            updateStatsRecord(&stats_by_threshold.stats_record, value);
+        }
     }
 
     if (request_stats.stats_by_default_threshold.has_value()) {
-        LOG(VERBOSE) << "Updating bindedCdev stats for sensor: " << sensor.data()
-                     << " , cooling_device: " << cdev.data() << " with new value: " << new_value;
-        updateStatsRecord(&request_stats.stats_by_default_threshold.value(), new_value);
+        auto &stats_record = request_stats.stats_by_default_threshold.value();
+        if (new_value != stats_record.cur_state) {
+            LOG(VERBOSE) << "Updating bindedCdev stats for sensor: " << sensor.data()
+                         << " , cooling_device: " << cdev.data()
+                         << " with new value: " << new_value;
+            updateStatsRecord(&stats_record, new_value);
+        }
     }
 }
 
@@ -215,9 +221,11 @@ void ThermalStatsHelper::updateSensorTempStatsByThreshold(std::string_view senso
     for (auto &stats_by_threshold :
          sensor_temp_stats_map_[sensor.data()].stats_by_custom_threshold) {
         int value = calculateThresholdBucket(stats_by_threshold.thresholds, temperature);
-        LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
-                     << " with value: " << value;
-        updateStatsRecord(&stats_by_threshold.stats_record, value);
+        if (value != stats_by_threshold.stats_record.cur_state) {
+            LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
+                         << " with value: " << value;
+            updateStatsRecord(&stats_by_threshold.stats_record, value);
+        }
     }
 }
 
@@ -226,11 +234,14 @@ void ThermalStatsHelper::updateSensorTempStatsBySeverity(std::string_view sensor
     std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
     if (sensor_temp_stats_map_.count(sensor.data()) &&
         sensor_temp_stats_map_[sensor.data()].stats_by_default_threshold.has_value()) {
+        auto &stats_record =
+                sensor_temp_stats_map_[sensor.data()].stats_by_default_threshold.value();
         int value = static_cast<int>(severity);
-        LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
-                     << " with value: " << value;
-        updateStatsRecord(&sensor_temp_stats_map_[sensor.data()].stats_by_default_threshold.value(),
-                          value);
+        if (value != stats_record.cur_state) {
+            LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
+                         << " with value: " << value;
+            updateStatsRecord(&stats_record, value);
+        }
     }
 }
 
