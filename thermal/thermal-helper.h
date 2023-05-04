@@ -131,11 +131,11 @@ class ThermalHelper {
     }
 
     // Get Thermal Stats Sensor Map
-    const std::unordered_map<std::string, StatsRecord> GetSensorTempStatsSnapshot() {
+    const std::unordered_map<std::string, ThermalStats<float>> GetSensorTempStatsSnapshot() {
         return thermal_stats_helper_.GetSensorTempStatsSnapshot();
     }
     // Get Thermal Stats Sensor, Binded Cdev State Request Map
-    const std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
+    const std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
     GetSensorCoolingDeviceRequestStatsSnapshot() {
         return thermal_stats_helper_.GetSensorCoolingDeviceRequestStatsSnapshot();
     }

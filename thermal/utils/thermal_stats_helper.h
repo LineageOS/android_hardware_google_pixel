@@ -62,6 +62,27 @@ struct StatsRecord {
     ~StatsRecord() = default;
 };
 
+template <typename ValueType>
+struct StatsByThreshold {
+    std::vector<ValueType> thresholds;
+    StatsRecord stats_record;
+    explicit StatsByThreshold(const size_t &time_in_state_size,
+                              std::vector<ValueType> threshold_list)
+        : thresholds(threshold_list), stats_record(time_in_state_size) {}
+    StatsByThreshold() = default;
+    StatsByThreshold(const StatsByThreshold &) = default;
+    StatsByThreshold &operator=(const StatsByThreshold &) = default;
+    StatsByThreshold(StatsByThreshold &&) = default;
+    StatsByThreshold &operator=(StatsByThreshold &&) = default;
+    ~StatsByThreshold() = default;
+};
+
+template <typename ValueType>
+struct ThermalStats {
+    std::vector<StatsByThreshold<ValueType>> stats_by_custom_threshold;
+    std::optional<StatsRecord> stats_by_default_threshold;
+};
+
 class ThermalStatsHelper {
   public:
     ThermalStatsHelper() = default;
@@ -70,8 +91,14 @@ class ThermalStatsHelper {
     ThermalStatsHelper(const ThermalStatsHelper &) = delete;
     void operator=(const ThermalStatsHelper &) = delete;
 
-    bool initializeStats(const std::unordered_map<std::string, SensorInfo> &sensors_parsed,
+    bool initializeStats(const Json::Value &config,
+                         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
                          const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_);
+    void updateSensorCdevRequestStats(std::string_view trigger_sensor, std::string_view cdev,
+                                      int new_state);
+    void updateSensorTempStatsBySeverity(std::string_view sensor,
+                                         const ThrottlingSeverity &severity);
+    void updateSensorTempStatsByThreshold(std::string_view sensor, float temperature);
     /*
      * Function to report all the stats by calling all specific stats reporting function.
      * Returns:
@@ -80,39 +107,41 @@ class ThermalStatsHelper {
      *  >0, count represents the number of stats failed to report.
      */
     int reportStats();
-    void updateSensorTempStats(std::string_view sensor,
-                               const std::shared_ptr<StatsInfo<float>> &stats_info,
-                               const Temperature &t);
-    void updateSensorCdevRequestStats(std::string_view trigger_sensor, std::string_view cdev,
-                                      const std::shared_ptr<StatsInfo<int>> &stats_info,
-                                      int new_state);
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
-    std::unordered_map<std::string, StatsRecord> GetSensorTempStatsSnapshot();
+    std::unordered_map<std::string, ThermalStats<float>> GetSensorTempStatsSnapshot();
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
-    std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
+    std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
     GetSensorCoolingDeviceRequestStatsSnapshot();
 
   private:
     static constexpr std::chrono::milliseconds kUpdateIntervalMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(24h);
     boot_clock::time_point last_total_stats_report_time = boot_clock::time_point::min();
+
     mutable std::shared_mutex sensor_temp_stats_map_mutex_;
     // Temperature stats for each sensor being watched
-    std::unordered_map<std::string, StatsRecord> sensor_temp_stats_map_;
+    std::unordered_map<std::string, ThermalStats<float>> sensor_temp_stats_map_;
     mutable std::shared_mutex sensor_cdev_request_stats_map_mutex_;
     // userVote request stat for the sensor to the corresponding cdev (sensor -> cdev ->
     // StatsRecord)
-    std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
+    std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
             sensor_cdev_request_stats_map_;
 
     bool initializeSensorTempStats(
+            const StatsInfo<float> &sensor_stats_info,
             const std::unordered_map<std::string, SensorInfo> &sensor_info_map_);
     bool initializeSensorCdevRequestStats(
+            const StatsInfo<int> &request_stats_info,
             const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
             const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_);
     void updateStatsRecord(StatsRecord *stats_record, int new_state);
-    int reportSensorTempStats(const std::shared_ptr<IStats> &stats_client);
-    int reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client);
+    int reportAllSensorTempStats(const std::shared_ptr<IStats> &stats_client);
+    bool reportSensorTempStats(const std::shared_ptr<IStats> &stats_client, std::string_view sensor,
+                               StatsRecord *stats_record);
+    int reportAllSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client);
+    bool reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client,
+                                      std::string_view sensor, std::string_view cdev,
+                                      StatsRecord *stats_record);
     bool reportThermalStats(const std::shared_ptr<IStats> &stats_client, const int32_t &atom_id,
                             std::vector<VendorAtomValue> values, StatsRecord *stats_record);
     std::vector<int64_t> processStatsRecordForReporting(StatsRecord *stats_record);

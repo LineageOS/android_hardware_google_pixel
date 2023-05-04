@@ -49,18 +49,43 @@ std::shared_ptr<IStats> getStatsService() {
     return stats_client;
 }
 
-template <typename T>
-static bool isRecordStats(const std::shared_ptr<StatsInfo<T>> &stats_info) {
-    return stats_info != nullptr && stats_info->record_stats;
+bool isRecordByDefaultThreshold(const std::variant<bool, std::unordered_set<std::string>>
+                                        &record_by_default_threshold_all_or_name_set_,
+                                std::string_view name) {
+    if (std::holds_alternative<bool>(record_by_default_threshold_all_or_name_set_)) {
+        return std::get<bool>(record_by_default_threshold_all_or_name_set_);
+    }
+    return std::get<std::unordered_set<std::string>>(record_by_default_threshold_all_or_name_set_)
+            .count(name.data());
 }
+
+template <typename T>
+int calculateThresholdBucket(const std::vector<T> &thresholds, T value) {
+    if (thresholds.empty()) {
+        LOG(VERBOSE) << "No threshold present, so bucket is " << value << " as int.";
+        return static_cast<int>(value);
+    }
+    auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), value);
+    int bucket = (threshold_idx - thresholds.begin());
+    LOG(VERBOSE) << "For value: " << value << " bucket is: " << bucket;
+    return bucket;
+}
+
 }  // namespace
 
 bool ThermalStatsHelper::initializeStats(
+        const Json::Value &config,
         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_) {
+    StatsConfig stats_config;
+    if (!ParseStatsConfig(config, sensor_info_map_, cooling_device_info_map_, &stats_config)) {
+        LOG(ERROR) << "Failed to parse stats config";
+        return false;
+    }
     bool is_initialized_ =
-            initializeSensorTempStats(sensor_info_map_) &&
-            initializeSensorCdevRequestStats(sensor_info_map_, cooling_device_info_map_);
+            initializeSensorTempStats(stats_config.sensor_stats_info, sensor_info_map_) &&
+            initializeSensorCdevRequestStats(stats_config.cooling_device_request_info,
+                                             sensor_info_map_, cooling_device_info_map_);
     if (is_initialized_) {
         last_total_stats_report_time = boot_clock::now();
         LOG(INFO) << "Thermal Stats Initialized Successfully";
@@ -68,56 +93,87 @@ bool ThermalStatsHelper::initializeStats(
     return is_initialized_;
 }
 
-bool ThermalStatsHelper::initializeSensorTempStats(
-        const std::unordered_map<std::string, SensorInfo> &sensor_info_map_) {
-    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
-    for (const auto &name_info_pair : sensor_info_map_) {
-        auto &sensor_info = name_info_pair.second;
-        if (isRecordStats(sensor_info.stats_info)) {
-            const size_t time_in_state_size =
-                    sensor_info.stats_info->stats_threshold.empty()
-                            ? kThrottlingSeverityCount  // if default, use severity as bucket
-                            : (sensor_info.stats_info->stats_threshold.size() + 1);
-            sensor_temp_stats_map_[name_info_pair.first] = StatsRecord(time_in_state_size);
-            LOG(INFO) << "Thermal Sensor stats initialized for sensor: " << name_info_pair.first;
+bool ThermalStatsHelper::initializeSensorCdevRequestStats(
+        const StatsInfo<int> &request_stats_info,
+        const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
+    for (const auto &[sensor, sensor_info] : sensor_info_map_) {
+        for (const auto &binded_cdev_info_pair :
+             sensor_info.throttling_info->binded_cdev_info_map) {
+            const auto &cdev = binded_cdev_info_pair.first;
+            const auto &max_state =
+                    cooling_device_info_map_.at(binded_cdev_info_pair.first).max_state;
+            // Record by all state
+            if (isRecordByDefaultThreshold(
+                        request_stats_info.record_by_default_threshold_all_or_name_set_, cdev)) {
+                // buckets = [0, 1, 2, 3, ...max_state]
+                const int default_threshold_time_in_state_size = max_state + 1;
+                sensor_cdev_request_stats_map_[sensor][cdev].stats_by_default_threshold =
+                        StatsRecord(default_threshold_time_in_state_size);
+                LOG(INFO) << "Sensor Cdev user vote stats on basis of all state initialized for ["
+                          << sensor << "-" << cdev << "]";
+            }
+
+            // Record by custom threshold
+            if (request_stats_info.record_by_threshold.count(cdev)) {
+                const auto &thresholds_list = request_stats_info.record_by_threshold.at(cdev);
+                for (const auto &thresholds : thresholds_list) {
+                    // check last threshold value(which is >= number of buckets as numbers in
+                    // threshold are strictly increasing from 0) is less than max_state
+                    if (thresholds.back() >= max_state) {
+                        LOG(ERROR) << "For sensor " << sensor << " bindedCdev: " << cdev
+                                   << "Invalid bindedCdev stats threshold: " << thresholds.back()
+                                   << " >= " << max_state;
+                        sensor_cdev_request_stats_map_.clear();
+                        return false;
+                    }
+                    // number of states = number of thresholds + 1
+                    // e.g. threshold: [2, 5, 8]
+                    //      buckets: [0 - 2, 2 - 5, 5-8, 8-MAX STATE]
+                    const int time_in_state_size = thresholds.size() + 1;
+                    sensor_cdev_request_stats_map_[sensor][cdev]
+                            .stats_by_custom_threshold.emplace_back(time_in_state_size, thresholds);
+                    LOG(INFO)
+                            << "Sensor Cdev user vote stats on basis of threshold initialized for ["
+                            << sensor << "-" << cdev << "]";
+                }
+            }
         }
     }
     return true;
 }
 
-bool ThermalStatsHelper::initializeSensorCdevRequestStats(
-        const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_) {
-    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
-    for (const auto &sensor_info_pair : sensor_info_map_) {
-        for (const auto &binded_cdev_info_pair :
-             sensor_info_pair.second.throttling_info->binded_cdev_info_map) {
-            if (!isRecordStats(binded_cdev_info_pair.second.stats_info)) {
-                continue;
+bool ThermalStatsHelper::initializeSensorTempStats(
+        const StatsInfo<float> &sensor_stats_info,
+        const std::unordered_map<std::string, SensorInfo> &sensor_info_map_) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
+    const int severity_time_in_state_size = kThrottlingSeverityCount;
+    for (const auto &[sensor, sensor_info] : sensor_info_map_) {
+        // Record by severity
+        if (sensor_info.is_watch &&
+            isRecordByDefaultThreshold(
+                    sensor_stats_info.record_by_default_threshold_all_or_name_set_, sensor)) {
+            // number of buckets = number of severity
+            sensor_temp_stats_map_[sensor].stats_by_default_threshold =
+                    StatsRecord(severity_time_in_state_size);
+            LOG(INFO) << "Sensor temp stats on basis of severity initialized for [" << sensor
+                      << "]";
+        }
+
+        // Record by custom threshold
+        if (sensor_stats_info.record_by_threshold.count(sensor)) {
+            const auto &thresholds_list = sensor_stats_info.record_by_threshold.at(sensor);
+            for (const auto &thresholds : thresholds_list) {
+                // number of states = number of thresholds + 1
+                // e.g. threshold: [30, 50, 60]
+                //      buckets: [-INF - 30, 30 - 50, 50-60, 60-INF]
+                int time_in_state_size = thresholds.size() + 1;
+                sensor_temp_stats_map_[sensor].stats_by_custom_threshold.emplace_back(
+                        time_in_state_size, thresholds);
+                LOG(INFO) << "Sensor temp stats on basis of threshold initialized for [" << sensor
+                          << "]";
             }
-            const auto &max_state =
-                    cooling_device_info_map_.at(binded_cdev_info_pair.first).max_state;
-            const auto &stats_threshold = binded_cdev_info_pair.second.stats_info->stats_threshold;
-            size_t time_in_state_size;
-            // if default, use each state as bucket
-            if (stats_threshold.empty()) {
-                time_in_state_size = max_state + 1;  // +1 for bucket to include last state
-            } else {
-                // check last threshold value(>=number of buckets) is less than
-                // max_state
-                if (stats_threshold.back() >= max_state) {
-                    LOG(ERROR) << "Invalid bindedCdev stats threshold: " << stats_threshold.back()
-                               << " >= " << max_state;
-                    return false;
-                }
-                time_in_state_size =
-                        stats_threshold.size() +
-                        1;  // +1 for bucket to include values greater than last threshold
-            }
-            sensor_cdev_request_stats_map_[sensor_info_pair.first][binded_cdev_info_pair.first] =
-                    StatsRecord(time_in_state_size);
-            LOG(INFO) << "Thermal BindedCdev stats initialized for sensor: "
-                      << sensor_info_pair.first << " " << binded_cdev_info_pair.first;
         }
     }
     return true;
@@ -136,44 +192,54 @@ void ThermalStatsHelper::updateStatsRecord(StatsRecord *stats_record, int new_st
     stats_record->cur_state = new_state;
 }
 
-void ThermalStatsHelper::updateSensorTempStats(std::string_view sensor,
-                                               const std::shared_ptr<StatsInfo<float>> &stats_info,
-                                               const Temperature &t) {
-    if (!isRecordStats(stats_info)) {
+void ThermalStatsHelper::updateSensorCdevRequestStats(std::string_view sensor,
+                                                      std::string_view cdev, int new_value) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
+    if (!sensor_cdev_request_stats_map_.count(sensor.data()) ||
+        !sensor_cdev_request_stats_map_[sensor.data()].count(cdev.data())) {
         return;
     }
-    int new_value;
-    if (stats_info->stats_threshold.empty()) {
-        new_value = static_cast<int>(t.throttlingStatus);
-    } else {
-        const auto &thresholds = stats_info->stats_threshold;
-        auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), t.value);
-        new_value = (threshold_idx - thresholds.begin());
+    auto &request_stats = sensor_cdev_request_stats_map_[sensor.data()][cdev.data()];
+    for (auto &stats_by_threshold : request_stats.stats_by_custom_threshold) {
+        int value = calculateThresholdBucket(stats_by_threshold.thresholds, new_value);
+        LOG(VERBOSE) << "Updating bindedCdev stats for sensor: " << sensor.data()
+                     << " , cooling_device: " << cdev.data() << " with new value: " << value;
+        updateStatsRecord(&stats_by_threshold.stats_record, value);
     }
-    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
-    StatsRecord &stats_record = sensor_temp_stats_map_.at(sensor.data());
-    LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
-                 << " with new value: " << new_value;
-    updateStatsRecord(&stats_record, new_value);
+
+    if (request_stats.stats_by_default_threshold.has_value()) {
+        LOG(VERBOSE) << "Updating bindedCdev stats for sensor: " << sensor.data()
+                     << " , cooling_device: " << cdev.data() << " with new value: " << new_value;
+        updateStatsRecord(&request_stats.stats_by_default_threshold.value(), new_value);
+    }
 }
 
-void ThermalStatsHelper::updateSensorCdevRequestStats(
-        std::string_view trigger_sensor, std::string_view cdev,
-        const std::shared_ptr<StatsInfo<int>> &stats_info, int new_value) {
-    if (!isRecordStats(stats_info)) {
+void ThermalStatsHelper::updateSensorTempStatsByThreshold(std::string_view sensor,
+                                                          float temperature) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
+    if (!sensor_temp_stats_map_.count(sensor.data())) {
         return;
     }
-    if (!stats_info->stats_threshold.empty()) {
-        const auto &thresholds = stats_info->stats_threshold;
-        auto threshold_idx = std::lower_bound(thresholds.begin(), thresholds.end(), new_value);
-        new_value = (threshold_idx - thresholds.begin());
+    for (auto &stats_by_threshold :
+         sensor_temp_stats_map_[sensor.data()].stats_by_custom_threshold) {
+        int value = calculateThresholdBucket(stats_by_threshold.thresholds, temperature);
+        LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
+                     << " with value: " << value;
+        updateStatsRecord(&stats_by_threshold.stats_record, value);
     }
-    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
-    StatsRecord &stats_record =
-            sensor_cdev_request_stats_map_.at(trigger_sensor.data()).at(cdev.data());
-    LOG(VERBOSE) << "Updating bindedCdev stats for trigger_sensor: " << trigger_sensor.data()
-                 << " , cooling_device: " << cdev.data() << " with new value: " << new_value;
-    updateStatsRecord(&stats_record, new_value);
+}
+
+void ThermalStatsHelper::updateSensorTempStatsBySeverity(std::string_view sensor,
+                                                         const ThrottlingSeverity &severity) {
+    std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
+    if (sensor_temp_stats_map_.count(sensor.data()) &&
+        sensor_temp_stats_map_[sensor.data()].stats_by_default_threshold.has_value()) {
+        int value = static_cast<int>(severity);
+        LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
+                     << " with value: " << value;
+        updateStatsRecord(&sensor_temp_stats_map_[sensor.data()].stats_by_default_threshold.value(),
+                          value);
+    }
 }
 
 int ThermalStatsHelper::reportStats() {
@@ -194,53 +260,102 @@ int ThermalStatsHelper::reportStats() {
         return -1;
     }
     int count_failed_reporting =
-            reportSensorTempStats(stats_client) + reportSensorCdevRequestStats(stats_client);
+            reportAllSensorTempStats(stats_client) + reportAllSensorCdevRequestStats(stats_client);
     last_total_stats_report_time = curTime;
     return count_failed_reporting;
 }
 
-int ThermalStatsHelper::reportSensorTempStats(const std::shared_ptr<IStats> &stats_client) {
+int ThermalStatsHelper::reportAllSensorTempStats(const std::shared_ptr<IStats> &stats_client) {
     int count_failed_reporting = 0;
     std::unique_lock<std::shared_mutex> _lock(sensor_temp_stats_map_mutex_);
-    for (auto &sensor_temp_stats_pair : sensor_temp_stats_map_) {
-        LOG(VERBOSE) << "Reporting sensor stats for " << sensor_temp_stats_pair.first;
-        // Load values array
-        std::vector<VendorAtomValue> values(1);
-        values[0].set<VendorAtomValue::stringValue>(sensor_temp_stats_pair.first);
-        if (!reportThermalStats(stats_client, PixelAtoms::Atom::kVendorTempResidencyStats, values,
-                                &sensor_temp_stats_pair.second)) {
-            LOG(ERROR) << "Unable to report VendorTempResidencyStats to Stats service for "
-                          "sensor: "
-                       << sensor_temp_stats_pair.first;
-            count_failed_reporting++;
+    for (auto &[sensor, temp_stats] : sensor_temp_stats_map_) {
+        for (auto &stats_by_threshold : temp_stats.stats_by_custom_threshold) {
+            if (!reportSensorTempStats(stats_client, sensor, &stats_by_threshold.stats_record)) {
+                count_failed_reporting++;
+            }
         }
-    }
-    return count_failed_reporting;
-}
-
-int ThermalStatsHelper::reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client) {
-    int count_failed_reporting = 0;
-    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
-    for (auto &sensor_binded_cdev_stats_pair : sensor_cdev_request_stats_map_) {
-        for (auto &cdev_stats_pair : sensor_binded_cdev_stats_pair.second) {
-            LOG(VERBOSE) << "Reporting bindedCdev stats for sensor: "
-                         << sensor_binded_cdev_stats_pair.first
-                         << " cooling_device: " << cdev_stats_pair.first;
-            // Load values array
-            std::vector<VendorAtomValue> values(2);
-            values[0].set<VendorAtomValue::stringValue>(sensor_binded_cdev_stats_pair.first);
-            values[1].set<VendorAtomValue::stringValue>(cdev_stats_pair.first);
-            if (!reportThermalStats(stats_client, PixelAtoms::Atom::kVendorSensorCoolingDeviceStats,
-                                    values, &cdev_stats_pair.second)) {
-                LOG(ERROR) << "Unable to report VendorSensorCoolingDeviceStats to Stats "
-                              "service for sensor: "
-                           << sensor_binded_cdev_stats_pair.first
-                           << " cooling_device: " << cdev_stats_pair.first;
+        if (temp_stats.stats_by_default_threshold.has_value()) {
+            if (!reportSensorTempStats(stats_client, sensor,
+                                       &temp_stats.stats_by_default_threshold.value())) {
                 count_failed_reporting++;
             }
         }
     }
     return count_failed_reporting;
+}
+
+bool ThermalStatsHelper::reportSensorTempStats(const std::shared_ptr<IStats> &stats_client,
+                                               std::string_view sensor, StatsRecord *stats_record) {
+    LOG(VERBOSE) << "Reporting sensor stats for " << sensor;
+    // Load values array
+    std::vector<VendorAtomValue> values(1);
+    values[0].set<VendorAtomValue::stringValue>(sensor);
+    if (!reportThermalStats(stats_client, PixelAtoms::Atom::kVendorTempResidencyStats, values,
+                            stats_record)) {
+        LOG(ERROR) << "Unable to report VendorTempResidencyStats to Stats service for "
+                      "sensor: "
+                   << sensor;
+        return false;
+    }
+    return true;
+}
+
+int ThermalStatsHelper::reportAllSensorCdevRequestStats(
+        const std::shared_ptr<IStats> &stats_client) {
+    int count_failed_reporting = 0;
+    std::unique_lock<std::shared_mutex> _lock(sensor_cdev_request_stats_map_mutex_);
+    for (auto &[sensor, cdev_request_stats_map] : sensor_cdev_request_stats_map_) {
+        for (auto &[cdev, request_stats] : cdev_request_stats_map) {
+            for (auto &stats_by_threshold : request_stats.stats_by_custom_threshold) {
+                if (!reportSensorCdevRequestStats(stats_client, sensor, cdev,
+                                                  &stats_by_threshold.stats_record)) {
+                    count_failed_reporting++;
+                }
+            }
+
+            if (request_stats.stats_by_default_threshold.has_value()) {
+                if (!reportSensorCdevRequestStats(
+                            stats_client, sensor, cdev,
+                            &request_stats.stats_by_default_threshold.value())) {
+                    count_failed_reporting++;
+                }
+            }
+        }
+    }
+    return count_failed_reporting;
+}
+
+bool ThermalStatsHelper::reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client,
+                                                      std::string_view sensor,
+                                                      std::string_view cdev,
+                                                      StatsRecord *stats_record) {
+    LOG(VERBOSE) << "Reporting bindedCdev stats for sensor: " << sensor
+                 << " cooling_device: " << cdev;
+    // Load values array
+    std::vector<VendorAtomValue> values(2);
+    values[0].set<VendorAtomValue::stringValue>(sensor);
+    values[1].set<VendorAtomValue::stringValue>(cdev);
+    if (!reportThermalStats(stats_client, PixelAtoms::Atom::kVendorSensorCoolingDeviceStats, values,
+                            stats_record)) {
+        LOG(ERROR) << "Unable to report VendorSensorCoolingDeviceStats to Stats "
+                      "service for sensor: "
+                   << sensor << " cooling_device: " << cdev;
+        return false;
+    }
+    return true;
+}
+
+std::vector<int64_t> ThermalStatsHelper::processStatsRecordForReporting(StatsRecord *stats_record) {
+    // update the last unclosed entry and start new record with same state
+    updateStatsRecord(stats_record, stats_record->cur_state);
+    std::vector<std::chrono::milliseconds> &time_in_state_ms = stats_record->time_in_state_ms;
+    // convert std::chrono::milliseconds time_in_state to int64_t vector for reporting
+    std::vector<int64_t> stats_residency(time_in_state_ms.size());
+    std::transform(time_in_state_ms.begin(), time_in_state_ms.end(), stats_residency.begin(),
+                   [](std::chrono::milliseconds time_ms) { return time_ms.count(); });
+    // clear previous stats
+    std::fill(time_in_state_ms.begin(), time_in_state_ms.end(), std::chrono::milliseconds::zero());
+    return stats_residency;
 }
 
 bool ThermalStatsHelper::reportThermalStats(const std::shared_ptr<IStats> &stats_client,
@@ -275,19 +390,6 @@ bool ThermalStatsHelper::reportThermalStats(const std::shared_ptr<IStats> &stats
     return true;
 }
 
-std::vector<int64_t> ThermalStatsHelper::processStatsRecordForReporting(StatsRecord *stats_record) {
-    // update the last unclosed entry and start new record with same state
-    updateStatsRecord(stats_record, stats_record->cur_state);
-    std::vector<std::chrono::milliseconds> &time_in_state_ms = stats_record->time_in_state_ms;
-    // convert std::chrono::milliseconds time_in_state to int64_t vector for reporting
-    std::vector<int64_t> stats_residency(time_in_state_ms.size());
-    std::transform(time_in_state_ms.begin(), time_in_state_ms.end(), stats_residency.begin(),
-                   [](std::chrono::milliseconds time_ms) { return time_ms.count(); });
-    // clear previous stats
-    std::fill(time_in_state_ms.begin(), time_in_state_ms.end(), std::chrono::milliseconds::zero());
-    return stats_residency;
-}
-
 StatsRecord ThermalStatsHelper::restoreStatsRecordOnFailure(
         StatsRecord &&stats_record_before_failure) {
     stats_record_before_failure.report_fail_count += 1;
@@ -300,27 +402,44 @@ StatsRecord ThermalStatsHelper::restoreStatsRecordOnFailure(
     }
 }
 
-std::unordered_map<std::string, StatsRecord> ThermalStatsHelper::GetSensorTempStatsSnapshot() {
-    auto sensor_stats_snapshot = sensor_temp_stats_map_;
-    for (auto &sensor_temp_stats_pair : sensor_stats_snapshot) {
-        auto &temp_stats = sensor_temp_stats_pair.second;
-        // update the last unclosed entry
-        updateStatsRecord(&temp_stats, temp_stats.cur_state);
-    }
-    return sensor_stats_snapshot;
-}
-
-std::unordered_map<std::string, std::unordered_map<std::string, StatsRecord>>
-ThermalStatsHelper::GetSensorCoolingDeviceRequestStatsSnapshot() {
-    auto binded_cdev_stats_snapshot = sensor_cdev_request_stats_map_;
-    for (auto &sensor_binded_cdev_stats_pair : binded_cdev_stats_snapshot) {
-        for (auto &cdev_stats_pair : sensor_binded_cdev_stats_pair.second) {
-            auto &request_stats = cdev_stats_pair.second;
-            // update the last unclosed entry
-            updateStatsRecord(&request_stats, request_stats.cur_state);
+std::unordered_map<std::string, ThermalStats<float>>
+ThermalStatsHelper::GetSensorTempStatsSnapshot() {
+    auto sensor_temp_stats_snapshot = sensor_temp_stats_map_;
+    for (auto &sensor_temp_stats_pair : sensor_temp_stats_snapshot) {
+        for (auto &temp_stats : sensor_temp_stats_pair.second.stats_by_custom_threshold) {
+            // update the last unclosed entry and start new record with same state
+            updateStatsRecord(&temp_stats.stats_record, temp_stats.stats_record.cur_state);
+        }
+        if (sensor_temp_stats_pair.second.stats_by_default_threshold.has_value()) {
+            auto &stats_by_default_threshold =
+                    sensor_temp_stats_pair.second.stats_by_default_threshold.value();
+            // update the last unclosed entry and start new record with same state
+            updateStatsRecord(&stats_by_default_threshold, stats_by_default_threshold.cur_state);
         }
     }
-    return binded_cdev_stats_snapshot;
+    return sensor_temp_stats_snapshot;
+}
+
+std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
+ThermalStatsHelper::GetSensorCoolingDeviceRequestStatsSnapshot() {
+    auto sensor_cdev_request_stats_snapshot = sensor_cdev_request_stats_map_;
+    for (auto &sensor_cdev_request_stats_pair : sensor_cdev_request_stats_snapshot) {
+        for (auto &cdev_request_stats_pair : sensor_cdev_request_stats_pair.second) {
+            for (auto &request_stats : cdev_request_stats_pair.second.stats_by_custom_threshold) {
+                // update the last unclosed entry and start new record with same state
+                updateStatsRecord(&request_stats.stats_record,
+                                  request_stats.stats_record.cur_state);
+            }
+            if (cdev_request_stats_pair.second.stats_by_default_threshold.has_value()) {
+                auto &stats_by_default_threshold =
+                        cdev_request_stats_pair.second.stats_by_default_threshold.value();
+                // update the last unclosed entry and start new record with same state
+                updateStatsRecord(&stats_by_default_threshold,
+                                  stats_by_default_threshold.cur_state);
+            }
+        }
+    }
+    return sensor_cdev_request_stats_snapshot;
 }
 
 }  // namespace implementation
