@@ -98,6 +98,7 @@ cc_library {
     "BatteryHealthReporter.cpp",
     "BrownoutDetectedReporter.cpp",
     "ChargeStatsReporter.cpp",
+    "DisplayStatsReporter.cpp",
     "DropDetect.cpp",
     "MmMetricsReporter.cpp",
     "MitigationStatsReporter.cpp",
