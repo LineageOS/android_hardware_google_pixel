@@ -106,6 +106,7 @@ message Atom {
       F2fsAtomicWriteInfo f2fs_atomic_write_info = 105052;
       PartitionsUsedSpaceReported partition_used_space_reported = 105053;
       PowerMitigationDurationCounts mitigation_duration = 105054; // moved from atoms.proto
+      DisplayPanelErrorStats display_panel_error_stats = 105055;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -946,6 +947,21 @@ message ThermalDfsStats {
  optional int32 tpu_dfs_count = 6;
  // The last count of DSP dfs triggers
  optional int32 aur_dfs_count = 7;
+}
+
+/**
+ * Log Display Panel error statistics.
+ */
+message DisplayPanelErrorStats {
+ optional string reverse_domain_name = 1;
+ // The error count due to Tear Effect on primary display panel.
+ optional int32 primary_error_count_te = 2;
+ // The error count due to unknown reason on primary display panel.
+ optional int32 primary_error_count_unknown = 3;
+ // The error count due to Tear Effect on primary display panel.
+ optional int32 secondary_error_count_te = 4;
+ // The error count due to unknown reason on secondary display panel.
+ optional int32 secondary_error_count_unknown = 5;
 }
 
 /**
