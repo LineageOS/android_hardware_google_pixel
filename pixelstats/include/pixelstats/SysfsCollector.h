@@ -23,6 +23,7 @@
 #include "BatteryEEPROMReporter.h"
 #include "BatteryHealthReporter.h"
 #include "BrownoutDetectedReporter.h"
+#include "DisplayStatsReporter.h"
 #include "MitigationDurationReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
@@ -70,6 +71,7 @@ class SysfsCollector {
         const int BlockStatsLength;
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
+        const std::vector<std::string> DisplayStatsPaths;
         const char *const CCARatePath;
         const std::vector<std::string> TempResidencyPaths;
         const char *const LongIRQMetricsPath;
@@ -112,6 +114,7 @@ class SysfsCollector {
     void logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> &stats_client);
     void logThermalStats(const std::shared_ptr<IStats> &stats_client);
     void logMitigationDurationCounts(const std::shared_ptr<IStats> &stats_client);
+    void logDisplayStats(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
@@ -160,6 +163,7 @@ class SysfsCollector {
     const char *const kResumeLatencyMetricsPath;
     const char *const kModemPcieLinkStatsPath;
     const char *const kWifiPcieLinkStatsPath;
+    const std::vector<std::string> kDisplayStatsPaths;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
@@ -167,6 +171,7 @@ class SysfsCollector {
     MitigationDurationReporter mitigation_duration_reporter_;
     BrownoutDetectedReporter brownout_detected_reporter_;
     ThermalStatsReporter thermal_stats_reporter_;
+    DisplayStatsReporter display_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
     TempResidencyReporter temp_residency_reporter_;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
