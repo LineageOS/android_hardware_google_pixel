@@ -1187,6 +1187,7 @@ message BatteryHealthStatus {
     MARGINAL = 1; // The battery may need replacement soon
     NEEDS_REPLACEMENT = 2; // The battery needs replacement
     FAILED = 3; // The battery has failed and no longer operates as expected
+    NOT_AVAILABLE = 4; // This is a temporary state when cycle count is insufficient
   }
 
   // HealthStatus calculated using health_index, health_perf_index.
