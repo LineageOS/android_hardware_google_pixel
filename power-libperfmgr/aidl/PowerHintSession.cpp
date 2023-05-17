@@ -115,34 +115,6 @@ int64_t PowerHintSession::convertWorkDurationToBoostByPid(
     return output;
 }
 
-bool PowerHintSession::isSlowUpdate(nanoseconds slowUpdateThreshold) {
-    if (!mReportingTimestamps.isFull()) {
-        return false;
-    }
-    // Convert timestamps to intervals between calls
-    std::array<nanoseconds, decltype(mReportingTimestamps)::maxSize() - 1> intervals;
-    for (int i = 0; i < mReportingTimestamps.size() - 1; ++i) {
-        intervals[i] = mReportingTimestamps[-i] - mReportingTimestamps[-i - 1];
-    }
-    // Take the median, sort of.. if we have an even number of intervals, we just
-    // use the larger one instead of averaging. This makes the cutoff a little clearer.
-    std::sort(intervals.begin(), intervals.end());
-    nanoseconds median = intervals[intervals.size() / 2];
-    bool out = median > slowUpdateThreshold;
-    if (ATRACE_ENABLED()) {
-        traceSessionVal("slow_frame", out);
-    }
-    return out;
-}
-
-std::chrono::nanoseconds PowerHintSession::getStaleTimeoutDuration(
-        std::shared_ptr<AdpfConfig> config) {
-    if (config == nullptr) {
-        config = HintManager::GetInstance()->GetAdpfProfile();
-    }
-    return duration_cast<nanoseconds>(mDescriptor->duration * config->mStaleTimeFactor);
-}
-
 PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
                                    int64_t durationNanos)
     : mStaleTimerHandler(sp<StaleTimerHandler>::make(this)),
@@ -298,7 +270,7 @@ ndk::ScopedAStatus PowerHintSession::updateTargetWorkDuration(int64_t targetDura
             targetDurationNanos * HintManager::GetInstance()->GetAdpfProfile()->mTargetTimeFactor;
     ALOGV("update target duration: %" PRId64 " ns", targetDurationNanos);
 
-    mDescriptor->duration = nanoseconds(targetDurationNanos);
+    mDescriptor->duration = std::chrono::nanoseconds(targetDurationNanos);
     if (ATRACE_ENABLED()) {
         traceSessionVal("target", mDescriptor->duration.count());
     }
@@ -335,9 +307,8 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
         traceSessionVal("hint.overtime",
                         actualDurations.back().durationNanos - mDescriptor->duration.count() > 0);
     }
-    const auto now = std::chrono::steady_clock::now();
 
-    mLastUpdatedTime.store(now);
+    mLastUpdatedTime.store(std::chrono::steady_clock::now());
     if (isFirstFrame) {
         if (isAppSession()) {
             tryToSendPowerHint("ADPF_FIRST_FRAME");
@@ -346,14 +317,6 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
     }
 
     disableTemporaryBoost();
-
-    mReportingTimestamps.append(now);
-
-    // If the updates have usually been taking longer than the stale timeout, ignore them
-    if (isSlowUpdate(getStaleTimeoutDuration(adpfConfig))) {
-        setSessionUclampMin(0);
-        return ndk::ScopedAStatus::ok();
-    }
 
     if (!adpfConfig->mPidOn) {
         setSessionUclampMin(adpfConfig->mUclampMinHigh);
@@ -376,17 +339,8 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
         ALOGE("Error: session is dead");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
-    if (!mDescriptor->is_active.load()) {
-        ALOGE("Error: shouldn't send hint during pause state.");
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
-    }
     disableTemporaryBoost();
     std::shared_ptr<AdpfConfig> adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
-    nanoseconds staleTimeout = getStaleTimeoutDuration(adpfConfig);
-    mLastUpdatedTime.store(std::chrono::steady_clock::now());
-    bool skipBoost = isSlowUpdate(staleTimeout) && hint == SessionHint::CPU_LOAD_RESET;
-    if (skipBoost)
-        return ndk::ScopedAStatus::ok();
     switch (hint) {
         case SessionHint::CPU_LOAD_UP:
             mNextUclampMin.store(mDescriptor->current_min);
@@ -399,7 +353,8 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
         case SessionHint::CPU_LOAD_RESET:
             mNextUclampMin.store(std::max(adpfConfig->mUclampMinInit,
                                           static_cast<uint32_t>(mDescriptor->current_min)));
-            mBoostTimerHandler->updateTimer(staleTimeout / 2);
+            mBoostTimerHandler->updateTimer(duration_cast<nanoseconds>(
+                    mDescriptor->duration * adpfConfig->mStaleTimeFactor / 2.0));
             setSessionUclampMin(adpfConfig->mUclampMinHigh);
             break;
         case SessionHint::CPU_LOAD_RESUME:
@@ -410,6 +365,7 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     tryToSendPowerHint(toString(hint));
+    mLastUpdatedTime.store(std::chrono::steady_clock::now());
     if (ATRACE_ENABLED()) {
         mLastHintSent = static_cast<int>(hint);
         traceSessionVal("session_hint", static_cast<int>(hint));
@@ -463,7 +419,11 @@ bool PowerHintSession::isActive() {
 
 bool PowerHintSession::isTimeout() {
     auto now = std::chrono::steady_clock::now();
-    time_point<steady_clock> staleTime = mLastUpdatedTime.load() + getStaleTimeoutDuration();
+    time_point<steady_clock> staleTime =
+            mLastUpdatedTime.load() +
+            nanoseconds(static_cast<int64_t>(
+                    mDescriptor->duration.count() *
+                    HintManager::GetInstance()->GetAdpfProfile()->mStaleTimeFactor));
     return now >= staleTime;
 }
 
@@ -546,7 +506,9 @@ void PowerHintSession::SessionTimerHandler::setSessionDead() {
 }
 
 void PowerHintSession::StaleTimerHandler::updateTimer() {
-    SessionTimerHandler::updateTimer(mSession->getStaleTimeoutDuration());
+    SessionTimerHandler::updateTimer(duration_cast<nanoseconds>(
+            mSession->mDescriptor->duration *
+            HintManager::GetInstance()->GetAdpfProfile()->mStaleTimeFactor));
 }
 
 void PowerHintSession::StaleTimerHandler::onTimeout() {
