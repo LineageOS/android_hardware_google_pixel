@@ -744,7 +744,7 @@ void Thermal::dumpThermalData(int fd) {
 }
 
 binder_status_t Thermal::dump(int fd, const char **args, uint32_t numArgs) {
-    if (numArgs == 0) {
+    if (numArgs == 0 || std::string(args[0]) == "-a") {
         dumpThermalData(fd);
         return STATUS_OK;
     }
