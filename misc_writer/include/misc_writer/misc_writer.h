@@ -38,6 +38,8 @@ enum class MiscWriterActions : int32_t {
   kClearWristOrientationFlag,
   kWriteTimeFormat,
   kWriteTimeOffset,
+  kSetMaxRamSize,
+  kClearMaxRamSize,
 
   kUnset = -1,
 };
@@ -57,6 +59,13 @@ class MiscWriter {
   static constexpr char kTimeFormat[] = "timeformat=";
   static constexpr uint32_t kTimeOffsetValOffsetInVendorSpace = 160;
   static constexpr char kTimeOffset[] = "timeoffset=";
+  static constexpr uint32_t kMaxRamSizeOffsetInVendorSpace = 192;
+  static constexpr char kMaxRamSize[] = "max-ram-size=";
+
+  // Minimum and maximum valid value for max-ram-size
+  static constexpr int32_t kRamSizeDefault = -1;
+  static constexpr uint32_t kRamSizeMin = 2048;
+  static constexpr uint32_t kRamSizeMax = 65536;
 
   // Minimum and maximum time zone are -12 and 14 hours from GMT
   static constexpr int32_t kMinTimeOffset = -12 * 60 * 60 * 1000;
