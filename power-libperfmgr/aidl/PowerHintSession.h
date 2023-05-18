@@ -19,12 +19,9 @@
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
 #include <aidl/android/hardware/power/SessionHint.h>
 #include <aidl/android/hardware/power/WorkDuration.h>
-#include <perfmgr/AdpfConfig.h>
 #include <utils/Looper.h>
-#include <utils/Mutex.h>
 #include <utils/Thread.h>
 
-#include <array>
 #include <mutex>
 #include <unordered_map>
 
@@ -41,7 +38,6 @@ using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
 using ::android::sp;
-using ::android::perfmgr::AdpfConfig;
 using std::chrono::milliseconds;
 using std::chrono::nanoseconds;
 using std::chrono::steady_clock;
@@ -131,39 +127,14 @@ class PowerHintSession : public BnPowerHintSession {
         void onTimeout() override;
     };
 
-    template <class T, size_t N>
-    class RingBuffer {
-        std::array<T, N> elements{};
-        size_t mIndex = 0;
-        size_t numElements = 0;
-
-      public:
-        void append(T item) {
-            mIndex = (mIndex + 1) % N;
-            numElements = std::min(N, numElements + 1);
-            elements[mIndex] = item;
-        }
-        bool isFull() const { return numElements == N; }
-        size_t size() const { return numElements; }
-        static constexpr size_t maxSize() { return N; }
-        // Allows access like [0] == current, [-1] = previous, etc..
-        T &operator[](int offset) {
-            size_t positiveOffset =
-                    static_cast<size_t>((offset % static_cast<int>(N)) + static_cast<int>(N));
-            return elements[(mIndex + positiveOffset) % N];
-        }
-    };
-
   private:
     void updateUniveralBoostMode();
     int setSessionUclampMin(int32_t min, bool resetStale = true);
     void tryToSendPowerHint(std::string hint);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
     void traceSessionVal(char const *identifier, int64_t val) const;
-    bool isSlowUpdate(nanoseconds slowUpdateThreshold);
-    nanoseconds getStaleTimeoutDuration(std::shared_ptr<AdpfConfig> config = nullptr);
-    AppHintDesc *mDescriptor GUARDED_BY(mSessionLock) = nullptr;
-    sp<StaleTimerHandler> mStaleTimerHandler GUARDED_BY(mSessionLock);
+    AppHintDesc *mDescriptor = nullptr;
+    sp<StaleTimerHandler> mStaleTimerHandler;
     sp<BoostTimerHandler> mBoostTimerHandler;
     std::atomic<time_point<steady_clock>> mLastUpdatedTime;
     sp<MessageHandler> mPowerManagerHandler;
@@ -176,8 +147,6 @@ class PowerHintSession : public BnPowerHintSession {
     std::unordered_map<std::string, std::optional<bool>> mSupportedHints;
     // Last session hint sent, used for logging
     int mLastHintSent = -1;
-    // Tracks the last N reported timestamps for slow update detection
-    RingBuffer<time_point<steady_clock>, 4> mReportingTimestamps;
 };
 
 }  // namespace pixel
