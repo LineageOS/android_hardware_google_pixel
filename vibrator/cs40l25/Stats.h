@@ -269,7 +269,7 @@ class StatsApi : public Vibrator::StatsApi, private StatsBase {
                 mMinLatencies[mCurrentLatencyIndex] = latency;
             }
             if (latency > mMaxLatencies[mCurrentLatencyIndex]) {
-                mMinLatencies[mCurrentLatencyIndex] = latency;
+                mMaxLatencies[mCurrentLatencyIndex] = latency;
             }
             mLatencyTotals[mCurrentLatencyIndex] += latency;
             mLatencyCounts[mCurrentLatencyIndex]++;
