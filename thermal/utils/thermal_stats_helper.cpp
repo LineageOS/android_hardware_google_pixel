@@ -30,7 +30,7 @@ namespace hardware {
 namespace thermal {
 namespace implementation {
 
-constexpr std::string_view kCustomThresholdSetSuffix("-THRESHOLD-LIST-");
+constexpr std::string_view kCustomThresholdSetSuffix("-TH-");
 constexpr std::string_view kCompressedThresholdSuffix("-CMBN-TH");
 
 using aidl::android::frameworks::stats::VendorAtom;
