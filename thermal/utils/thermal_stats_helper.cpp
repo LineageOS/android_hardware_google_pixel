@@ -21,6 +21,7 @@
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 
 #include <algorithm>
+#include <numeric>
 #include <string_view>
 
 namespace aidl {
@@ -29,7 +30,8 @@ namespace hardware {
 namespace thermal {
 namespace implementation {
 
-constexpr std::string_view kCustomThresholdSetSuffix("-THRESHOLD-LIST-");
+constexpr std::string_view kCustomThresholdSetSuffix("-TH-");
+constexpr std::string_view kCompressedThresholdSuffix("-CMBN-TH");
 
 using aidl::android::frameworks::stats::VendorAtom;
 namespace PixelAtoms = ::android::hardware::google::pixel::PixelAtoms;
@@ -109,10 +111,25 @@ bool ThermalStatsHelper::initializeSensorCdevRequestStats(
             // Record by all state
             if (isRecordByDefaultThreshold(
                         request_stats_info.record_by_default_threshold_all_or_name_set_, cdev)) {
-                // buckets = [0, 1, 2, 3, ...max_state]
-                const int default_threshold_time_in_state_size = max_state + 1;
-                sensor_cdev_request_stats_map_[sensor][cdev].stats_by_default_threshold =
-                        StatsRecord(default_threshold_time_in_state_size);
+                // if the number of states is greater / equal(as state starts from 0) than
+                // residency_buckets in atom combine the initial states
+                if (max_state >= kMaxStatsResidencyCount) {
+                    // buckets = [max_state -kMaxStatsResidencyCount + 1, ...max_state]
+                    //     idx = [1, .. max_state - (max_state - kMaxStatsResidencyCount + 1) + 1]
+                    //     idx = [1, .. kMaxStatsResidencyCount]
+                    const auto starting_state = max_state - kMaxStatsResidencyCount + 1;
+                    std::vector<int> thresholds(kMaxStatsResidencyCount);
+                    std::iota(thresholds.begin(), thresholds.end(), starting_state);
+                    const auto logging_name = cdev + kCompressedThresholdSuffix.data();
+                    ThresholdList<int> threshold_list(logging_name, thresholds);
+                    sensor_cdev_request_stats_map_[sensor][cdev]
+                            .stats_by_custom_threshold.emplace_back(threshold_list);
+                } else {
+                    // buckets = [0, 1, 2, 3, ...max_state]
+                    const auto default_threshold_time_in_state_size = max_state + 1;
+                    sensor_cdev_request_stats_map_[sensor][cdev].stats_by_default_threshold =
+                            StatsRecord(default_threshold_time_in_state_size);
+                }
                 LOG(INFO) << "Sensor Cdev user vote stats on basis of all state initialized for ["
                           << sensor << "-" << cdev << "]";
             }
