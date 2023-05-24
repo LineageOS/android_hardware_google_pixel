@@ -42,7 +42,8 @@ constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::millisecon
 constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
 // Max number of time_in_state buckets is 20 in atoms
 // VendorSensorCoolingDeviceStats, VendorTempResidencyStats
-constexpr size_t kMaxStatsThresholdCount = 19;
+constexpr int kMaxStatsResidencyCount = 20;
+constexpr int kMaxStatsThresholdCount = kMaxStatsResidencyCount - 1;
 
 enum FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
