@@ -69,7 +69,7 @@ class SysfsCollector {
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
         const char *const CCARatePath;
-        const std::vector<std::string> TempResidencyPaths;
+        const std::vector<std::pair<std::string, std::string>> TempResidencyAndResetPaths;
         const char *const LongIRQMetricsPath;
         const char *const ResumeLatencyMetricsPath;
         const char *const ModemPcieLinkStatsPath;
@@ -151,7 +151,7 @@ class SysfsCollector {
     const char *const kAmsRatePath;
     const std::vector<std::string> kThermalStatsPaths;
     const char *const kCCARatePath;
-    const std::vector<std::string> kTempResidencyPaths;
+    const std::vector<std::pair<std::string, std::string>> kTempResidencyAndResetPaths;
     const char *const kLongIRQMetricsPath;
     const char *const kResumeLatencyMetricsPath;
     const char *const kModemPcieLinkStatsPath;
