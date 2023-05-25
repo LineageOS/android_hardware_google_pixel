@@ -28,6 +28,12 @@ namespace pixel {
 using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtomValue;
 
+struct TempResidencyStats {
+    std::vector<int64_t> temp_residency_buckets;
+    float max_temp, min_temp;
+    int64_t max_temp_timestamp, min_temp_timestamp;
+};
+
 /**
  * A class to upload Pixel TempResidency Stats metrics
  */
