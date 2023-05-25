@@ -105,7 +105,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAmsRatePath(sysfs_paths.AmsRatePath),
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
       kCCARatePath(sysfs_paths.CCARatePath),
-      kTempResidencyPaths(sysfs_paths.TempResidencyPaths),
+      kTempResidencyAndResetPaths(sysfs_paths.TempResidencyAndResetPaths),
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
@@ -902,8 +902,10 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
 }
 
 void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
-    for (int i = 0; i < kTempResidencyPaths.size(); i++) {
-        temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPaths[i]);
+    for (const auto &temp_residency_and_reset_path : kTempResidencyAndResetPaths) {
+        temp_residency_reporter_.logTempResidencyStats(stats_client,
+                                                       temp_residency_and_reset_path.first,
+                                                       temp_residency_and_reset_path.second);
     }
 }
 
@@ -1425,12 +1427,16 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
          PcieLinkStatsReported::kModemPcieLinkupFailuresFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkupFailuresFieldNumber},
 
+        {"link_recovery_failures", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieLinkRecoveryFailuresFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkRecoveryFailuresFieldNumber},
+
         {"pll_lock_average", false, 0, 0,
          PcieLinkStatsReported::kModemPciePllLockAvgFieldNumber,
          PcieLinkStatsReported::kWifiPciePllLockAvgFieldNumber},
 
         {"link_up_average", false, 0, 0,
-         PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber,
+         PcieLinkStatsReported::kModemPcieLinkUpAvgFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber },
     };
 

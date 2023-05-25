@@ -48,6 +48,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --clear-wrist-orientation     Clear the wrist orientation flag\n";
   std::cerr << "  --set-timeformat              Write the time format value (1=24hr, 0=12hr)\n";
   std::cerr << "  --set-timeoffset              Write the time offset value (tz_time - utc_time)\n";
+  std::cerr << "  --set-max-ram-size <2048-65536> Write the sw limit max ram size in MB\n";
+  std::cerr << "  --set-max-ram-size <-1>         Clear the sw limit max ram size\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -68,6 +70,7 @@ int main(int argc, char** argv) {
     { "set-disable-pkvm", no_argument, nullptr, 0 },
     { "set-timeformat", required_argument, nullptr, 0},
     { "set-timeoffset", required_argument, nullptr, 0},
+    { "set-max-ram-size", required_argument, nullptr, 0},
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -148,6 +151,28 @@ int main(int argc, char** argv) {
       }
       misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeOffset,
                                                      std::to_string(timeoffset));
+    } else if (option_name == "set-max-ram-size"s) {
+      int max_ram_size;
+      if (!android::base::ParseInt(optarg, &max_ram_size)) {
+        LOG(ERROR) << "Failed to parse the max_ram_size: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (max_ram_size != MiscWriter::kRamSizeDefault &&
+          (max_ram_size < MiscWriter::kRamSizeMin || max_ram_size > MiscWriter::kRamSizeMax)) {
+        LOG(ERROR) << "max_ram_size out of range: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+
+      if (max_ram_size == MiscWriter::kRamSizeDefault) {
+        misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kClearMaxRamSize);
+      } else {
+        misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kSetMaxRamSize,
+                                                   std::to_string(max_ram_size));
+      }
     } else if (auto iter = action_map.find(option_name); iter != action_map.end()) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";

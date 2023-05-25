@@ -69,3 +69,11 @@ on property:init.svc.bugreportd=running
 
 on property:init.svc.bugreportd=stopped
     write /sys/kernel/tracing/instances/pixel/tracing_on 1
+
+# max-ram-size experiment
+service vendor.set_max_ram_size /vendor/bin/misc_writer --set-max-ram-size ${persist.device_config.vendor_system_native_boot.max_ram_size:--1}
+    disabled
+    oneshot
+
+on property:persist.device_config.vendor_system_native_boot.max_ram_size=*
+    start vendor.set_max_ram_size
