@@ -40,11 +40,16 @@ using android::base::ReadFileToString;
 using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 
+bool updateOffsetAndCheckBound(int *offset, const int &bytes_read, const int &data_len) {
+    *offset += bytes_read;
+    return *offset <= data_len;
+}
+
 /**
  * Parse file_contents and read residency stats into stats.
  */
 bool parse_file_contents(std::string file_contents,
-                         std::map<std::string, std::vector<int64_t>> *stats) {
+                         std::map<std::string, TempResidencyStats> *stats) {
     const char *data = file_contents.c_str();
     int data_len = file_contents.length();
     char sensor_name[32];
@@ -52,21 +57,40 @@ bool parse_file_contents(std::string file_contents,
     int bytes_read;
 
     while (sscanf(data + offset, "THERMAL ZONE: %31s\n%n", sensor_name, &bytes_read) == 1) {
+        TempResidencyStats temp_residency_stats;
         int64_t temp_res_value;
         int num_stats_buckets;
         int index = 0;
-        offset += bytes_read;
-        if (offset >= data_len)
+        if (!updateOffsetAndCheckBound(&offset, bytes_read, data_len))
             return false;
 
         std::string sensor_name_str = sensor_name;
 
+        if (!sscanf(data + offset, "MAX_TEMP: %f\n%n", &temp_residency_stats.max_temp,
+                    &bytes_read) ||
+            !updateOffsetAndCheckBound(&offset, bytes_read, data_len))
+            return false;
+
+        if (!sscanf(data + offset, "MAX_TEMP_TIMESTAMP: %" PRId64 "s\n%n",
+                    &temp_residency_stats.max_temp_timestamp, &bytes_read) ||
+            !updateOffsetAndCheckBound(&offset, bytes_read, data_len))
+            return false;
+
+        if (!sscanf(data + offset, "MIN_TEMP: %f\n%n", &temp_residency_stats.min_temp,
+                    &bytes_read) ||
+            !updateOffsetAndCheckBound(&offset, bytes_read, data_len))
+            return false;
+
+        if (!sscanf(data + offset, "MIN_TEMP_TIMESTAMP: %" PRId64 "s\n%n",
+                    &temp_residency_stats.min_temp_timestamp, &bytes_read) ||
+            !updateOffsetAndCheckBound(&offset, bytes_read, data_len))
+            return false;
+
         if (!sscanf(data + offset, "NUM_TEMP_RESIDENCY_BUCKETS: %d\n%n", &num_stats_buckets,
-                    &bytes_read))
+                    &bytes_read) ||
+            !updateOffsetAndCheckBound(&offset, bytes_read, data_len))
             return false;
-        offset += bytes_read;
-        if (offset >= data_len)
-            return false;
+
         while (index < num_stats_buckets) {
             if (sscanf(data + offset, "-inf - %*d ====> %" PRId64 "ms\n%n", &temp_res_value,
                        &bytes_read) != 1 &&
@@ -76,13 +100,14 @@ bool parse_file_contents(std::string file_contents,
                        &bytes_read) != 1)
                 return false;
 
-            (*stats)[sensor_name_str].push_back(temp_res_value);
+            temp_residency_stats.temp_residency_buckets.push_back(temp_res_value);
             index++;
 
             offset += bytes_read;
             if ((offset >= data_len) && (index < num_stats_buckets))
                 return false;
         }
+        (*stats)[sensor_name_str] = temp_residency_stats;
     }
     return true;
 }
@@ -102,7 +127,7 @@ void TempResidencyReporter::logTempResidencyStats(
         ALOGE("Unable to read TempResidencyStatsPath");
         return;
     }
-    std::map<std::string, std::vector<int64_t>> stats_map;
+    std::map<std::string, TempResidencyStats> stats_map;
     if (!parse_file_contents(file_contents, &stats_map)) {
         ALOGE("Fail to parse TempResidencyStatsPath");
         return;
@@ -126,22 +151,37 @@ void TempResidencyReporter::logTempResidencyStats(
     // Iterate through stats_map by sensor_name
     while (stats_map_iterator != stats_map.end()) {
         std::vector<VendorAtomValue> values;
-        std::string sensor_name_str = stats_map_iterator->first;
-        std::vector<int64_t> residency_stats = stats_map_iterator->second;
+        const auto &sensor_name_str = stats_map_iterator->first;
+        const auto &temp_residency_stats = stats_map_iterator->second;
+        const auto &temp_residency_buckets_count =
+                temp_residency_stats.temp_residency_buckets.size();
+        if (temp_residency_buckets_count > kMaxBucketLen) {
+            stats_map_iterator++;
+            continue;
+        }
         tmp_atom_value.set<VendorAtomValue::stringValue>(sensor_name_str);
         values.push_back(tmp_atom_value);
         tmp_atom_value.set<VendorAtomValue::longValue>(since_last_update_ms);
         values.push_back(tmp_atom_value);
-
-        if (residency_stats.size() > kMaxBucketLen) {
-            stats_map_iterator++;
-            continue;
-        }
         // Iterate over every temperature residency buckets
-        for (int index = 0; index < residency_stats.size(); index++) {
-            tmp_atom_value.set<VendorAtomValue::longValue>(residency_stats[index]);
+        for (const auto &temp_residency_bucket : temp_residency_stats.temp_residency_buckets) {
+            tmp_atom_value.set<VendorAtomValue::longValue>(temp_residency_bucket);
             values.push_back(tmp_atom_value);
         }
+        // Fill the remaining residency buckets with 0.
+        int remaining_residency_buckets_count = kMaxBucketLen - temp_residency_buckets_count;
+        if (remaining_residency_buckets_count > 0) {
+            tmp_atom_value.set<VendorAtomValue::longValue>(0);
+            values.insert(values.end(), remaining_residency_buckets_count, tmp_atom_value);
+        }
+        tmp_atom_value.set<VendorAtomValue::floatValue>(temp_residency_stats.max_temp);
+        values.push_back(tmp_atom_value);
+        tmp_atom_value.set<VendorAtomValue::longValue>(temp_residency_stats.max_temp_timestamp);
+        values.push_back(tmp_atom_value);
+        tmp_atom_value.set<VendorAtomValue::floatValue>(temp_residency_stats.min_temp);
+        values.push_back(tmp_atom_value);
+        tmp_atom_value.set<VendorAtomValue::longValue>(temp_residency_stats.min_temp_timestamp);
+        values.push_back(tmp_atom_value);
         //  Send vendor atom to IStats HAL
         VendorAtom event = {.reverseDomainName = "",
                             .atomId = PixelAtoms::Atom::kVendorTempResidencyStats,
