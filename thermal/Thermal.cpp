@@ -545,6 +545,10 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     for (const auto &sensor_temp_stats_pair : sensor_temp_stats_map_) {
         *dump_buf << "  Sensor Name: " << sensor_temp_stats_pair.first << std::endl;
         const auto &sensor_temp_stats = sensor_temp_stats_pair.second;
+        *dump_buf << "   Max Temp: " << sensor_temp_stats.max_temp << ", TimeStamp: "
+                  << system_clock::to_time_t(sensor_temp_stats.max_temp_timestamp) << std::endl;
+        *dump_buf << "   Min Temp: " << sensor_temp_stats.min_temp << ", TimeStamp: "
+                  << system_clock::to_time_t(sensor_temp_stats.min_temp_timestamp) << std::endl;
         for (const auto &stats_by_threshold : sensor_temp_stats.stats_by_custom_threshold) {
             *dump_buf << "   Record by Threshold: [";
             for (const auto &threshold : stats_by_threshold.thresholds) {

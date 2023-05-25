@@ -37,6 +37,8 @@ namespace implementation {
 using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using ::android::base::boot_clock;
+using std::chrono::system_clock;
+using SystemTimePoint = std::chrono::time_point<std::chrono::system_clock>;
 
 constexpr int kMaxStatsReportingFailCount = 3;
 
@@ -89,6 +91,13 @@ struct ThermalStats {
     std::optional<StatsRecord> stats_by_default_threshold;
 };
 
+struct SensorTempStats : ThermalStats<float> {
+    float max_temp = std::numeric_limits<float>::min();
+    SystemTimePoint max_temp_timestamp = SystemTimePoint::min();
+    float min_temp = std::numeric_limits<float>::max();
+    SystemTimePoint min_temp_timestamp = SystemTimePoint::min();
+};
+
 class ThermalStatsHelper {
   public:
     ThermalStatsHelper() = default;
@@ -114,7 +123,7 @@ class ThermalStatsHelper {
      */
     int reportStats();
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
-    std::unordered_map<std::string, ThermalStats<float>> GetSensorTempStatsSnapshot();
+    std::unordered_map<std::string, SensorTempStats> GetSensorTempStatsSnapshot();
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
     std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
     GetSensorCoolingDeviceRequestStatsSnapshot();
@@ -126,7 +135,7 @@ class ThermalStatsHelper {
 
     mutable std::shared_mutex sensor_temp_stats_map_mutex_;
     // Temperature stats for each sensor being watched
-    std::unordered_map<std::string, ThermalStats<float>> sensor_temp_stats_map_;
+    std::unordered_map<std::string, SensorTempStats> sensor_temp_stats_map_;
     mutable std::shared_mutex sensor_cdev_request_stats_map_mutex_;
     // userVote request stat for the sensor to the corresponding cdev (sensor -> cdev ->
     // StatsRecord)
@@ -143,13 +152,13 @@ class ThermalStatsHelper {
     void updateStatsRecord(StatsRecord *stats_record, int new_state);
     int reportAllSensorTempStats(const std::shared_ptr<IStats> &stats_client);
     bool reportSensorTempStats(const std::shared_ptr<IStats> &stats_client, std::string_view sensor,
-                               StatsRecord *stats_record);
+                               const SensorTempStats &sensor_temp_stats, StatsRecord *stats_record);
     int reportAllSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client);
     bool reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client,
                                       std::string_view sensor, std::string_view cdev,
                                       StatsRecord *stats_record);
-    bool reportThermalStats(const std::shared_ptr<IStats> &stats_client, const int32_t &atom_id,
-                            std::vector<VendorAtomValue> values, StatsRecord *stats_record);
+    bool reportAtom(const std::shared_ptr<IStats> &stats_client, const int32_t &atom_id,
+                    std::vector<VendorAtomValue> &&values);
     std::vector<int64_t> processStatsRecordForReporting(StatsRecord *stats_record);
     StatsRecord restoreStatsRecordOnFailure(StatsRecord &&stats_record_before_failure);
 };
