@@ -86,6 +86,13 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
         content = std::string(kTimeOffset) + stringdata_;
         content.resize(strlen(kTimeOffset) + std::to_string(kMinTimeOffset).size(), 0);
         break;
+    case MiscWriterActions::kSetMaxRamSize:
+    case MiscWriterActions::kClearMaxRamSize:
+        offset = override_offset.value_or(kMaxRamSizeOffsetInVendorSpace);
+        content = (action_ == MiscWriterActions::kSetMaxRamSize)
+                          ? std::string(kMaxRamSize).append(stringdata_).append("\n")
+                          : std::string(32, 0);
+        break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
       return false;
