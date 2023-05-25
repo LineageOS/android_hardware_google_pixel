@@ -34,14 +34,13 @@ using aidl::android::frameworks::stats::VendorAtomValue;
 class TempResidencyReporter {
   public:
     void logTempResidencyStats(const std::shared_ptr<IStats> &stats_client,
-                               const std::string &temperature_residency_path);
+                               std::string_view temperature_residency_path,
+                               std::string_view temperature_residency_reset_path);
 
   private:
-    std::map<std::string, std::vector<int64_t>> prev_stats;
     ::android::base::boot_clock::time_point prevTime =
             ::android::base::boot_clock::time_point::min();
     const int kMaxBucketLen = 20;
-    const int kMaxResidencyDiffMs = 3000;
 };
 
 }  // namespace pixel
