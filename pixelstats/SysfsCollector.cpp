@@ -1427,12 +1427,16 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
          PcieLinkStatsReported::kModemPcieLinkupFailuresFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkupFailuresFieldNumber},
 
+        {"link_recovery_failures", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieLinkRecoveryFailuresFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkRecoveryFailuresFieldNumber},
+
         {"pll_lock_average", false, 0, 0,
          PcieLinkStatsReported::kModemPciePllLockAvgFieldNumber,
          PcieLinkStatsReported::kWifiPciePllLockAvgFieldNumber},
 
         {"link_up_average", false, 0, 0,
-         PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber,
+         PcieLinkStatsReported::kModemPcieLinkUpAvgFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber },
     };
 
