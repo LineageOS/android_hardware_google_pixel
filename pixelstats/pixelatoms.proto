@@ -1399,6 +1399,13 @@ message VendorTempResidencyStats {
   optional int64 temp_residency_ms_bucket_18 = 21;
   optional int64 temp_residency_ms_bucket_19 = 22;
   optional int64 temp_residency_ms_bucket_20 = 23;
+
+  // The maximum and minimum temperature observed for the sensor along with the
+  // timestamp of occurrence in terms of time_t.
+  optional float max_temp = 24;
+  optional int64 max_temp_timestamp = 25;
+  optional float min_temp = 26;
+  optional int64 min_temp_timestamp = 27;
 }
 
 /**
