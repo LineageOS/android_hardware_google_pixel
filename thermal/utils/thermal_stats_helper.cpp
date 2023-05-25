@@ -235,14 +235,22 @@ void ThermalStatsHelper::updateSensorTempStatsByThreshold(std::string_view senso
     if (!sensor_temp_stats_map_.count(sensor.data())) {
         return;
     }
-    for (auto &stats_by_threshold :
-         sensor_temp_stats_map_[sensor.data()].stats_by_custom_threshold) {
+    auto &sensor_temp_stats = sensor_temp_stats_map_[sensor.data()];
+    for (auto &stats_by_threshold : sensor_temp_stats.stats_by_custom_threshold) {
         int value = calculateThresholdBucket(stats_by_threshold.thresholds, temperature);
         if (value != stats_by_threshold.stats_record.cur_state) {
             LOG(VERBOSE) << "Updating sensor stats for sensor: " << sensor.data()
                          << " with value: " << value;
             updateStatsRecord(&stats_by_threshold.stats_record, value);
         }
+    }
+    if (temperature > sensor_temp_stats.max_temp) {
+        sensor_temp_stats.max_temp = temperature;
+        sensor_temp_stats.max_temp_timestamp = system_clock::now();
+    }
+    if (temperature < sensor_temp_stats.min_temp) {
+        sensor_temp_stats.min_temp = temperature;
+        sensor_temp_stats.min_temp_timestamp = system_clock::now();
     }
 }
 
@@ -294,13 +302,13 @@ int ThermalStatsHelper::reportAllSensorTempStats(const std::shared_ptr<IStats> &
             auto &stats_by_threshold = temp_stats.stats_by_custom_threshold[threshold_set_idx];
             std::string sensor_name = stats_by_threshold.logging_name.value_or(
                     sensor + kCustomThresholdSetSuffix.data() + std::to_string(threshold_set_idx));
-            if (!reportSensorTempStats(stats_client, sensor_name,
+            if (!reportSensorTempStats(stats_client, sensor_name, temp_stats,
                                        &stats_by_threshold.stats_record)) {
                 count_failed_reporting++;
             }
         }
         if (temp_stats.stats_by_default_threshold.has_value()) {
-            if (!reportSensorTempStats(stats_client, sensor,
+            if (!reportSensorTempStats(stats_client, sensor, temp_stats,
                                        &temp_stats.stats_by_default_threshold.value())) {
                 count_failed_reporting++;
             }
@@ -310,18 +318,48 @@ int ThermalStatsHelper::reportAllSensorTempStats(const std::shared_ptr<IStats> &
 }
 
 bool ThermalStatsHelper::reportSensorTempStats(const std::shared_ptr<IStats> &stats_client,
-                                               std::string_view sensor, StatsRecord *stats_record) {
+                                               std::string_view sensor,
+                                               const SensorTempStats &sensor_temp_stats,
+                                               StatsRecord *stats_record) {
     LOG(VERBOSE) << "Reporting sensor stats for " << sensor;
-    // Load values array
-    std::vector<VendorAtomValue> values(1);
+    // maintain a copy in case reporting fails
+    StatsRecord thermal_stats_before_reporting = *stats_record;
+    std::vector<VendorAtomValue> values(2);
     values[0].set<VendorAtomValue::stringValue>(sensor);
-    if (!reportThermalStats(stats_client, PixelAtoms::Atom::kVendorTempResidencyStats, values,
-                            stats_record)) {
+    std::vector<int64_t> time_in_state_ms = processStatsRecordForReporting(stats_record);
+    const auto since_last_update_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            stats_record->cur_state_start_time - stats_record->last_stats_report_time);
+    values[1].set<VendorAtomValue::longValue>(since_last_update_ms.count());
+    VendorAtomValue tmp;
+    for (auto &time_in_state : time_in_state_ms) {
+        tmp.set<VendorAtomValue::longValue>(time_in_state);
+        values.push_back(tmp);
+    }
+    auto remaining_residency_buckets_count = kMaxStatsResidencyCount - time_in_state_ms.size();
+    if (remaining_residency_buckets_count > 0) {
+        tmp.set<VendorAtomValue::longValue>(0);
+        values.insert(values.end(), remaining_residency_buckets_count, tmp);
+    }
+    tmp.set<VendorAtomValue::floatValue>(sensor_temp_stats.max_temp);
+    values.push_back(tmp);
+    tmp.set<VendorAtomValue::longValue>(
+            system_clock::to_time_t(sensor_temp_stats.max_temp_timestamp));
+    values.push_back(tmp);
+    tmp.set<VendorAtomValue::floatValue>(sensor_temp_stats.min_temp);
+    values.push_back(tmp);
+    tmp.set<VendorAtomValue::longValue>(
+            system_clock::to_time_t(sensor_temp_stats.min_temp_timestamp));
+    values.push_back(tmp);
+
+    if (!reportAtom(stats_client, PixelAtoms::Atom::kVendorTempResidencyStats, std::move(values))) {
         LOG(ERROR) << "Unable to report VendorTempResidencyStats to Stats service for "
                       "sensor: "
                    << sensor;
+        *stats_record = restoreStatsRecordOnFailure(std::move(thermal_stats_before_reporting));
         return false;
     }
+    // Update last time of stats reporting
+    stats_record->last_stats_report_time = boot_clock::now();
     return true;
 }
 
@@ -363,17 +401,31 @@ bool ThermalStatsHelper::reportSensorCdevRequestStats(const std::shared_ptr<ISta
                                                       StatsRecord *stats_record) {
     LOG(VERBOSE) << "Reporting bindedCdev stats for sensor: " << sensor
                  << " cooling_device: " << cdev;
-    // Load values array
-    std::vector<VendorAtomValue> values(2);
+    // maintain a copy in case reporting fails
+    StatsRecord thermal_stats_before_reporting = *stats_record;
+    std::vector<VendorAtomValue> values(3);
     values[0].set<VendorAtomValue::stringValue>(sensor);
     values[1].set<VendorAtomValue::stringValue>(cdev);
-    if (!reportThermalStats(stats_client, PixelAtoms::Atom::kVendorSensorCoolingDeviceStats, values,
-                            stats_record)) {
+    std::vector<int64_t> time_in_state_ms = processStatsRecordForReporting(stats_record);
+    const auto since_last_update_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            stats_record->cur_state_start_time - stats_record->last_stats_report_time);
+    values[3].set<VendorAtomValue::longValue>(since_last_update_ms.count());
+    VendorAtomValue tmp;
+    for (auto &time_in_state : time_in_state_ms) {
+        tmp.set<VendorAtomValue::longValue>(time_in_state);
+        values.push_back(tmp);
+    }
+
+    if (!reportAtom(stats_client, PixelAtoms::Atom::kVendorSensorCoolingDeviceStats,
+                    std::move(values))) {
         LOG(ERROR) << "Unable to report VendorSensorCoolingDeviceStats to Stats "
                       "service for sensor: "
                    << sensor << " cooling_device: " << cdev;
+        *stats_record = restoreStatsRecordOnFailure(std::move(thermal_stats_before_reporting));
         return false;
     }
+    // Update last time of stats reporting
+    stats_record->last_stats_report_time = boot_clock::now();
     return true;
 }
 
@@ -390,36 +442,13 @@ std::vector<int64_t> ThermalStatsHelper::processStatsRecordForReporting(StatsRec
     return stats_residency;
 }
 
-bool ThermalStatsHelper::reportThermalStats(const std::shared_ptr<IStats> &stats_client,
-                                            const int32_t &atom_id,
-                                            std::vector<VendorAtomValue> values,
-                                            StatsRecord *stats_record) {
-    // maintain a copy in case reporting fails
-    StatsRecord thermal_stats_before_reporting = *stats_record;
-    std::vector<int64_t> time_in_state_ms = processStatsRecordForReporting(stats_record);
-    const auto since_last_update_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            stats_record->cur_state_start_time - stats_record->last_stats_report_time);
-    VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::longValue>(since_last_update_ms.count());
-    values.push_back(tmp);
-    for (auto &time_in_state : time_in_state_ms) {
-        tmp.set<VendorAtomValue::longValue>(time_in_state);
-        values.push_back(tmp);
-    }
-
+bool ThermalStatsHelper::reportAtom(const std::shared_ptr<IStats> &stats_client,
+                                    const int32_t &atom_id, std::vector<VendorAtomValue> &&values) {
     LOG(VERBOSE) << "Reporting thermal stats for atom_id " << atom_id;
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "", .atomId = atom_id, .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-    if (!ret.isOk()) {
-        LOG(ERROR) << "Unable to report to Stats service for atom " << atom_id;
-        *stats_record = restoreStatsRecordOnFailure(std::move(thermal_stats_before_reporting));
-        return false;
-    } else {
-        // Update last time of stats reporting
-        stats_record->last_stats_report_time = boot_clock::now();
-    }
-    return true;
+    return ret.isOk();
 }
 
 StatsRecord ThermalStatsHelper::restoreStatsRecordOnFailure(
@@ -434,8 +463,7 @@ StatsRecord ThermalStatsHelper::restoreStatsRecordOnFailure(
     }
 }
 
-std::unordered_map<std::string, ThermalStats<float>>
-ThermalStatsHelper::GetSensorTempStatsSnapshot() {
+std::unordered_map<std::string, SensorTempStats> ThermalStatsHelper::GetSensorTempStatsSnapshot() {
     auto sensor_temp_stats_snapshot = sensor_temp_stats_map_;
     for (auto &sensor_temp_stats_pair : sensor_temp_stats_snapshot) {
         for (auto &temp_stats : sensor_temp_stats_pair.second.stats_by_custom_threshold) {
