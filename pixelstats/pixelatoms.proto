@@ -1188,6 +1188,7 @@ message BatteryHealthStatus {
     NEEDS_REPLACEMENT = 2; // The battery needs replacement
     FAILED = 3; // The battery has failed and no longer operates as expected
     NOT_AVAILABLE = 4; // This is a temporary state when cycle count is insufficient
+    INCONSISTENT = 5; // The battery recalibration is pending
   }
 
   // HealthStatus calculated using health_index, health_perf_index.
@@ -1382,6 +1383,13 @@ message VendorTempResidencyStats {
   optional int64 temp_residency_ms_bucket_18 = 21;
   optional int64 temp_residency_ms_bucket_19 = 22;
   optional int64 temp_residency_ms_bucket_20 = 23;
+
+  // The maximum and minimum temperature observed for the sensor along with the
+  // timestamp of occurrence in terms of time_t.
+  optional float max_temp = 24;
+  optional int64 max_temp_timestamp = 25;
+  optional float min_temp = 26;
+  optional int64 min_temp_timestamp = 27;
 }
 
 /**
@@ -1583,6 +1591,11 @@ message PcieLinkStatsReported {
     optional int32 wifi_pcie_pll_lock_avg = 10;
     /* Average time (uS) for successful PCIe Link Up on wifi interface */
     optional int32 wifi_pcie_link_up_avg = 11;
+
+    /* Count of new PCIe Link Recovery Failure events on the modem interface */
+    optional int32 modem_pcie_link_recovery_failures = 12;
+    /* Count of new PCIe Link Recovery Failure events on the wifi interface */
+    optional int32 wifi_pcie_link_recovery_failures = 13;
 }
 
 /**

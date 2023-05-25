@@ -103,7 +103,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAmsRatePath(sysfs_paths.AmsRatePath),
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
       kCCARatePath(sysfs_paths.CCARatePath),
-      kTempResidencyPaths(sysfs_paths.TempResidencyPaths),
+      kTempResidencyAndResetPaths(sysfs_paths.TempResidencyAndResetPaths),
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
@@ -895,8 +895,10 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
 }
 
 void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
-    for (int i = 0; i < kTempResidencyPaths.size(); i++) {
-        temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPaths[i]);
+    for (const auto &temp_residency_and_reset_path : kTempResidencyAndResetPaths) {
+        temp_residency_reporter_.logTempResidencyStats(stats_client,
+                                                       temp_residency_and_reset_path.first,
+                                                       temp_residency_and_reset_path.second);
     }
 }
 
@@ -1377,9 +1379,9 @@ void SysfsCollector::logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_
                     VendorAtomValue::make<VendorAtomValue::intValue>
                         (PixelAtoms::PartitionsUsedSpaceReported::PERSIST);
     values[PartitionsUsedSpaceReported::kFreeBytesFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_bfree);
+            VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_bfree);
     values[PartitionsUsedSpaceReported::kTotalBytesFieldNumber - kVendorAtomOffset] =
-                    VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_blocks);
+            VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_blocks);
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
                         .atomId = PixelAtoms::Atom::kPartitionUsedSpaceReported,
@@ -1418,12 +1420,16 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
          PcieLinkStatsReported::kModemPcieLinkupFailuresFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkupFailuresFieldNumber},
 
+        {"link_recovery_failures", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieLinkRecoveryFailuresFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkRecoveryFailuresFieldNumber},
+
         {"pll_lock_average", false, 0, 0,
          PcieLinkStatsReported::kModemPciePllLockAvgFieldNumber,
          PcieLinkStatsReported::kWifiPciePllLockAvgFieldNumber},
 
         {"link_up_average", false, 0, 0,
-         PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber,
+         PcieLinkStatsReported::kModemPcieLinkUpAvgFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber },
     };
 
@@ -1432,8 +1438,8 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
         ALOGD("Modem PCIe stats path not specified");
     } else {
         for (i=0; i < ARRAY_SIZE(datamap); i++) {
-            std::string modempath = std::string (kModemPcieLinkStatsPath) + \
-                                    "/" + datamap[i].sysfs_path;
+            std::string modempath =
+                    std::string(kModemPcieLinkStatsPath) + "/" + datamap[i].sysfs_path;
 
             if (ReadFileToInt(modempath, &(datamap[i].modem_val))) {
                 reportPcieLinkStats = true;
@@ -1455,8 +1461,8 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
         ALOGD("Wifi PCIe stats path not specified");
     } else {
         for (i=0; i < ARRAY_SIZE(datamap); i++) {
-            std::string wifipath = std::string (kWifiPcieLinkStatsPath) + \
-                                   "/" + datamap[i].sysfs_path;
+            std::string wifipath =
+                    std::string(kWifiPcieLinkStatsPath) + "/" + datamap[i].sysfs_path;
 
             if (ReadFileToInt(wifipath, &(datamap[i].wifi_val))) {
                 reportPcieLinkStats = true;
