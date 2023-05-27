@@ -434,7 +434,7 @@ bool ThermalThrottling::allocatePowerToCdev(
                 if (binded_cdev_info_pair.second.max_release_step !=
                             std::numeric_limits<int>::max() &&
                     (power_data_invalid || cdev_power_adjustment > 0)) {
-                    if (curr_cdev_vote < max_cdev_vote) {
+                    if (!power_data_invalid && curr_cdev_vote < max_cdev_vote) {
                         cdev_power_budget = cdev_info.state2power[curr_cdev_vote];
                         LOG(VERBOSE) << temp.name << "'s " << binded_cdev_info_pair.first
                                      << " vote: " << curr_cdev_vote
