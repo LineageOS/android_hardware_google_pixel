@@ -409,7 +409,7 @@ bool ThermalStatsHelper::reportSensorCdevRequestStats(const std::shared_ptr<ISta
     std::vector<int64_t> time_in_state_ms = processStatsRecordForReporting(stats_record);
     const auto since_last_update_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             stats_record->cur_state_start_time - stats_record->last_stats_report_time);
-    values[3].set<VendorAtomValue::longValue>(since_last_update_ms.count());
+    values[2].set<VendorAtomValue::longValue>(since_last_update_ms.count());
     VendorAtomValue tmp;
     for (auto &time_in_state : time_in_state_ms) {
         tmp.set<VendorAtomValue::longValue>(time_in_state);
