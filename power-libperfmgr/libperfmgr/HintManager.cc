@@ -655,8 +655,6 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
     uint64_t samplingWindowD;
     double staleTimeFactor;
     uint64_t reportingRate;
-    bool earlyBoostOn;
-    double earlyBoostTimeFactor;
     double targetTimeFactor;
     std::vector<std::shared_ptr<AdpfConfig>> adpfs_parsed;
     std::set<std::string> name_parsed;
@@ -818,7 +816,6 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
             adpfs_parsed.clear();
             return adpfs_parsed;
         }
-        earlyBoostOn = adpfs[i]["EarlyBoost_On"].asBool();
 
         if (adpfs[i]["EarlyBoost_TimeFactor"].empty() ||
             !adpfs[i]["EarlyBoost_TimeFactor"].isDouble()) {
@@ -827,7 +824,6 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
             adpfs_parsed.clear();
             return adpfs_parsed;
         }
-        earlyBoostTimeFactor = adpfs[i]["EarlyBoost_TimeFactor"].asDouble();
 
         if (adpfs[i]["TargetTimeFactor"].empty() || !adpfs[i]["TargetTimeFactor"].isDouble()) {
             LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][TargetTimeFactor]'s Values";
@@ -840,7 +836,7 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
                 pidDOver, pidDUnder, adpfUclamp, uclampMinInit, uclampMinHighLimit,
                 uclampMinLowLimit, samplingWindowP, samplingWindowI, samplingWindowD, reportingRate,
-                earlyBoostOn, earlyBoostTimeFactor, targetTimeFactor, staleTimeFactor));
+                targetTimeFactor, staleTimeFactor));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;
