@@ -754,12 +754,14 @@ binder_status_t Thermal::dump(int fd, const char **args, uint32_t numArgs) {
     }
 
     if (std::string(args[0]) == "emul_temp") {
-        return (numArgs != 3 || !thermal_helper_.emulTemp(std::string(args[1]), std::atof(args[2])))
+        return (numArgs != 3 ||
+                !thermal_helper_.emulTemp(std::string(args[1]), std::strtod(args[2], nullptr)))
                        ? STATUS_BAD_VALUE
                        : STATUS_OK;
     } else if (std::string(args[0]) == "emul_severity") {
         return (numArgs != 3 ||
-                !thermal_helper_.emulSeverity(std::string(args[1]), std::atoi(args[2])))
+                !thermal_helper_.emulSeverity(std::string(args[1]),
+                                              static_cast<int>(std::strtol(args[2], nullptr, 10))))
                        ? STATUS_BAD_VALUE
                        : STATUS_OK;
     } else if (std::string(args[0]) == "emul_clear") {
