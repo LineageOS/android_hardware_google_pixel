@@ -78,6 +78,7 @@ class SysfsCollector {
         const char *const ResumeLatencyMetricsPath;
         const char *const ModemPcieLinkStatsPath;
         const char *const WifiPcieLinkStatsPath;
+        const char *const PDMStatePath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -115,6 +116,7 @@ class SysfsCollector {
     void logThermalStats(const std::shared_ptr<IStats> &stats_client);
     void logMitigationDurationCounts(const std::shared_ptr<IStats> &stats_client);
     void logDisplayStats(const std::shared_ptr<IStats> &stats_client);
+    void logVendorAudioPdmStatsReported(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
                               const VendorSlowIo::IoOperation &operation_s);
@@ -164,6 +166,7 @@ class SysfsCollector {
     const char *const kModemPcieLinkStatsPath;
     const char *const kWifiPcieLinkStatsPath;
     const std::vector<std::string> kDisplayStatsPaths;
+    const char *const kPDMStatePath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
