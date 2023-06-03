@@ -102,11 +102,11 @@ message Atom {
       VibratorPlaycountReported vibrator_playcount_reported = 105049;
       VibratorLatencyReported vibrator_latency_reported = 105050;
       VibratorErrorsReported vibrator_errors_reported = 105051;
-
       F2fsAtomicWriteInfo f2fs_atomic_write_info = 105052;
       PartitionsUsedSpaceReported partition_used_space_reported = 105053;
       PowerMitigationDurationCounts mitigation_duration = 105054; // moved from atoms.proto
       DisplayPanelErrorStats display_panel_error_stats = 105055;
+      VendorAudioPdmStatsReported vendor_audio_pdm_stats_reported = 105056;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1323,6 +1323,23 @@ message VendorAudioHardwareStatsReported {
 
   /* cca_enable: UI enable & algorithm is inactive. (C2) */
   optional int32 rate_of_cca_enable_per_day = 4;
+}
+
+
+/**
+ * Logs the reported vendor audio PDM stats.
+ * PDM stats are used to show background noise level during voice/voip calling.
+ * Each of the atom will show only one type of background noises. There are at most 4 types.
+ * Thus, this atoms will be reported at most 4 times to show all types.
+ */
+message VendorAudioPdmStatsReported {
+  optional string reverse_domain_name = 1;
+
+  /* index of the pdm to report. There are 4 pdm instances. So, the value is in the range 1-4 */
+  optional int32 pdm_index = 2;
+
+  /* State of the pdm to report. There is only two value 1 for good and 0 for bad. */
+  optional int32 state = 3;
 }
 
 /*

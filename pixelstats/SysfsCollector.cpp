@@ -62,6 +62,7 @@ using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioPdmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorLongIRQStatsReported;
@@ -110,7 +111,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
       kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath),
-      kDisplayStatsPaths(sysfs_paths.DisplayStatsPaths) {}
+      kDisplayStatsPaths(sysfs_paths.DisplayStatsPaths),
+      kPDMStatePath(sysfs_paths.PDMStatePath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1140,6 +1142,66 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
 }
 
 /**
+ * Report PDM States which indicates microphone background noise level.
+ * This function will report at most 4 atoms showing different background noise type.
+ */
+void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> pdm_states;
+
+    if (kPDMStatePath == nullptr) {
+        ALOGD("Audio PDM State path not specified");
+    } else {
+        if (!ReadFileToString(kPDMStatePath, &file_contents)) {
+            ALOGD("Unable to read PDM State path %s", kPDMStatePath);
+        } else {
+            std::stringstream file_content_stream(file_contents);
+            while (file_content_stream.good()) {
+                std::string substr;
+                int state;
+                getline(file_content_stream, substr, ',');
+                if (sscanf(substr.c_str(), "%d", &state) != 1) {
+                    ALOGD("Unable to parse PDM State %s", file_contents.c_str());
+                } else {
+                    pdm_states.push_back(state);
+                    ALOGD("Parsed PDM State: %d", state);
+                }
+            }
+        }
+    }
+
+    if (pdm_states.empty()) {
+        ALOGD("Empty PDM State parsed.");
+        return;
+    }
+
+    if (pdm_states.size() > 4) {
+        ALOGD("Too many values parsed.");
+        return;
+    }
+
+    for (int index = 0; index < pdm_states.size(); index++) {
+        std::vector<VendorAtomValue> values(2);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioPdmStatsReported::kPdmIndexFieldNumber - kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(pdm_states[index]);
+        values[VendorAudioPdmStatsReported::kStateFieldNumber - kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioPdmStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioPdmStatsReported at index %d", index);
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1567,6 +1629,7 @@ void SysfsCollector::logPerDay() {
     logPartitionUsedSpace(stats_client);
     logPcieLinkStats(stats_client);
     logMitigationDurationCounts(stats_client);
+    logVendorAudioPdmStatsReported(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
