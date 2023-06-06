@@ -16,12 +16,12 @@
 
 #include "misc_writer/misc_writer.h"
 
-#include <string.h>
-
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <bootloader_message/bootloader_message.h>
+#include <string.h>
 
 namespace android {
 namespace hardware {
@@ -103,6 +103,19 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
     LOG(ERROR) << "Failed to write " << content << " at offset " << offset << " : " << err;
     return false;
   }
+
+  if (action_ == MiscWriterActions::kSetSotaFlag) {
+    content = ::android::base::GetProperty("persist.vendor.nfc.factoryota.state", "");
+    if (content.size() != 0 && content.size() <= 40) {
+      offset = kSotaStateOffsetInVendorSpace;
+      if (std::string err;
+          !WriteMiscPartitionVendorSpace(content.data(), content.size(), offset, &err)) {
+          LOG(ERROR) << "Failed to write " << content << " at offset " << offset << " : " << err;
+          return false;
+      }
+    }
+  }
+
   return true;
 }
 
