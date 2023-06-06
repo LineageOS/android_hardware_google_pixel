@@ -13,14 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <pixelstats/DropDetect.h>
-
 #include <chre/util/nanoapp/app_id.h>
 #include <chre_host/host_protocol_host.h>
 #include <chre_host/socket_client.h>
-
-#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
+#include <pixelstats/DropDetect.h>
 #include <pixelstats/StatsHelper.h>
+#include <pixelstatsatoms.h>
 
 #define LOG_TAG "pixelstats-vendor"
 #include <log/log.h>
@@ -35,7 +33,7 @@ using android::sp;
 using android::chre::HostProtocolHost;
 using android::chre::IChreMessageHandlers;
 using android::chre::SocketClient;
-using android::hardware::google::pixel::PixelAtoms::VendorPhysicalDropDetected;
+using android::hardware::google::pixel::PixelAtoms::VENDOR_PHYSICAL_DROP_DETECTED;
 
 // following convention of CHRE code.
 namespace fbs = ::chre::fbs;
@@ -128,7 +126,7 @@ void DropDetect::handleNanoappListResponse(const fbs::NanoappListResponseT &resp
     ALOGE("Drop Detect app not found");
 }
 
-static VendorPhysicalDropDetected dropEventFromNanoappPayload(const struct DropEventPayload *p) {
+static VendorAtom dropEventFromNanoappPayload(const struct DropEventPayload *p) {
     ALOGI("Received drop detect message! Confidence %f Peak %f Duration %g",
           p->confidence, p->accel_magnitude_peak, p->free_fall_duration_ns / 1e9);
 
@@ -138,14 +136,11 @@ static VendorPhysicalDropDetected dropEventFromNanoappPayload(const struct DropE
     int32_t accel_magnitude_peak_1000ths_g = p->accel_magnitude_peak * 1000.0;
     int32_t free_fall_duration_ms = p->free_fall_duration_ns / 1000000;
 
-    VendorPhysicalDropDetected drop_info;
-    drop_info.set_confidence_pctg(confidence);
-    drop_info.set_accel_peak_thousandths_g(accel_magnitude_peak_1000ths_g);
-    drop_info.set_freefall_time_millis(free_fall_duration_ms);
-    return drop_info;
+    return createVendorAtom(VENDOR_PHYSICAL_DROP_DETECTED, "", confidence,
+                            accel_magnitude_peak_1000ths_g, free_fall_duration_ms);
 }
 
-static VendorPhysicalDropDetected dropEventFromNanoappPayload(const struct DropEventPayloadV2 *p) {
+static VendorAtom dropEventFromNanoappPayload(const struct DropEventPayloadV2 *p) {
     ALOGI("Received drop detect message: "
           "duration %g ms, impact acceleration: x = %f, y = %f, z = %f",
           p->free_fall_duration_ns / 1e6,
@@ -165,23 +160,24 @@ static VendorPhysicalDropDetected dropEventFromNanoappPayload(const struct DropE
             (impact_magnitude - min_confidence_magnitude) /
             (max_confidence_magnitude - min_confidence_magnitude) * 100;
 
-    int32_t free_fall_duration_ms = static_cast<int32_t>(p->free_fall_duration_ns / 1000000);
+    const int32_t accel_peak_thousandths_g = static_cast<int32_t>(impact_magnitude * 1000);
+    const int32_t free_fall_duration_ms = static_cast<int32_t>(p->free_fall_duration_ns / 1000000);
 
-    VendorPhysicalDropDetected drop_info;
-    drop_info.set_confidence_pctg(confidence_percentage);
-    drop_info.set_accel_peak_thousandths_g(static_cast<int32_t>(impact_magnitude * 1000));
-    drop_info.set_freefall_time_millis(free_fall_duration_ms);
-    return drop_info;
+    return createVendorAtom(VENDOR_PHYSICAL_DROP_DETECTED, "", confidence_percentage,
+                            accel_peak_thousandths_g, free_fall_duration_ms);
 }
 
-static void reportDropEventToStatsd(const VendorPhysicalDropDetected &drop) {
+static void reportDropEventToStatsd(const VendorAtom &atom) {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
         ALOGE("Unable to get AIDL Stats service");
         return;
     }
 
-    reportPhysicalDropDetected(stats_client, drop);
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(atom);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report VENDOR_PHYSICAL_DROP_DETECTED to Stats service");
+    }
 }
 
 /**
