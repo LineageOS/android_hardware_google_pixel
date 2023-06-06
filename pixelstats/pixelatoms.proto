@@ -60,7 +60,8 @@ message Atom {
       VendorHardwareFailed vendor_hardware_failed = 105019; // moved from atoms.proto
       VendorSlowIo vendor_slow_io = 105020; // moved from atoms.proto
       VendorSpeechDspStat vendor_speech_dsp_stat = 105021; // moved from atoms.proto
-      VendorPhysicalDropDetected vendor_physical_drop_detected = 105022; // moved from atoms.proto
+      VendorPhysicalDropDetected vendor_physical_drop_detected =
+                105022 [(android.os.statsd.module) = "pixelstats"];     // moved from atoms.proto
       VendorUsbPortOverheat vendor_usb_port_overheat = 105023; // moved from atoms.proto
       CmaStatus cma_status = 105024;
       CmaStatusExt cma_status_ext = 105025;

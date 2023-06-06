@@ -176,27 +176,6 @@ void reportSpeechDspStat(const std::shared_ptr<IStats> &stats_client,
         ALOGE("Unable to report VendorSpeechDspStat to Stats service");
 }
 
-void reportPhysicalDropDetected(const std::shared_ptr<IStats> &stats_client,
-                                const PixelAtoms::VendorPhysicalDropDetected &dropDetected) {
-    // Load values array
-    std::vector<VendorAtomValue> values(3);
-    VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::intValue>(dropDetected.confidence_pctg());
-    values[0] = tmp;
-    tmp.set<VendorAtomValue::intValue>(dropDetected.accel_peak_thousandths_g());
-    values[1] = tmp;
-    tmp.set<VendorAtomValue::intValue>(dropDetected.freefall_time_millis());
-    values[2] = tmp;
-
-    // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = "",
-                        .atomId = PixelAtoms::Atom::kVendorPhysicalDropDetected,
-                        .values = std::move(values)};
-    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-    if (!ret.isOk())
-        ALOGE("Unable to report VendorPhysicalDropDetected to Stats service");
-}
-
 void reportUsbPortOverheat(const std::shared_ptr<IStats> &stats_client,
                            const PixelAtoms::VendorUsbPortOverheat &overheat_info) {
     // Load values array
