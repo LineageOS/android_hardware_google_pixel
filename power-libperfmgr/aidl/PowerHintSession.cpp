@@ -284,8 +284,8 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
         ALOGE("Expect to call updateTargetWorkDuration() first.");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
-    if (actualDurations.size() == 0) {
-        ALOGE("Error: duration.size() shouldn't be %zu.", actualDurations.size());
+    if (actualDurations.empty()) {
+        ALOGE("Error: durations shouldn't be empty.");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     if (!mDescriptor->is_active.load()) {
@@ -387,8 +387,8 @@ ndk::ScopedAStatus PowerHintSession::setThreads(const std::vector<int32_t> &thre
         ALOGE("Error: session is dead");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
-    if (threadIds.size() == 0) {
-        ALOGE("Error: threadIds.size() shouldn't be %ld", threadIds.size());
+    if (threadIds.empty()) {
+        ALOGE("Error: threadIds should not be empty");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
