@@ -107,6 +107,7 @@ message Atom {
       PowerMitigationDurationCounts mitigation_duration = 105054; // moved from atoms.proto
       DisplayPanelErrorStats display_panel_error_stats = 105055;
       VendorAudioPdmStatsReported vendor_audio_pdm_stats_reported = 105056;
+      VendorAudioThirdPartyEffectStatsReported vendor_audio_third_party_effect_stats_reported = 105057;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1822,3 +1823,42 @@ message PowerMitigationDurationCounts {
  optional int32 greater_than_thresh_sub_11 = 34;
 }
 
+/*
+ * Logs the third party audio effects stats.
+ * Third party audio effects stats includes duration in milliseconds for each
+ * instance of the effects (speaker, USB, etc.).
+ */
+message VendorAudioThirdPartyEffectStatsReported {
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+
+    enum InstanceId {
+        OTHER = 0;
+        SPEAKER = 1;
+        USB = 2;
+        BT_A2DP = 3;
+        BT_LE = 4;
+    }
+    /* Instance of the effect. */
+    optional InstanceId instance = 2;
+    /* Active duration in milliseconds per day for volume range 0. */
+    optional int32 volume_range_0_active_ms_per_day = 3;
+    /* Active duration in milliseconds per day for volume range 1. */
+    optional int32 volume_range_1_active_ms_per_day = 4;
+    /* Active duration in milliseconds per day for volume range 2. */
+    optional int32 volume_range_2_active_ms_per_day = 5;
+    /* Active duration in milliseconds per day for volume range 3. */
+    optional int32 volume_range_3_active_ms_per_day = 6;
+    /* Active duration in milliseconds per day for volume range 4. */
+    optional int32 volume_range_4_active_ms_per_day = 7;
+    /* Active duration in milliseconds per day for volume range 5. */
+    optional int32 volume_range_5_active_ms_per_day = 8;
+    /* Active duration in milliseconds per day for volume range 6. */
+    optional int32 volume_range_6_active_ms_per_day = 9;
+    /* Active duration in milliseconds per day for volume range 7. */
+    optional int32 volume_range_7_active_ms_per_day = 10;
+    /* Active duration in milliseconds per day for volume range 8. */
+    optional int32 volume_range_8_active_ms_per_day = 11;
+    /* Active duration in milliseconds per day for volume range 9. */
+    optional int32 volume_range_9_active_ms_per_day = 12;
+}
