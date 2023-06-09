@@ -24,6 +24,7 @@ cc_library {
         "disp-power/DisplayLowPower.cpp",
         "disp-power/InteractionHandler.cpp",
     ],
+    cpp_std: "gnu++20",
     shared_libs: [
         "libbase",
         "libcutils",
@@ -39,6 +40,35 @@ cc_library_headers {
     name: "pixel_power_headers",
     vendor: true,
     export_include_dirs: ["hidl"],
+}
+
+cc_test {
+    name: "libadpf_test",
+    proprietary: true,
+    vendor: true,
+    require_root: true,
+    srcs: [
+        "aidl/tests/BackgroundWorkerTest.cpp",
+        "aidl/tests/SessionTaskMapTest.cpp",
+        "aidl/tests/UClampVoterTest.cpp",
+        "aidl/SessionTaskMap.cpp",
+        "aidl/BackgroundWorker.cpp",
+        "aidl/SessionValueEntry.cpp",
+        "aidl/UClampVoter.cpp",
+    ],
+    cpp_std: "gnu++20",
+    static_libs: [
+        "libgmock",
+        "android.hardware.power-V4-ndk",
+    ],
+    shared_libs: [
+        "liblog",
+        "libbase",
+        "libcutils",
+        "libutils",
+        "libperfmgr",
+    ],
+    test_suites: ["device-tests"],
 }
 
 cc_binary {
@@ -58,15 +88,19 @@ cc_binary {
         "libperfmgr",
         "libprocessgroup",
         "pixel-power-ext-V1-ndk",
-        "libprotobuf-cpp-full",
     ],
     srcs: [
+        "aidl/BackgroundWorker.cpp",
         "aidl/service.cpp",
         "aidl/Power.cpp",
         "aidl/PowerExt.cpp",
         "aidl/PowerHintSession.cpp",
         "aidl/PowerSessionManager.cpp",
+        "aidl/UClampVoter.cpp",
+        "aidl/SessionTaskMap.cpp",
+        "aidl/SessionValueEntry.cpp",
     ],
+    cpp_std: "gnu++20",
 }
 
 cc_binary {
