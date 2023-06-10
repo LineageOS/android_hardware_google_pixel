@@ -108,6 +108,7 @@ message Atom {
       DisplayPanelErrorStats display_panel_error_stats = 105055;
       VendorAudioPdmStatsReported vendor_audio_pdm_stats_reported = 105056;
       VendorAudioThirdPartyEffectStatsReported vendor_audio_third_party_effect_stats_reported = 105057;
+      VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1861,4 +1862,28 @@ message VendorAudioThirdPartyEffectStatsReported {
     optional int32 volume_range_8_active_ms_per_day = 11;
     /* Active duration in milliseconds per day for volume range 9. */
     optional int32 volume_range_9_active_ms_per_day = 12;
+}
+
+/*
+ * Logs the Audio Adapted information stats.
+ * Two stats are recorded, count and duration (in ms) per features.
+ */
+message VendorAudioAdaptedInfoStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum AdaptedInfoFeature {
+    UNKNOWN = 0;
+    BATTERY_ADAPTED_AUDIO_CONTROL = 1;
+    MEDIA_PLAYBACK_THERMAL_THROTTLE = 2;
+    TELEPHONY_THERMAL_THROTTLE = 3;
+    ACOUSTIC_SHOCK = 4;
+    SPATIAL_AUDIO = 5;
+  };
+  /* Feature to record the stats */
+  optional AdaptedInfoFeature feature_id = 2;
+  /* Number of time the feature is active */
+  optional int32 active_counts_per_day = 3;
+  /* Duration the feature is active in milliseconds */
+  optional int32 active_duration_ms_per_day = 4;
 }

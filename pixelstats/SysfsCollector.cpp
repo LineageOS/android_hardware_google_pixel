@@ -61,6 +61,7 @@ using android::hardware::google::pixel::PixelAtoms::PcieLinkStatsReported;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioAdaptedInfoStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPdmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioThirdPartyEffectStatsReported;
@@ -114,7 +115,9 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath),
       kDisplayStatsPaths(sysfs_paths.DisplayStatsPaths),
       kPDMStatePath(sysfs_paths.PDMStatePath),
-      kWavesPath(sysfs_paths.WavesPath) {}
+      kWavesPath(sysfs_paths.WavesPath),
+      kAdaptedInfoCountPath(sysfs_paths.AdaptedInfoCountPath),
+      kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1282,6 +1285,86 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
 }
 
 /**
+ * Report Audio Adapted Information stats such as thermal throttling.
+ * This function will report at most 6 atoms showing different instance stats.
+ */
+void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> count_per_feature;
+    std::vector<int> duration_per_feature;
+
+    constexpr int num_features = 6;
+
+    if (kAdaptedInfoCountPath == nullptr) {
+        ALOGD("Audio Adapted Info Count stats path not specified");
+        return;
+    }
+
+    if (kAdaptedInfoDurationPath == nullptr) {
+        ALOGD("Audio Adapted Info Duration stats path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kAdaptedInfoCountPath, &file_contents)) {
+        ALOGD("Unable to read Adapted Info Count stats path %s", kAdaptedInfoCountPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int count;
+        while (file_content_stream.good() && file_content_stream >> count) {
+            count_per_feature.push_back(count);
+        }
+    }
+
+    if (count_per_feature.size() != num_features) {
+        ALOGD("Audio Adapted Info Count doesn't match the number of features. %zu / %d",
+              count_per_feature.size(), num_features);
+        return;
+    }
+
+    if (!ReadFileToString(kAdaptedInfoDurationPath, &file_contents)) {
+        ALOGD("Unable to read Adapted Info Duration stats path %s", kAdaptedInfoDurationPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            duration_per_feature.push_back(duration);
+        }
+    }
+
+    if (duration_per_feature.size() != num_features) {
+        ALOGD("Audio Adapted Info Duration doesn't match the number of features. %zu / %d",
+              duration_per_feature.size(), num_features);
+        return;
+    }
+
+    for (int index = 0; index < num_features; index++) {
+        std::vector<VendorAtomValue> values(3);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioAdaptedInfoStatsReported::kFeatureIdFieldNumber - kVendorAtomOffset] =
+                tmp;
+
+        tmp.set<VendorAtomValue::intValue>(count_per_feature[index]);
+        values[VendorAudioAdaptedInfoStatsReported::kActiveCountsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(duration_per_feature[index]);
+        values[VendorAudioAdaptedInfoStatsReported::kActiveDurationMsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioAdaptedInfoStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioAdaptedInfoStatsReported at index %d", index);
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1711,6 +1794,7 @@ void SysfsCollector::logPerDay() {
     logMitigationDurationCounts(stats_client);
     logVendorAudioPdmStatsReported(stats_client);
     logWavesStats(stats_client);
+    logAdaptedInfoStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
