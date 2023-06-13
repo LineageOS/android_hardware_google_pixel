@@ -191,6 +191,15 @@ void PowerHintSession::updateUniveralBoostMode() {
     }
 }
 
+void PowerHintSession::tryToSendPowerHint(std::string hint) {
+    if (!mSupportedHints[hint].has_value()) {
+        mSupportedHints[hint] = HintManager::GetInstance()->IsHintSupported(hint);
+    }
+    if (mSupportedHints[hint].value()) {
+        HintManager::GetInstance()->DoHint(hint);
+    }
+}
+
 int PowerHintSession::setSessionUclampMin(int32_t min) {
     {
         std::lock_guard<std::mutex> guard(mSessionLock);
@@ -334,6 +343,9 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
 
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
     if (isFirstFrame) {
+        if (isAppSession()) {
+            tryToSendPowerHint("ADPF_FIRST_FRAME");
+        }
         updateUniveralBoostMode();
     }
 
