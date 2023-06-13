@@ -102,7 +102,7 @@ int PowerSessionManager::getDisplayRefreshRate() {
 
 void PowerSessionManager::addPowerSession(const std::string &idString, int64_t sessionId,
                                           std::chrono::nanoseconds durationNs, int32_t tgid,
-                                          int32_t uid, const std::vector<int32_t> threadIds) {
+                                          int32_t uid, const std::vector<int32_t> &threadIds) {
     const auto timeNow = std::chrono::steady_clock::now();
     VoteRange pidVoteRange(false, kUclampMin, kUclampMax, timeNow, durationNs);
 
@@ -155,7 +155,7 @@ void PowerSessionManager::removePowerSession(int64_t sessionId) {
 }
 
 void PowerSessionManager::setThreadsFromPowerSession(int64_t sessionId,
-                                                     const std::vector<int32_t> threadIds) {
+                                                     const std::vector<int32_t> &threadIds) {
     std::vector<pid_t> addedThreads;
     std::vector<pid_t> removedThreads;
     forceSessionActive(sessionId, false);

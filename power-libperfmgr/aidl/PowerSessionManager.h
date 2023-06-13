@@ -51,10 +51,10 @@ class PowerSessionManager : public ::android::RefBase {
     // Add and remove power hint session
     void addPowerSession(const std::string &idString, int64_t sessionId,
                          std::chrono::nanoseconds durationNs, int32_t tgid, int32_t uid,
-                         const std::vector<int32_t> threadIds);
+                         const std::vector<int32_t> &threadIds);
     void removePowerSession(int64_t sessionId);
     // Replace current threads in session with threadIds
-    void setThreadsFromPowerSession(int64_t sessionId, const std::vector<int32_t> threadIds);
+    void setThreadsFromPowerSession(int64_t sessionId, const std::vector<int32_t> &threadIds);
     // Pause and resume power hint session
     void pause(int64_t sessionId);
     void resume(int64_t sessionId);
