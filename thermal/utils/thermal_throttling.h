@@ -101,7 +101,7 @@ class ThermalThrottling {
     float computeExcludedPower(const SensorInfo &sensor_info,
                                const ThrottlingSeverity curr_severity,
                                const std::unordered_map<std::string, PowerStatus> &power_status_map,
-                               std::string *log_buf);
+                               std::string *log_buf, std::string_view sensor_name);
 
     // PID algo - allocate the power to target CDEV according to the ODPM
     bool allocatePowerToCdev(
