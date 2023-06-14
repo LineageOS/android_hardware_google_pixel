@@ -247,10 +247,10 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
     ATRACE_INT((sensor_name + std::string("-target_state")).c_str(),
                static_cast<int>(target_state));
 
-    ATRACE_INT((sensor_name + std::string("-err")).c_str(), static_cast<int>(err));
+    ATRACE_INT((sensor_name + std::string("-err")).c_str(), static_cast<int>(err / sensor_info.multiplier));
     ATRACE_INT((sensor_name + std::string("-p")).c_str(), static_cast<int>(p));
     ATRACE_INT((sensor_name + std::string("-d")).c_str(), static_cast<int>(d));
-    ATRACE_INT((sensor_name + std::string("-temp")).c_str(), static_cast<int>(temp.value));
+    ATRACE_INT((sensor_name + std::string("-temp")).c_str(), static_cast<int>(temp.value / sensor_info.multiplier));
 
     throttling_status.prev_power_budget = power_budget;
 
@@ -259,8 +259,8 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
 
 float ThermalThrottling::computeExcludedPower(
         const SensorInfo &sensor_info, const ThrottlingSeverity curr_severity,
-        const std::unordered_map<std::string, PowerStatus> &power_status_map,
-        std::string *log_buf) {
+        const std::unordered_map<std::string, PowerStatus> &power_status_map, std::string *log_buf,
+        std::string_view sensor_name) {
     float excluded_power = 0.0;
 
     for (const auto &excluded_power_info_pair :
@@ -275,12 +275,15 @@ float ThermalThrottling::computeExcludedPower(
                     last_updated_avg_power,
                     excluded_power_info_pair.second[static_cast<size_t>(curr_severity)]));
 
-            ATRACE_INT((excluded_power_info_pair.first + std::string("-avg_power")).c_str(),
+            ATRACE_INT((std::string(sensor_name) + std::string("-") +
+                        excluded_power_info_pair.first + std::string("-avg_power"))
+                               .c_str(),
                        static_cast<int>(last_updated_avg_power));
         }
     }
 
-    ATRACE_INT("excluded_power", static_cast<int>(excluded_power));
+    ATRACE_INT((std::string(sensor_name) + std::string("-excluded_power")).c_str(),
+               static_cast<int>(excluded_power));
     return excluded_power;
 }
 
@@ -304,8 +307,8 @@ bool ThermalThrottling::allocatePowerToCdev(
     auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity);
 
     if (sensor_info.throttling_info->excluded_power_info_map.size()) {
-        total_power_budget -=
-                computeExcludedPower(sensor_info, curr_severity, power_status_map, &log_buf);
+        total_power_budget -= computeExcludedPower(sensor_info, curr_severity, power_status_map,
+                                                   &log_buf, temp.name);
         total_power_budget = std::max(total_power_budget, 0.0f);
         if (!log_buf.empty()) {
             LOG(INFO) << temp.name << " power budget=" << total_power_budget << " after " << log_buf
@@ -352,7 +355,8 @@ bool ThermalThrottling::allocatePowerToCdev(
                         break;
                     }
 
-                    ATRACE_INT((binded_cdev_info_pair.second.power_rail + std::string("-avg_power"))
+                    ATRACE_INT((temp.name + std::string("-") +
+                                binded_cdev_info_pair.second.power_rail + std::string("-avg_power"))
                                        .c_str(),
                                static_cast<int>(last_updated_avg_power));
                 } else {
@@ -571,13 +575,13 @@ bool ThermalThrottling::throttlingReleaseUpdate(
                   << ": power threshold = "
                   << binded_cdev_info_pair.second.power_thresholds[static_cast<int>(severity)]
                   << ", avg power = " << avg_power;
-
+        std::string atrace_prefix = ::android::base::StringPrintf(
+                "%s-%s", sensor_name.data(), binded_cdev_info_pair.second.power_rail.data());
         ATRACE_INT(
-                (binded_cdev_info_pair.second.power_rail + std::string("-power_threshold")).c_str(),
+                (atrace_prefix + std::string("-power_threshold")).c_str(),
                 static_cast<int>(
                         binded_cdev_info_pair.second.power_thresholds[static_cast<int>(severity)]));
-        ATRACE_INT((binded_cdev_info_pair.second.power_rail + std::string("-avg_power")).c_str(),
-                   avg_power);
+        ATRACE_INT((atrace_prefix + std::string("-avg_power")).c_str(), avg_power);
 
         switch (binded_cdev_info_pair.second.release_logic) {
             case ReleaseLogic::INCREASE:
@@ -696,12 +700,14 @@ void ThermalThrottling::computeCoolingDevicesRequest(
                      << " release_step=" << release_step
                      << " cdev_floor_with_power_link=" << cdev_floor
                      << " cdev_ceiling=" << cdev_ceiling;
-
-        ATRACE_INT((cdev_name + std::string("-pid_request")).c_str(), pid_cdev_request);
-        ATRACE_INT((cdev_name + std::string("-hardlimit_request")).c_str(), hardlimit_cdev_request);
-        ATRACE_INT((cdev_name + std::string("-release_step")).c_str(), release_step);
-        ATRACE_INT((cdev_name + std::string("-cdev_floor")).c_str(), cdev_floor);
-        ATRACE_INT((cdev_name + std::string("-cdev_ceiling")).c_str(), cdev_ceiling);
+        std::string atrace_prefix =
+                ::android::base::StringPrintf("%s-%s", sensor_name.data(), cdev_name.data());
+        ATRACE_INT((atrace_prefix + std::string("-pid_request")).c_str(), pid_cdev_request);
+        ATRACE_INT((atrace_prefix + std::string("-hardlimit_request")).c_str(),
+                   hardlimit_cdev_request);
+        ATRACE_INT((atrace_prefix + std::string("-release_step")).c_str(), release_step);
+        ATRACE_INT((atrace_prefix + std::string("-cdev_floor")).c_str(), cdev_floor);
+        ATRACE_INT((atrace_prefix + std::string("-cdev_ceiling")).c_str(), cdev_ceiling);
 
         auto request_state = std::max(pid_cdev_request, hardlimit_cdev_request);
         if (release_step) {
