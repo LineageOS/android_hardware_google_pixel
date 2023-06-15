@@ -59,5 +59,5 @@ PRODUCT_PROPERTY_OVERRIDES += \
     dalvik.vm.systemuicompilerfilter=speed
 
 # Virtual fingerprint HAL
-PRODUCT_PACKAGES_DEBUG += android.hardware.biometrics.fingerprint-service.example
+PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.fingerprint.virtual
 
