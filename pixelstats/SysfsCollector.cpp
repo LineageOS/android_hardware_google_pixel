@@ -32,6 +32,10 @@
 #include <cinttypes>
 #include <string>
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
 namespace android {
 namespace hardware {
 namespace google {
@@ -49,6 +53,7 @@ using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::PcieLinkStatsReported;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
@@ -95,7 +100,9 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kCCARatePath(sysfs_paths.CCARatePath),
       kTempResidencyPath(sysfs_paths.TempResidencyPath),
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
-      kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath) {}
+      kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
+      kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
+      kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1058,6 +1065,10 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string uart_enabled = android::base::GetProperty("init.svc.console", "");
+    if (uart_enabled == "running") {
+        return;
+    }
     std::string file_contents;
     if (!kResumeLatencyMetricsPath) {
         ALOGE("ResumeLatencyMetrics path not specified");
@@ -1182,6 +1193,10 @@ void process_irqatom_values(std::vector<std::pair<int, int64_t>> sorted_pair,
  * Logs the Long irq stats.
  */
 void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string uart_enabled = android::base::GetProperty("init.svc.console", "");
+    if (uart_enabled == "running") {
+        return;
+    }
     std::string file_contents;
     if (!kLongIRQMetricsPath) {
         ALOGV("LongIRQ path not specified");
@@ -1276,6 +1291,119 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
         ALOGE("Unable to report kVendorLongIRQStatsReported to Stats service");
 }
 
+void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_client) {
+    struct sysfs_map {
+        const char *sysfs_path;
+        bool is_counter;
+        int modem_val;
+        int wifi_val;
+        int modem_msg_field_number;
+        int wifi_msg_field_number;
+    };
+
+    int i;
+    bool reportPcieLinkStats = false;
+
+    /* Map sysfs data to PcieLinkStatsReported message elements */
+    struct sysfs_map datamap[] = {
+        {"link_down_irqs", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieLinkdownsFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkdownsFieldNumber},
+
+        {"complete_timeout_irqs", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieCompletionTimeoutsFieldNumber,
+         PcieLinkStatsReported::kWifiPcieCompletionTimeoutsFieldNumber},
+
+        {"link_up_failures", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieLinkupFailuresFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkupFailuresFieldNumber},
+
+        {"pll_lock_average", false, 0, 0,
+         PcieLinkStatsReported::kModemPciePllLockAvgFieldNumber,
+         PcieLinkStatsReported::kWifiPciePllLockAvgFieldNumber},
+
+        {"link_up_average", false, 0, 0,
+         PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber },
+    };
+
+
+    if (kModemPcieLinkStatsPath == nullptr) {
+        ALOGD("Modem PCIe stats path not specified");
+    } else {
+        for (i=0; i < ARRAY_SIZE(datamap); i++) {
+            std::string modempath = std::string (kModemPcieLinkStatsPath) + \
+                                    "/" + datamap[i].sysfs_path;
+
+            if (ReadFileToInt(modempath, &(datamap[i].modem_val))) {
+                reportPcieLinkStats = true;
+                ALOGD("Modem %s = %d", datamap[i].sysfs_path,
+                      datamap[i].modem_val);
+                if (datamap[i].is_counter) {
+                    std::string value = std::to_string(datamap[i].modem_val);
+                    /* Writing the value back clears the counter */
+                    if (!WriteStringToFile(value, modempath)) {
+                        ALOGE("Unable to clear modem PCIe statistics file: %s - %s",
+                              modempath.c_str(), strerror(errno));
+                    }
+                }
+            }
+        }
+    }
+
+    if (kWifiPcieLinkStatsPath == nullptr) {
+        ALOGD("Wifi PCIe stats path not specified");
+    } else {
+        for (i=0; i < ARRAY_SIZE(datamap); i++) {
+            std::string wifipath = std::string (kWifiPcieLinkStatsPath) + \
+                                   "/" + datamap[i].sysfs_path;
+
+            if (ReadFileToInt(wifipath, &(datamap[i].wifi_val))) {
+                reportPcieLinkStats = true;
+                ALOGD("Wifi %s = %d", datamap[i].sysfs_path,
+                      datamap[i].wifi_val);
+                if (datamap[i].is_counter) {
+                    std::string value = std::to_string(datamap[i].wifi_val);
+                    /* Writing the value back clears the counter */
+                    if (!WriteStringToFile(value, wifipath)) {
+                        ALOGE("Unable to clear wifi PCIe statistics file: %s - %s",
+                              wifipath.c_str(), strerror(errno));
+                    }
+                }
+            }
+        }
+    }
+
+    if (!reportPcieLinkStats) {
+        ALOGD("No PCIe link stats to report");
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(2 * ARRAY_SIZE(datamap));
+    VendorAtomValue tmp;
+    for (i=0; i < ARRAY_SIZE(datamap); i++) {
+        if (datamap[i].modem_val > 0) {
+            tmp.set<VendorAtomValue::intValue>(datamap[i].modem_val);
+            values[datamap[i].modem_msg_field_number - kVendorAtomOffset] = tmp;
+        }
+        if (datamap[i].wifi_val > 0) {
+            tmp.set<VendorAtomValue::intValue>(datamap[i].wifi_val);
+            values[datamap[i].wifi_msg_field_number - kVendorAtomOffset] = tmp;
+        }
+    }
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kPcieLinkStats,
+                        .values = std::move(values)};
+
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report PCIe link statistics to stats service");
+    }
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -1310,6 +1438,7 @@ void SysfsCollector::logPerDay() {
     logTempResidencyStats(stats_client);
     logVendorLongIRQStatsReported(stats_client);
     logVendorResumeLatencyStats(stats_client);
+    logPcieLinkStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
