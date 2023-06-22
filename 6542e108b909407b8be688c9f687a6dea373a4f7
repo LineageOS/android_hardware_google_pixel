@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "81c72025_9b37bbfd",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4550
+      },
+      "writtenOn": "2023-06-22T15:02:12Z",
+      "side": 1,
+      "message": "Let\u0027s not break everyone\u0027s charging until sdk is fixed.",
+      "revId": "6542e108b909407b8be688c9f687a6dea373a4f7",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
