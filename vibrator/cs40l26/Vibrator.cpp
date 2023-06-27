@@ -22,6 +22,7 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include <chrono>
 #include <cinttypes>
 #include <cmath>
 #include <fstream>
@@ -558,6 +559,20 @@ ndk::ScopedAStatus Vibrator::off() {
     bool ret{true};
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
 
+    const auto startTime = std::chrono::system_clock::now();
+    const auto endTime = startTime + std::chrono::milliseconds(POLLING_TIMEOUT);
+    auto now = startTime;
+    while (halState == ISSUED && now <= endTime) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        now = std::chrono::system_clock::now();
+    }
+    if (halState == ISSUED && now > endTime) {
+        ALOGE("Timeout waiting for the actuator activation! (%d ms)", POLLING_TIMEOUT);
+    } else if (halState == PLAYING) {
+        ALOGD("Took %lld ms to wait for the actuator activation.",
+              std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count());
+    }
+
     if (mActiveId >= 0) {
         /* Stop the active effect. */
         if (!mHwApi->setFFPlay(mActiveId, false)) {
@@ -565,6 +580,7 @@ ndk::ScopedAStatus Vibrator::off() {
             ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
             ret = false;
         }
+        halState = STOPPED;
 
         if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
             (!mHwApi->eraseOwtEffect(mActiveId, &mFfEffects))) {
@@ -581,6 +597,7 @@ ndk::ScopedAStatus Vibrator::off() {
     if (mF0Offset) {
         mHwApi->setF0Offset(0);
     }
+    halState = RESTORED;
 
     if (ret) {
         return ndk::ScopedAStatus::ok();
@@ -877,6 +894,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const 
         ALOGE("Failed to play effect %d (%d): %s", effectIndex, errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
+    halState = ISSUED;
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
     return ndk::ScopedAStatus::ok();
@@ -1729,9 +1747,11 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGW("Failed to get state \"Haptic\"");
     }
+    halState = PLAYING;
     ATRACE_BEGIN("Vibrating");
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
     ATRACE_END();
+    halState = STOPPED;
 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
@@ -1751,6 +1771,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     }
 
     mActiveId = -1;
+    halState = RESTORED;
 
     if (callback) {
         auto ret = callback->onComplete();
