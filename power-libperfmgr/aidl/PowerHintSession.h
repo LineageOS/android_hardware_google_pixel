@@ -18,10 +18,12 @@
 
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
 #include <aidl/android/hardware/power/SessionHint.h>
+#include <aidl/android/hardware/power/SessionMode.h>
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <utils/Looper.h>
 #include <utils/Thread.h>
 
+#include <array>
 #include <unordered_map>
 
 #include "AppDescriptorTrace.h"
@@ -35,6 +37,7 @@ namespace pixel {
 
 using aidl::android::hardware::power::BnPowerHintSession;
 using aidl::android::hardware::power::SessionHint;
+using aidl::android::hardware::power::SessionMode;
 using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
@@ -84,6 +87,7 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus reportActualWorkDuration(
             const std::vector<WorkDuration> &actualDurations) override;
     ndk::ScopedAStatus sendHint(SessionHint hint) override;
+    ndk::ScopedAStatus setMode(SessionMode mode, bool enabled) override;
     ndk::ScopedAStatus setThreads(const std::vector<int32_t> &threadIds) override;
     bool isActive();
     bool isTimeout();
@@ -108,6 +112,8 @@ class PowerHintSession : public BnPowerHintSession {
     std::unordered_map<std::string, std::optional<bool>> mSupportedHints;
     // Last session hint sent, used for logging
     int mLastHintSent = -1;
+    // Use the value of the last enum in enum_range +1 as array size
+    std::array<bool, enum_size<SessionMode>()> mModes{};
 };
 
 }  // namespace pixel

@@ -340,6 +340,10 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
         ALOGE("Error: session is dead");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
+    if (mDescriptor->targetNs.count() == 0LL) {
+        ALOGE("Expect to call updateTargetWorkDuration() first.");
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
     auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
 
     switch (hint) {
@@ -379,6 +383,27 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
         mLastHintSent = static_cast<int>(hint);
         ATRACE_INT(mAppDescriptorTrace.trace_session_hint.c_str(), static_cast<int>(hint));
     }
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus PowerHintSession::setMode(SessionMode mode, bool enabled) {
+    ATRACE_CALL();
+    if (mSessionClosed) {
+        ALOGE("Error: session is dead");
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    }
+
+    switch (mode) {
+        case SessionMode::POWER_EFFICIENCY:
+            break;
+        default:
+            ALOGE("Error: mode is invalid");
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+
+    mModes[static_cast<size_t>(mode)] = enabled;
+    ATRACE_INT(mAppDescriptorTrace.trace_modes[static_cast<size_t>(mode)].c_str(), enabled);
+    mLastUpdatedTime.store(std::chrono::steady_clock::now());
     return ndk::ScopedAStatus::ok();
 }
 
