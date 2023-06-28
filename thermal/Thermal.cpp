@@ -343,9 +343,14 @@ void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
                 }
                 *dump_buf << "]" << std::endl;
             }
-            *dump_buf << "  Binded CDEV Info:" << std::endl;
+            const auto &profile = thermal_throttling_status_map.at(name_info_pair.first).profile;
+            *dump_buf << "  Binded CDEV Info:" << (profile.empty() ? "default" : profile)
+                      << std::endl;
+
             for (const auto &binded_cdev_info_pair :
-                 name_info_pair.second.throttling_info->binded_cdev_info_map) {
+                 name_info_pair.second.throttling_info->profile_map.count(profile)
+                         ? name_info_pair.second.throttling_info->profile_map.at(profile)
+                         : name_info_pair.second.throttling_info->binded_cdev_info_map) {
                 *dump_buf << "   Cooling device name: " << binded_cdev_info_pair.first << std::endl;
                 if (thermal_throttling_status_map.at(name_info_pair.first)
                             .pid_power_budget_map.size()) {
