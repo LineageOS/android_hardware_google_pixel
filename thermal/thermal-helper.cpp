@@ -1159,17 +1159,22 @@ void ThermalHelper::sendPowerExtHint(const Temperature &t) {
     ThrottlingSeverity prev_hint_severity;
     prev_hint_severity = sensor_status_map_.at(t.name).prev_hint_severity;
     ThrottlingSeverity current_hint_severity = supported_powerhint_map_[t.name][t.throttlingStatus];
+    std::stringstream log_buf;
 
-    if (prev_hint_severity == current_hint_severity)
+    if (prev_hint_severity == current_hint_severity) {
         return;
-
-    if (prev_hint_severity != ThrottlingSeverity::NONE) {
-        power_hal_service_.setMode(t.name, prev_hint_severity, false);
     }
 
-    if (current_hint_severity != ThrottlingSeverity::NONE) {
-        power_hal_service_.setMode(t.name, current_hint_severity, true);
+    for (const auto &severity : ::ndk::enum_range<ThrottlingSeverity>()) {
+        if (severity != supported_powerhint_map_[t.name][severity]) {
+            continue;
+        }
+        bool mode = severity <= current_hint_severity;
+        power_hal_service_.setMode(t.name, severity, mode);
+        log_buf << toString(severity).c_str() << ":" << mode << " ";
     }
+
+    LOG(INFO) << t.name << " send powerhint: " << log_buf.str();
 
     sensor_status_map_[t.name].prev_hint_severity = current_hint_severity;
 }
