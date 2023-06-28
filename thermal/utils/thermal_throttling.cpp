@@ -58,6 +58,28 @@ size_t getTargetStateOfPID(const SensorInfo &sensor_info, const ThrottlingSeveri
     return target_state;
 }
 
+void ThermalThrottling::parseProfileProperty(std::string_view sensor_name,
+                                             const SensorInfo &sensor_info) {
+    if (sensor_info.throttling_info == nullptr) {
+        return;
+    }
+
+    const std::string profile = ::android::base::GetProperty(
+            StringPrintf("vendor.thermal.%s.profile", sensor_name.data()), "");
+
+    if (profile.empty() || sensor_info.throttling_info->profile_map.count(profile)) {
+        if (profile != thermal_throttling_status_map_[sensor_name.data()].profile) {
+            LOG(INFO) << sensor_name.data() << ": throttling profile change to "
+                      << ((profile.empty()) ? "default" : profile);
+            thermal_throttling_status_map_[sensor_name.data()].profile = profile;
+        }
+    } else {
+        LOG(ERROR) << sensor_name.data() << ": set profile to default because " << profile
+                   << " is invalid";
+        thermal_throttling_status_map_[sensor_name.data()].profile = "";
+    }
+}
+
 void ThermalThrottling::clearThrottlingData(std::string_view sensor_name,
                                             const SensorInfo &sensor_info) {
     if (!thermal_throttling_status_map_.count(sensor_name.data())) {
@@ -115,6 +137,7 @@ bool ThermalThrottling::registerThermalThrottling(
             static_cast<size_t>(ThrottlingSeverity::NONE);
     thermal_throttling_status_map_[sensor_name.data()].prev_power_budget = NAN;
     thermal_throttling_status_map_[sensor_name.data()].tran_cycle = 0;
+    thermal_throttling_status_map_[sensor_name.data()].profile = "";
 
     for (auto &binded_cdev_pair : throttling_info->binded_cdev_info_map) {
         if (!cooling_device_info_map.count(binded_cdev_pair.first)) {
@@ -247,10 +270,12 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
     ATRACE_INT((sensor_name + std::string("-target_state")).c_str(),
                static_cast<int>(target_state));
 
-    ATRACE_INT((sensor_name + std::string("-err")).c_str(), static_cast<int>(err / sensor_info.multiplier));
+    ATRACE_INT((sensor_name + std::string("-err")).c_str(),
+               static_cast<int>(err / sensor_info.multiplier));
     ATRACE_INT((sensor_name + std::string("-p")).c_str(), static_cast<int>(p));
     ATRACE_INT((sensor_name + std::string("-d")).c_str(), static_cast<int>(d));
-    ATRACE_INT((sensor_name + std::string("-temp")).c_str(), static_cast<int>(temp.value / sensor_info.multiplier));
+    ATRACE_INT((sensor_name + std::string("-temp")).c_str(),
+               static_cast<int>(temp.value / sensor_info.multiplier));
 
     throttling_status.prev_power_budget = power_budget;
 
@@ -305,6 +330,7 @@ bool ThermalThrottling::allocatePowerToCdev(
 
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
     auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity);
+    const auto &profile = thermal_throttling_status_map_[temp.name].profile;
 
     if (sensor_info.throttling_info->excluded_power_info_map.size()) {
         total_power_budget -= computeExcludedPower(sensor_info, curr_severity, power_status_map,
@@ -317,10 +343,15 @@ bool ThermalThrottling::allocatePowerToCdev(
     }
 
     // Compute total cdev weight
-    for (const auto &binded_cdev_info_pair : sensor_info.throttling_info->binded_cdev_info_map) {
+    for (const auto &binded_cdev_info_pair :
+         (sensor_info.throttling_info->profile_map.count(profile)
+                  ? sensor_info.throttling_info->profile_map.at(profile)
+                  : sensor_info.throttling_info->binded_cdev_info_map)) {
         const auto cdev_weight = binded_cdev_info_pair.second
                                          .cdev_weight_for_pid[static_cast<size_t>(curr_severity)];
-        if (std::isnan(cdev_weight) || cdev_weight == 0) {
+        if (!binded_cdev_info_pair.second.enabled) {
+            continue;
+        } else if (std::isnan(cdev_weight) || cdev_weight == 0) {
             allocated_cdev.insert(binded_cdev_info_pair.first);
             continue;
         }
@@ -329,17 +360,15 @@ bool ThermalThrottling::allocatePowerToCdev(
 
     while (!is_budget_allocated) {
         for (const auto &binded_cdev_info_pair :
-             sensor_info.throttling_info->binded_cdev_info_map) {
+             (sensor_info.throttling_info->profile_map.count(profile)
+                      ? sensor_info.throttling_info->profile_map.at(profile)
+                      : sensor_info.throttling_info->binded_cdev_info_map)) {
             float cdev_power_adjustment = 0;
             const auto cdev_weight =
                     binded_cdev_info_pair.second
                             .cdev_weight_for_pid[static_cast<size_t>(curr_severity)];
 
             if (allocated_cdev.count(binded_cdev_info_pair.first)) {
-                continue;
-            }
-            if (std::isnan(cdev_weight) || !cdev_weight) {
-                allocated_cdev.insert(binded_cdev_info_pair.first);
                 continue;
             }
 
@@ -403,7 +432,9 @@ bool ThermalThrottling::allocatePowerToCdev(
                     continue;
                 }
 
-                if (!power_data_invalid && binded_cdev_info_pair.second.power_rail != "") {
+                if (!binded_cdev_info_pair.second.enabled) {
+                    cdev_power_budget = cdev_info.state2power[0];
+                } else if (!power_data_invalid && binded_cdev_info_pair.second.power_rail != "") {
                     auto cdev_curr_power_budget =
                             thermal_throttling_status_map_[temp.name].pid_power_budget_map.at(
                                     binded_cdev_info_pair.first);
@@ -516,10 +547,22 @@ void ThermalThrottling::updateCdevRequestBySeverity(std::string_view sensor_name
                                                     const SensorInfo &sensor_info,
                                                     ThrottlingSeverity curr_severity) {
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
-    for (auto const &binded_cdev_info_pair : sensor_info.throttling_info->binded_cdev_info_map) {
+    const auto &profile = thermal_throttling_status_map_[sensor_name.data()].profile;
+
+    for (const auto &binded_cdev_info_pair :
+         (sensor_info.throttling_info->profile_map.count(profile)
+                  ? sensor_info.throttling_info->profile_map.at(profile)
+                  : sensor_info.throttling_info->binded_cdev_info_map)) {
+        if (!thermal_throttling_status_map_[sensor_name.data()].hardlimit_cdev_request_map.count(
+                    binded_cdev_info_pair.first)) {
+            continue;
+        }
         thermal_throttling_status_map_[sensor_name.data()].hardlimit_cdev_request_map.at(
                 binded_cdev_info_pair.first) =
-                binded_cdev_info_pair.second.limit_info[static_cast<size_t>(curr_severity)];
+                (binded_cdev_info_pair.second.enabled)
+                        ? binded_cdev_info_pair.second
+                                  .limit_info[static_cast<size_t>(curr_severity)]
+                        : 0;
         LOG(VERBOSE) << "Hard Limit: Sensor " << sensor_name.data() << " update cdev "
                      << binded_cdev_info_pair.first << " to "
                      << thermal_throttling_status_map_[sensor_name.data()]
@@ -633,6 +676,10 @@ void ThermalThrottling::thermalThrottlingUpdate(
         return;
     }
 
+    if (sensor_info.throttling_info->profile_map.size()) {
+        parseProfileProperty(temp.name.c_str(), sensor_info);
+    }
+
     if (thermal_throttling_status_map_[temp.name].pid_power_budget_map.size()) {
         if (!allocatePowerToCdev(temp, sensor_info, curr_severity, time_elapsed_ms,
                                  power_status_map, cooling_device_info_map)) {
@@ -670,12 +717,17 @@ void ThermalThrottling::computeCoolingDevicesRequest(
     auto &thermal_throttling_status = thermal_throttling_status_map_.at(sensor_name.data());
     const auto &cdev_release_map = thermal_throttling_status.throttling_release_map;
 
+    const auto &profile = thermal_throttling_status_map_[sensor_name.data()].profile;
+    const auto &binded_cdev_info_map =
+            sensor_info.throttling_info->profile_map.count(profile)
+                    ? sensor_info.throttling_info->profile_map.at(profile)
+                    : sensor_info.throttling_info->binded_cdev_info_map;
+
     for (auto &cdev_request_pair : thermal_throttling_status.cdev_status_map) {
         int pid_cdev_request = 0;
         int hardlimit_cdev_request = 0;
         const auto &cdev_name = cdev_request_pair.first;
-        const auto &binded_cdev_info =
-                sensor_info.throttling_info->binded_cdev_info_map.at(cdev_name);
+        const auto &binded_cdev_info = binded_cdev_info_map.at(cdev_name);
         const auto cdev_ceiling = binded_cdev_info.cdev_ceiling[static_cast<size_t>(curr_severity)];
         const auto cdev_floor =
                 binded_cdev_info.cdev_floor_with_power_link[static_cast<size_t>(curr_severity)];

@@ -92,6 +92,23 @@ std::unordered_map<std::string, std::string> parseThermalPathMap(std::string_vie
 
 }  // namespace
 
+// If the cdev_ceiling is higher than CDEV max_state, cap the cdev_ceiling to max_state.
+void ThermalHelper::maxCoolingRequestCheck(
+        std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map) {
+    for (auto &binded_cdev_info_pair : *binded_cdev_info_map) {
+        const auto &cdev_info = cooling_device_info_map_.at(binded_cdev_info_pair.first);
+        for (auto &cdev_ceiling : binded_cdev_info_pair.second.cdev_ceiling) {
+            if (cdev_ceiling > cdev_info.max_state) {
+                if (cdev_ceiling != std::numeric_limits<int>::max()) {
+                    LOG(ERROR) << binded_cdev_info_pair.first << " cdev_ceiling:" << cdev_ceiling
+                               << " is higher than max state:" << cdev_info.max_state;
+                }
+                cdev_ceiling = cdev_info.max_state;
+            }
+        }
+    }
+}
+
 /*
  * Populate the sensor_name_to_file_map_ map by walking through the file tree,
  * reading the type file and assigning the temp file path to the map.  If we do
@@ -145,7 +162,7 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
         LOG(FATAL) << "Failed to initialize thermal stats";
     }
 
-    for (auto const &name_status_pair : sensor_info_map_) {
+    for (auto &name_status_pair : sensor_info_map_) {
         sensor_status_map_[name_status_pair.first] = {
                 .severity = ThrottlingSeverity::NONE,
                 .prev_hot_severity = ThrottlingSeverity::NONE,
@@ -165,22 +182,13 @@ ThermalHelper::ThermalHelper(const NotificationCallback &cb)
                 break;
             }
 
-            // Update cooling device max state
-            for (auto &binded_cdev_info_pair :
-                 name_status_pair.second.throttling_info->binded_cdev_info_map) {
-                const auto &cdev_info = cooling_device_info_map_.at(binded_cdev_info_pair.first);
+            // Update cooling device max state for default mode
+            maxCoolingRequestCheck(&name_status_pair.second.throttling_info->binded_cdev_info_map);
 
-                for (auto &cdev_ceiling : binded_cdev_info_pair.second.cdev_ceiling) {
-                    if (cdev_ceiling > cdev_info.max_state) {
-                        if (cdev_ceiling != std::numeric_limits<int>::max()) {
-                            LOG(WARNING) << "Sensor " << name_status_pair.first << "'s "
-                                         << binded_cdev_info_pair.first
-                                         << " cdev_ceiling:" << cdev_ceiling
-                                         << " is higher than max state:" << cdev_info.max_state;
-                        }
-                        cdev_ceiling = cdev_info.max_state;
-                    }
-                }
+            // Update cooling device max state for each profile mode
+            for (auto &cdev_throttling_profile_pair :
+                 name_status_pair.second.throttling_info->profile_map) {
+                maxCoolingRequestCheck(&cdev_throttling_profile_pair.second);
             }
         }
         // Check the virtual sensor settings are valid
@@ -1159,17 +1167,22 @@ void ThermalHelper::sendPowerExtHint(const Temperature &t) {
     ThrottlingSeverity prev_hint_severity;
     prev_hint_severity = sensor_status_map_.at(t.name).prev_hint_severity;
     ThrottlingSeverity current_hint_severity = supported_powerhint_map_[t.name][t.throttlingStatus];
+    std::stringstream log_buf;
 
-    if (prev_hint_severity == current_hint_severity)
+    if (prev_hint_severity == current_hint_severity) {
         return;
-
-    if (prev_hint_severity != ThrottlingSeverity::NONE) {
-        power_hal_service_.setMode(t.name, prev_hint_severity, false);
     }
 
-    if (current_hint_severity != ThrottlingSeverity::NONE) {
-        power_hal_service_.setMode(t.name, current_hint_severity, true);
+    for (const auto &severity : ::ndk::enum_range<ThrottlingSeverity>()) {
+        if (severity != supported_powerhint_map_[t.name][severity]) {
+            continue;
+        }
+        bool mode = severity <= current_hint_severity;
+        power_hal_service_.setMode(t.name, severity, mode);
+        log_buf << toString(severity).c_str() << ":" << mode << " ";
     }
+
+    LOG(INFO) << t.name << " send powerhint: " << log_buf.str();
 
     sensor_status_map_[t.name].prev_hint_severity = current_hint_severity;
 }
