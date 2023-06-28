@@ -134,7 +134,11 @@ struct BindedCdevInfo {
     bool high_power_check;
     // The flag for only triggering throttling until all power samples are collected
     bool throttling_with_power_link;
+    bool enabled;
 };
+
+// The map to store the CDEV throttling info for each profile
+using ProfileMap = std::unordered_map<std::string, std::unordered_map<std::string, BindedCdevInfo>>;
 
 struct ThrottlingInfo {
     ThrottlingArray k_po;
@@ -150,6 +154,7 @@ struct ThrottlingInfo {
     int tran_cycle;
     std::unordered_map<std::string, ThrottlingArray> excluded_power_info_map;
     std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
+    ProfileMap profile_map;
 };
 
 struct SensorInfo {
