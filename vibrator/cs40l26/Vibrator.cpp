@@ -1461,7 +1461,12 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     dprintf(fd, "AIDL:\n");
 
+    dprintf(fd, "  Global Gain: %0.2f\n", mLongEffectScale);
+    dprintf(fd, "  Active Effect ID: %" PRId32 "\n", mActiveId);
+    dprintf(fd, "  F0: %.02f\n", mResonantFrequency);
     dprintf(fd, "  F0 Offset: %" PRIu32 "\n", mF0Offset);
+    dprintf(fd, "  Redc: %.02f\n", mRedc);
+    dprintf(fd, "  HAL State: %" PRIu32 "\n", halState);
 
     dprintf(fd, "  Voltage Levels:\n");
     dprintf(fd, "    Tick Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mTickEffectVol[0],
@@ -1471,15 +1476,15 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "    Long Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mLongEffectVol[0],
             mLongEffectVol[1]);
 
-    dprintf(fd, "  FF effect:\n");
-    dprintf(fd, "    Physical waveform:\n");
+    dprintf(fd, "  FF Effect:\n");
+    dprintf(fd, "    Physical Waveform:\n");
     dprintf(fd, "\tId\tIndex\tt   ->\tt'\n");
     for (uint8_t effectId = 0; effectId < WAVEFORM_MAX_PHYSICAL_INDEX; effectId++) {
         dprintf(fd, "\t%d\t%d\t%d\t%d\n", mFfEffects[effectId].id,
                 mFfEffects[effectId].u.periodic.custom_data[1], mEffectDurations[effectId],
                 mFfEffects[effectId].replay.length);
     }
-    dprintf(fd, "    OWT waveform:\n");
+    dprintf(fd, "    OWT Waveform:\n");
     dprintf(fd, "\tId\tBytes\tData\n");
     for (uint8_t effectId = WAVEFORM_MAX_PHYSICAL_INDEX; effectId < WAVEFORM_MAX_INDEX;
          effectId++) {
