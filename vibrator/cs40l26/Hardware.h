@@ -245,6 +245,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
                     std::string currentToken;
                     std::getline(ss, currentToken, ':');
                     sscanf(currentToken.c_str(), "%d-%d", card, device);
+                    saveName(StringPrintf("/dev/snd/pcmC%uD%up", *card, *device), &mPcmStream);
                     return true;
                 }
             }
@@ -264,23 +265,27 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
                 ALOGE("cannot open pcm_out driver: %s", pcm_get_error(*haptic_pcm));
                 goto fail;
             }
+            HWAPI_RECORD(std::string("pcm_open"), &mPcmStream);
 
             ret = pcm_prepare(*haptic_pcm);
             if (ret < 0) {
                 ALOGE("cannot prepare haptic_pcm: %s", pcm_get_error(*haptic_pcm));
                 goto fail;
             }
+            HWAPI_RECORD(std::string("pcm_prepare"), &mPcmStream);
 
             ret = pcm_start(*haptic_pcm);
             if (ret < 0) {
                 ALOGE("cannot start haptic_pcm: %s", pcm_get_error(*haptic_pcm));
                 goto fail;
             }
+            HWAPI_RECORD(std::string("pcm_start"), &mPcmStream);
 
             return true;
         } else {
             if (*haptic_pcm) {
                 pcm_close(*haptic_pcm);
+                HWAPI_RECORD(std::string("pcm_close"), &mPcmStream);
                 *haptic_pcm = NULL;
             }
             return true;
@@ -288,6 +293,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
 
     fail:
         pcm_close(*haptic_pcm);
+        HWAPI_RECORD(std::string("pcm_close"), &mPcmStream);
         *haptic_pcm = NULL;
         return false;
     }
@@ -388,6 +394,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mRedcCompEnable;
     std::ofstream mMinOnOffInterval;
     std::ofstream mInputIoStream;
+    std::ofstream mPcmStream;
     ::android::base::unique_fd mInputFd;
 };
 
