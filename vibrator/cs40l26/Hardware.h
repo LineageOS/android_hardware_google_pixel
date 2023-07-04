@@ -144,11 +144,21 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
                     if (ioctl(fd, EVIOCGBIT(0, sizeof(val)), &val) > 0 && (val & (1 << EV_FF)) &&
                         ioctl(fd, EVIOCGNAME(sizeof(str)), &str) > 0 &&
                         strcmp(str, INPUT_EVENT_NAME.c_str()) == 0) {
+                        // Get fd ready for input event ioctl().
                         mInputFd.reset(fd);  // mInputFd.ok() becomes true.
                         ALOGI("Control %s through %s", INPUT_EVENT_NAME.c_str(), g.gl_pathv[i]);
 
-                        // Construct the sysfs device path.
                         std::string path = g.gl_pathv[i];
+                        // Get fstream ready for input event write().
+                        saveName(path, &mInputIoStream);
+                        mInputIoStream.open(
+                                path, std::fstream::out | std::fstream::in | std::fstream::binary);
+                        if (!mInputIoStream) {
+                            ALOGE("Failed to open %s (%d): %s", path.c_str(), errno,
+                                  strerror(errno));
+                        }
+
+                        // Construct the sysfs device path.
                         path = "/sys/class/input/" +
                                path.substr(path.find("event"), std::string::npos) + "/../../../";
                         updatePathPrefix(path);
@@ -185,9 +195,13 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
             ALOGE("Invalid gain");
             return false;
         }
-        if (write(mInputFd, (const void *)&gain, sizeof(gain)) != sizeof(gain)) {
+        mInputIoStream.write((const char *)&gain, sizeof(gain));
+        mInputIoStream.flush();
+        if (mInputIoStream.fail()) {
+            ALOGE("setFFGain fail");
             return false;
         }
+        HWAPI_RECORD(StringPrintf("%d%%", value), &mInputIoStream);
         return true;
     }
     bool setFFEffect(struct ff_effect *effect, uint16_t timeoutMs) override {
@@ -199,9 +213,10 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         if (((*effect).replay.length != timeoutMs) || (ioctl(mInputFd, EVIOCSFF, effect) < 0)) {
             ALOGE("setFFEffect fail");
             return false;
-        } else {
-            return true;
         }
+        HWAPI_RECORD(StringPrintf("#%d: %dms", (*effect).id, (*effect).replay.length),
+                     &mInputIoStream);
+        return true;
     }
     bool setFFPlay(int8_t index, bool value) override {
         ATRACE_NAME(StringPrintf("%s index:%d %s", __func__, index, value ? "on" : "off").c_str());
@@ -210,11 +225,14 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
                 .code = static_cast<uint16_t>(index),
                 .value = value,
         };
-        if (write(mInputFd, (const void *)&play, sizeof(play)) != sizeof(play)) {
+        mInputIoStream.write((const char *)&play, sizeof(play));
+        mInputIoStream.flush();
+        if (mInputIoStream.fail()) {
+            ALOGE("setFFPlay fail");
             return false;
-        } else {
-            return true;
         }
+        HWAPI_RECORD(StringPrintf("#%d: %b", index, value), &mInputIoStream);
+        return true;
     }
     bool getHapticAlsaDevice(int *card, int *device) override {
         ATRACE_NAME(__func__);
@@ -308,6 +326,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         }
         *outEffectIndex = (*effect).id;
         *status = 0;
+        HWAPI_RECORD(StringPrintf("#%d: %dB", *outEffectIndex, numBytes), &mInputIoStream);
         return true;
     }
     bool eraseOwtEffect(int8_t effectIndex, std::vector<ff_effect> *effect) override {
@@ -334,12 +353,14 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
                     break;
                 }
             }
+            HWAPI_RECORD(StringPrintf("#%d", effectIndex), &mInputIoStream);
         } else {
             /* Flush all non-prestored effects of ff-core and driver. */
             getEffectCount(&effectCountBefore);
             for (i = WAVEFORM_MAX_PHYSICAL_INDEX; i < FF_MAX_EFFECTS; i++) {
                 if (ioctl(mInputFd, EVIOCRMFF, i) >= 0) {
                     successFlush++;
+                    HWAPI_RECORD(StringPrintf("#%d", i), &mInputIoStream);
                 }
             }
             getEffectCount(&effectCountAfter);
@@ -366,6 +387,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mF0CompEnable;
     std::ofstream mRedcCompEnable;
     std::ofstream mMinOnOffInterval;
+    std::ofstream mInputIoStream;
     ::android::base::unique_fd mInputFd;
 };
 
