@@ -1461,7 +1461,12 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     dprintf(fd, "AIDL:\n");
 
+    dprintf(fd, "  Global Gain: %0.2f\n", mLongEffectScale);
+    dprintf(fd, "  Active Effect ID: %" PRId32 "\n", mActiveId);
+    dprintf(fd, "  F0: %.02f\n", mResonantFrequency);
     dprintf(fd, "  F0 Offset: %" PRIu32 "\n", mF0Offset);
+    dprintf(fd, "  Redc: %.02f\n", mRedc);
+    dprintf(fd, "  HAL State: %" PRIu32 "\n", halState);
 
     dprintf(fd, "  Voltage Levels:\n");
     dprintf(fd, "    Tick Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mTickEffectVol[0],
@@ -1471,15 +1476,15 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "    Long Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mLongEffectVol[0],
             mLongEffectVol[1]);
 
-    dprintf(fd, "  FF effect:\n");
-    dprintf(fd, "    Physical waveform:\n");
+    dprintf(fd, "  FF Effect:\n");
+    dprintf(fd, "    Physical Waveform:\n");
     dprintf(fd, "\tId\tIndex\tt   ->\tt'\n");
     for (uint8_t effectId = 0; effectId < WAVEFORM_MAX_PHYSICAL_INDEX; effectId++) {
         dprintf(fd, "\t%d\t%d\t%d\t%d\n", mFfEffects[effectId].id,
                 mFfEffects[effectId].u.periodic.custom_data[1], mEffectDurations[effectId],
                 mFfEffects[effectId].replay.length);
     }
-    dprintf(fd, "    OWT waveform:\n");
+    dprintf(fd, "    OWT Waveform:\n");
     dprintf(fd, "\tId\tBytes\tData\n");
     for (uint8_t effectId = WAVEFORM_MAX_PHYSICAL_INDEX; effectId < WAVEFORM_MAX_INDEX;
          effectId++) {
@@ -1497,6 +1502,65 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     }
 
     dprintf(fd, "\n");
+
+    dprintf(fd, "Versions:\n");
+    std::ifstream verFile;
+    const auto verBinFileMode = std::ifstream::in | std::ifstream::binary;
+    std::string ver;
+    verFile.open("/sys/module/cs40l26_core/version");
+    if (verFile.is_open()) {
+        getline(verFile, ver);
+        dprintf(fd, "  Haptics Driver: %s\n", ver.c_str());
+        verFile.close();
+    }
+    verFile.open("/sys/module/cl_dsp_core/version");
+    if (verFile.is_open()) {
+        getline(verFile, ver);
+        dprintf(fd, "  DSP Driver: %s\n", ver.c_str());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26.wmfw", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(113);
+        dprintf(fd, "  cs40l26.wmfw: %d.%d.%d\n", verFile.get(), verFile.get(), verFile.get());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26-calib.wmfw", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(113);
+        dprintf(fd, "  cs40l26-calib.wmfw: %d.%d.%d\n", verFile.get(), verFile.get(),
+                verFile.get());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        while (getline(verFile, ver)) {
+            auto pos = ver.find("Date: ");
+            if (pos != std::string::npos) {
+                ver = ver.substr(pos + 6, pos + 15);
+                dprintf(fd, "  cs40l26.bin: %s\n", ver.c_str());
+                break;
+            }
+        }
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26-svc.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(36);
+        getline(verFile, ver);
+        ver = ver.substr(ver.rfind('\\') + 1);
+        dprintf(fd, "  cs40l26-svc.bin: %s\n", ver.c_str());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26-calib.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(36);
+        getline(verFile, ver);
+        ver = ver.substr(ver.rfind('\\') + 1);
+        dprintf(fd, "  cs40l26-calib.bin: %s\n", ver.c_str());
+        verFile.close();
+    }
+
     dprintf(fd, "\n");
 
     mHwApi->debug(fd);
@@ -1505,11 +1569,15 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     mHwCal->debug(fd);
 
-    dprintf(fd, "Capo Info\n");
+    dprintf(fd, "\n");
+
+    dprintf(fd, "Capo Info:\n");
     if (mContextListener) {
         dprintf(fd, "Capo ID: 0x%x\n", (uint32_t)(mContextListener->getNanoppAppId()));
         dprintf(fd, "Capo State: %d\n", mContextListener->getCarriedPosition());
     }
+
+    dprintf(fd, "\n");
 
     mStatsApi->debug(fd);
 
