@@ -61,6 +61,7 @@ class MiscWriter {
   static constexpr char kTimeOffset[] = "timeoffset=";
   static constexpr uint32_t kMaxRamSizeOffsetInVendorSpace = 192;
   static constexpr char kMaxRamSize[] = "max-ram-size=";
+  static constexpr uint32_t kSotaStateOffsetInVendorSpace = 224;
 
   // Minimum and maximum valid value for max-ram-size
   static constexpr int32_t kRamSizeDefault = -1;
