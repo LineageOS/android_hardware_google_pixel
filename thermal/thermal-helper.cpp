@@ -383,8 +383,8 @@ bool ThermalHelper::readTemperature(
     std::map<std::string, float> sensor_log_map;
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
-        LOG(ERROR) << "readTemperature: failed to read sensor: " << sensor_name;
+    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map) ||
+        std::isnan(temp)) {
         return false;
     }
 
@@ -845,15 +845,20 @@ bool ThermalHelper::readDataByType(std::string_view sensor_data, float *reading_
             *reading_value = GetPowerStatusMap().at(sensor_data.data()).last_updated_avg_power;
             if (std::isnan(*reading_value)) {
                 LOG(INFO) << "Power data " << sensor_data.data() << " is under collecting";
-                return false;
+                return true;
             }
             (*sensor_log_map)[sensor_data.data()] = *reading_value;
+            break;
+        case SensorFusionType::CONSTANT:
+            *reading_value = std::atof(sensor_data.data());
             break;
         default:
             break;
     }
     return true;
 }
+
+constexpr int kTranTimeoutParam = 2;
 
 bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                                       const bool force_no_cache,
@@ -880,11 +885,13 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
         }
     }
 
+    const auto since_last_update = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - sensor_status.thermal_cached.timestamp);
+
     // Check if thermal data need to be read from cache
     if (!force_no_cache &&
         (sensor_status.thermal_cached.timestamp != boot_clock::time_point::min()) &&
-        (std::chrono::duration_cast<std::chrono::milliseconds>(
-                 now - sensor_status.thermal_cached.timestamp) < sensor_info.time_resolution) &&
+        (since_last_update < sensor_info.time_resolution) &&
         !isnan(sensor_status.thermal_cached.temp)) {
         *temp = sensor_status.thermal_cached.temp;
         (*sensor_log_map)[sensor_name.data()] = *temp;
@@ -894,11 +901,8 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
 
     // Reading thermal sensor according to it's composition
     if (sensor_info.virtual_sensor_info == nullptr) {
-        if (!thermal_sensors_.readThermalFile(sensor_name.data(), &file_reading)) {
-            return false;
-        }
-
-        if (file_reading.empty()) {
+        if (!thermal_sensors_.readThermalFile(sensor_name.data(), &file_reading) ||
+            file_reading.empty()) {
             LOG(ERROR) << "failed to read sensor: " << sensor_name;
             return false;
         }
@@ -912,11 +916,23 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
                                 force_no_cache, sensor_log_map)) {
                 LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s linked sensor "
                            << sensor_info.virtual_sensor_info->linked_sensors[i];
-            }
-            if (std::isnan(sensor_info.virtual_sensor_info->coefficients[i])) {
                 return false;
             }
-            float coefficient = sensor_info.virtual_sensor_info->coefficients[i];
+
+            float coefficient = 0.0;
+            if (!readDataByType(sensor_info.virtual_sensor_info->coefficients[i], &coefficient,
+                                sensor_info.virtual_sensor_info->coefficients_type[i],
+                                force_no_cache, sensor_log_map)) {
+                LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s coefficient "
+                           << sensor_info.virtual_sensor_info->coefficients[i];
+                return false;
+            }
+
+            if (std::isnan(sensor_reading) || std::isnan(coefficient)) {
+                LOG(INFO) << sensor_name << " data is under collecting";
+                return true;
+            }
+
             switch (sensor_info.virtual_sensor_info->formula) {
                 case FormulaOption::COUNT_THRESHOLD:
                     if ((coefficient < 0 && sensor_reading < -coefficient) ||
@@ -944,6 +960,13 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
         }
         *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
     }
+
+    if (!isnan(sensor_info.step_ratio) && !isnan(sensor_status.thermal_cached.temp) &&
+        since_last_update < sensor_info.passive_delay * kTranTimeoutParam) {
+        *temp = (sensor_info.step_ratio * *temp +
+                 (1 - sensor_info.step_ratio) * sensor_status.thermal_cached.temp);
+    }
+
     (*sensor_log_map)[sensor_name.data()] = *temp;
     ATRACE_INT(sensor_name.data(), static_cast<int>(*temp));
 
