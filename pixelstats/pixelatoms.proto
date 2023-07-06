@@ -109,6 +109,7 @@ message Atom {
       VendorAudioPdmStatsReported vendor_audio_pdm_stats_reported = 105056;
       VendorAudioThirdPartyEffectStatsReported vendor_audio_third_party_effect_stats_reported = 105057;
       VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
+      GpuEvent gpu_event = 105059;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1773,6 +1774,45 @@ message PartitionsUsedSpaceReported {
     optional int64 total_bytes = 4;
 }
 
+message GpuEvent {
+    enum GpuEventType {
+      MALI_TYPE_NONE = 0;
+      MALI_KMD_ERROR = 1;
+      MALI_GPU_RESET = 2;
+    }
+    enum GpuEventInfo {
+      MALI_INFO_NONE = 0;
+      MALI_CSG_REQ_STATUS_UPDATE = 1;
+      MALI_CSG_SUSPEND = 2;
+      MALI_CSG_SLOTS_SUSPEND = 3;
+      MALI_CSG_GROUP_SUSPEND = 4;
+      MALI_CSG_EP_CFG = 5;
+      MALI_CSG_SLOTS_START = 6;
+      MALI_GROUP_TERM = 7;
+      MALI_QUEUE_START = 8;
+      MALI_QUEUE_STOP = 9;
+      MALI_QUEUE_STOP_ACK = 10;
+      MALI_CSG_SLOT_READY = 11;
+      MALI_L2_PM_TIMEOUT = 12;
+      MALI_PM_TIMEOUT = 13;
+      MALI_CSF_RESET_OK = 14;
+      MALI_CSF_RESET_FAILED = 15;
+    }
+
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+    /*
+     * Type of the GPU event. Possible values depend on the platform GPU.
+     * Eg, MALI_KMD_ERROR, MALI_GPU_RESET.
+     */
+    optional GpuEventType gpu_event_type = 2;
+    /*
+     * Additional information about the GPU event. Possible values depend
+     * on the platform GPU.
+     * Eg, MALI_PM_TIMEOUT, MALI_CSF_RESET_OK.
+     */
+    optional GpuEventInfo gpu_event_info = 3;
+}
 /**
  * Log mitigation duration.
  */
