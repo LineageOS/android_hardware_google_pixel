@@ -50,6 +50,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --set-timeoffset              Write the time offset value (tz_time - utc_time)\n";
   std::cerr << "  --set-max-ram-size <2048-65536> Write the sw limit max ram size in MB\n";
   std::cerr << "  --set-max-ram-size <-1>         Clear the sw limit max ram size\n";
+  std::cerr << "  --set-timertcoffset           Write the time offset value (utc_time - rtc_time)\n";
+  std::cerr << "  --set-minrtc                  Write the minimum expected rtc value for tilb\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -71,6 +73,8 @@ int main(int argc, char** argv) {
     { "set-timeformat", required_argument, nullptr, 0},
     { "set-timeoffset", required_argument, nullptr, 0},
     { "set-max-ram-size", required_argument, nullptr, 0},
+    { "set-timertcoffset", required_argument, nullptr, 0},
+    { "set-minrtc", required_argument, nullptr, 0},
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -173,6 +177,30 @@ int main(int argc, char** argv) {
         misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kSetMaxRamSize,
                                                    std::to_string(max_ram_size));
       }
+    } else if (option_name == "set-timertcoffset"s) {
+      long long int timertcoffset = strtoll(optarg, NULL, 10);
+      if (0 == timertcoffset) {
+        LOG(ERROR) << "Failed to parse the timertcoffset:" << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeRtcOffset,
+                                                     std::to_string(timertcoffset));
+    } else if (option_name == "set-minrtc"s) {
+      long long int minrtc = strtoll(optarg, NULL, 10);
+      if (0 == minrtc) {
+        LOG(ERROR) << "Failed to parse the minrtc:" << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeMinRtc,
+                                                     std::to_string(minrtc));
     } else if (auto iter = action_map.find(option_name); iter != action_map.end()) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";
