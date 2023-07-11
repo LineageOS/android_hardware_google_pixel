@@ -303,6 +303,7 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockApi, setMinOnOffInterval(_)).Times(times);
         EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).Times(times);
         EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, _, _, _)).Times(times);
+        EXPECT_CALL(*mMockApi, enableDbc()).Times(times);
 
         EXPECT_CALL(*mMockApi, debug(_)).Times(times);
 
@@ -396,6 +397,7 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockApi, getContextSettlingTime()).WillRepeatedly(Return(0));
     EXPECT_CALL(*mMockApi, getContextCooldownTime()).WillRepeatedly(Return(0));
     EXPECT_CALL(*mMockApi, getContextFadeEnable()).WillRepeatedly(Return(false));
+    EXPECT_CALL(*mMockApi, enableDbc()).WillOnce(Return(true));
     createVibrator(std::move(mockapi), std::move(mockcal), std::move(mockstats), false);
 }
 

@@ -519,6 +519,9 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
     createPwleMaxLevelLimitMap();
     createBandwidthAmplitudeMap();
 
+    // We need to do this until it's supported through WISCE
+    mHwApi->enableDbc();
+
 #ifdef ADAPTIVE_HAPTICS_V1
     mContextListener = CapoDetector::start();
     if (mContextListener == nullptr) {
@@ -1580,6 +1583,10 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "\n");
 
     mStatsApi->debug(fd);
+
+    if (mHwApi->isDbcSupported()) {
+        dprintf(fd, "\nDBC Enabled\n");
+    }
 
     fsync(fd);
     return STATUS_OK;
