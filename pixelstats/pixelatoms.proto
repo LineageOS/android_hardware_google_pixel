@@ -110,6 +110,7 @@ message Atom {
       VendorAudioThirdPartyEffectStatsReported vendor_audio_third_party_effect_stats_reported = 105057;
       VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
       GpuEvent gpu_event = 105059;
+      VendorAudioPcmStatsReported vendor_audio_pcm_stats_reported = 105060;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1928,4 +1929,41 @@ message VendorAudioAdaptedInfoStatsReported {
   optional int32 active_counts_per_day = 3;
   /* Duration the feature is active in milliseconds */
   optional int32 active_duration_ms_per_day = 4;
+}
+
+/*
+ * Logs the audio PCM usage stats.
+ * PCM usage includes average latency and total active count per day.
+ */
+message VendorAudioPcmStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum HalPcmType {
+    UNKNOWN = 0;
+    DEEPBUFFER = 1;
+    LOWLATENCY = 2;
+    MMAP_PLAY = 3;
+    RAW_PLAY = 4;
+    IMMERSIVE = 5;
+    HAPTIC = 6;
+    COMPRESS = 7;
+    MMAP_REC = 8;
+    RAW_REC = 9;
+    AUDIO_REC = 10;
+    HIFI_RX = 11;
+    HIFI_TX = 12;
+    IMMUTABLE_RX = 13;
+    CUSTOM_PCM_1 = 14;
+    CUSTOM_PCM_2 = 15;
+    CUSTOM_PCM_3 = 16;
+    CUSTOM_PCM_4 = 17;
+    CUSTOM_PCM_5 = 18;
+  };
+  /* Type of PCM */
+  optional HalPcmType type = 2;
+  /* Average latency in millisecond of the pcm type per day. */
+  optional int32 pcm_open_latency_avg_ms_per_day = 3;
+  /* Total active count of the pcm type per day. */
+  optional int32 pcm_active_counts_per_day = 4;
 }

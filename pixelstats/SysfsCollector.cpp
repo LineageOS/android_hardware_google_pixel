@@ -63,6 +63,7 @@ using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioAdaptedInfoStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioPcmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPdmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioThirdPartyEffectStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
@@ -117,7 +118,9 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kPDMStatePath(sysfs_paths.PDMStatePath),
       kWavesPath(sysfs_paths.WavesPath),
       kAdaptedInfoCountPath(sysfs_paths.AdaptedInfoCountPath),
-      kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath) {}
+      kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath),
+      kPcmLatencyPath(sysfs_paths.PcmLatencyPath),
+      kPcmCountPath(sysfs_paths.PcmCountPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1365,6 +1368,87 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
 }
 
 /**
+ * Report audio PCM usage stats such as latency and active count.
+ * This function will report at most 19 atoms showing different PCM type.
+ */
+void SysfsCollector::logPcmUsageStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> count_per_type;
+    std::vector<int> latency_per_type;
+
+    constexpr int num_type = 19;
+
+    if (kPcmLatencyPath == nullptr) {
+        ALOGD("PCM Latency path not specified");
+        return;
+    }
+
+    if (kPcmCountPath == nullptr) {
+        ALOGD("PCM Count path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kPcmCountPath, &file_contents)) {
+        ALOGD("Unable to read PCM Count path %s", kPcmCountPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int count;
+        while (file_content_stream.good() && file_content_stream >> count) {
+            count_per_type.push_back(count);
+        }
+    }
+
+    if (count_per_type.size() != num_type) {
+        ALOGD("Audio PCM Count path doesn't match the number of features. %zu / %d",
+              count_per_type.size(), num_type);
+        return;
+    }
+
+    if (!ReadFileToString(kPcmLatencyPath, &file_contents)) {
+        ALOGD("Unable to read PCM Latency path %s", kPcmLatencyPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            latency_per_type.push_back(duration);
+        }
+    }
+
+    if (latency_per_type.size() != num_type) {
+        ALOGD("Audio PCM Latency path doesn't match the number of features. %zu / %d",
+              latency_per_type.size(), num_type);
+        return;
+    }
+
+    for (int index = 0; index < num_type; index++) {
+        std::vector<VendorAtomValue> values(3);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioPcmStatsReported::kTypeFieldNumber - kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(latency_per_type[index]);
+        values[VendorAudioPcmStatsReported::kPcmOpenLatencyAvgMsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(count_per_type[index]);
+        values[VendorAudioPcmStatsReported::kPcmActiveCountsPerDayFieldNumber - kVendorAtomOffset] =
+                tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioPcmStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioPcmStatsReported at index %d", index);
+        else
+            ALOGD("Reported VendorAudioPcmStatsReported at index %d successfully", index);
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1795,6 +1879,7 @@ void SysfsCollector::logPerDay() {
     logVendorAudioPdmStatsReported(stats_client);
     logWavesStats(stats_client);
     logAdaptedInfoStats(stats_client);
+    logPcmUsageStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
