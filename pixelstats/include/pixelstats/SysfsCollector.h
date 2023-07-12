@@ -82,6 +82,8 @@ class SysfsCollector {
         const char *const WavesPath;
         const char *const AdaptedInfoCountPath;
         const char *const AdaptedInfoDurationPath;
+        const char *const PcmLatencyPath;
+        const char *const PcmCountPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -134,6 +136,7 @@ class SysfsCollector {
     void logPcieLinkStats(const std::shared_ptr<IStats> &stats_client);
     void logWavesStats(const std::shared_ptr<IStats> &stats_client);
     void logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_client);
+    void logPcmUsageStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -175,6 +178,8 @@ class SysfsCollector {
     const char *const kWavesPath;
     const char *const kAdaptedInfoCountPath;
     const char *const kAdaptedInfoDurationPath;
+    const char *const kPcmLatencyPath;
+    const char *const kPcmCountPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
