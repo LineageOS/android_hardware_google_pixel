@@ -174,13 +174,15 @@ bool PowerHintSession::isAppSession() {
     return mDescriptor->uid >= AID_APP_START;
 }
 
-void PowerHintSession::updatePidSetPoint(int pidSetPoint) {
-    auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
+void PowerHintSession::updatePidSetPoint(int pidSetPoint, bool updateVote) {
     mDescriptor->pidSetPoint = pidSetPoint;
-    mPSManager->voteSet(
-            mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, pidSetPoint, kUclampMax,
-            std::chrono::steady_clock::now(),
-            duration_cast<nanoseconds>(mDescriptor->targetNs * adpfConfig->mStaleTimeFactor));
+    if (updateVote) {
+        auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
+        mPSManager->voteSet(
+                mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, pidSetPoint, kUclampMax,
+                std::chrono::steady_clock::now(),
+                duration_cast<nanoseconds>(mDescriptor->targetNs * adpfConfig->mStaleTimeFactor));
+    }
     if (ATRACE_ENABLED()) {
         ATRACE_INT(mAppDescriptorTrace.trace_min.c_str(), pidSetPoint);
     }
@@ -354,7 +356,8 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
             break;
         case SessionHint::CPU_LOAD_RESET:
             updatePidSetPoint(std::max(adpfConfig->mUclampMinInit,
-                                       static_cast<uint32_t>(mDescriptor->pidSetPoint)));
+                                       static_cast<uint32_t>(mDescriptor->pidSetPoint)),
+                              false);
             mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESET,
                                 adpfConfig->mUclampMinHigh, kUclampMax,
                                 std::chrono::steady_clock::now(),
@@ -362,7 +365,6 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
                                                            adpfConfig->mStaleTimeFactor / 2.0));
             break;
         case SessionHint::CPU_LOAD_RESUME:
-            updatePidSetPoint(mDescriptor->pidSetPoint);
             mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESUME,
                                 mDescriptor->pidSetPoint, kUclampMax,
                                 std::chrono::steady_clock::now(),
