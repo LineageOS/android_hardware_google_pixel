@@ -162,7 +162,8 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     std::vector<std::string> linked_sensors;
     std::vector<SensorFusionType> linked_sensors_type;
     std::vector<std::string> trigger_sensors;
-    std::vector<float> coefficients;
+    std::vector<std::string> coefficients;
+    std::vector<SensorFusionType> coefficients_type;
     FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
 
     Json::Value values = sensor["Combination"];
@@ -192,6 +193,8 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
                 linked_sensors_type.emplace_back(SensorFusionType::SENSOR);
             } else if (values[j].asString().compare("ODPM") == 0) {
                 linked_sensors_type.emplace_back(SensorFusionType::ODPM);
+            } else if (values[j].asString().compare("CONSTANT") == 0) {
+                linked_sensors_type.emplace_back(SensorFusionType::CONSTANT);
             } else {
                 LOG(ERROR) << "Sensor[" << name << "] has invalid CombinationType settings "
                            << values[j].asString();
@@ -206,7 +209,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     if (values.size()) {
         coefficients.reserve(values.size());
         for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
-            coefficients.emplace_back(getFloatFromValue(values[j]));
+            coefficients.emplace_back(values[j].asString());
             LOG(INFO) << "Sensor[" << name << "]'s coefficient[" << j << "]: " << coefficients[j];
         }
     } else {
@@ -217,6 +220,40 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         LOG(ERROR) << "Sensor[" << name << "] has invalid Coefficient size";
         return false;
     }
+
+    values = sensor["CoefficientType"];
+    if (!values.size()) {
+        coefficients_type.reserve(linked_sensors.size());
+        for (size_t j = 0; j < linked_sensors.size(); ++j) {
+            coefficients_type.emplace_back(SensorFusionType::CONSTANT);
+        }
+    } else if (values.size() != coefficients.size()) {
+        LOG(ERROR) << "Sensor[" << name << "] has invalid coefficient type size";
+        return false;
+    } else {
+        for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
+            if (values[j].asString().compare("CONSTANT") == 0) {
+                coefficients_type.emplace_back(SensorFusionType::CONSTANT);
+            } else if (values[j].asString().compare("SENSOR") == 0) {
+                coefficients_type.emplace_back(SensorFusionType::SENSOR);
+            } else if (values[j].asString().compare("ODPM") == 0) {
+                coefficients_type.emplace_back(SensorFusionType::ODPM);
+            } else {
+                LOG(ERROR) << "Sensor[" << name << "] has invalid coefficient options "
+                           << values[j].asString();
+                return false;
+            }
+            LOG(INFO) << "Sensor[" << name << "]'s coefficient type[" << j
+                      << "]: " << coefficients_type[j];
+        }
+    }
+
+    if (linked_sensors.size() != coefficients_type.size()) {
+        LOG(ERROR) << "Sensor[" << name
+                   << "]'s combination size is not matched with coefficient type size";
+        return false;
+    }
+
     if (!sensor["Offset"].empty()) {
         offset = sensor["Offset"].asFloat();
     }
@@ -255,8 +292,9 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         LOG(ERROR) << "Sensor[" << name << "]'s Formula is invalid";
         return false;
     }
-    virtual_sensor_info->reset(new VirtualSensorInfo{
-            linked_sensors, linked_sensors_type, coefficients, offset, trigger_sensors, formula});
+    virtual_sensor_info->reset(new VirtualSensorInfo{linked_sensors, linked_sensors_type,
+                                                     coefficients, coefficients_type, offset,
+                                                     trigger_sensors, formula});
     return true;
 }
 
@@ -841,6 +879,16 @@ bool ParseSensorInfo(const Json::Value &config,
         }
         LOG(INFO) << "Sensor[" << name << "]'s Time resolution: " << time_resolution.count();
 
+        float step_ratio = NAN;
+        if (!sensors[i]["StepRatio"].empty()) {
+            step_ratio = sensors[i]["StepRatio"].asFloat();
+            if (step_ratio < 0 || step_ratio > 1) {
+                LOG(ERROR) << "Sensor[" << name << "]'s StepRatio should be set 0 ~ 1";
+                sensors_parsed->clear();
+                return false;
+            }
+        }
+
         if (is_hidden && send_cb) {
             LOG(ERROR) << "is_hidden and send_cb cannot be enabled together";
             sensors_parsed->clear();
@@ -877,6 +925,7 @@ bool ParseSensorInfo(const Json::Value &config,
                 .polling_delay = polling_delay,
                 .passive_delay = passive_delay,
                 .time_resolution = time_resolution,
+                .step_ratio = step_ratio,
                 .send_cb = send_cb,
                 .send_powerhint = send_powerhint,
                 .is_watch = is_watch,
@@ -983,7 +1032,7 @@ bool ParsePowerRailInfo(const Json::Value &config,
         LOG(INFO) << "PowerRail[" << i << "]'s Rail: " << rail;
 
         std::vector<std::string> linked_power_rails;
-        std::vector<float> coefficients;
+        std::vector<float> coefficient;
         float offset = 0;
         FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
         bool is_virtual_power_rail = false;
@@ -1013,11 +1062,11 @@ bool ParsePowerRailInfo(const Json::Value &config,
 
             values = power_rails[i]["Coefficient"];
             if (values.size()) {
-                coefficients.reserve(values.size());
+                coefficient.reserve(values.size());
                 for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
-                    coefficients.emplace_back(getFloatFromValue(values[j]));
+                    coefficient.emplace_back(getFloatFromValue(values[j]));
                     LOG(INFO) << "PowerRail[" << name << "]'s coefficient[" << j
-                              << "]: " << coefficients[j];
+                              << "]: " << coefficient[j];
                 }
             } else {
                 LOG(ERROR) << "PowerRails[" << name << "] has no coefficient for VirtualRail";
@@ -1025,7 +1074,7 @@ bool ParsePowerRailInfo(const Json::Value &config,
                 return false;
             }
 
-            if (linked_power_rails.size() != coefficients.size()) {
+            if (linked_power_rails.size() != coefficient.size()) {
                 LOG(ERROR) << "PowerRails[" << name
                            << "]'s combination size is not matched with coefficient size";
                 power_rails_parsed->clear();
@@ -1036,7 +1085,7 @@ bool ParsePowerRailInfo(const Json::Value &config,
                 offset = power_rails[i]["Offset"].asFloat();
             }
 
-            if (linked_power_rails.size() != coefficients.size()) {
+            if (linked_power_rails.size() != coefficient.size()) {
                 LOG(ERROR) << "PowerRails[" << name
                            << "]'s combination size is not matched with coefficient size";
                 power_rails_parsed->clear();
@@ -1061,7 +1110,7 @@ bool ParsePowerRailInfo(const Json::Value &config,
         std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;
         if (is_virtual_power_rail) {
             virtual_power_rail_info.reset(
-                    new VirtualPowerRailInfo{linked_power_rails, coefficients, offset, formula});
+                    new VirtualPowerRailInfo{linked_power_rails, coefficient, offset, formula});
         }
 
         power_sample_count = power_rails[i]["PowerSampleCount"].asInt();
