@@ -93,12 +93,15 @@ struct StatsConfig {
 enum SensorFusionType : uint32_t {
     SENSOR = 0,
     ODPM,
+    CONSTANT,
 };
 
 struct VirtualSensorInfo {
     std::vector<std::string> linked_sensors;
     std::vector<SensorFusionType> linked_sensors_type;
-    std::vector<float> coefficients;
+    std::vector<std::string> coefficients;
+    std::vector<SensorFusionType> coefficients_type;
+
     float offset;
     std::vector<std::string> trigger_sensors;
     FormulaOption formula;
@@ -169,6 +172,9 @@ struct SensorInfo {
     std::chrono::milliseconds polling_delay;
     std::chrono::milliseconds passive_delay;
     std::chrono::milliseconds time_resolution;
+    // The StepRatio value which is used for smoothing transient w/ the equation:
+    // Temp = CurrentTemp * StepRatio + LastTemp * (1 - StepRatio)
+    float step_ratio;
     bool send_cb;
     bool send_powerhint;
     bool is_watch;
