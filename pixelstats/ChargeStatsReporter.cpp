@@ -117,6 +117,8 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
             tmp[12] = pca_rs[4];
             tmp[14] = pca_rs[1];
             if (wline_at.empty()) {
+                /* force adapter type to PPS when pca log is available, but not wlc */
+                tmp[0] = PixelAtoms::ChargeStats::ADAPTER_TYPE_USB_PD_PPS;
                 tmp[8] = pca_ac[0];
                 tmp[9] = pca_ac[1];
                 tmp[13] = pca_rs[0];
