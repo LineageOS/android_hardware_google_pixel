@@ -1151,6 +1151,12 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
         LOG(ERROR) << "Failed to report " << count_failed_reporting << " thermal stats";
     }
 
+    const auto since_last_power_log_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - power_files_.GetPrevPowerLogTime());
+    if (since_last_power_log_ms >= kPowerLogIntervalMs) {
+        power_files_.logPowerStatus(now);
+    }
+
     return min_sleep_ms;
 }
 
