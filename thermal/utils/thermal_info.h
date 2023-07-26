@@ -197,7 +197,6 @@ struct CdevInfo {
 };
 
 struct PowerRailInfo {
-    std::string rail;
     int power_sample_count;
     std::chrono::milliseconds power_sample_delay;
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;

@@ -1036,14 +1036,6 @@ bool ParsePowerRailInfo(const Json::Value &config,
             return false;
         }
 
-        std::string rail;
-        if (power_rails[i]["Rail"].empty()) {
-            rail = name;
-        } else {
-            rail = power_rails[i]["Rail"].asString();
-        }
-        LOG(INFO) << "PowerRail[" << i << "]'s Rail: " << rail;
-
         std::vector<std::string> linked_power_rails;
         std::vector<float> coefficient;
         float offset = 0;
@@ -1137,7 +1129,6 @@ bool ParsePowerRailInfo(const Json::Value &config,
         }
 
         (*power_rails_parsed)[name] = {
-                .rail = rail,
                 .power_sample_count = power_sample_count,
                 .power_sample_delay = power_sample_delay,
                 .virtual_power_rail_info = std::move(virtual_power_rail_info),
