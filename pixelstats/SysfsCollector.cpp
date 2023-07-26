@@ -1147,6 +1147,8 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
+    else
+        ALOGD("Reported VendorAudioHardwareStatsReported");
 }
 
 /**
@@ -1191,6 +1193,11 @@ void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats
         std::vector<VendorAtomValue> values(2);
         VendorAtomValue tmp;
 
+        if (pdm_states[index] == 0) {
+            ALOGD("Skipped VendorAudioPdmStatsReported at index %d", index);
+            continue;
+        }
+
         tmp.set<VendorAtomValue::intValue>(index);
         values[VendorAudioPdmStatsReported::kPdmIndexFieldNumber - kVendorAtomOffset] = tmp;
 
@@ -1205,6 +1212,8 @@ void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioPdmStatsReported at index %d", index);
+        else
+            ALOGD("Reported VendorAudioPdmStatsReported at index %d", index);
     }
 }
 
@@ -1268,6 +1277,17 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
         std::vector<VendorAtomValue> values(11);
         VendorAtomValue tmp;
 
+        bool has_value = false;
+        for (int volume_index = 0; volume_index < num_volume; volume_index++) {
+            if (volume_duration_per_instance[index][volume_index] > 0) {
+                has_value = true;
+            }
+        }
+        if (!has_value) {
+            ALOGD("Skipped VendorAudioThirdPartyEffectStatsReported at index %d", index);
+            continue;
+        }
+
         tmp.set<VendorAtomValue::intValue>(index);
         values[VendorAudioThirdPartyEffectStatsReported::kInstanceFieldNumber - kVendorAtomOffset] =
                 tmp;
@@ -1284,6 +1304,8 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioThirdPartyEffectStatsReported at index %d", index);
+        else
+            ALOGD("Reported VendorAudioThirdPartyEffectStatsReported at index %d", index);
     }
 }
 
@@ -1344,6 +1366,11 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
         std::vector<VendorAtomValue> values(3);
         VendorAtomValue tmp;
 
+        if (count_per_feature[index] == 0 && duration_per_feature[index] == 0) {
+            ALOGD("Skipped VendorAudioAdaptedInfoStatsReported at index %d", index);
+            continue;
+        }
+
         tmp.set<VendorAtomValue::intValue>(index);
         values[VendorAudioAdaptedInfoStatsReported::kFeatureIdFieldNumber - kVendorAtomOffset] =
                 tmp;
@@ -1364,6 +1391,8 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioAdaptedInfoStatsReported at index %d", index);
+        else
+            ALOGD("Reported VendorAudioAdaptedInfoStatsReported at index %d", index);
     }
 }
 
@@ -1423,6 +1452,10 @@ void SysfsCollector::logPcmUsageStats(const std::shared_ptr<IStats> &stats_clien
     for (int index = 0; index < num_type; index++) {
         std::vector<VendorAtomValue> values(3);
         VendorAtomValue tmp;
+
+        if (latency_per_type[index] == 0 && count_per_type[index] == 0) {
+            continue;
+        }
 
         tmp.set<VendorAtomValue::intValue>(index);
         values[VendorAudioPcmStatsReported::kTypeFieldNumber - kVendorAtomOffset] = tmp;
