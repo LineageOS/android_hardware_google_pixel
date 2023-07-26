@@ -62,17 +62,12 @@ class ThermalThrottling {
     ThermalThrottling(const ThermalThrottling &) = delete;
     void operator=(const ThermalThrottling &) = delete;
 
-    // Check if the thermal throttling profile need to be switched
-    void parseProfileProperty(std::string_view sensor_name, const SensorInfo &sensor_info);
     // Clear throttling data
     void clearThrottlingData(std::string_view sensor_name, const SensorInfo &sensor_info);
     // Register map for throttling algo
     bool registerThermalThrottling(
             std::string_view sensor_name, const std::shared_ptr<ThrottlingInfo> &throttling_info,
             const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map);
-    // Register map for throttling release algo
-    bool registerThrottlingReleaseToWatch(std::string_view sensor_name, std::string_view cdev_name,
-                                          const BindedCdevInfo &binded_cdev_info);
     // Get throttling status map
     const std::unordered_map<std::string, ThermalThrottlingStatus> &GetThermalThrottlingStatusMap()
             const {
@@ -95,6 +90,8 @@ class ThermalThrottling {
     bool getCdevMaxRequest(std::string_view cdev_name, int *max_state);
 
   private:
+    // Check if the thermal throttling profile need to be switched
+    void parseProfileProperty(std::string_view sensor_name, const SensorInfo &sensor_info);
     // PID algo - get the total power budget
     float updatePowerBudget(const Temperature &temp, const SensorInfo &sensor_info,
                             std::chrono::milliseconds time_elapsed_ms,
