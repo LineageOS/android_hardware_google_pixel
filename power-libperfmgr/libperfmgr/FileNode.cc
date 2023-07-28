@@ -31,11 +31,12 @@ namespace android {
 namespace perfmgr {
 
 FileNode::FileNode(std::string name, std::string node_path, std::vector<RequestGroup> req_sorted,
-                   std::size_t default_val_index, bool reset_on_init, bool truncate, bool hold_fd)
+                   std::size_t default_val_index, bool reset_on_init, bool truncate, bool hold_fd, bool write_only)
     : Node(std::move(name), std::move(node_path), std::move(req_sorted), default_val_index,
            reset_on_init),
       hold_fd_(hold_fd),
       truncate_(truncate),
+      write_only_(write_only),
       warn_timeout_(android::base::GetBoolProperty("ro.debuggable", false) ? 5ms : 50ms) {}
 
 std::chrono::milliseconds FileNode::Update(bool log_error) {
@@ -110,7 +111,7 @@ bool FileNode::GetTruncate() const {
 
 void FileNode::DumpToFd(int fd) const {
     std::string node_value;
-    if (!android::base::ReadFileToString(node_path_, &node_value)) {
+    if (!write_only_ && !android::base::ReadFileToString(node_path_, &node_value)) {
         LOG(ERROR) << "Failed to read node path: " << node_path_;
     }
     node_value = android::base::Trim(node_value);
