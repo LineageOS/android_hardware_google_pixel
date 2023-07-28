@@ -495,9 +495,19 @@ std::vector<std::unique_ptr<Node>> HintManager::ParseNodes(
             LOG(VERBOSE) << "Node[" << i << "]'s HoldFd: " << std::boolalpha
                          << hold_fd << std::noboolalpha;
 
+            bool write_only = false;
+            if (nodes[i]["WriteOnly"].empty() || !nodes[i]["WriteOnly"].isBool()) {
+                LOG(INFO) << "Failed to read Node[" << i
+                          << "]'s WriteOnly, set to 'false'";
+            } else {
+                write_only = nodes[i]["WriteOnly"].asBool();
+            }
+            LOG(VERBOSE) << "Node[" << i << "]'s WriteOnly: " << std::boolalpha
+                         << write_only << std::noboolalpha;
+
             nodes_parsed.emplace_back(std::make_unique<FileNode>(
                     name, path, values_parsed, static_cast<std::size_t>(default_index), reset,
-                    truncate, hold_fd));
+                    truncate, hold_fd, write_only));
         } else {
             nodes_parsed.emplace_back(std::make_unique<PropertyNode>(
                 name, path, values_parsed,
