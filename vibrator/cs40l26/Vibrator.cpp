@@ -19,6 +19,7 @@
 #include <android-base/properties.h>
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
+#include <linux/version.h>
 #include <log/log.h>
 #include <utils/Trace.h>
 
@@ -97,6 +98,30 @@ static constexpr uint32_t WT_LEN_CALCD = 0x00800000;
 static constexpr uint8_t PWLE_CHIRP_BIT = 0x8;  // Dynamic/static frequency and voltage
 static constexpr uint8_t PWLE_BRAKE_BIT = 0x4;
 static constexpr uint8_t PWLE_AMP_REG_BIT = 0x2;
+
+static constexpr uint8_t PWLE_WT_TYPE = 12;
+static constexpr uint8_t PWLE_HEADER_WORD_COUNT = 3;
+static constexpr uint8_t PWLE_HEADER_FTR_SHIFT = 8;
+static constexpr uint8_t PWLE_SVC_METADATA_WORD_COUNT = 3;
+static constexpr uint32_t PWLE_SVC_METADATA_TERMINATOR = 0xFFFFFF;
+static constexpr uint8_t PWLE_SEGMENT_WORD_COUNT = 2;
+static constexpr uint8_t PWLE_HEADER_WCOUNT_WORD_OFFSET = 2;
+static constexpr uint8_t PWLE_WORD_SIZE = sizeof(uint32_t);
+
+static constexpr uint8_t PWLE_SVC_NO_BRAKING = -1;
+static constexpr uint8_t PWLE_SVC_CAT_BRAKING = 0;
+static constexpr uint8_t PWLE_SVC_OPEN_BRAKING = 1;
+static constexpr uint8_t PWLE_SVC_CLOSED_BRAKING = 2;
+static constexpr uint8_t PWLE_SVC_MIXED_BRAKING = 3;
+
+static constexpr uint32_t PWLE_SVC_MAX_BRAKING_TIME_MS = 1000;
+
+static constexpr uint8_t PWLE_FTR_BUZZ_BIT = 0x80;
+static constexpr uint8_t PWLE_FTR_CLICK_BIT = 0x00;
+static constexpr uint8_t PWLE_FTR_DYNAMIC_F0_BIT = 0x10;
+static constexpr uint8_t PWLE_FTR_SVC_METADATA_BIT = 0x04;
+static constexpr uint8_t PWLE_FTR_DVL_BIT = 0x02;
+static constexpr uint8_t PWLE_FTR_LF0T_BIT = 0x01;
 
 static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
@@ -237,10 +262,18 @@ class DspMemChunk {
             write(8, 0); /* nsections placeholder */
             write(8, 0); /* repeat */
         } else if (waveformType == WAVEFORM_PWLE) {
+            write(16, (PWLE_FTR_BUZZ_BIT | PWLE_FTR_DVL_BIT)
+                              << PWLE_HEADER_FTR_SHIFT); /* Feature flag */
+            write(8, PWLE_WT_TYPE);                      /* type12 */
+            write(24, PWLE_HEADER_WORD_COUNT);           /* Header word count */
+            write(24, 0);                                /* Body word count placeholder */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
             write(24, 0); /* Waveform length placeholder */
             write(8, 0);  /* Repeat */
             write(12, 0); /* Wait time between repeats */
             write(8, 0);  /* nsections placeholder */
+#endif
         } else {
             ALOGE("%s: Invalid type: %u", __func__, waveformType);
         }
@@ -338,6 +371,9 @@ class DspMemChunk {
             ALOGE("%s: Invalid argument: %u", __func__, totalDuration);
             return -EINVAL;
         }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+        f += PWLE_HEADER_WORD_COUNT * PWLE_WORD_SIZE;
+#endif
         totalDuration *= 8; /* Unit: 0.125 ms (since wlength played @ 8kHz). */
         totalDuration |=
                 WT_LEN_CALCD; /* Bit 23 is for WT_LEN_CALCD; Bit 22 is for WT_INDEFINITE. */
@@ -367,12 +403,44 @@ class DspMemChunk {
                 ALOGE("%s: Invalid argument: %d", __func__, segmentIdx);
                 return -EINVAL;
             }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+            f += PWLE_HEADER_WORD_COUNT * PWLE_WORD_SIZE;
+#endif
             *(f + 7) |= (0xF0 & segmentIdx) >> 4; /* Bit 4 to 7 */
             *(f + 9) |= (0x0F & segmentIdx) << 4; /* Bit 3 to 0 */
         } else {
             ALOGE("%s: Invalid type: %d", __func__, waveformType);
             return -EDOM;
         }
+
+        return 0;
+    }
+
+    int updateWCount(int segmentCount) {
+        HAPTICS_TRACE("     updateWCount(segmentIdx:%d)", segmentCount);
+        uint8_t *f = front();
+
+        if (segmentCount > COMPOSE_SIZE_MAX + 1 /*1st effect may have a delay*/) {
+            ALOGE("%s: Invalid argument: %d", __func__, segmentCount);
+            return -EINVAL;
+        }
+        if (f == nullptr) {
+            ALOGE("%s: head does not exist!", __func__);
+            return -ENOMEM;
+        }
+        if (waveformType != WAVEFORM_PWLE) {
+            ALOGE("%s: Invalid type: %d", __func__, waveformType);
+            return -EDOM;
+        }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+        f += PWLE_HEADER_WORD_COUNT * PWLE_WORD_SIZE;
+#endif
+        uint32_t dataSize = segmentCount * PWLE_SEGMENT_WORD_COUNT + PWLE_HEADER_WORD_COUNT;
+        *(f + 0) = (dataSize >> 24) & 0xFF;
+        *(f + 1) = (dataSize >> 16) & 0xFF;
+        *(f + 2) = (dataSize >> 8) & 0xFF;
+        *(f + 3) = dataSize & 0xFF;
 
         return 0;
     }
@@ -1447,6 +1515,14 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
         mFfEffects[WAVEFORM_PWLE].replay.length = totalDuration;
     }
 
+    /* Update word count */
+    if (ch.updateWCount(segmentIdx) < 0) {
+        mStatsApi->logError(kPwleConstructionFailError);
+        ALOGE("%s: Failed to update the waveform word count", __func__);
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+
+    /* Update waveform length */
     if (ch.updateWLength(totalDuration) < 0) {
         mStatsApi->logError(kPwleConstructionFailError);
         ALOGE("%s: Failed to update the waveform length length", __func__);
