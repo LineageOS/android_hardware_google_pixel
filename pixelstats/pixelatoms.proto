@@ -1385,6 +1385,17 @@ message VendorLongIRQStatsReported {
   optional int64 top4_irq_latency_us = 21;
   optional int64 top5_irq_num = 22;
   optional int64 top5_irq_latency_us = 23;
+
+  optional int64 storm_irq_top1_num = 24;
+  optional int64 storm_irq_top1_count = 25;
+  optional int64 storm_irq_top2_num = 26;
+  optional int64 storm_irq_top2_count = 27;
+  optional int64 storm_irq_top3_num = 28;
+  optional int64 storm_irq_top3_count = 29;
+  optional int64 storm_irq_top4_num = 30;
+  optional int64 storm_irq_top4_count = 31;
+  optional int64 storm_irq_top5_num= 32;
+  optional int64 storm_irq_top5_count = 33;
 }
 
 /**
