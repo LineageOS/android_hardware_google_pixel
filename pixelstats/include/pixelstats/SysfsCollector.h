@@ -75,6 +75,8 @@ class SysfsCollector {
         const char *const CCARatePath;
         const std::vector<std::pair<std::string, std::string>> TempResidencyAndResetPaths;
         const char *const LongIRQMetricsPath;
+        const char *const StormIRQMetricsPath;
+        const char *const IRQStatsResetPath;
         const char *const ResumeLatencyMetricsPath;
         const char *const ModemPcieLinkStatsPath;
         const char *const WifiPcieLinkStatsPath;
@@ -170,6 +172,8 @@ class SysfsCollector {
     const char *const kCCARatePath;
     const std::vector<std::pair<std::string, std::string>> kTempResidencyAndResetPaths;
     const char *const kLongIRQMetricsPath;
+    const char *const kStormIRQMetricsPath;
+    const char *const kIRQStatsResetPath;
     const char *const kResumeLatencyMetricsPath;
     const char *const kModemPcieLinkStatsPath;
     const char *const kWifiPcieLinkStatsPath;
@@ -199,8 +203,6 @@ class SysfsCollector {
     int64_t prev_huge_pages_since_boot_ = -1;
 
     struct perf_metrics_data {
-        int64_t softirq_count;
-        int64_t irq_count;
         uint64_t resume_latency_sum_ms;
         int64_t resume_count;
         std::vector<int64_t> resume_latency_buckets;
