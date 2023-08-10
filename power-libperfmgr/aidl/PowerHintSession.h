@@ -93,7 +93,7 @@ class PowerHintSession : public BnPowerHintSession {
 
   private:
     void tryToSendPowerHint(std::string hint);
-    void updatePidSetPoint(int pidSetPoint);
+    void updatePidSetPoint(int pidSetPoint, bool updateVote = true);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
     // Data
     sp<PowerSessionManager> mPSManager;
