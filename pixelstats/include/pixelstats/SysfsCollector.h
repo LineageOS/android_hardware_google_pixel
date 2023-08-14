@@ -22,6 +22,7 @@
 
 #include "BatteryEEPROMReporter.h"
 #include "BatteryHealthReporter.h"
+#include "BrownoutDetectedReporter.h"
 #include "MitigationStatsReporter.h"
 #include "MmMetricsReporter.h"
 #include "TempResidencyReporter.h"
@@ -58,6 +59,8 @@ class SysfsCollector {
         const char *const ZramBdStatPath;
         const char *const EEPROMPath;
         const char *const MitigationPath;
+        const char *const BrownoutLogPath;
+        const char *const BrownoutReasonProp;
         const char *const SpeakerTemperaturePath;
         const char *const SpeakerExcursionPath;
         const char *const SpeakerHeartBeatPath;
@@ -66,7 +69,7 @@ class SysfsCollector {
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
         const char *const CCARatePath;
-        const char *const TempResidencyPath;
+        const std::vector<std::pair<std::string, std::string>> TempResidencyAndResetPaths;
         const char *const LongIRQMetricsPath;
         const char *const ResumeLatencyMetricsPath;
         const char *const ModemPcieLinkStatsPath;
@@ -80,6 +83,8 @@ class SysfsCollector {
     bool ReadFileToInt(const std::string &path, int *val);
     bool ReadFileToInt(const char *path, int *val);
     void aggregatePer5Min();
+    void logOnce();
+    void logBrownout();
     void logPerDay();
     void logPerHour();
 
@@ -95,6 +100,7 @@ class SysfsCollector {
     void logUFSLifetime(const std::shared_ptr<IStats> &stats_client);
     void logUFSErrorStats(const std::shared_ptr<IStats> &stats_client);
     void logF2fsStats(const std::shared_ptr<IStats> &stats_client);
+    void logF2fsAtomicWriteInfo(const std::shared_ptr<IStats> &stats_client);
     void logF2fsCompressionInfo(const std::shared_ptr<IStats> &stats_client);
     void logF2fsGcSegmentInfo(const std::shared_ptr<IStats> &stats_client);
     void logZramStats(const std::shared_ptr<IStats> &stats_client);
@@ -113,6 +119,7 @@ class SysfsCollector {
     void logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client);
     void logVendorLongIRQStatsReported(const std::shared_ptr<IStats> &stats_client);
     void logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client);
+    void logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_client);
     void logPcieLinkStats(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
@@ -133,6 +140,8 @@ class SysfsCollector {
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
+    const char *const kBrownoutLogPath;
+    const char *const kBrownoutReasonProp;
     const char *const kPowerMitigationStatsPath;
     const char *const kSpeakerTemperaturePath;
     const char *const kSpeakerExcursionPath;
@@ -142,7 +151,7 @@ class SysfsCollector {
     const char *const kAmsRatePath;
     const std::vector<std::string> kThermalStatsPaths;
     const char *const kCCARatePath;
-    const char *const kTempResidencyPath;
+    const std::vector<std::pair<std::string, std::string>> kTempResidencyAndResetPaths;
     const char *const kLongIRQMetricsPath;
     const char *const kResumeLatencyMetricsPath;
     const char *const kModemPcieLinkStatsPath;
@@ -151,6 +160,7 @@ class SysfsCollector {
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
     MitigationStatsReporter mitigation_stats_reporter_;
+    BrownoutDetectedReporter brownout_detected_reporter_;
     ThermalStatsReporter thermal_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
     TempResidencyReporter temp_residency_reporter_;

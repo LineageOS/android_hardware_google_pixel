@@ -22,7 +22,6 @@
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include <android/binder_manager.h>
-#include <hidl/HidlTransportSupport.h>
 
 #include <iterator>
 #include <set>
@@ -33,13 +32,13 @@
 #include "thermal_info.h"
 #include "thermal_throttling.h"
 
+namespace aidl {
 namespace android {
 namespace hardware {
 namespace thermal {
-namespace V2_0 {
 namespace implementation {
 
-using android::base::StringPrintf;
+using ::android::base::StringPrintf;
 
 PowerHalService::PowerHalService()
     : power_hal_aidl_exist_(true), power_hal_aidl_(nullptr), power_hal_ext_aidl_(nullptr) {
@@ -133,7 +132,7 @@ void PowerHalService::setMode(const std::string &type, const ThrottlingSeverity 
 }
 
 }  // namespace implementation
-}  // namespace V2_0
 }  // namespace thermal
 }  // namespace hardware
 }  // namespace android
+}  // namespace aidl

@@ -35,10 +35,9 @@ cc_library {
         "libbinder_ndk",
         "libcutils",
         "libhardware",
-        "libhidlbase",
         "liblog",
         "libutils",
-        "android.hardware.thermal@2.0"
+        "android.hardware.thermal-V1-ndk"
     ],
     cflags: [
         "-Wall",

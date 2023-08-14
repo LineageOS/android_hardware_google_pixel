@@ -141,6 +141,7 @@ cc_library {
     "BatteryCapacityReporter.cpp",
     "BatteryEEPROMReporter.cpp",
     "BatteryHealthReporter.cpp",
+    "BrownoutDetectedReporter.cpp",
     "ChargeStatsReporter.cpp",
     "DropDetect.cpp",
     "MmMetricsReporter.cpp",

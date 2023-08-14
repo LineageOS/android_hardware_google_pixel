@@ -34,15 +34,21 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
     MOCK_METHOD1(setF0CompEnable, bool(bool value));
     MOCK_METHOD1(setRedcCompEnable, bool(bool value));
     MOCK_METHOD1(setMinOnOffInterval, bool(uint32_t value));
-    MOCK_METHOD2(setFFGain, bool(int fd, uint16_t value));
-    MOCK_METHOD3(setFFEffect, bool(int fd, struct ff_effect *effect, uint16_t timeoutMs));
-    MOCK_METHOD3(setFFPlay, bool(int fd, int8_t index, bool value));
+    MOCK_METHOD0(initFF, bool());
+    MOCK_METHOD0(getContextScale, uint32_t());
+    MOCK_METHOD0(getContextEnable, bool());
+    MOCK_METHOD0(getContextSettlingTime, uint32_t());
+    MOCK_METHOD0(getContextCooldownTime, uint32_t());
+    MOCK_METHOD0(getContextFadeEnable, bool());
+    MOCK_METHOD1(setFFGain, bool(uint16_t value));
+    MOCK_METHOD2(setFFEffect, bool(struct ff_effect *effect, uint16_t timeoutMs));
+    MOCK_METHOD2(setFFPlay, bool(int8_t index, bool value));
     MOCK_METHOD2(getHapticAlsaDevice, bool(int *card, int *device));
     MOCK_METHOD4(setHapticPcmAmp, bool(struct pcm **haptic_pcm, bool enable, int card, int device));
-    MOCK_METHOD6(uploadOwtEffect,
-                 bool(int fd, uint8_t *owtData, uint32_t numBytes, struct ff_effect *effect,
+    MOCK_METHOD5(uploadOwtEffect,
+                 bool(const uint8_t *owtData, const uint32_t numBytes, struct ff_effect *effect,
                       uint32_t *outEffectIndex, int *status));
-    MOCK_METHOD3(eraseOwtEffect, bool(int fd, int8_t effectIndex, std::vector<ff_effect> *effect));
+    MOCK_METHOD2(eraseOwtEffect, bool(int8_t effectIndex, std::vector<ff_effect> *effect));
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockApi() override { destructor(); };
@@ -61,6 +67,8 @@ class MockCal : public ::aidl::android::hardware::vibrator::Vibrator::HwCal {
     MOCK_METHOD1(getLongVolLevels, bool(std::array<uint32_t, 2> *value));
     MOCK_METHOD0(isChirpEnabled, bool());
     MOCK_METHOD1(getSupportedPrimitives, bool(uint32_t *value));
+    MOCK_METHOD1(getDeviceMass, bool(float *value));
+    MOCK_METHOD1(getLocCoeff, bool(float *value));
     MOCK_METHOD0(isF0CompEnabled, bool());
     MOCK_METHOD0(isRedcCompEnabled, bool());
     MOCK_METHOD1(debug, void(int fd));
@@ -70,6 +78,19 @@ class MockCal : public ::aidl::android::hardware::vibrator::Vibrator::HwCal {
     bool getF0(std::string *value) { return getF0(*value); }
     bool getRedc(std::string *value) { return getRedc(*value); }
     bool getQ(std::string *value) { return getQ(*value); }
+};
+
+class MockStats : public ::aidl::android::hardware::vibrator::Vibrator::StatsApi {
+  public:
+    MOCK_METHOD0(destructor, void());
+    MOCK_METHOD1(logPrimitive, bool(uint16_t effectIndex));
+    MOCK_METHOD2(logWaveform, bool(uint16_t effectIndex, int32_t duration));
+    MOCK_METHOD1(logError, bool(uint16_t errorIndex));
+    MOCK_METHOD1(logLatencyStart, bool(uint16_t latencyIndex));
+    MOCK_METHOD0(logLatencyEnd, bool());
+    MOCK_METHOD1(debug, void(int fd));
+
+    ~MockStats() override { destructor(); };
 };
 
 class MockVibratorCallback : public aidl::android::hardware::vibrator::BnVibratorCallback {

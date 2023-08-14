@@ -39,7 +39,13 @@ using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::ChargeStats;
 using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
+#define DURATION_FILTER_SECS 15
+
 ChargeStatsReporter::ChargeStatsReporter() {}
+
+int64_t ChargeStatsReporter::getTimeSecs(void) {
+    return nanoseconds_to_seconds(systemTime(SYSTEM_TIME_BOOTTIME));
+}
 
 void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats_client,
                                             const std::string line, const std::string wline_at,
@@ -200,6 +206,29 @@ void ChargeStatsReporter::ReportVoltageTierStats(const std::shared_ptr<IStats> &
         ALOGE("Unable to report VoltageTierStats to Stats service");
 }
 
+/**
+ * b/223664185
+ * Adds a rolling window filter to charge stats. If the time has expired, there will be a new log
+ * event.
+ *
+ * This helps ensure that we throttle stats even if there is an intermittent disconnect, while still
+ * retaining some stats on the disconnect.
+ */
+bool ChargeStatsReporter::shouldReportEvent(void) {
+    const int64_t current_time = getTimeSecs();
+    if (current_time == 0) {
+        ALOGE("Current boot time is zero!");
+        return false;
+    }
+
+    if (log_event_time_secs_ == 0 || log_event_time_secs_ + DURATION_FILTER_SECS < current_time) {
+        log_event_time_secs_ = current_time;
+        return true;
+    }
+
+    return false;
+}
+
 void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
                                          const std::string &path) {
     std::string file_contents, line, wfile_contents, wline_at, wline_ac, pca_file_contents,
@@ -224,6 +253,11 @@ void ChargeStatsReporter::checkAndReport(const std::shared_ptr<IStats> &stats_cl
 
     if (!WriteStringToFile("0", path.c_str())) {
         ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
+    }
+
+    if (!shouldReportEvent()) {
+        ALOGW("Too many log events; event ignored.");
+        return;
     }
 
     if (has_pca) {
