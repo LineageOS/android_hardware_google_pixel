@@ -182,3 +182,10 @@ cc_library {
   ],
   header_libs: ["chre_api"],
 }
+
+filegroup {
+    name: "pixelatoms_proto",
+    srcs: [
+        "pixelatoms.proto",
+    ],
+}
