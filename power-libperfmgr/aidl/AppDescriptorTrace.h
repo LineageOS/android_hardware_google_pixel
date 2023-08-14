@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <aidl/android/hardware/power/SessionMode.h>
 #include <android-base/stringprintf.h>
 
 #include <string>
@@ -26,6 +27,11 @@ namespace hardware {
 namespace power {
 namespace impl {
 namespace pixel {
+
+template <class T>
+constexpr size_t enum_size() {
+    return static_cast<size_t>(*(ndk::enum_range<T>().end() - 1)) + 1;
+}
 
 // The App Hint Descriptor struct manages information necessary
 // to calculate the next uclamp min value from the PID function
@@ -51,6 +57,11 @@ struct AppDescriptorTrace {
         trace_hint_overtime = StringPrintf("adpf.%s-%s", idString.c_str(), "hint_overtime");
         trace_is_first_frame = StringPrintf("adpf.%s-%s", idString.c_str(), "is_first_frame");
         trace_session_hint = StringPrintf("adpf.%s-%s", idString.c_str(), "session_hint");
+        for (size_t i = 0; i < trace_modes.size(); ++i) {
+            trace_modes[i] = StringPrintf(
+                    "adpf.%s-%s_mode", idString.c_str(),
+                    toString(static_cast<aidl::android::hardware::power::SessionMode>(i)).c_str());
+        }
     }
 
     // Trace values
@@ -71,6 +82,7 @@ struct AppDescriptorTrace {
     std::string trace_hint_overtime;
     std::string trace_is_first_frame;
     std::string trace_session_hint;
+    std::array<std::string, enum_size<aidl::android::hardware::power::SessionMode>()> trace_modes;
 };
 
 }  // namespace pixel

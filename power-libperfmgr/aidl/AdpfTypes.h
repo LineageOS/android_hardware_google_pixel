@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace aidl {
 namespace google {
 namespace hardware {
