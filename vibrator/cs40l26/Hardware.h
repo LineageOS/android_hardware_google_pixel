@@ -379,10 +379,57 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         }
         return true;
     }
+    bool isDbcSupported() override {
+        ATRACE_NAME(__func__);
+        return utils::getProperty("ro.vendor.vibrator.hal.dbc.enable", false);
+    }
+
+    bool enableDbc() override {
+        ATRACE_NAME(__func__);
+        if (isDbcSupported()) {
+            open("dbc/dbc_env_rel_coef", &mDbcEnvRelCoef);
+            open("dbc/dbc_rise_headroom", &mDbcRiseHeadroom);
+            open("dbc/dbc_fall_headroom", &mDbcFallHeadroom);
+            open("dbc/dbc_tx_lvl_thresh_fs", &mDbcTxLvlThreshFs);
+            open("dbc/dbc_tx_lvl_hold_off_ms", &mDbcTxLvlHoldOffMs);
+            open("default/pm_active_timeout_ms", &mPmActiveTimeoutMs);
+            open("dbc/dbc_enable", &mDbcEnable);
+
+            // Set values from config. Default if not found.
+            set(utils::getProperty("ro.vendor.vibrator.hal.dbc.envrelcoef", kDbcDefaultEnvRelCoef),
+                &mDbcEnvRelCoef);
+            set(utils::getProperty("ro.vendor.vibrator.hal.dbc.riseheadroom",
+                                   kDbcDefaultRiseHeadroom),
+                &mDbcRiseHeadroom);
+            set(utils::getProperty("ro.vendor.vibrator.hal.dbc.fallheadroom",
+                                   kDbcDefaultFallHeadroom),
+                &mDbcFallHeadroom);
+            set(utils::getProperty("ro.vendor.vibrator.hal.dbc.txlvlthreshfs",
+                                   kDbcDefaultTxLvlThreshFs),
+                &mDbcTxLvlThreshFs);
+            set(utils::getProperty("ro.vendor.vibrator.hal.dbc.txlvlholdoffms",
+                                   kDbcDefaultTxLvlHoldOffMs),
+                &mDbcTxLvlHoldOffMs);
+            set(utils::getProperty("ro.vendor.vibrator.hal.pm.activetimeout",
+                                   kDefaultPmActiveTimeoutMs),
+                &mPmActiveTimeoutMs);
+            set(kDbcEnable, &mDbcEnable);
+            return true;
+        }
+        return false;
+    }
 
     void debug(int fd) override { HwApiBase::debug(fd); }
 
   private:
+    static constexpr uint32_t kDbcDefaultEnvRelCoef = 8353728;
+    static constexpr uint32_t kDbcDefaultRiseHeadroom = 1909602;
+    static constexpr uint32_t kDbcDefaultFallHeadroom = 1909602;
+    static constexpr uint32_t kDbcDefaultTxLvlThreshFs = 2516583;
+    static constexpr uint32_t kDbcDefaultTxLvlHoldOffMs = 0;
+    static constexpr uint32_t kDefaultPmActiveTimeoutMs = 5;
+    static constexpr uint32_t kDbcEnable = 1;
+
     std::ofstream mF0;
     std::ofstream mF0Offset;
     std::ofstream mRedc;
@@ -396,6 +443,15 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
     std::ofstream mInputIoStream;
     std::ofstream mPcmStream;
     ::android::base::unique_fd mInputFd;
+
+    // DBC Parameters
+    std::ofstream mDbcEnvRelCoef;
+    std::ofstream mDbcRiseHeadroom;
+    std::ofstream mDbcFallHeadroom;
+    std::ofstream mDbcTxLvlThreshFs;
+    std::ofstream mDbcTxLvlHoldOffMs;
+    std::ofstream mDbcEnable;
+    std::ofstream mPmActiveTimeoutMs;
 };
 
 class HwCal : public Vibrator::HwCal, private HwCalBase {
