@@ -48,7 +48,7 @@ constexpr int kMaxPowerLogPerLine = 6;
 constexpr int kMaxStatsResidencyCount = 20;
 constexpr int kMaxStatsThresholdCount = kMaxStatsResidencyCount - 1;
 
-enum FormulaOption : uint32_t {
+enum class FormulaOption : uint32_t {
     COUNT_THRESHOLD = 0,
     WEIGHTED_AVG,
     MAXIMUM,
@@ -93,11 +93,13 @@ struct StatsConfig {
     }
 };
 
-enum SensorFusionType : uint32_t {
+enum class SensorFusionType : uint32_t {
     SENSOR = 0,
     ODPM,
     CONSTANT,
 };
+
+std::ostream &operator<<(std::ostream &os, const SensorFusionType &sensor_fusion_type);
 
 struct VirtualSensorInfo {
     std::vector<std::string> linked_sensors;
@@ -118,7 +120,7 @@ struct VirtualPowerRailInfo {
 };
 
 // The method when the ODPM power is lower than threshold
-enum ReleaseLogic : uint32_t {
+enum class ReleaseLogic : uint32_t {
     INCREASE = 0,      // Increase throttling by step
     DECREASE,          // Decrease throttling by step
     STEPWISE,          // Support both increase and decrease logix
@@ -195,7 +197,6 @@ struct CdevInfo {
 };
 
 struct PowerRailInfo {
-    std::string rail;
     int power_sample_count;
     std::chrono::milliseconds power_sample_delay;
     std::unique_ptr<VirtualPowerRailInfo> virtual_power_rail_info;

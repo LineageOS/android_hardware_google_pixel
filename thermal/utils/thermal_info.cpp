@@ -131,6 +131,19 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
 }
 }  // namespace
 
+std::ostream &operator<<(std::ostream &stream, const SensorFusionType &sensor_fusion_type) {
+    switch (sensor_fusion_type) {
+        case SensorFusionType::SENSOR:
+            return stream << "SENSOR";
+        case SensorFusionType::ODPM:
+            return stream << "ODPM";
+        case SensorFusionType::CONSTANT:
+            return stream << "CONSTANT";
+        default:
+            return stream << "UNDEFINED";
+    }
+}
+
 bool ParseThermalConfig(std::string_view config_path, Json::Value *config) {
     std::string json_doc;
     if (!::android::base::ReadFileToString(config_path.data(), &json_doc)) {
@@ -1023,14 +1036,6 @@ bool ParsePowerRailInfo(const Json::Value &config,
             return false;
         }
 
-        std::string rail;
-        if (power_rails[i]["Rail"].empty()) {
-            rail = name;
-        } else {
-            rail = power_rails[i]["Rail"].asString();
-        }
-        LOG(INFO) << "PowerRail[" << i << "]'s Rail: " << rail;
-
         std::vector<std::string> linked_power_rails;
         std::vector<float> coefficient;
         float offset = 0;
@@ -1124,7 +1129,6 @@ bool ParsePowerRailInfo(const Json::Value &config,
         }
 
         (*power_rails_parsed)[name] = {
-                .rail = rail,
                 .power_sample_count = power_sample_count,
                 .power_sample_delay = power_sample_delay,
                 .virtual_power_rail_info = std::move(virtual_power_rail_info),
