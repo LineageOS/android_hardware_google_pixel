@@ -86,6 +86,7 @@ class SysfsCollector {
         const char *const AdaptedInfoDurationPath;
         const char *const PcmLatencyPath;
         const char *const PcmCountPath;
+        const char *const TotalCallCountPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -184,6 +185,7 @@ class SysfsCollector {
     const char *const kAdaptedInfoDurationPath;
     const char *const kPcmLatencyPath;
     const char *const kPcmCountPath;
+    const char *const kTotalCallCountPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
