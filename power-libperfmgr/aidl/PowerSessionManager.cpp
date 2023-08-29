@@ -70,7 +70,11 @@ static void set_uclamp_min(int tid, int min) {
 
     const int ret = syscall(__NR_sched_setattr, tid, attr, 0);
     if (ret) {
-        ALOGW("sched_setattr failed for thread %d, err=%d", tid, errno);
+        if (ret == ESRCH) {
+            ALOGV("sched_setattr failed for thread %d, err=%d", tid, errno);
+        } else {
+            ALOGW("sched_setattr failed for thread %d, err=%d", tid, errno);
+        }
     }
 }
 }  // namespace
