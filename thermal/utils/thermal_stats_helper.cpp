@@ -81,15 +81,21 @@ bool ThermalStatsHelper::initializeStats(
         const Json::Value &config,
         const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_) {
-    StatsConfig stats_config;
-    if (!ParseStatsConfig(config, sensor_info_map_, cooling_device_info_map_, &stats_config)) {
-        LOG(ERROR) << "Failed to parse stats config";
+    StatsInfo<float> sensor_stats_info;
+    if (!ParseSensorStatsConfig(config, sensor_info_map_, &sensor_stats_info)) {
+        LOG(ERROR) << "Failed to parse sensor stats config";
+        return false;
+    }
+    StatsInfo<int> cooling_device_request_info;
+    if (!ParseCoolingDeviceStatsConfig(config, cooling_device_info_map_,
+                                       &cooling_device_request_info)) {
+        LOG(ERROR) << "Failed to parse cooling device stats config";
         return false;
     }
     bool is_initialized_ =
-            initializeSensorTempStats(stats_config.sensor_stats_info, sensor_info_map_) &&
-            initializeSensorCdevRequestStats(stats_config.cooling_device_request_info,
-                                             sensor_info_map_, cooling_device_info_map_);
+            initializeSensorTempStats(sensor_stats_info, sensor_info_map_) &&
+            initializeSensorCdevRequestStats(cooling_device_request_info, sensor_info_map_,
+                                             cooling_device_info_map_);
     if (is_initialized_) {
         last_total_stats_report_time = boot_clock::now();
         LOG(INFO) << "Thermal Stats Initialized Successfully";

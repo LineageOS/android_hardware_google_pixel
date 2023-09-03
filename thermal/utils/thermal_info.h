@@ -209,10 +209,13 @@ bool ParseCoolingDevice(const Json::Value &config,
                         std::unordered_map<std::string, CdevInfo> *cooling_device_parsed);
 bool ParsePowerRailInfo(const Json::Value &config,
                         std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
-bool ParseStatsConfig(const Json::Value &config,
-                      const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-                      const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
-                      StatsConfig *stats_config);
+bool ParseSensorStatsConfig(const Json::Value &config,
+                            const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
+                            StatsInfo<float> *sensor_stats_info_parsed);
+bool ParseCoolingDeviceStatsConfig(
+        const Json::Value &config,
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
+        StatsInfo<int> *cooling_device_request_info_parsed);
 }  // namespace implementation
 }  // namespace thermal
 }  // namespace hardware

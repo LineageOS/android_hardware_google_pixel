@@ -447,14 +447,14 @@ bool ParseBindedCdevInfo(const Json::Value &values,
                 .limit_info = limit_info,
                 .power_thresholds = power_thresholds,
                 .release_logic = release_logic,
-                .high_power_check = high_power_check,
-                .throttling_with_power_link = throttling_with_power_link,
                 .cdev_weight_for_pid = cdev_weight_for_pid,
                 .cdev_ceiling = cdev_ceiling,
                 .max_release_step = max_release_step,
                 .max_throttle_step = max_throttle_step,
                 .cdev_floor_with_power_link = cdev_floor_with_power_link,
                 .power_rail = power_rail,
+                .high_power_check = high_power_check,
+                .throttling_with_power_link = throttling_with_power_link,
                 .enabled = enabled,
         };
     }
@@ -1236,44 +1236,48 @@ bool ParseStatsInfo(const Json::Value &stats_config,
     return true;
 }
 
-bool ParseStatsConfig(const Json::Value &config,
-                      const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-                      const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
-                      StatsConfig *stats_config_parsed) {
+bool ParseSensorStatsConfig(const Json::Value &config,
+                            const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
+                            StatsInfo<float> *sensor_stats_info_parsed) {
     Json::Value stats_config = config["Stats"];
-
     if (stats_config.empty()) {
         LOG(INFO) << "No Stats Config present.";
         return true;
     }
-
     LOG(INFO) << "Parse Stats Config for Sensor Temp.";
     // Parse sensor stats config
-    if (!ParseStatsInfo(stats_config["Sensors"], sensor_info_map_,
-                        &stats_config_parsed->sensor_stats_info,
+    if (!ParseStatsInfo(stats_config["Sensors"], sensor_info_map_, sensor_stats_info_parsed,
                         std::numeric_limits<float>::lowest())) {
         LOG(ERROR) << "Failed to parse sensor temp stats info.";
-        stats_config_parsed->clear();
-        return false;
-    }
-
-    // Parse cooling device user vote
-    if (stats_config["CoolingDevices"].empty()) {
-        LOG(INFO) << "No cooling device stats present.";
-        return true;
-    }
-
-    LOG(INFO) << "Parse Stats Config for Sensor CDev Request.";
-    if (!ParseStatsInfo(stats_config["CoolingDevices"]["RecordVotePerSensor"],
-                        cooling_device_info_map_, &stats_config_parsed->cooling_device_request_info,
-                        -1)) {
-        LOG(ERROR) << "Failed to parse cooling device user vote stats info.";
-        stats_config_parsed->clear();
+        sensor_stats_info_parsed->clear();
         return false;
     }
     return true;
 }
 
+bool ParseCoolingDeviceStatsConfig(
+        const Json::Value &config,
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
+        StatsInfo<int> *cooling_device_request_info_parsed) {
+    Json::Value stats_config = config["Stats"];
+    if (stats_config.empty()) {
+        LOG(INFO) << "No Stats Config present.";
+        return true;
+    }
+    // Parse cooling device user vote
+    if (stats_config["CoolingDevices"].empty()) {
+        LOG(INFO) << "No cooling device stats present.";
+        return true;
+    }
+    LOG(INFO) << "Parse Stats Config for Sensor CDev Request.";
+    if (!ParseStatsInfo(stats_config["CoolingDevices"]["RecordVotePerSensor"],
+                        cooling_device_info_map_, cooling_device_request_info_parsed, -1)) {
+        LOG(ERROR) << "Failed to parse cooling device user vote stats info.";
+        cooling_device_request_info_parsed->clear();
+        return false;
+    }
+    return true;
+}
 }  // namespace implementation
 }  // namespace thermal
 }  // namespace hardware
