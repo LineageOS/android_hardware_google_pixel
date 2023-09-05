@@ -644,6 +644,16 @@ std::unordered_map<std::string, Hint> HintManager::ParseActions(
     return actions_parsed;
 }
 
+#define ADPF_PARSE(VARIABLE, ENTRY, TYPE)                                                        \
+    static_assert(std::is_same<decltype(adpfs[i][ENTRY].as##TYPE()), decltype(VARIABLE)>::value, \
+                  "Parser type mismatch");                                                       \
+    if (adpfs[i][ENTRY].empty() || !adpfs[i][ENTRY].is##TYPE()) {                                \
+        LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][" ENTRY "]'s Values";           \
+        adpfs_parsed.clear();                                                                    \
+        return adpfs_parsed;                                                                     \
+    }                                                                                            \
+    VARIABLE = adpfs[i][ENTRY].as##TYPE()
+
 std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         const std::string &json_doc) {
     // function starts
@@ -693,154 +703,25 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
             return adpfs_parsed;
         }
 
-        if (adpfs[i]["PID_On"].empty() || !adpfs[i]["PID_On"].isBool()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_On]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidOn = adpfs[i]["PID_On"].asBool();
-
-        if (adpfs[i]["PID_Po"].empty() || !adpfs[i]["PID_Po"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Po]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidPOver = adpfs[i]["PID_Po"].asDouble();
-
-        if (adpfs[i]["PID_Pu"].empty() || !adpfs[i]["PID_Pu"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Pu]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidPUnder = adpfs[i]["PID_Pu"].asDouble();
-
-        if (adpfs[i]["PID_I"].empty() || !adpfs[i]["PID_I"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidI = adpfs[i]["PID_I"].asDouble();
-
-        if (adpfs[i]["PID_I_Init"].empty() || !adpfs[i]["PID_I_Init"].isInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I_Init]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidIInit = adpfs[i]["PID_I_Init"].asInt64();
-
-        if (adpfs[i]["PID_I_High"].empty() || !adpfs[i]["PID_I_High"].isInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I_High]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidIHighLimit = adpfs[i]["PID_I_High"].asInt64();
-
-        if (adpfs[i]["PID_I_Low"].empty() || !adpfs[i]["PID_I_Low"].isInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_I_Low]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidILowLimit = adpfs[i]["PID_I_Low"].asInt64();
-
-        if (adpfs[i]["PID_Do"].empty() || !adpfs[i]["PID_Do"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Do]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidDOver = adpfs[i]["PID_Do"].asDouble();
-
-        if (adpfs[i]["PID_Du"].empty() || !adpfs[i]["PID_Du"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][PID_Du]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        pidDUnder = adpfs[i]["PID_Du"].asDouble();
-
-        if (adpfs[i]["UclampMin_On"].empty() || !adpfs[i]["UclampMin_On"].isBool()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_On]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        adpfUclamp = adpfs[i]["UclampMin_On"].asBool();
-
-        if (adpfs[i]["UclampMin_Init"].empty() || !adpfs[i]["UclampMin_Init"].isInt()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_Init]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        uclampMinInit = adpfs[i]["UclampMin_Init"].asInt();
-
-        if (adpfs[i]["UclampMin_High"].empty() || !adpfs[i]["UclampMin_High"].isUInt()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_High]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        uclampMinHighLimit = adpfs[i]["UclampMin_High"].asUInt();
-
-        if (adpfs[i]["UclampMin_Low"].empty() || !adpfs[i]["UclampMin_Low"].isUInt()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][UclampMin_Low]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        uclampMinLowLimit = adpfs[i]["UclampMin_Low"].asUInt();
-
-        if (adpfs[i]["SamplingWindow_P"].empty() || !adpfs[i]["SamplingWindow_P"].isUInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][SamplingWindow_P]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        samplingWindowP = adpfs[i]["SamplingWindow_P"].asUInt64();
-
-        if (adpfs[i]["SamplingWindow_I"].empty() || !adpfs[i]["SamplingWindow_I"].isUInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][SamplingWindow_I]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        samplingWindowI = adpfs[i]["SamplingWindow_I"].asUInt64();
-
-        if (adpfs[i]["SamplingWindow_D"].empty() || !adpfs[i]["SamplingWindow_D"].isUInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][SamplingWindow_D]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        samplingWindowD = adpfs[i]["SamplingWindow_D"].asUInt64();
-
-        if (adpfs[i]["StaleTimeFactor"].empty() || !adpfs[i]["StaleTimeFactor"].isUInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][StaleTimeFactor]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        staleTimeFactor = adpfs[i]["StaleTimeFactor"].asDouble();
-
-        if (adpfs[i]["ReportingRateLimitNs"].empty() ||
-            !adpfs[i]["ReportingRateLimitNs"].isInt64()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name
-                       << "][ReportingRateLimitNs]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        reportingRate = adpfs[i]["ReportingRateLimitNs"].asInt64();
-
-        if (adpfs[i]["EarlyBoost_On"].empty() || !adpfs[i]["EarlyBoost_On"].isBool()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][EarlyBoost_On]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-
-        if (adpfs[i]["EarlyBoost_TimeFactor"].empty() ||
-            !adpfs[i]["EarlyBoost_TimeFactor"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name
-                       << "][EarlyBoost_TimeFactor]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-
-        if (adpfs[i]["TargetTimeFactor"].empty() || !adpfs[i]["TargetTimeFactor"].isDouble()) {
-            LOG(ERROR) << "Failed to read AdpfConfig[" << name << "][TargetTimeFactor]'s Values";
-            adpfs_parsed.clear();
-            return adpfs_parsed;
-        }
-        targetTimeFactor = adpfs[i]["TargetTimeFactor"].asDouble();
+        ADPF_PARSE(pidOn, "PID_On", Bool);
+        ADPF_PARSE(pidPOver, "PID_Po", Double);
+        ADPF_PARSE(pidPUnder, "PID_Pu", Double);
+        ADPF_PARSE(pidI, "PID_I", Double);
+        ADPF_PARSE(pidIInit, "PID_I_Init", Int64);
+        ADPF_PARSE(pidIHighLimit, "PID_I_High", Int64);
+        ADPF_PARSE(pidILowLimit, "PID_I_Low", Int64);
+        ADPF_PARSE(pidDOver, "PID_Do", Double);
+        ADPF_PARSE(pidDUnder, "PID_Du", Double);
+        ADPF_PARSE(adpfUclamp, "UclampMin_On", Bool);
+        ADPF_PARSE(uclampMinInit, "UclampMin_Init", UInt);
+        ADPF_PARSE(uclampMinHighLimit, "UclampMin_High", UInt);
+        ADPF_PARSE(uclampMinLowLimit, "UclampMin_Low", UInt);
+        ADPF_PARSE(samplingWindowP, "SamplingWindow_P", UInt64);
+        ADPF_PARSE(samplingWindowI, "SamplingWindow_I", UInt64);
+        ADPF_PARSE(samplingWindowD, "SamplingWindow_D", UInt64);
+        ADPF_PARSE(staleTimeFactor, "StaleTimeFactor", Double);
+        ADPF_PARSE(reportingRate, "ReportingRateLimitNs", UInt64);
+        ADPF_PARSE(targetTimeFactor, "TargetTimeFactor", Double);
 
         adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
