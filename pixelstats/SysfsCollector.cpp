@@ -1136,7 +1136,7 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
 
     // Sending ams_rate, total_call, c1 and c2
     {
-        std::vector<VendorAtomValue> values(5);
+        std::vector<VendorAtomValue> values(7);
         VendorAtomValue tmp;
 
         if (isAmsReady) {
@@ -1173,7 +1173,7 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
 
     // Sending total_call, c3 and c4
     {
-        std::vector<VendorAtomValue> values(5);
+        std::vector<VendorAtomValue> values(7);
         VendorAtomValue tmp;
 
         tmp.set<VendorAtomValue::intValue>(0);

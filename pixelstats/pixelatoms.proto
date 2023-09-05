@@ -1312,12 +1312,18 @@ message BlockStatsReported {
  */
 message VendorAudioHardwareStatsReported {
   optional string reverse_domain_name = 1;
-  /* The percentage of calls in a day where CCA is active.
-  * It represented as a fixed-point and rounded integer.
-  * E.g.:12.345% is represented by 12.
-  * CCA can only be applied under some radio bands.
-  */
+  /* The number of calls in a day where CCA is active.
+   * CCA can only be applied under some radio bands.
+   */
   optional int32 milli_rate_of_ams_per_day = 2;
+
+  // cca_active: obsoleted UI enable & algorithm is active (C1)
+  // replaced by cca_active_count_per_day
+  optional int32 rate_of_cca_active_per_day = 3 [deprecated = true];
+
+  // cca_enable: obsoleted UI enable & algorithm is inactive field (C2)
+  // replaced by cca_enable_count_per_day
+  optional int32 rate_of_cca_enable_per_day = 4 [deprecated = true];
 
   enum Source {
     VOIP = 0;
@@ -1325,16 +1331,16 @@ message VendorAudioHardwareStatsReported {
   }
 
   /* source: identify whether this atom is for voice or voip case. */
-  optional Source source = 3;
+  optional Source source = 5;
 
   /* total_call_count_per_day: count total number of call per day. */
-  optional int32 total_call_count_per_day = 4;
+  optional int32 total_call_count_per_day = 6;
 
-  /* cca_active: UI enable & algorithm is active */
-  optional int32 cca_active_count_per_day = 5;
+  /* cca_active: UI enable & algorithm is active (C1 or C3) */
+  optional int32 cca_active_count_per_day = 7;
 
-  /* cca_enable: UI enable & algorithm is inactive. */
-  optional int32 cca_enable_count_per_day = 6;
+  /* cca_enable: UI enable & algorithm is inactive (C2 or C4) */
+  optional int32 cca_enable_count_per_day = 8;
 }
 
 /**
