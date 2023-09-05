@@ -56,7 +56,7 @@ struct sched_attr {
     __u32 sched_util_max;
 };
 
-static void set_uclamp_min(int tid, int min) {
+static int set_uclamp_min(int tid, int min) {
     static constexpr int32_t kMinUclampValue = 0;
     static constexpr int32_t kMaxUclampValue = 1024;
     min = std::max(kMinUclampValue, min);
@@ -70,12 +70,10 @@ static void set_uclamp_min(int tid, int min) {
 
     const int ret = syscall(__NR_sched_setattr, tid, attr, 0);
     if (ret) {
-        if (errno == ESRCH) {
-            ALOGV("sched_setattr failed for thread %d, err=%d", tid, errno);
-        } else {
-            ALOGW("sched_setattr failed for thread %d, err=%d", tid, errno);
-        }
+        ALOGW("sched_setattr failed for thread %d, err=%d", tid, errno);
+        return errno;
     }
+    return 0;
 }
 }  // namespace
 
@@ -104,18 +102,23 @@ int PowerSessionManager::getDisplayRefreshRate() {
     return mDisplayRefreshRate;
 }
 
-void PowerSessionManager::addPowerSession(const std::string &idString, int64_t sessionId,
-                                          std::chrono::nanoseconds durationNs, int32_t tgid,
-                                          int32_t uid, const std::vector<int32_t> &threadIds) {
+void PowerSessionManager::addPowerSession(const std::string &idString,
+                                          const std::shared_ptr<AppHintDesc> &sessionDescriptor,
+                                          const std::vector<int32_t> &threadIds) {
+    if (!sessionDescriptor) {
+        ALOGE("sessionDescriptor is null. PowerSessionManager failed to add power session: %s",
+              idString.c_str());
+        return;
+    }
     const auto timeNow = std::chrono::steady_clock::now();
-    VoteRange pidVoteRange(false, kUclampMin, kUclampMax, timeNow, durationNs);
+    VoteRange pidVoteRange(false, kUclampMin, kUclampMax, timeNow, sessionDescriptor->targetNs);
 
     SessionValueEntry sve;
-    sve.tgid = tgid;
-    sve.uid = uid;
+    sve.tgid = sessionDescriptor->tgid;
+    sve.uid = sessionDescriptor->uid;
     sve.idString = idString;
-    sve.isActive = true;
-    sve.isAppSession = uid >= AID_APP_START;
+    sve.isActive = sessionDescriptor->is_active;
+    sve.isAppSession = sessionDescriptor->uid >= AID_APP_START;
     sve.lastUpdatedTime = timeNow;
     sve.votes = std::make_shared<Votes>();
     sve.votes->add(
@@ -125,13 +128,13 @@ void PowerSessionManager::addPowerSession(const std::string &idString, int64_t s
     bool addedRes = false;
     {
         std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
-        addedRes = mSessionTaskMap.add(sessionId, sve, {});
+        addedRes = mSessionTaskMap.add(sessionDescriptor->sessionId, sve, {});
     }
     if (!addedRes) {
-        ALOGE("sessionTaskMap failed to add power session: %" PRId64, sessionId);
+        ALOGE("sessionTaskMap failed to add power session: %" PRId64, sessionDescriptor->sessionId);
     }
 
-    setThreadsFromPowerSession(sessionId, threadIds);
+    setThreadsFromPowerSession(sessionDescriptor->sessionId, threadIds);
 }
 
 void PowerSessionManager::removePowerSession(int64_t sessionId) {
@@ -420,11 +423,23 @@ void PowerSessionManager::applyUclamp(int64_t sessionId,
         if (!uclampMinOn) {
             ALOGV("PowerSessionManager::set_uclamp_min: skip");
         } else {
-            for (auto taskId : mSessionTaskMap.getTaskIds(sessionId)) {
+            auto &threadList = mSessionTaskMap.getTaskIds(sessionId);
+            auto tidIter = threadList.begin();
+            while (tidIter != threadList.end()) {
                 UclampRange uclampRange;
-                mSessionTaskMap.getTaskVoteRange(taskId, timePoint, &uclampRange.uclampMin,
+                mSessionTaskMap.getTaskVoteRange(*tidIter, timePoint, &uclampRange.uclampMin,
                                                  &uclampRange.uclampMax);
-                set_uclamp_min(taskId, uclampRange.uclampMin);
+                int stat = set_uclamp_min(*tidIter, uclampRange.uclampMin);
+                if (stat == ESRCH) {
+                    ALOGV("Removing dead thread %d from hint session %s.", *tidIter,
+                          sessValPtr->idString.c_str());
+                    if (mSessionTaskMap.removeDeadTaskSessionMap(sessionId, *tidIter)) {
+                        ALOGV("Removed dead thread-session map.");
+                    }
+                    tidIter = threadList.erase(tidIter);
+                } else {
+                    tidIter++;
+                }
             }
         }
 

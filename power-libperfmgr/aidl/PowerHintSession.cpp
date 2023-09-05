@@ -119,11 +119,10 @@ int64_t PowerHintSession::convertWorkDurationToBoostByPid(
 }
 
 AppHintDesc::AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid,
-                         std::vector<int32_t> threadIds, std::chrono::nanoseconds pTargetNs)
+                         std::chrono::nanoseconds pTargetNs)
     : sessionId(sessionId),
       tgid(tgid),
       uid(uid),
-      threadIds(std::move(threadIds)),
       targetNs(pTargetNs),
       pidSetPoint(0),
       is_active(true),
@@ -136,8 +135,8 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
     : mPSManager(PowerSessionManager::getInstance()),
       mSessionId(++sSessionIDCounter),
       mIdString(StringPrintf("%" PRId32 "-%" PRId32 "-%" PRId64, tgid, uid, mSessionId)),
-      mDescriptor(new AppHintDesc(mSessionId, tgid, uid, threadIds,
-                                  std::chrono::nanoseconds(durationNs))),
+      mDescriptor(std::make_shared<AppHintDesc>(mSessionId, tgid, uid,
+                                                std::chrono::nanoseconds(durationNs))),
       mAppDescriptorTrace(mIdString) {
     if (ATRACE_ENABLED()) {
         ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
@@ -145,7 +144,7 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
     }
 
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
-    mPSManager->addPowerSession(mIdString, mSessionId, mDescriptor->targetNs, tgid, uid, threadIds);
+    mPSManager->addPowerSession(mIdString, mDescriptor, threadIds);
     // init boost
     auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
     mPSManager->voteSet(
@@ -166,7 +165,6 @@ PowerHintSession::~PowerHintSession() {
         ATRACE_INT(mAppDescriptorTrace.trace_actl_last.c_str(), 0);
         ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), 0);
     }
-    delete mDescriptor;
 }
 
 bool PowerHintSession::isAppSession() {
@@ -419,9 +417,7 @@ ndk::ScopedAStatus PowerHintSession::setThreads(const std::vector<int32_t> &thre
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
-    mDescriptor->threadIds.resize(threadIds.size());
-    std::copy(threadIds.begin(), threadIds.end(), back_inserter(mDescriptor->threadIds));
-    mPSManager->setThreadsFromPowerSession(mSessionId, mDescriptor->threadIds);
+    mPSManager->setThreadsFromPowerSession(mSessionId, threadIds);
     // init boost
     updatePidSetPoint(HintManager::GetInstance()->GetAdpfProfile()->mUclampMinInit);
     return ndk::ScopedAStatus::ok();
@@ -433,17 +429,6 @@ std::string AppHintDesc::toString() const {
             StringPrintf("  duration: %" PRId64 " ns\n", static_cast<int64_t>(targetNs.count())));
     out.append(StringPrintf("  uclamp.min: %d \n", pidSetPoint));
     out.append(StringPrintf("  uid: %d, tgid: %d\n", uid, tgid));
-
-    out.append("  threadIds: [");
-    bool first = true;
-    for (int tid : threadIds) {
-        if (!first) {
-            out.append(", ");
-        }
-        out.append(std::to_string(tid));
-        first = false;
-    }
-    out.append("]\n");
     return out;
 }
 
