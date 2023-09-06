@@ -57,3 +57,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # Virtual fingerprint HAL
 PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.fingerprint.virtual
 
+# Virtual face HAL
+PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.face.virtual
+
