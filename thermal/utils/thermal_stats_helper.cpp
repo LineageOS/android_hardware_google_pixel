@@ -74,6 +74,12 @@ int calculateThresholdBucket(const std::vector<T> &thresholds, T value) {
     return bucket;
 }
 
+void resetCurrentTempStatus(CurrTempStatus *curr_temp_status, float new_temp) {
+    curr_temp_status->temp = new_temp;
+    curr_temp_status->start_time = boot_clock::now();
+    curr_temp_status->repeat_count = 1;
+}
+
 }  // namespace
 
 bool ThermalStatsHelper::initializeStats(
@@ -216,15 +222,38 @@ bool ThermalStatsHelper::initializeSensorAbnormalityStats(
             temp_range_info_map_[sensor] = temp_range_info_ptr;
         }
     }
+    auto &temp_stuck_info_map_ = sensor_stats.temp_stuck_info_map_;
+    for (const auto &sensors_temp_stuck_info : abnormal_stats_info.sensors_temp_stuck_infos) {
+        const auto &temp_stuck_info_ptr =
+                std::make_shared<TempStuckInfo>(sensors_temp_stuck_info.temp_stuck_info);
+        for (const auto &sensor : sensors_temp_stuck_info.sensors) {
+            temp_stuck_info_map_[sensor] = temp_stuck_info_ptr;
+        }
+    }
     const auto &default_temp_range_info_ptr =
             abnormal_stats_info.default_temp_range_info
                     ? std::make_shared<TempRangeInfo>(
                               abnormal_stats_info.default_temp_range_info.value())
                     : nullptr;
+    const auto &default_temp_stuck_info_ptr =
+            abnormal_stats_info.default_temp_stuck_info
+                    ? std::make_shared<TempStuckInfo>(
+                              abnormal_stats_info.default_temp_stuck_info.value())
+                    : nullptr;
     for (const auto &sensor_info : sensor_info_map_) {
         const auto &sensor = sensor_info.first;
         if (default_temp_range_info_ptr && !temp_range_info_map_.count(sensor))
             temp_range_info_map_[sensor] = default_temp_range_info_ptr;
+        if (default_temp_stuck_info_ptr && !temp_stuck_info_map_.count(sensor))
+            temp_stuck_info_map_[sensor] = default_temp_stuck_info_ptr;
+    }
+
+    for (const auto &sensor_temp_stuck_info : temp_stuck_info_map_) {
+        sensor_stats.curr_temp_status_map_[sensor_temp_stuck_info.first] = {
+                .temp = std::numeric_limits<float>::min(),
+                .start_time = boot_clock::time_point::min(),
+                .repeat_count = 0,
+        };
     }
     return true;
 }
@@ -320,13 +349,41 @@ void ThermalStatsHelper::verifySensorAbnormality(std::string_view sensor, float 
         if (temp < temp_range_info->min_temp_threshold) {
             LOG(ERROR) << "Outlier Temperature Detected, sensor: " << sensor.data()
                        << " temp: " << temp << " < " << temp_range_info->min_temp_threshold;
-            reportAbnormalAtom(ThermalAbnormalityDetected::EXTREME_LOW_TEMP, sensor,
-                               std::round(temp));
+            reportThermalAbnormality(ThermalAbnormalityDetected::EXTREME_LOW_TEMP, sensor,
+                                     std::round(temp));
         } else if (temp > temp_range_info->max_temp_threshold) {
             LOG(ERROR) << "Outlier Temperature Detected, sensor: " << sensor.data()
                        << " temp: " << temp << " > " << temp_range_info->max_temp_threshold;
-            reportAbnormalAtom(ThermalAbnormalityDetected::EXTREME_HIGH_TEMP, sensor,
-                               std::round(temp));
+            reportThermalAbnormality(ThermalAbnormalityDetected::EXTREME_HIGH_TEMP, sensor,
+                                     std::round(temp));
+        }
+    }
+    if (sensor_stats.temp_stuck_info_map_.count(sensor.data())) {
+        const auto &temp_stuck_info = sensor_stats.temp_stuck_info_map_[sensor.data()];
+        auto &curr_temp_status = sensor_stats.curr_temp_status_map_[sensor.data()];
+        LOG(VERBOSE) << "Current Temp Status: temp=" << curr_temp_status.temp
+                     << " repeat_count=" << curr_temp_status.repeat_count
+                     << " start_time=" << curr_temp_status.start_time.time_since_epoch().count();
+        if (std::fabs(curr_temp_status.temp - temp) <= kPrecisionThreshold) {
+            curr_temp_status.repeat_count++;
+            if (temp_stuck_info->min_polling_count <= curr_temp_status.repeat_count) {
+                auto time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        boot_clock::now() - curr_temp_status.start_time);
+                if (temp_stuck_info->min_stuck_duration <= time_elapsed_ms) {
+                    LOG(ERROR) << "Stuck Temperature Detected, sensor: " << sensor.data()
+                               << " temp: " << temp << " repeated "
+                               << temp_stuck_info->min_polling_count << " times for "
+                               << time_elapsed_ms.count() << "ms";
+                    if (reportThermalAbnormality(ThermalAbnormalityDetected::SENSOR_STUCK, sensor,
+                                                 std::round(temp))) {
+                        // reset current status to verify for sensor stuck with start time as
+                        // current polling
+                        resetCurrentTempStatus(&curr_temp_status, temp);
+                    }
+                }
+            }
+        } else {
+            resetCurrentTempStatus(&curr_temp_status, temp);
         }
     }
 }
@@ -507,11 +564,13 @@ std::vector<int64_t> ThermalStatsHelper::processStatsRecordForReporting(StatsRec
     return stats_residency;
 }
 
-bool ThermalStatsHelper::reportAbnormalAtom(const ThermalAbnormalityDetected::AbnormalityType &type,
-                                            std::string_view name, int value) {
+bool ThermalStatsHelper::reportThermalAbnormality(
+        const ThermalAbnormalityDetected::AbnormalityType &type, std::string_view name,
+        std::optional<int> reading) {
+    const auto value_str = reading.has_value() ? std::to_string(reading.value()) : "undefined";
     if (abnormal_stats_reported_per_update_interval >= kMaxAbnormalLoggingPerUpdateInterval) {
         LOG(ERROR) << "Thermal abnormal atom logging rate limited for " << name.data()
-                   << " with value " << value;
+                   << " with value " << value_str;
         return true;
     }
     const std::shared_ptr<IStats> stats_client = getStatsService();
@@ -524,15 +583,17 @@ bool ThermalStatsHelper::reportAbnormalAtom(const ThermalAbnormalityDetected::Ab
             VendorAtomValue::make<VendorAtomValue::intValue>(type);
     values[ThermalAbnormalityDetected::kNameFieldNumber - kVendorAtomOffset] =
             VendorAtomValue::make<VendorAtomValue::stringValue>(name);
-    values[ThermalAbnormalityDetected::kValueFieldNumber - kVendorAtomOffset] =
-            VendorAtomValue::make<VendorAtomValue::intValue>(value);
+    if (reading.has_value()) {
+        values[ThermalAbnormalityDetected::kValueFieldNumber - kVendorAtomOffset] =
+                VendorAtomValue::make<VendorAtomValue::intValue>(reading.value());
+    }
     if (!reportAtom(stats_client, PixelAtoms::Atom::kThermalAbnormalityDetected,
                     std::move(values))) {
         LOG(ERROR) << "Failed to log thermal abnormal atom for " << name.data() << " with value "
-                   << value;
+                   << value_str;
         return false;
     }
-    LOG(INFO) << "Thermal abnormality reported for " << name.data() << " with value " << value;
+    LOG(INFO) << "Thermal abnormality reported for " << name.data() << " with value " << value_str;
     abnormal_stats_reported_per_update_interval++;
     return true;
 }

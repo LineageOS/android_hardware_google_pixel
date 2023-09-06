@@ -98,14 +98,25 @@ struct TempRangeInfo {
     int min_temp_threshold;
 };
 
+struct TempStuckInfo {
+    int min_polling_count;
+    std::chrono::milliseconds min_stuck_duration;
+};
+
 struct AbnormalStatsInfo {
     struct SensorsTempRangeInfo {
         std::vector<std::string> sensors;
         TempRangeInfo temp_range_info;
     };
+    struct SensorsTempStuckInfo {
+        std::vector<std::string> sensors;
+        TempStuckInfo temp_stuck_info;
+    };
 
     std::optional<TempRangeInfo> default_temp_range_info;
     std::vector<SensorsTempRangeInfo> sensors_temp_range_infos;
+    std::optional<TempStuckInfo> default_temp_stuck_info;
+    std::vector<SensorsTempStuckInfo> sensors_temp_stuck_infos;
 };
 
 enum class SensorFusionType : uint32_t {

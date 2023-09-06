@@ -379,8 +379,15 @@ bool ThermalHelperImpl::readTemperature(
     std::map<std::string, float> sensor_log_map;
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map) ||
-        std::isnan(temp)) {
+    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
+        LOG(ERROR) << "Failed to read thermal sensor " << sensor_name.data();
+        thermal_stats_helper_.reportThermalAbnormality(ThermalAbnormalityDetected::UNKNOWN,
+                                                       sensor_name, std::nullopt);
+        return false;
+    }
+
+    if (std::isnan(temp)) {
+        LOG(INFO) << "Sensor " << sensor_name.data() << " temperature is nan.";
         return false;
     }
 

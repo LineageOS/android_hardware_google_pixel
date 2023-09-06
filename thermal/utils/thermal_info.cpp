@@ -156,6 +156,33 @@ bool getTempRangeInfoFromJsonValues(const Json::Value &values, TempRangeInfo *te
               << " <= t <= " << temp_range_info->max_temp_threshold;
     return true;
 }
+
+bool getTempStuckInfoFromJsonValue(const Json::Value &values, TempStuckInfo *temp_stuck_info) {
+    if (values["MinStuckDuration"].empty()) {
+        LOG(ERROR) << "Minimum stuck duration not present.";
+        return false;
+    }
+    int min_stuck_duration_int = getIntFromValue(values["MinStuckDuration"]);
+    if (min_stuck_duration_int <= 0) {
+        LOG(ERROR) << "Invalid Minimum stuck duration " << min_stuck_duration_int;
+        return false;
+    }
+
+    if (values["MinPollingCount"].empty()) {
+        LOG(ERROR) << "Minimum polling count not present.";
+        return false;
+    }
+    int min_polling_count = getIntFromValue(values["MinPollingCount"]);
+    if (min_polling_count <= 0) {
+        LOG(ERROR) << "Invalid Minimum stuck duration " << min_polling_count;
+        return false;
+    }
+    temp_stuck_info->min_stuck_duration = std::chrono::milliseconds(min_stuck_duration_int);
+    temp_stuck_info->min_polling_count = min_polling_count;
+    LOG(INFO) << "Temp Stuck Info: polling_count=" << temp_stuck_info->min_polling_count
+              << " stuck_duration=" << temp_stuck_info->min_stuck_duration.count();
+    return true;
+}
 }  // namespace
 
 std::ostream &operator<<(std::ostream &stream, const SensorFusionType &sensor_fusion_type) {
@@ -1324,9 +1351,61 @@ bool ParseSensorAbnormalStatsConfig(
             }
         }
     }
+    std::optional<TempStuckInfo> default_temp_stuck_info;
+    std::vector<AbnormalStatsInfo::SensorsTempStuckInfo> sensors_temp_stuck_infos;
+    Json::Value stuck_temp_config = abnormal_stats_config["Stuck"];
+    if (stuck_temp_config) {
+        LOG(INFO) << "Start to parse stuck temp config.";
+
+        if (stuck_temp_config["Default"]) {
+            LOG(INFO) << "Start to parse defaultTempStuck.";
+            if (!getTempStuckInfoFromJsonValue(stuck_temp_config["Default"],
+                                               &default_temp_stuck_info.value())) {
+                LOG(ERROR) << "Failed to parse default temp stuck config.";
+                return false;
+            }
+        }
+
+        Json::Value configs = stuck_temp_config["Configs"];
+        if (configs) {
+            std::unordered_set<std::string> sensors_parsed;
+            for (Json::Value::ArrayIndex i = 0; i < configs.size(); i++) {
+                LOG(INFO) << "Start to parse temp stuck config[" << i << "]";
+                AbnormalStatsInfo::SensorsTempStuckInfo sensor_temp_stuck_info;
+                values = configs[i]["Monitor"];
+                if (!values.size()) {
+                    LOG(ERROR) << "Invalid config no sensor list present for stuck temp "
+                                  "config.";
+                    return false;
+                }
+                for (Json::Value::ArrayIndex j = 0; j < values.size(); j++) {
+                    const std::string &sensor = values[j].asString();
+                    if (!sensor_info_map_.count(sensor)) {
+                        LOG(ERROR) << "Unknown sensor " << sensor;
+                        return false;
+                    }
+                    auto result = sensors_parsed.insert(sensor);
+                    if (!result.second) {
+                        LOG(ERROR) << "Duplicate Sensor Temp Stuck Config: " << sensor;
+                        return false;
+                    }
+                    LOG(INFO) << "Monitored sensor [" << j << "]: " << sensor;
+                    sensor_temp_stuck_info.sensors.push_back(sensor);
+                }
+                if (!getTempStuckInfoFromJsonValue(configs[i]["TempStuck"],
+                                                   &sensor_temp_stuck_info.temp_stuck_info)) {
+                    LOG(ERROR) << "Failed to parse temp stuck config.";
+                    return false;
+                }
+                sensors_temp_stuck_infos.push_back(sensor_temp_stuck_info);
+            }
+        }
+    }
     *abnormal_stats_info_parsed = {
             .default_temp_range_info = default_temp_range_info,
             .sensors_temp_range_infos = sensors_temp_range_infos,
+            .default_temp_stuck_info = default_temp_stuck_info,
+            .sensors_temp_stuck_infos = sensors_temp_stuck_infos,
     };
     return true;
 }

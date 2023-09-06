@@ -49,6 +49,7 @@ constexpr int kMaxStatsReportingFailCount = 3;
 // store everything in the values array at the index of the field number
 // -2.
 constexpr int kVendorAtomOffset = 2;
+constexpr float kPrecisionThreshold = 1e-4;
 
 struct StatsRecord {
     int cur_state; /* temperature / cdev state at current time */
@@ -106,11 +107,21 @@ struct SensorTempStats : ThermalStats<float> {
     SystemTimePoint min_temp_timestamp = SystemTimePoint::min();
 };
 
+struct CurrTempStatus {
+    float temp;
+    boot_clock::time_point start_time;
+    int repeat_count;
+};
+
 struct SensorStats {
     // Temperature residency stats for each sensor being watched
     std::unordered_map<std::string, SensorTempStats> temp_stats_map_;
     // Min, Max Temp threshold info for each sensor being monitored
     std::unordered_map<std::string, std::shared_ptr<TempRangeInfo>> temp_range_info_map_;
+    // Temperature Stuck info for each sensor being monitored
+    std::unordered_map<std::string, std::shared_ptr<TempStuckInfo>> temp_stuck_info_map_;
+    // Current temperature status for each sensor being monitored for stuck
+    std::unordered_map<std::string, CurrTempStatus> curr_temp_status_map_;
 };
 
 class ThermalStatsHelper {
@@ -137,6 +148,8 @@ class ThermalStatsHelper {
      *  >0, count represents the number of stats failed to report.
      */
     int reportStats();
+    bool reportThermalAbnormality(const ThermalAbnormalityDetected::AbnormalityType &type,
+                                  std::string_view name, std::optional<int> reading);
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
     std::unordered_map<std::string, SensorTempStats> GetSensorTempStatsSnapshot();
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
@@ -175,8 +188,6 @@ class ThermalStatsHelper {
     bool reportSensorCdevRequestStats(const std::shared_ptr<IStats> &stats_client,
                                       std::string_view sensor, std::string_view cdev,
                                       StatsRecord *stats_record);
-    bool reportAbnormalAtom(const ThermalAbnormalityDetected::AbnormalityType &type,
-                            std::string_view name, int value);
     bool reportAtom(const std::shared_ptr<IStats> &stats_client, const int32_t &atom_id,
                     std::vector<VendorAtomValue> &&values);
     std::vector<int64_t> processStatsRecordForReporting(StatsRecord *stats_record);
