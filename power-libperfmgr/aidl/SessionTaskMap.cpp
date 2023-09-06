@@ -74,22 +74,10 @@ void SessionTaskMap::getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::t
         return;
     }
 
-    /*
-    for (auto sessionId : taskItr->second) {
-        auto sessItr = mSessions.find(sessionId);
-        if (sessItr == mSessions.end()) {
-            continue;
-        }
-
-        if (!sessItr->second.val->isActive) {
-            continue;
-        }
-
-        sessItr->second.val->votes->getUclampRange(&uclampRange, timeNow);
-    }
-    */
-
     for (const auto &sessInTask : taskItr->second) {
+        if (!sessInTask->isActive) {
+            continue;
+        }
         sessInTask->votes->getUclampRange(&uclampRange, timeNow);
     }
     *uclampMin = uclampRange.uclampMin;

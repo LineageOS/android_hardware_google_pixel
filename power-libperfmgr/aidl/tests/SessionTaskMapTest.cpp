@@ -290,6 +290,44 @@ TEST(SessionTaskMapTest, votesEdgeCaseNoOverlap) {
     EXPECT_EQ(0, getVoteMin(m, 20, t0 + 181ns));
 }
 
+TEST(SessionTaskMapTest, TwoSessionsOneInactive) {
+    const auto tNow = std::chrono::steady_clock::now();
+    SessionTaskMap m;
+
+    {
+        SessionValueEntry sv;
+        sv.isActive = true;
+        sv.isAppSession = true;
+        sv.lastUpdatedTime = tNow;
+        sv.votes = std::make_shared<Votes>();
+        sv.votes->add(11, VoteRange::makeMinRange(111, tNow, 400ms));
+        EXPECT_TRUE(m.add(1001, sv, {10, 20, 30}));
+    }
+
+    {
+        SessionValueEntry sv;
+        sv.isActive = true;
+        sv.isAppSession = true;
+        sv.lastUpdatedTime = tNow;
+        sv.votes = std::make_shared<Votes>();
+        sv.votes->add(22, VoteRange::makeMinRange(222, tNow, 400ms));
+        EXPECT_TRUE(m.add(2001, sv, {10, 20, 30}));
+    }
+
+    UclampRange uclampRange;
+    m.getTaskVoteRange(10, tNow + 10ns, &uclampRange.uclampMin, &uclampRange.uclampMax);
+    EXPECT_EQ(222, uclampRange.uclampMin);
+
+    auto sessItr = m.findSession(2001);
+    EXPECT_NE(nullptr, sessItr);
+    sessItr->isActive = false;
+
+    uclampRange.uclampMin = 0;
+    uclampRange.uclampMax = 1024;
+    m.getTaskVoteRange(10, tNow + 10ns, &uclampRange.uclampMin, &uclampRange.uclampMax);
+    EXPECT_EQ(111, uclampRange.uclampMin);
+}
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
