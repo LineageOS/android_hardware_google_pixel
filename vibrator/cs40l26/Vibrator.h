@@ -271,6 +271,7 @@ class Vibrator : public BnVibrator {
     uint32_t mScalingFactor;
     uint32_t mScaleCooldown;
     bool mContextEnable;
+    bool mContextEnabledPreviously{false};
     uint32_t mLastEffectPlayedTime = 0;
     float mLastPlayedScale = 0;
     sp<CapoDetector> mContextListener;

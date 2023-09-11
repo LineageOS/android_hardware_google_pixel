@@ -523,13 +523,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
     mHwApi->enableDbc();
 
 #ifdef ADAPTIVE_HAPTICS_V1
-    mContextListener = CapoDetector::start();
-    if (mContextListener == nullptr) {
-        ALOGE("%s, CapoDetector failed to start", __func__);
-    } else {
-        ALOGD("%s, CapoDetector started successfully! NanoAppID: 0x%x", __func__,
-              (uint32_t)mContextListener->getNanoppAppId());
-    }
+    updateContext();
 #endif /*ADAPTIVE_HAPTICS_V1*/
 }
 
@@ -915,7 +909,7 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
         ratio = 100;
 
 #ifdef ADAPTIVE_HAPTICS_V1
-    if (scalable && mContextEnable) {
+    if (scalable && mContextEnable && mContextListener) {
         uint32_t now = CapoDetector::getCurrentTimeInMs();
         uint32_t last_played = mLastEffectPlayedTime;
         uint32_t lastFaceUpTime = 0;
@@ -968,10 +962,24 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
 
 void Vibrator::updateContext() {
     mContextEnable = mHwApi->getContextEnable();
-    mFadeEnable = mHwApi->getContextFadeEnable();
-    mScalingFactor = mHwApi->getContextScale();
-    mScaleTime = mHwApi->getContextSettlingTime();
-    mScaleCooldown = mHwApi->getContextCooldownTime();
+    if (mContextEnable && !mContextEnabledPreviously) {
+        mContextListener = CapoDetector::start();
+        if (mContextListener == nullptr) {
+            ALOGE("%s, CapoDetector failed to start", __func__);
+        } else {
+            mFadeEnable = mHwApi->getContextFadeEnable();
+            mScalingFactor = mHwApi->getContextScale();
+            mScaleTime = mHwApi->getContextSettlingTime();
+            mScaleCooldown = mHwApi->getContextCooldownTime();
+            ALOGD("%s, CapoDetector started successfully! NanoAppID: 0x%x, Scaling Factor: %d, "
+                  "Scaling Time: %d, Cooldown Time: %d",
+                  __func__, (uint32_t)mContextListener->getNanoppAppId(), mScalingFactor,
+                  mScaleTime, mScaleCooldown);
+
+            /* We no longer need to use this path */
+            mContextEnabledPreviously = true;
+        }
+    }
 }
 
 ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, bool scalable) {
@@ -980,9 +988,7 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, 
     uint16_t scale;
 
 #ifdef ADAPTIVE_HAPTICS_V1
-    if (scalable) {
-        updateContext();
-    }
+    updateContext();
 #endif /*ADAPTIVE_HAPTICS_V1*/
 
     scale = amplitudeToScale(amplitude, maximum, scalable);
@@ -1575,6 +1581,7 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "\n");
 
     dprintf(fd, "Capo Info:\n");
+    dprintf(fd, "Capo Enabled: %d\n", mContextEnable);
     if (mContextListener) {
         dprintf(fd, "Capo ID: 0x%x\n", (uint32_t)(mContextListener->getNanoppAppId()));
         dprintf(fd, "Capo State: %d\n", mContextListener->getCarriedPosition());
