@@ -93,6 +93,21 @@ struct StatsConfig {
     }
 };
 
+struct TempRangeInfo {
+    int max_temp_threshold;
+    int min_temp_threshold;
+};
+
+struct AbnormalStatsInfo {
+    struct SensorsTempRangeInfo {
+        std::vector<std::string> sensors;
+        TempRangeInfo temp_range_info;
+    };
+
+    std::optional<TempRangeInfo> default_temp_range_info;
+    std::vector<SensorsTempRangeInfo> sensors_temp_range_infos;
+};
+
 enum class SensorFusionType : uint32_t {
     SENSOR = 0,
     ODPM,
@@ -211,7 +226,8 @@ bool ParsePowerRailInfo(const Json::Value &config,
                         std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
 bool ParseSensorStatsConfig(const Json::Value &config,
                             const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-                            StatsInfo<float> *sensor_stats_info_parsed);
+                            StatsInfo<float> *sensor_stats_info_parsed,
+                            AbnormalStatsInfo *abnormal_stats_info_parsed);
 bool ParseCoolingDeviceStatsConfig(
         const Json::Value &config,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,

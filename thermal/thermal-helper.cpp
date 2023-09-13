@@ -157,9 +157,11 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
         ret = false;
     }
 
-    if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
-                                               cooling_device_info_map_)) {
-        LOG(FATAL) << "Failed to initialize thermal stats";
+    if (ret) {
+        if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
+                                                   cooling_device_info_map_)) {
+            LOG(FATAL) << "Failed to initialize thermal stats";
+        }
     }
 
     for (auto &name_status_pair : sensor_info_map_) {

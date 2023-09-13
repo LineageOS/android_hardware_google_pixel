@@ -129,6 +129,33 @@ bool getFloatFromJsonValues(const Json::Value &values, ThrottlingArray *out, boo
     *out = ret;
     return true;
 }
+
+bool getTempRangeInfoFromJsonValues(const Json::Value &values, TempRangeInfo *temp_range_info) {
+    if (values.size() != 2) {
+        LOG(ERROR) << "Temp Range Values size: " << values.size() << "is invalid.";
+        return false;
+    }
+
+    float min_temp = getFloatFromValue(values[0]);
+    float max_temp = getFloatFromValue(values[1]);
+
+    if (std::isnan(min_temp) || std::isnan(max_temp)) {
+        LOG(ERROR) << "Illegal temp range: thresholds not defined properly " << min_temp << " : "
+                   << max_temp;
+        return false;
+    }
+
+    if (min_temp > max_temp) {
+        LOG(ERROR) << "Illegal temp range: temp_min_threshold(" << min_temp
+                   << ") > temp_max_threshold(" << max_temp << ")";
+        return false;
+    }
+    temp_range_info->min_temp_threshold = min_temp;
+    temp_range_info->max_temp_threshold = max_temp;
+    LOG(INFO) << "Temp Range Info: " << temp_range_info->min_temp_threshold
+              << " <= t <= " << temp_range_info->max_temp_threshold;
+    return true;
+}
 }  // namespace
 
 std::ostream &operator<<(std::ostream &stream, const SensorFusionType &sensor_fusion_type) {
@@ -1236,12 +1263,87 @@ bool ParseStatsInfo(const Json::Value &stats_config,
     return true;
 }
 
+bool ParseSensorAbnormalStatsConfig(
+        const Json::Value &abnormal_stats_config,
+        const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
+        AbnormalStatsInfo *abnormal_stats_info_parsed) {
+    if (abnormal_stats_config.empty()) {
+        LOG(INFO) << "No sensors abnormality monitoring info present.";
+        return true;
+    }
+
+    Json::Value values;
+
+    std::optional<TempRangeInfo> default_temp_range_info;
+    std::vector<AbnormalStatsInfo::SensorsTempRangeInfo> sensors_temp_range_infos;
+    Json::Value outlier_temp_config = abnormal_stats_config["Outlier"];
+    if (outlier_temp_config) {
+        LOG(INFO) << "Start to parse outlier temp config.";
+
+        if (outlier_temp_config["Default"]) {
+            LOG(INFO) << "Start to parse defaultTempRange.";
+            if (!getTempRangeInfoFromJsonValues(outlier_temp_config["Default"],
+                                                &default_temp_range_info.value())) {
+                LOG(ERROR) << "Failed to parse default temp range config.";
+                return false;
+            }
+        }
+
+        Json::Value configs = outlier_temp_config["Configs"];
+        if (configs) {
+            std::unordered_set<std::string> sensors_parsed;
+            for (Json::Value::ArrayIndex i = 0; i < configs.size(); i++) {
+                LOG(INFO) << "Start to parse temp range config[" << i << "]";
+                AbnormalStatsInfo::SensorsTempRangeInfo sensors_temp_range_info;
+                values = configs[i]["Monitor"];
+                if (!values.size()) {
+                    LOG(ERROR) << "Invalid config no sensor list present for outlier temp "
+                                  "config.";
+                    return false;
+                }
+                for (Json::Value::ArrayIndex j = 0; j < values.size(); j++) {
+                    const std::string &sensor = values[j].asString();
+                    if (!sensor_info_map_.count(sensor)) {
+                        LOG(ERROR) << "Unknown sensor " << sensor;
+                        return false;
+                    }
+                    auto result = sensors_parsed.insert(sensor);
+                    if (!result.second) {
+                        LOG(ERROR) << "Duplicate Sensor Temp Range Config: " << sensor;
+                        return false;
+                    }
+                    LOG(INFO) << "Monitored sensor [" << j << "]: " << sensor;
+                    sensors_temp_range_info.sensors.push_back(sensor);
+                }
+                if (!getTempRangeInfoFromJsonValues(configs[i]["TempRange"],
+                                                    &sensors_temp_range_info.temp_range_info)) {
+                    LOG(ERROR) << "Failed to parse temp range config.";
+                    return false;
+                }
+                sensors_temp_range_infos.push_back(sensors_temp_range_info);
+            }
+        }
+    }
+    *abnormal_stats_info_parsed = {
+            .default_temp_range_info = default_temp_range_info,
+            .sensors_temp_range_infos = sensors_temp_range_infos,
+    };
+    return true;
+}
+
 bool ParseSensorStatsConfig(const Json::Value &config,
                             const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-                            StatsInfo<float> *sensor_stats_info_parsed) {
+                            StatsInfo<float> *sensor_stats_info_parsed,
+                            AbnormalStatsInfo *abnormal_stats_info_parsed) {
     Json::Value stats_config = config["Stats"];
     if (stats_config.empty()) {
         LOG(INFO) << "No Stats Config present.";
+        return true;
+    }
+    // Parse cooling device user vote
+    Json::Value sensor_config = stats_config["Sensors"];
+    if (sensor_config.empty()) {
+        LOG(INFO) << "No Sensor Stats Config present.";
         return true;
     }
     LOG(INFO) << "Parse Stats Config for Sensor Temp.";
@@ -1250,6 +1352,11 @@ bool ParseSensorStatsConfig(const Json::Value &config,
                         std::numeric_limits<float>::lowest())) {
         LOG(ERROR) << "Failed to parse sensor temp stats info.";
         sensor_stats_info_parsed->clear();
+        return false;
+    }
+    if (!ParseSensorAbnormalStatsConfig(sensor_config["Abnormality"], sensor_info_map_,
+                                        abnormal_stats_info_parsed)) {
+        LOG(ERROR) << "Failed to parse sensor abnormal stats config.";
         return false;
     }
     return true;
