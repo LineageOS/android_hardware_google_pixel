@@ -1246,7 +1246,6 @@ void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats
         VendorAtomValue tmp;
 
         if (pdm_states[index] == 0) {
-            ALOGD("Skipped VendorAudioPdmStatsReported at index %d", index);
             continue;
         }
 
@@ -1264,8 +1263,6 @@ void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioPdmStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioPdmStatsReported at index %d", index);
     }
 }
 
@@ -1336,7 +1333,6 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
             }
         }
         if (!has_value) {
-            ALOGD("Skipped VendorAudioThirdPartyEffectStatsReported at index %d", index);
             continue;
         }
 
@@ -1356,8 +1352,6 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioThirdPartyEffectStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioThirdPartyEffectStatsReported at index %d", index);
     }
 }
 
@@ -1419,7 +1413,6 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
         VendorAtomValue tmp;
 
         if (count_per_feature[index] == 0 && duration_per_feature[index] == 0) {
-            ALOGD("Skipped VendorAudioAdaptedInfoStatsReported at index %d", index);
             continue;
         }
 
@@ -1443,8 +1436,6 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioAdaptedInfoStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioAdaptedInfoStatsReported at index %d", index);
     }
 }
 
@@ -1528,8 +1519,6 @@ void SysfsCollector::logPcmUsageStats(const std::shared_ptr<IStats> &stats_clien
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioPcmStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioPcmStatsReported at index %d successfully", index);
     }
 }
 
