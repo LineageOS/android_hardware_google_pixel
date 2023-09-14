@@ -97,9 +97,9 @@ std::unordered_map<std::string, std::string> parseThermalPathMap(std::string_vie
  * reading the type file and assigning the temp file path to the map.  If we do
  * not succeed, abort.
  */
-ThermalHelper::ThermalHelper(const NotificationCallback &cb)
-    : thermal_watcher_(new ThermalWatcher(
-              std::bind(&ThermalHelper::thermalWatcherCallbackFunc, this, std::placeholders::_1))),
+ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
+    : thermal_watcher_(new ThermalWatcher(std::bind(&ThermalHelperImpl::thermalWatcherCallbackFunc,
+                                                    this, std::placeholders::_1))),
       cb_(cb) {
     const std::string config_path =
             "/vendor/etc/" +
@@ -285,7 +285,7 @@ bool getThermalZoneTypeById(int tz_id, std::string *type) {
     return true;
 }
 
-bool ThermalHelper::emulTemp(std::string_view target_sensor, const float value) {
+bool ThermalHelperImpl::emulTemp(std::string_view target_sensor, const float value) {
     LOG(INFO) << "Set " << target_sensor.data() << " emul_temp "
               << "to " << value;
 
@@ -303,7 +303,7 @@ bool ThermalHelper::emulTemp(std::string_view target_sensor, const float value) 
     return true;
 }
 
-bool ThermalHelper::emulSeverity(std::string_view target_sensor, const int severity) {
+bool ThermalHelperImpl::emulSeverity(std::string_view target_sensor, const int severity) {
     LOG(INFO) << "Set " << target_sensor.data() << " emul_severity "
               << "to " << severity;
 
@@ -326,7 +326,7 @@ bool ThermalHelper::emulSeverity(std::string_view target_sensor, const int sever
     return true;
 }
 
-bool ThermalHelper::emulClear(std::string_view target_sensor) {
+bool ThermalHelperImpl::emulClear(std::string_view target_sensor) {
     LOG(INFO) << "Clear " << target_sensor.data() << " emulation settings";
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
@@ -347,7 +347,8 @@ bool ThermalHelper::emulClear(std::string_view target_sensor) {
     return true;
 }
 
-bool ThermalHelper::readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const {
+bool ThermalHelperImpl::readCoolingDevice(std::string_view cooling_device,
+                                          CoolingDevice *out) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string data;
 
@@ -366,7 +367,7 @@ bool ThermalHelper::readCoolingDevice(std::string_view cooling_device, CoolingDe
     return true;
 }
 
-bool ThermalHelper::readTemperature(
+bool ThermalHelperImpl::readTemperature(
         std::string_view sensor_name, Temperature *out,
         std::pair<ThrottlingSeverity, ThrottlingSeverity> *throttling_status,
         const bool force_no_cache) {
@@ -428,8 +429,8 @@ bool ThermalHelper::readTemperature(
     return true;
 }
 
-bool ThermalHelper::readTemperatureThreshold(std::string_view sensor_name,
-                                             TemperatureThreshold *out) const {
+bool ThermalHelperImpl::readTemperatureThreshold(std::string_view sensor_name,
+                                                 TemperatureThreshold *out) const {
     // Read the file.  If the file can't be read temp will be empty string.
     std::string temp;
     std::string path;
@@ -450,7 +451,7 @@ bool ThermalHelper::readTemperatureThreshold(std::string_view sensor_name,
     return true;
 }
 
-void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated_cdev) {
+void ThermalHelperImpl::updateCoolingDevices(const std::vector<std::string> &updated_cdev) {
     int max_state;
 
     for (const auto &target_cdev : updated_cdev) {
@@ -466,7 +467,7 @@ void ThermalHelper::updateCoolingDevices(const std::vector<std::string> &updated
     }
 }
 
-std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFromThresholds(
+std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelperImpl::getSeverityFromThresholds(
         const ThrottlingArray &hot_thresholds, const ThrottlingArray &cold_thresholds,
         const ThrottlingArray &hot_hysteresis, const ThrottlingArray &cold_hysteresis,
         ThrottlingSeverity prev_hot_severity, ThrottlingSeverity prev_cold_severity,
@@ -507,8 +508,8 @@ std::pair<ThrottlingSeverity, ThrottlingSeverity> ThermalHelper::getSeverityFrom
     return std::make_pair(ret_hot, ret_cold);
 }
 
-bool ThermalHelper::isSubSensorValid(std::string_view sensor_data,
-                                     const SensorFusionType sensor_fusion_type) {
+bool ThermalHelperImpl::isSubSensorValid(std::string_view sensor_data,
+                                         const SensorFusionType sensor_fusion_type) {
     switch (sensor_fusion_type) {
         case SensorFusionType::SENSOR:
             if (!sensor_info_map_.count(sensor_data.data())) {
@@ -528,7 +529,7 @@ bool ThermalHelper::isSubSensorValid(std::string_view sensor_data,
     return true;
 }
 
-void ThermalHelper::clearAllThrottling(void) {
+void ThermalHelperImpl::clearAllThrottling(void) {
     // Clear the CDEV request
     for (const auto &cdev_info_pair : cooling_device_info_map_) {
         cooling_devices_.writeCdevFile(cdev_info_pair.first, "0");
@@ -558,7 +559,7 @@ void ThermalHelper::clearAllThrottling(void) {
     }
 }
 
-bool ThermalHelper::initializeSensorMap(
+bool ThermalHelperImpl::initializeSensorMap(
         const std::unordered_map<std::string, std::string> &path_map) {
     for (const auto &sensor_info_pair : sensor_info_map_) {
         std::string_view sensor_name = sensor_info_pair.first;
@@ -586,7 +587,7 @@ bool ThermalHelper::initializeSensorMap(
     return true;
 }
 
-bool ThermalHelper::initializeCoolingDevices(
+bool ThermalHelperImpl::initializeCoolingDevices(
         const std::unordered_map<std::string, std::string> &path_map) {
     for (auto &cooling_device_info_pair : cooling_device_info_map_) {
         std::string cooling_device_name = cooling_device_info_pair.first;
@@ -674,14 +675,14 @@ bool ThermalHelper::initializeCoolingDevices(
     return true;
 }
 
-void ThermalHelper::setMinTimeout(SensorInfo *sensor_info) {
+void ThermalHelperImpl::setMinTimeout(SensorInfo *sensor_info) {
     sensor_info->polling_delay = kMinPollIntervalMs;
     sensor_info->passive_delay = kMinPollIntervalMs;
 }
 
-void ThermalHelper::initializeTrip(const std::unordered_map<std::string, std::string> &path_map,
-                                   std::set<std::string> *monitored_sensors,
-                                   bool thermal_genl_enabled) {
+void ThermalHelperImpl::initializeTrip(const std::unordered_map<std::string, std::string> &path_map,
+                                       std::set<std::string> *monitored_sensors,
+                                       bool thermal_genl_enabled) {
     for (auto &sensor_info : sensor_info_map_) {
         if (!sensor_info.second.is_watch || (sensor_info.second.virtual_sensor_info != nullptr)) {
             continue;
@@ -754,9 +755,9 @@ void ThermalHelper::initializeTrip(const std::unordered_map<std::string, std::st
     }
 }
 
-bool ThermalHelper::fillCurrentTemperatures(bool filterType, bool filterCallback,
-                                            TemperatureType type,
-                                            std::vector<Temperature> *temperatures) {
+bool ThermalHelperImpl::fillCurrentTemperatures(bool filterType, bool filterCallback,
+                                                TemperatureType type,
+                                                std::vector<Temperature> *temperatures) {
     std::vector<Temperature> ret;
     for (const auto &name_info_pair : sensor_info_map_) {
         Temperature temp;
@@ -780,8 +781,9 @@ bool ThermalHelper::fillCurrentTemperatures(bool filterType, bool filterCallback
     return ret.size() > 0;
 }
 
-bool ThermalHelper::fillTemperatureThresholds(bool filterType, TemperatureType type,
-                                              std::vector<TemperatureThreshold> *thresholds) const {
+bool ThermalHelperImpl::fillTemperatureThresholds(
+        bool filterType, TemperatureType type,
+        std::vector<TemperatureThreshold> *thresholds) const {
     std::vector<TemperatureThreshold> ret;
     for (const auto &name_info_pair : sensor_info_map_) {
         TemperatureThreshold temp;
@@ -803,8 +805,8 @@ bool ThermalHelper::fillTemperatureThresholds(bool filterType, TemperatureType t
     return ret.size() > 0;
 }
 
-bool ThermalHelper::fillCurrentCoolingDevices(bool filterType, CoolingType type,
-                                              std::vector<CoolingDevice> *cooling_devices) const {
+bool ThermalHelperImpl::fillCurrentCoolingDevices(
+        bool filterType, CoolingType type, std::vector<CoolingDevice> *cooling_devices) const {
     std::vector<CoolingDevice> ret;
     for (const auto &name_info_pair : cooling_device_info_map_) {
         CoolingDevice value;
@@ -822,9 +824,9 @@ bool ThermalHelper::fillCurrentCoolingDevices(bool filterType, CoolingType type,
     return ret.size() > 0;
 }
 
-bool ThermalHelper::readDataByType(std::string_view sensor_data, float *reading_value,
-                                   const SensorFusionType type, const bool force_no_cache,
-                                   std::map<std::string, float> *sensor_log_map) {
+bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *reading_value,
+                                       const SensorFusionType type, const bool force_no_cache,
+                                       std::map<std::string, float> *sensor_log_map) {
     switch (type) {
         case SensorFusionType::SENSOR:
             if (!readThermalSensor(sensor_data.data(), reading_value, force_no_cache,
@@ -847,7 +849,7 @@ bool ThermalHelper::readDataByType(std::string_view sensor_data, float *reading_
     return true;
 }
 
-bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
+bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *temp,
                                       const bool force_no_cache,
                                       std::map<std::string, float> *sensor_log_map) {
     float temp_val = 0.0;
@@ -951,7 +953,7 @@ bool ThermalHelper::readThermalSensor(std::string_view sensor_name, float *temp,
 
 // This is called in the different thread context and will update sensor_status
 // uevent_sensors is the set of sensors which trigger uevent from thermal core driver.
-std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
+std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         const std::set<std::string> &uevent_sensors) {
     std::vector<Temperature> temps;
     std::vector<std::string> cooling_devices_to_update;
@@ -1123,11 +1125,11 @@ std::chrono::milliseconds ThermalHelper::thermalWatcherCallbackFunc(
     return min_sleep_ms;
 }
 
-bool ThermalHelper::connectToPowerHal() {
+bool ThermalHelperImpl::connectToPowerHal() {
     return power_hal_service_.connect();
 }
 
-void ThermalHelper::updateSupportedPowerHints() {
+void ThermalHelperImpl::updateSupportedPowerHints() {
     for (auto const &name_status_pair : sensor_info_map_) {
         if (!(name_status_pair.second.send_powerhint)) {
             continue;
@@ -1153,7 +1155,7 @@ void ThermalHelper::updateSupportedPowerHints() {
     }
 }
 
-void ThermalHelper::sendPowerExtHint(const Temperature &t) {
+void ThermalHelperImpl::sendPowerExtHint(const Temperature &t) {
     ATRACE_CALL();
     std::lock_guard<std::shared_mutex> lock(sensor_status_map_mutex_);
     ThrottlingSeverity prev_hint_severity;
