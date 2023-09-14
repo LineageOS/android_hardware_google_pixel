@@ -41,7 +41,6 @@ struct CallbackSetting {
 class Thermal : public BnThermal {
   public:
     Thermal();
-    explicit Thermal(const std::shared_ptr<ThermalHelper> &helper);
     ~Thermal() = default;
     ndk::ScopedAStatus getTemperatures(std::vector<Temperature> *_aidl_return) override;
     ndk::ScopedAStatus getTemperaturesWithType(TemperatureType type,
@@ -78,8 +77,6 @@ class Thermal : public BnThermal {
         Looper() {
             thread_ = std::thread([&] { loop(); });
         }
-        ~Looper();
-
         void addEvent(const Event &e);
 
       private:
@@ -87,12 +84,11 @@ class Thermal : public BnThermal {
         std::queue<Event> events_;
         std::mutex mutex_;
         std::thread thread_;
-        bool aborted_;
 
         void loop();
     };
 
-    std::shared_ptr<ThermalHelper> thermal_helper_;
+    ThermalHelper thermal_helper_;
     std::mutex thermal_callback_mutex_;
     std::vector<CallbackSetting> callbacks_;
     Looper looper_;

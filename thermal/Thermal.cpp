@@ -50,14 +50,9 @@ bool interfacesEqual(const std::shared_ptr<::ndk::ICInterface> left,
 
 }  // namespace
 
-Thermal::Thermal() {
-    thermal_helper_ = std::make_shared<ThermalHelperImpl>(
-            std::bind(&Thermal::sendThermalChangedCallback, this, std::placeholders::_1));
-}
-
-Thermal::Thermal(const std::shared_ptr<ThermalHelper> &helper) {
-    thermal_helper_ = helper;
-}
+Thermal::Thermal()
+    : thermal_helper_(
+              std::bind(&Thermal::sendThermalChangedCallback, this, std::placeholders::_1)) {}
 
 ndk::ScopedAStatus Thermal::getTemperatures(std::vector<Temperature> *_aidl_return) {
     return getFilteredTemperatures(false, TemperatureType::UNKNOWN, _aidl_return);
@@ -71,10 +66,10 @@ ndk::ScopedAStatus Thermal::getTemperaturesWithType(TemperatureType type,
 ndk::ScopedAStatus Thermal::getFilteredTemperatures(bool filterType, TemperatureType type,
                                                     std::vector<Temperature> *_aidl_return) {
     *_aidl_return = {};
-    if (!thermal_helper_->isInitializedOk()) {
+    if (!thermal_helper_.isInitializedOk()) {
         return initErrorStatus();
     }
-    if (!thermal_helper_->fillCurrentTemperatures(filterType, false, type, _aidl_return)) {
+    if (!thermal_helper_.fillCurrentTemperatures(filterType, false, type, _aidl_return)) {
         return readErrorStatus();
     }
     return ndk::ScopedAStatus::ok();
@@ -92,10 +87,10 @@ ndk::ScopedAStatus Thermal::getCoolingDevicesWithType(CoolingType type,
 ndk::ScopedAStatus Thermal::getFilteredCoolingDevices(bool filterType, CoolingType type,
                                                       std::vector<CoolingDevice> *_aidl_return) {
     *_aidl_return = {};
-    if (!thermal_helper_->isInitializedOk()) {
+    if (!thermal_helper_.isInitializedOk()) {
         return initErrorStatus();
     }
-    if (!thermal_helper_->fillCurrentCoolingDevices(filterType, type, _aidl_return)) {
+    if (!thermal_helper_.fillCurrentCoolingDevices(filterType, type, _aidl_return)) {
         return readErrorStatus();
     }
     return ndk::ScopedAStatus::ok();
@@ -115,10 +110,10 @@ ndk::ScopedAStatus Thermal::getTemperatureThresholdsWithType(
 ndk::ScopedAStatus Thermal::getFilteredTemperatureThresholds(
         bool filterType, TemperatureType type, std::vector<TemperatureThreshold> *_aidl_return) {
     *_aidl_return = {};
-    if (!thermal_helper_->isInitializedOk()) {
+    if (!thermal_helper_.isInitializedOk()) {
         return initErrorStatus();
     }
-    if (!thermal_helper_->fillTemperatureThresholds(filterType, type, _aidl_return)) {
+    if (!thermal_helper_.fillTemperatureThresholds(filterType, type, _aidl_return)) {
         return readErrorStatus();
     }
     return ndk::ScopedAStatus::ok();
@@ -173,7 +168,7 @@ ndk::ScopedAStatus Thermal::registerThermalChangedCallback(
         return ndk::ScopedAStatus::fromExceptionCodeWithMessage(EX_ILLEGAL_ARGUMENT,
                                                                 "Invalid nullptr callback");
     }
-    if (!thermal_helper_->isInitializedOk()) {
+    if (!thermal_helper_.isInitializedOk()) {
         return initErrorStatus();
     }
     std::lock_guard<std::mutex> _lock(thermal_callback_mutex_);
@@ -189,25 +184,14 @@ ndk::ScopedAStatus Thermal::registerThermalChangedCallback(
     // Send notification right away after successful thermal callback registration
     std::function<void()> handler = [this, c, filterType, type]() {
         std::vector<Temperature> temperatures;
-        if (thermal_helper_->fillCurrentTemperatures(filterType, true, type, &temperatures)) {
+        if (thermal_helper_.fillCurrentTemperatures(filterType, true, type, &temperatures)) {
             for (const auto &t : temperatures) {
                 if (!filterType || t.type == type) {
-                    std::lock_guard<std::mutex> _lock(thermal_callback_mutex_);
-                    auto it = std::find_if(callbacks_.begin(), callbacks_.end(),
-                                           [&](const CallbackSetting &cc) {
-                                               return interfacesEqual(c.callback, cc.callback);
-                                           });
-                    if (it != callbacks_.end()) {
-                        if (AIBinder_isAlive(c.callback->asBinder().get())) {
-                            LOG(INFO) << "Sending notification: "
-                                      << " Type: " << toString(t.type) << " Name: " << t.name
-                                      << " CurrentValue: " << t.value
-                                      << " ThrottlingStatus: " << toString(t.throttlingStatus);
-                            c.callback->notifyThrottling(t);
-                        } else {
-                            callbacks_.erase(it);
-                        }
-                    }
+                    LOG(INFO) << "Sending notification: "
+                              << " Type: " << toString(t.type) << " Name: " << t.name
+                              << " CurrentValue: " << t.value
+                              << " ThrottlingStatus: " << toString(t.throttlingStatus);
+                    c.callback->notifyThrottling(t);
                 }
             }
         }
@@ -243,7 +227,7 @@ void Thermal::sendThermalChangedCallback(const Temperature &t) {
 
 void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
     *dump_buf << "getVirtualSensorInfo:" << std::endl;
-    const auto &map = thermal_helper_->GetSensorInfoMap();
+    const auto &map = thermal_helper_.GetSensorInfoMap();
     for (const auto &sensor_info_pair : map) {
         if (sensor_info_pair.second.virtual_sensor_info != nullptr) {
             *dump_buf << " Name: " << sensor_info_pair.first << std::endl;
@@ -298,8 +282,8 @@ void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
 
 void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
     *dump_buf << "getThrottlingInfo:" << std::endl;
-    const auto &map = thermal_helper_->GetSensorInfoMap();
-    const auto &thermal_throttling_status_map = thermal_helper_->GetThermalThrottlingStatusMap();
+    const auto &map = thermal_helper_.GetSensorInfoMap();
+    const auto &thermal_throttling_status_map = thermal_helper_.GetThermalThrottlingStatusMap();
     for (const auto &name_info_pair : map) {
         if (name_info_pair.second.throttling_info == nullptr) {
             continue;
@@ -432,7 +416,7 @@ void Thermal::dumpThrottlingInfo(std::ostringstream *dump_buf) {
 }
 
 void Thermal::dumpThrottlingRequestStatus(std::ostringstream *dump_buf) {
-    const auto &thermal_throttling_status_map = thermal_helper_->GetThermalThrottlingStatusMap();
+    const auto &thermal_throttling_status_map = thermal_helper_.GetThermalThrottlingStatusMap();
     if (!thermal_throttling_status_map.size()) {
         return;
     }
@@ -482,8 +466,8 @@ void Thermal::dumpThrottlingRequestStatus(std::ostringstream *dump_buf) {
 }
 
 void Thermal::dumpPowerRailInfo(std::ostringstream *dump_buf) {
-    const auto &power_rail_info_map = thermal_helper_->GetPowerRailInfoMap();
-    const auto &power_status_map = thermal_helper_->GetPowerStatusMap();
+    const auto &power_rail_info_map = thermal_helper_.GetPowerRailInfoMap();
+    const auto &power_status_map = thermal_helper_.GetPowerStatusMap();
 
     *dump_buf << "getPowerRailInfo:" << std::endl;
     for (const auto &power_rail_pair : power_rail_info_map) {
@@ -561,7 +545,7 @@ void Thermal::dumpStatsRecord(std::ostringstream *dump_buf, const StatsRecord &s
 void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     *dump_buf << "getThermalStatsInfo:" << std::endl;
     *dump_buf << " Sensor Temp Stats Info:" << std::endl;
-    const auto &sensor_temp_stats_map_ = thermal_helper_->GetSensorTempStatsSnapshot();
+    const auto &sensor_temp_stats_map_ = thermal_helper_.GetSensorTempStatsSnapshot();
     const std::string sensor_temp_stats_line_prefix("    ");
     for (const auto &sensor_temp_stats_pair : sensor_temp_stats_map_) {
         *dump_buf << "  Sensor Name: " << sensor_temp_stats_pair.first << std::endl;
@@ -592,7 +576,7 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
     }
     *dump_buf << " Sensor Cdev Request Stats Info:" << std::endl;
     const auto &sensor_cdev_request_stats_map_ =
-            thermal_helper_->GetSensorCoolingDeviceRequestStatsSnapshot();
+            thermal_helper_.GetSensorCoolingDeviceRequestStatsSnapshot();
     const std::string sensor_cdev_request_stats_line_prefix("     ");
     for (const auto &sensor_cdev_request_stats_pair : sensor_cdev_request_stats_map_) {
         *dump_buf << "  Sensor Name: " << sensor_cdev_request_stats_pair.first << std::endl;
@@ -624,10 +608,10 @@ void Thermal::dumpThermalStats(std::ostringstream *dump_buf) {
 void Thermal::dumpThermalData(int fd) {
     std::ostringstream dump_buf;
 
-    if (!thermal_helper_->isInitializedOk()) {
+    if (!thermal_helper_.isInitializedOk()) {
         dump_buf << "ThermalHAL not initialized properly." << std::endl;
     } else {
-        const auto &sensor_status_map = thermal_helper_->GetSensorStatusMap();
+        const auto &sensor_status_map = thermal_helper_.GetSensorStatusMap();
         {
             dump_buf << "getCachedTemperatures:" << std::endl;
             boot_clock::time_point now = boot_clock::now();
@@ -658,11 +642,11 @@ void Thermal::dumpThermalData(int fd) {
             }
         }
         {
-            const auto &map = thermal_helper_->GetSensorInfoMap();
+            const auto &map = thermal_helper_.GetSensorInfoMap();
             dump_buf << "getCurrentTemperatures:" << std::endl;
             Temperature temp_2_0;
             for (const auto &name_info_pair : map) {
-                thermal_helper_->readTemperature(name_info_pair.first, &temp_2_0, nullptr, true);
+                thermal_helper_.readTemperature(name_info_pair.first, &temp_2_0, nullptr, true);
                 dump_buf << " Type: " << toString(temp_2_0.type)
                          << " Name: " << name_info_pair.first << " CurrentValue: " << temp_2_0.value
                          << " ThrottlingStatus: " << toString(temp_2_0.throttlingStatus)
@@ -706,8 +690,8 @@ void Thermal::dumpThermalData(int fd) {
         {
             dump_buf << "getCurrentCoolingDevices:" << std::endl;
             std::vector<CoolingDevice> cooling_devices;
-            if (!thermal_helper_->fillCurrentCoolingDevices(false, CoolingType::CPU,
-                                                            &cooling_devices)) {
+            if (!thermal_helper_.fillCurrentCoolingDevices(false, CoolingType::CPU,
+                                                           &cooling_devices)) {
                 dump_buf << " Failed to getCurrentCoolingDevices." << std::endl;
             }
 
@@ -727,7 +711,7 @@ void Thermal::dumpThermalData(int fd) {
         {
             dump_buf << "sendCallback:" << std::endl;
             dump_buf << "  Enabled List: ";
-            const auto &map = thermal_helper_->GetSensorInfoMap();
+            const auto &map = thermal_helper_.GetSensorInfoMap();
             for (const auto &name_info_pair : map) {
                 if (name_info_pair.second.send_cb) {
                     dump_buf << name_info_pair.first << " ";
@@ -738,7 +722,7 @@ void Thermal::dumpThermalData(int fd) {
         {
             dump_buf << "sendPowerHint:" << std::endl;
             dump_buf << "  Enabled List: ";
-            const auto &map = thermal_helper_->GetSensorInfoMap();
+            const auto &map = thermal_helper_.GetSensorInfoMap();
             for (const auto &name_info_pair : map) {
                 if (name_info_pair.second.send_powerhint) {
                     dump_buf << name_info_pair.first << " ";
@@ -753,12 +737,12 @@ void Thermal::dumpThermalData(int fd) {
         dumpThermalStats(&dump_buf);
         {
             dump_buf << "getAIDLPowerHalInfo:" << std::endl;
-            dump_buf << " Exist: " << std::boolalpha << thermal_helper_->isAidlPowerHalExist()
+            dump_buf << " Exist: " << std::boolalpha << thermal_helper_.isAidlPowerHalExist()
                      << std::endl;
-            dump_buf << " Connected: " << std::boolalpha << thermal_helper_->isPowerHalConnected()
+            dump_buf << " Connected: " << std::boolalpha << thermal_helper_.isPowerHalConnected()
                      << std::endl;
             dump_buf << " Ext connected: " << std::boolalpha
-                     << thermal_helper_->isPowerHalExtConnected() << std::endl;
+                     << thermal_helper_.isPowerHalExtConnected() << std::endl;
         }
     }
     std::string buf = dump_buf.str();
@@ -776,19 +760,18 @@ binder_status_t Thermal::dump(int fd, const char **args, uint32_t numArgs) {
 
     if (std::string(args[0]) == "emul_temp") {
         return (numArgs != 3 ||
-                !thermal_helper_->emulTemp(std::string(args[1]), std::strtod(args[2], nullptr)))
+                !thermal_helper_.emulTemp(std::string(args[1]), std::strtod(args[2], nullptr)))
                        ? STATUS_BAD_VALUE
                        : STATUS_OK;
     } else if (std::string(args[0]) == "emul_severity") {
         return (numArgs != 3 ||
-                !thermal_helper_->emulSeverity(std::string(args[1]),
-                                               static_cast<int>(std::strtol(args[2], nullptr, 10))))
+                !thermal_helper_.emulSeverity(std::string(args[1]),
+                                              static_cast<int>(std::strtol(args[2], nullptr, 10))))
                        ? STATUS_BAD_VALUE
                        : STATUS_OK;
     } else if (std::string(args[0]) == "emul_clear") {
-        return (numArgs != 2 || !thermal_helper_->emulClear(std::string(args[1])))
-                       ? STATUS_BAD_VALUE
-                       : STATUS_OK;
+        return (numArgs != 2 || !thermal_helper_.emulClear(std::string(args[1]))) ? STATUS_BAD_VALUE
+                                                                                  : STATUS_OK;
     }
     return STATUS_BAD_VALUE;
 }
@@ -799,25 +782,14 @@ void Thermal::Looper::addEvent(const Thermal::Looper::Event &e) {
     cv_.notify_all();
 }
 
-Thermal::Looper::~Looper() {
-    {
-        std::unique_lock<std::mutex> lock(mutex_);
-        aborted_ = true;
-    }
-    cv_.notify_one();
-    thread_.join();
-}
-
 void Thermal::Looper::loop() {
-    while (!aborted_) {
+    while (true) {
         std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock, [&] { return aborted_ || !events_.empty(); });
-        if (!aborted_ && !events_.empty()) {
-            Event event = events_.front();
-            events_.pop();
-            lock.unlock();
-            event.handler();
-        }
+        cv_.wait(lock, [&] { return !events_.empty(); });
+        Event event = events_.front();
+        events_.pop();
+        lock.unlock();
+        event.handler();
     }
 }
 

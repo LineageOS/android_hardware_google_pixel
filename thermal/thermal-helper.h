@@ -73,114 +73,77 @@ struct SensorStatus {
 
 class ThermalHelper {
   public:
-    virtual ~ThermalHelper() = default;
-    virtual bool fillCurrentTemperatures(bool filterType, bool filterCallback, TemperatureType type,
-                                         std::vector<Temperature> *temperatures) = 0;
-    virtual bool fillTemperatureThresholds(bool filterType, TemperatureType type,
-                                           std::vector<TemperatureThreshold> *thresholds) const = 0;
-    virtual bool fillCurrentCoolingDevices(bool filterType, CoolingType type,
-                                           std::vector<CoolingDevice> *coolingdevices) const = 0;
-    virtual bool emulTemp(std::string_view target_sensor, const float temp) = 0;
-    virtual bool emulSeverity(std::string_view target_sensor, const int severity) = 0;
-    virtual bool emulClear(std::string_view target_sensor) = 0;
-    virtual bool isInitializedOk() const = 0;
-    virtual bool readTemperature(
-            std::string_view sensor_name, Temperature *out,
-            std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr,
-            const bool force_sysfs = false) = 0;
-    virtual bool readTemperatureThreshold(std::string_view sensor_name,
-                                          TemperatureThreshold *out) const = 0;
-    virtual bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const = 0;
-    virtual const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const = 0;
-    virtual const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const = 0;
-    virtual const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const = 0;
-    virtual const std::unordered_map<std::string, ThermalThrottlingStatus> &
-    GetThermalThrottlingStatusMap() const = 0;
-    virtual const std::unordered_map<std::string, PowerRailInfo> &GetPowerRailInfoMap() const = 0;
-    virtual const std::unordered_map<std::string, PowerStatus> &GetPowerStatusMap() const = 0;
-    virtual const std::unordered_map<std::string, SensorTempStats> GetSensorTempStatsSnapshot() = 0;
-    virtual const std::unordered_map<std::string,
-                                     std::unordered_map<std::string, ThermalStats<int>>>
-    GetSensorCoolingDeviceRequestStatsSnapshot() = 0;
-    virtual void sendPowerExtHint(const Temperature &t) = 0;
-    virtual bool isAidlPowerHalExist() = 0;
-    virtual bool isPowerHalConnected() = 0;
-    virtual bool isPowerHalExtConnected() = 0;
-};
-
-class ThermalHelperImpl : public ThermalHelper {
-  public:
-    explicit ThermalHelperImpl(const NotificationCallback &cb);
-    ~ThermalHelperImpl() override = default;
+    explicit ThermalHelper(const NotificationCallback &cb);
+    ~ThermalHelper() = default;
 
     bool fillCurrentTemperatures(bool filterType, bool filterCallback, TemperatureType type,
-                                 std::vector<Temperature> *temperatures) override;
+                                 std::vector<Temperature> *temperatures);
     bool fillTemperatureThresholds(bool filterType, TemperatureType type,
-                                   std::vector<TemperatureThreshold> *thresholds) const override;
+                                   std::vector<TemperatureThreshold> *thresholds) const;
     bool fillCurrentCoolingDevices(bool filterType, CoolingType type,
-                                   std::vector<CoolingDevice> *coolingdevices) const override;
-    bool emulTemp(std::string_view target_sensor, const float temp) override;
-    bool emulSeverity(std::string_view target_sensor, const int severity) override;
-    bool emulClear(std::string_view target_sensor) override;
+                                   std::vector<CoolingDevice> *coolingdevices) const;
+    bool emulTemp(std::string_view target_sensor, const float temp);
+    bool emulSeverity(std::string_view target_sensor, const int severity);
+    bool emulClear(std::string_view target_sensor);
 
     // Disallow copy and assign.
-    ThermalHelperImpl(const ThermalHelperImpl &) = delete;
-    void operator=(const ThermalHelperImpl &) = delete;
+    ThermalHelper(const ThermalHelper &) = delete;
+    void operator=(const ThermalHelper &) = delete;
 
-    bool isInitializedOk() const override { return is_initialized_; }
+    bool isInitializedOk() const { return is_initialized_; }
 
     // Read the temperature of a single sensor.
+    bool readTemperature(std::string_view sensor_name, Temperature *out);
     bool readTemperature(
             std::string_view sensor_name, Temperature *out,
             std::pair<ThrottlingSeverity, ThrottlingSeverity> *throtting_status = nullptr,
-            const bool force_sysfs = false) override;
+            const bool force_sysfs = false);
 
-    bool readTemperatureThreshold(std::string_view sensor_name,
-                                  TemperatureThreshold *out) const override;
+    bool readTemperatureThreshold(std::string_view sensor_name, TemperatureThreshold *out) const;
     // Read the value of a single cooling device.
-    bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const override;
+    bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const;
     // Get SensorInfo Map
-    const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const override {
+    const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const {
         return sensor_info_map_;
     }
     // Get CdevInfo Map
-    const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const override {
+    const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const {
         return cooling_device_info_map_;
     }
     // Get SensorStatus Map
-    const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const override {
+    const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
         return sensor_status_map_;
     }
     // Get ThermalThrottling Map
     const std::unordered_map<std::string, ThermalThrottlingStatus> &GetThermalThrottlingStatusMap()
-            const override {
+            const {
         return thermal_throttling_.GetThermalThrottlingStatusMap();
     }
     // Get PowerRailInfo Map
-    const std::unordered_map<std::string, PowerRailInfo> &GetPowerRailInfoMap() const override {
+    const std::unordered_map<std::string, PowerRailInfo> &GetPowerRailInfoMap() const {
         return power_files_.GetPowerRailInfoMap();
     }
 
     // Get PowerStatus Map
-    const std::unordered_map<std::string, PowerStatus> &GetPowerStatusMap() const override {
+    const std::unordered_map<std::string, PowerStatus> &GetPowerStatusMap() const {
         return power_files_.GetPowerStatusMap();
     }
 
     // Get Thermal Stats Sensor Map
-    const std::unordered_map<std::string, SensorTempStats> GetSensorTempStatsSnapshot() override {
+    const std::unordered_map<std::string, SensorTempStats> GetSensorTempStatsSnapshot() {
         return thermal_stats_helper_.GetSensorTempStatsSnapshot();
     }
     // Get Thermal Stats Sensor, Binded Cdev State Request Map
     const std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
-    GetSensorCoolingDeviceRequestStatsSnapshot() override {
+    GetSensorCoolingDeviceRequestStatsSnapshot() {
         return thermal_stats_helper_.GetSensorCoolingDeviceRequestStatsSnapshot();
     }
 
-    void sendPowerExtHint(const Temperature &t) override;
-    bool isAidlPowerHalExist() override { return power_hal_service_.isAidlPowerHalExist(); }
-    bool isPowerHalConnected() override { return power_hal_service_.isPowerHalConnected(); }
-    bool isPowerHalExtConnected() override { return power_hal_service_.isPowerHalExtConnected(); }
+    void sendPowerExtHint(const Temperature &t);
+    bool isAidlPowerHalExist() { return power_hal_service_.isAidlPowerHalExist(); }
+    bool isPowerHalConnected() { return power_hal_service_.isPowerHalConnected(); }
+    bool isPowerHalExtConnected() { return power_hal_service_.isPowerHalExtConnected(); }
 
   private:
     bool initializeSensorMap(const std::unordered_map<std::string, std::string> &path_map);
