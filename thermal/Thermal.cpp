@@ -190,24 +190,24 @@ ndk::ScopedAStatus Thermal::registerThermalChangedCallback(
     std::function<void()> handler = [this, c, filterType, type]() {
         std::vector<Temperature> temperatures;
         if (thermal_helper_->fillCurrentTemperatures(filterType, true, type, &temperatures)) {
-            for (const auto &t : temperatures) {
-                if (!filterType || t.type == type) {
-                    std::lock_guard<std::mutex> _lock(thermal_callback_mutex_);
-                    auto it = std::find_if(callbacks_.begin(), callbacks_.end(),
-                                           [&](const CallbackSetting &cc) {
-                                               return interfacesEqual(c.callback, cc.callback);
-                                           });
-                    if (it != callbacks_.end()) {
-                        if (AIBinder_isAlive(c.callback->asBinder().get())) {
+            std::lock_guard<std::mutex> _lock(thermal_callback_mutex_);
+            auto it = std::find_if(callbacks_.begin(), callbacks_.end(),
+                                   [&](const CallbackSetting &cc) {
+                                       return interfacesEqual(c.callback, cc.callback);
+                                   });
+            if (it != callbacks_.end()) {
+                if (AIBinder_isAlive(c.callback->asBinder().get())) {
+                    for (const auto &t : temperatures) {
+                        if (!filterType || t.type == type) {
                             LOG(INFO) << "Sending notification: "
                                       << " Type: " << toString(t.type) << " Name: " << t.name
                                       << " CurrentValue: " << t.value
                                       << " ThrottlingStatus: " << toString(t.throttlingStatus);
                             c.callback->notifyThrottling(t);
-                        } else {
-                            callbacks_.erase(it);
                         }
                     }
+                } else {
+                    callbacks_.erase(it);
                 }
             }
         }
