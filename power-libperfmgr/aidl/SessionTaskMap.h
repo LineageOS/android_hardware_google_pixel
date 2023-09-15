@@ -61,7 +61,7 @@ class SessionTaskMap {
     std::vector<int64_t> getSessionIds(pid_t taskId) const;
 
     // Get a vec of tasks associated with a session
-    const std::vector<pid_t> &getTaskIds(int64_t sessionId) const;
+    std::vector<pid_t> &getTaskIds(int64_t sessionId);
 
     // Return true if any app session is active, false otherwise
     bool isAnyAppSessionActive(std::chrono::steady_clock::time_point timePoint) const;
@@ -107,6 +107,9 @@ class SessionTaskMap {
 
     // Returns true if session id is an app session id
     bool isAppSession(int64_t sessionId) const;
+
+    // Remove dead task-session map entry
+    bool removeDeadTaskSessionMap(int64_t sessionId, pid_t taskId);
 
   private:
     // Internal struct to hold per-session data and linked tasks

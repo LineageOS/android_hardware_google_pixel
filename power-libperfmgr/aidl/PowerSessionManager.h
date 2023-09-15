@@ -49,8 +49,8 @@ class PowerSessionManager : public ::android::RefBase {
     void updateHintBoost(const std::string &boost, int32_t durationMs);
     int getDisplayRefreshRate();
     // Add and remove power hint session
-    void addPowerSession(const std::string &idString, int64_t sessionId,
-                         std::chrono::nanoseconds durationNs, int32_t tgid, int32_t uid,
+    void addPowerSession(const std::string &idString,
+                         const std::shared_ptr<AppHintDesc> &sessionDescriptor,
                          const std::vector<int32_t> &threadIds);
     void removePowerSession(int64_t sessionId);
     // Replace current threads in session with threadIds
