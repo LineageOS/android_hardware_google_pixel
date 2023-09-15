@@ -65,7 +65,6 @@ struct SensorStatus {
     ThrottlingSeverity severity;
     ThrottlingSeverity prev_hot_severity;
     ThrottlingSeverity prev_cold_severity;
-    ThrottlingSeverity prev_hint_severity;
     boot_clock::time_point last_update_time;
     ThermalSample thermal_cached;
     std::unique_ptr<EmulSetting> emul_setting;
@@ -102,7 +101,6 @@ class ThermalHelper {
     virtual const std::unordered_map<std::string,
                                      std::unordered_map<std::string, ThermalStats<int>>>
     GetSensorCoolingDeviceRequestStatsSnapshot() = 0;
-    virtual void sendPowerExtHint(const Temperature &t) = 0;
     virtual bool isAidlPowerHalExist() = 0;
     virtual bool isPowerHalConnected() = 0;
     virtual bool isPowerHalExtConnected() = 0;
@@ -177,7 +175,6 @@ class ThermalHelperImpl : public ThermalHelper {
         return thermal_stats_helper_.GetSensorCoolingDeviceRequestStatsSnapshot();
     }
 
-    void sendPowerExtHint(const Temperature &t) override;
     bool isAidlPowerHalExist() override { return power_hal_service_.isAidlPowerHalExist(); }
     bool isPowerHalConnected() override { return power_hal_service_.isPowerHalConnected(); }
     bool isPowerHalExtConnected() override { return power_hal_service_.isPowerHalExtConnected(); }
@@ -206,8 +203,6 @@ class ThermalHelperImpl : public ThermalHelper {
     // Read temperature data according to thermal sensor's info
     bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
                            std::map<std::string, float> *sensor_log_map);
-    bool connectToPowerHal();
-    void updateSupportedPowerHints();
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
     // Check the max CDEV state for cdev_ceiling
     void maxCoolingRequestCheck(
