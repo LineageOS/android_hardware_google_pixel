@@ -62,7 +62,6 @@ class MockThermalHelper : public ThermalHelper {
     MOCK_METHOD((const std::unordered_map<std::string,
                                           std::unordered_map<std::string, ThermalStats<int>>>),
                 GetSensorCoolingDeviceRequestStatsSnapshot, (), (override));
-    MOCK_METHOD(void, sendPowerExtHint, (const Temperature &), (override));
     MOCK_METHOD(bool, isAidlPowerHalExist, (), (override));
     MOCK_METHOD(bool, isPowerHalConnected, (), (override));
     MOCK_METHOD(bool, isPowerHalExtConnected, (), (override));
