@@ -167,7 +167,6 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 .severity = ThrottlingSeverity::NONE,
                 .prev_hot_severity = ThrottlingSeverity::NONE,
                 .prev_cold_severity = ThrottlingSeverity::NONE,
-                .prev_hint_severity = ThrottlingSeverity::NONE,
                 .last_update_time = boot_clock::time_point::min(),
                 .thermal_cached = {NAN, boot_clock::time_point::min()},
                 .emul_setting = nullptr,
@@ -230,10 +229,10 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
         }
     }
 
-    if (!connectToPowerHal()) {
+    if (!power_hal_service_.connect()) {
         LOG(ERROR) << "Fail to connect to Power Hal";
     } else {
-        updateSupportedPowerHints();
+        power_hal_service_.updateSupportedPowerHints(sensor_info_map_);
     }
 
     if (thermal_throttling_disabled) {
@@ -267,12 +266,6 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
     is_initialized_ = thermal_watcher_->startWatchingDeviceFiles();
     if (!is_initialized_) {
         LOG(FATAL) << "ThermalHAL could not start watching thread properly.";
-    }
-
-    if (!connectToPowerHal()) {
-        LOG(ERROR) << "Fail to connect to Power Hal";
-    } else {
-        updateSupportedPowerHints();
     }
 }
 
@@ -1142,8 +1135,8 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
                 cb_(t);
             }
 
-            if (sensor_info_map_.at(t.name).send_powerhint && isAidlPowerHalExist()) {
-                sendPowerExtHint(t);
+            if (sensor_info_map_.at(t.name).send_powerhint) {
+                power_hal_service_.sendPowerExtHint(t);
             }
         }
     }
@@ -1162,61 +1155,6 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
     return min_sleep_ms;
 }
 
-bool ThermalHelperImpl::connectToPowerHal() {
-    return power_hal_service_.connect();
-}
-
-void ThermalHelperImpl::updateSupportedPowerHints() {
-    for (auto const &name_status_pair : sensor_info_map_) {
-        if (!(name_status_pair.second.send_powerhint)) {
-            continue;
-        }
-        ThrottlingSeverity current_severity = ThrottlingSeverity::NONE;
-        for (const auto &severity : ::ndk::enum_range<ThrottlingSeverity>()) {
-            if (severity == ThrottlingSeverity::NONE) {
-                supported_powerhint_map_[name_status_pair.first][ThrottlingSeverity::NONE] =
-                        ThrottlingSeverity::NONE;
-                continue;
-            }
-
-            bool isSupported = false;
-            ndk::ScopedAStatus isSupportedResult;
-
-            if (power_hal_service_.isPowerHalExtConnected()) {
-                isSupported = power_hal_service_.isModeSupported(name_status_pair.first, severity);
-            }
-            if (isSupported)
-                current_severity = severity;
-            supported_powerhint_map_[name_status_pair.first][severity] = current_severity;
-        }
-    }
-}
-
-void ThermalHelperImpl::sendPowerExtHint(const Temperature &t) {
-    ATRACE_CALL();
-    std::lock_guard<std::shared_mutex> lock(sensor_status_map_mutex_);
-    ThrottlingSeverity prev_hint_severity;
-    prev_hint_severity = sensor_status_map_.at(t.name).prev_hint_severity;
-    ThrottlingSeverity current_hint_severity = supported_powerhint_map_[t.name][t.throttlingStatus];
-    std::stringstream log_buf;
-
-    if (prev_hint_severity == current_hint_severity) {
-        return;
-    }
-
-    for (const auto &severity : ::ndk::enum_range<ThrottlingSeverity>()) {
-        if (severity != supported_powerhint_map_[t.name][severity]) {
-            continue;
-        }
-        bool mode = severity <= current_hint_severity;
-        power_hal_service_.setMode(t.name, severity, mode);
-        log_buf << toString(severity).c_str() << ":" << mode << " ";
-    }
-
-    LOG(INFO) << t.name << " send powerhint: " << log_buf.str();
-
-    sensor_status_map_[t.name].prev_hint_severity = current_hint_severity;
-}
 }  // namespace implementation
 }  // namespace thermal
 }  // namespace hardware
