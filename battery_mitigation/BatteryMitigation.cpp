@@ -18,7 +18,6 @@
 
 #include <sstream>
 
-#define MAX_BROWNOUT_DATA_AGE_MINUTES 5
 #define ONE_SECOND_IN_US 1000000
 
 namespace android {
@@ -66,7 +65,7 @@ bool BatteryMitigation::isMitigationLogTimeValid(std::chrono::system_clock::time
             auto delta = epoch_startTime - epoch_logFileTime;
             auto delta_minutes = delta / 60;
 
-            if ((delta_minutes < MAX_BROWNOUT_DATA_AGE_MINUTES) && (delta_minutes >= 0)) {
+            if (delta_minutes >= 0) {
                 return true;
             }
         }
