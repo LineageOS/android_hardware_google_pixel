@@ -125,7 +125,7 @@ cc_library_static {
     generated_headers: ["pixelstatsatoms.h"],
     export_generated_headers: ["pixelstatsatoms.h"],
     shared_libs: [
-        "android.frameworks.stats-V1-ndk",
+        "android.frameworks.stats-V2-ndk",
     ]
 }
 
@@ -161,7 +161,7 @@ cc_library {
     "-Werror",
   ],
   shared_libs: [
-    "android.frameworks.stats-V1-ndk",
+    "android.frameworks.stats-V2-ndk",
     "libbase",
     "libbinder_ndk",
     "libcutils",
@@ -173,7 +173,7 @@ cc_library {
     "pixelatoms-cpp",
   ],
   export_shared_lib_headers: [
-    "android.frameworks.stats-V1-ndk",
+    "android.frameworks.stats-V2-ndk",
     "pixelatoms-cpp",
   ],
   static_libs: [
