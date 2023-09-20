@@ -187,7 +187,8 @@ bool ThermalThrottling::registerThermalThrottling(
 // return power budget based on PID algo
 float ThermalThrottling::updatePowerBudget(const Temperature &temp, const SensorInfo &sensor_info,
                                            std::chrono::milliseconds time_elapsed_ms,
-                                           ThrottlingSeverity curr_severity) {
+                                           ThrottlingSeverity curr_severity,
+                                           const bool max_throttling) {
     float p = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
     bool target_changed = false;
@@ -210,6 +211,11 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
 
     // Compute PID
     float err = sensor_info.hot_thresholds[target_state] - temp.value;
+
+    if (max_throttling && err <= 0) {
+        return sensor_info.throttling_info->min_alloc_power[target_state];
+    }
+
     p = err * (err < 0 ? sensor_info.throttling_info->k_po[target_state]
                        : sensor_info.throttling_info->k_pu[target_state]);
 
@@ -317,7 +323,8 @@ bool ThermalThrottling::allocatePowerToCdev(
         const Temperature &temp, const SensorInfo &sensor_info,
         const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
         const std::unordered_map<std::string, PowerStatus> &power_status_map,
-        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map) {
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map,
+        const bool max_throttling) {
     float total_weight = 0;
     float last_updated_avg_power = NAN;
     float allocated_power = 0;
@@ -329,7 +336,8 @@ bool ThermalThrottling::allocatePowerToCdev(
     std::string log_buf;
 
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
-    auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity);
+    auto total_power_budget =
+            updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity, max_throttling);
     const auto &profile = thermal_throttling_status_map_[temp.name].profile;
 
     if (sensor_info.throttling_info->excluded_power_info_map.size()) {
@@ -466,30 +474,33 @@ bool ThermalThrottling::allocatePowerToCdev(
                         thermal_throttling_status_map_[temp.name].pid_cdev_request_map.at(
                                 binded_cdev_info_pair.first);
 
-                if (binded_cdev_info_pair.second.max_release_step !=
-                            std::numeric_limits<int>::max() &&
-                    (power_data_invalid || cdev_power_adjustment > 0)) {
-                    if (!power_data_invalid && curr_cdev_vote < max_cdev_vote) {
-                        cdev_power_budget = cdev_info.state2power[curr_cdev_vote];
-                        LOG(VERBOSE) << temp.name << "'s " << binded_cdev_info_pair.first
-                                     << " vote: " << curr_cdev_vote
-                                     << " is lower than max cdev vote: " << max_cdev_vote;
-                    } else {
-                        const auto target_state = std::max(
-                                curr_cdev_vote - binded_cdev_info_pair.second.max_release_step, 0);
-                        cdev_power_budget =
-                                std::min(cdev_power_budget, cdev_info.state2power[target_state]);
+                if (!max_throttling) {
+                    if (binded_cdev_info_pair.second.max_release_step !=
+                                std::numeric_limits<int>::max() &&
+                        (power_data_invalid || cdev_power_adjustment > 0)) {
+                        if (!power_data_invalid && curr_cdev_vote < max_cdev_vote) {
+                            cdev_power_budget = cdev_info.state2power[curr_cdev_vote];
+                            LOG(VERBOSE) << temp.name << "'s " << binded_cdev_info_pair.first
+                                         << " vote: " << curr_cdev_vote
+                                         << " is lower than max cdev vote: " << max_cdev_vote;
+                        } else {
+                            const auto target_state = std::max(
+                                    curr_cdev_vote - binded_cdev_info_pair.second.max_release_step,
+                                    0);
+                            cdev_power_budget = std::min(cdev_power_budget,
+                                                         cdev_info.state2power[target_state]);
+                        }
                     }
-                }
 
-                if (binded_cdev_info_pair.second.max_throttle_step !=
-                            std::numeric_limits<int>::max() &&
-                    (power_data_invalid || cdev_power_adjustment < 0)) {
-                    const auto target_state = std::min(
-                            curr_cdev_vote + binded_cdev_info_pair.second.max_throttle_step,
-                            cdev_info.max_state);
-                    cdev_power_budget =
-                            std::max(cdev_power_budget, cdev_info.state2power[target_state]);
+                    if (binded_cdev_info_pair.second.max_throttle_step !=
+                                std::numeric_limits<int>::max() &&
+                        (power_data_invalid || cdev_power_adjustment < 0)) {
+                        const auto target_state = std::min(
+                                curr_cdev_vote + binded_cdev_info_pair.second.max_throttle_step,
+                                cdev_info.max_state);
+                        cdev_power_budget =
+                                std::max(cdev_power_budget, cdev_info.state2power[target_state]);
+                    }
                 }
 
                 thermal_throttling_status_map_[temp.name].pid_power_budget_map.at(
@@ -671,7 +682,8 @@ void ThermalThrottling::thermalThrottlingUpdate(
         const Temperature &temp, const SensorInfo &sensor_info,
         const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
         const std::unordered_map<std::string, PowerStatus> &power_status_map,
-        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map) {
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map,
+        const bool max_throttling) {
     if (!thermal_throttling_status_map_.count(temp.name)) {
         return;
     }
@@ -682,7 +694,7 @@ void ThermalThrottling::thermalThrottlingUpdate(
 
     if (thermal_throttling_status_map_[temp.name].pid_power_budget_map.size()) {
         if (!allocatePowerToCdev(temp, sensor_info, curr_severity, time_elapsed_ms,
-                                 power_status_map, cooling_device_info_map)) {
+                                 power_status_map, cooling_device_info_map, max_throttling)) {
             LOG(ERROR) << "Sensor " << temp.name << " PID request cdev failed";
             // Clear the CDEV request if the power budget is failed to be allocated
             for (auto &pid_cdev_request_pair :

@@ -646,15 +646,17 @@ void Thermal::dumpThermalData(int fd) {
             }
         }
         {
-            dump_buf << "getEmulTemperatures:" << std::endl;
+            dump_buf << "getEmulSettings:" << std::endl;
             for (const auto &sensor_status_pair : sensor_status_map) {
-                if (sensor_status_pair.second.emul_setting == nullptr) {
+                if (sensor_status_pair.second.override_status.emul_temp == nullptr) {
                     continue;
                 }
-                dump_buf << " Name: " << sensor_status_pair.first
-                         << " EmulTemp: " << sensor_status_pair.second.emul_setting->emul_temp
+                dump_buf << " Name: " << sensor_status_pair.first << " EmulTemp: "
+                         << sensor_status_pair.second.override_status.emul_temp->temp
                          << " EmulSeverity: "
-                         << sensor_status_pair.second.emul_setting->emul_severity << std::endl;
+                         << sensor_status_pair.second.override_status.emul_temp->severity
+                         << " maxThrottling: " << std::boolalpha
+                         << sensor_status_pair.second.override_status.max_throttling << std::endl;
             }
         }
         {
@@ -774,17 +776,18 @@ binder_status_t Thermal::dump(int fd, const char **args, uint32_t numArgs) {
         return STATUS_OK;
     }
 
-    if (std::string(args[0]) == "emul_temp") {
-        return (numArgs != 3 ||
-                !thermal_helper_->emulTemp(std::string(args[1]), std::strtod(args[2], nullptr)))
-                       ? STATUS_BAD_VALUE
-                       : STATUS_OK;
-    } else if (std::string(args[0]) == "emul_severity") {
-        return (numArgs != 3 ||
-                !thermal_helper_->emulSeverity(std::string(args[1]),
-                                               static_cast<int>(std::strtol(args[2], nullptr, 10))))
-                       ? STATUS_BAD_VALUE
-                       : STATUS_OK;
+    if (std::string(args[0]) == "emul_temp" && numArgs >= 3) {
+        return thermal_helper_->emulTemp(
+                       std::string(args[1]), std::atof(args[2]),
+                       numArgs == 3 ? false : std::string(args[3]) == "max_throttling")
+                       ? STATUS_OK
+                       : STATUS_BAD_VALUE;
+    } else if (std::string(args[0]) == "emul_severity" && numArgs >= 3) {
+        return thermal_helper_->emulSeverity(
+                       std::string(args[1]), std::atof(args[2]),
+                       numArgs == 3 ? false : std::string(args[3]) == "max_throttling")
+                       ? STATUS_OK
+                       : STATUS_BAD_VALUE;
     } else if (std::string(args[0]) == "emul_clear") {
         return (numArgs != 2 || !thermal_helper_->emulClear(std::string(args[1])))
                        ? STATUS_BAD_VALUE
