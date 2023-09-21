@@ -74,22 +74,10 @@ void SessionTaskMap::getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::t
         return;
     }
 
-    /*
-    for (auto sessionId : taskItr->second) {
-        auto sessItr = mSessions.find(sessionId);
-        if (sessItr == mSessions.end()) {
-            continue;
-        }
-
-        if (!sessItr->second.val->isActive) {
-            continue;
-        }
-
-        sessItr->second.val->votes->getUclampRange(&uclampRange, timeNow);
-    }
-    */
-
     for (const auto &sessInTask : taskItr->second) {
+        if (!sessInTask->isActive) {
+            continue;
+        }
         sessInTask->votes->getUclampRange(&uclampRange, timeNow);
     }
     *uclampMin = uclampRange.uclampMin;
@@ -110,10 +98,10 @@ std::vector<int64_t> SessionTaskMap::getSessionIds(pid_t taskId) const {
     return res;
 }
 
-const std::vector<pid_t> &SessionTaskMap::getTaskIds(int64_t sessionId) const {
+std::vector<pid_t> &SessionTaskMap::getTaskIds(int64_t sessionId) {
     auto taskItr = mSessions.find(sessionId);
     if (taskItr == mSessions.end()) {
-        static const std::vector<pid_t> emptyTaskIdVec;
+        static std::vector<pid_t> emptyTaskIdVec;
         return emptyTaskIdVec;
     }
     return taskItr->second.linkedTasks;
@@ -168,6 +156,35 @@ bool SessionTaskMap::remove(int64_t sessionId) {
     // Now we can safely remove session entirely since there are no more
     // mappings in task to session id
     mSessions.erase(sessItr);
+    return true;
+}
+
+bool SessionTaskMap::removeDeadTaskSessionMap(int64_t sessionId, pid_t taskId) {
+    auto sessItr = mSessions.find(sessionId);
+    if (sessItr == mSessions.end()) {
+        return false;
+    }
+
+    auto taskItr = mTasks.find(taskId);
+    if (taskItr == mTasks.end()) {
+        // Inconsisent state
+        return false;
+    }
+
+    // Now lookup session id in task's set
+    auto taskSessItr =
+            std::find(taskItr->second.begin(), taskItr->second.end(), sessItr->second.val);
+    if (taskSessItr == taskItr->second.end()) {
+        // Should not happen
+        return false;
+    }
+
+    // Remove session id from task map
+    taskItr->second.erase(taskSessItr);
+    if (taskItr->second.empty()) {
+        mTasks.erase(taskItr);
+    }
+
     return true;
 }
 

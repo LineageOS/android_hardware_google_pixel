@@ -152,6 +152,23 @@ TEST(UclampVoter, overwrite) {
     EXPECT_EQ(32, ucr2.uclampMin);
 }
 
+TEST(UclampVoter, updateDuration) {
+    const auto tNow = std::chrono::steady_clock::now();
+
+    auto votes = std::make_shared<Votes>();
+    EXPECT_EQ(0, votes->size());
+
+    votes->add(1, VoteRange::makeMinRange(11, tNow, 4s));
+    votes->add(2, VoteRange::makeMinRange(22, tNow, 2s));
+    EXPECT_EQ(2, votes->size());
+
+    EXPECT_TRUE(votes->allTimedOut(tNow + 7s));
+    votes->updateDuration(1, 8s);
+    EXPECT_FALSE(votes->allTimedOut(tNow + 7s));
+    votes->updateDuration(5, 10s);
+    EXPECT_TRUE(votes->allTimedOut(tNow + 9s));
+}
+
 TEST(UclampVoter, loadVoteTest) {
     const int defaultVoteId = 1;
     const int loadVoteId = 2;

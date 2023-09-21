@@ -54,13 +54,11 @@ class PowerSessionManager;
 // and is separate so that it can be used as a pointer for
 // easily passing to the pid function
 struct AppHintDesc {
-    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, std::vector<int32_t> threadIds,
-                std::chrono::nanoseconds pTargetNs);
+    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, std::chrono::nanoseconds pTargetNs);
     std::string toString() const;
     int64_t sessionId{0};
     const int32_t tgid;
     const int32_t uid;
-    std::vector<int32_t> threadIds;
     nanoseconds targetNs;
     int pidSetPoint;
     // status
@@ -103,7 +101,7 @@ class PowerHintSession : public BnPowerHintSession {
     sp<PowerSessionManager> mPSManager;
     int64_t mSessionId = 0;
     std::string mIdString;
-    AppHintDesc *mDescriptor = nullptr;
+    std::shared_ptr<AppHintDesc> mDescriptor;
     // Trace strings
     AppDescriptorTrace mAppDescriptorTrace;
     std::atomic<time_point<steady_clock>> mLastUpdatedTime;

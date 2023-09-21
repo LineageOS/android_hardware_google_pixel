@@ -51,7 +51,7 @@ void Votes::add(int voteId, const VoteRange &v) {
 
 void Votes::updateDuration(int voteId, std::chrono::nanoseconds durationNs) {
     auto voteItr = mVotes.find(voteId);
-    if (voteItr == mVotes.end()) {
+    if (voteItr != mVotes.end()) {
         voteItr->second.updateDuration(durationNs);
     }
 }

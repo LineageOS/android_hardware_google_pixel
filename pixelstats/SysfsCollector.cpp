@@ -122,7 +122,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAdaptedInfoCountPath(sysfs_paths.AdaptedInfoCountPath),
       kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath),
       kPcmLatencyPath(sysfs_paths.PcmLatencyPath),
-      kPcmCountPath(sysfs_paths.PcmCountPath) {}
+      kPcmCountPath(sysfs_paths.PcmCountPath),
+      kTotalCallCountPath(sysfs_paths.TotalCallCountPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1083,7 +1084,8 @@ void SysfsCollector::logBootStats(const std::shared_ptr<IStats> &stats_client) {
  */
 void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &stats_client) {
     std::string file_contents;
-    uint32_t milli_ams_rate, cca_active_rate, cca_enable_rate;
+    uint32_t milli_ams_rate, c1, c2, c3, c4;
+    uint32_t total_call_voice = 0, total_call_voip = 0;
     bool isAmsReady = false, isCCAReady = false;
 
     if (kAmsRatePath == nullptr) {
@@ -1107,12 +1109,22 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
         if (!ReadFileToString(kCCARatePath, &file_contents)) {
             ALOGD("Unable to read cca_rate path %s", kCCARatePath);
         } else {
-            if (sscanf(file_contents.c_str(), "%u,%u", &cca_active_rate, &cca_enable_rate) != 2) {
+            if (sscanf(file_contents.c_str(), "%u %u %u %u", &c1, &c2, &c3, &c4) != 4) {
                 ALOGD("Unable to parse cca rates %s", file_contents.c_str());
             } else {
                 isCCAReady = true;
-                ALOGD("cca_active_rate = %u, cca_enable_rate = %u", cca_active_rate,
-                      cca_enable_rate);
+            }
+        }
+    }
+
+    if (kTotalCallCountPath == nullptr) {
+        ALOGD("Total call count path not specified");
+    } else {
+        if (!ReadFileToString(kTotalCallCountPath, &file_contents)) {
+            ALOGD("Unable to read total call path %s", kTotalCallCountPath);
+        } else {
+            if (sscanf(file_contents.c_str(), "%u %u", &total_call_voice, &total_call_voip) != 2) {
+                ALOGD("Unable to parse total call %s", file_contents.c_str());
             }
         }
     }
@@ -1122,35 +1134,73 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
         return;
     }
 
-    std::vector<VendorAtomValue> values(3);
-    VendorAtomValue tmp;
+    // Sending ams_rate, total_call, c1 and c2
+    {
+        std::vector<VendorAtomValue> values(7);
+        VendorAtomValue tmp;
 
-    if (isAmsReady) {
-        tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
-        values[VendorAudioHardwareStatsReported::kMilliRateOfAmsPerDayFieldNumber -
+        if (isAmsReady) {
+            tmp.set<VendorAtomValue::intValue>(milli_ams_rate);
+            values[VendorAudioHardwareStatsReported::kMilliRateOfAmsPerDayFieldNumber -
+                   kVendorAtomOffset] = tmp;
+        }
+
+        tmp.set<VendorAtomValue::intValue>(1);
+        values[VendorAudioHardwareStatsReported::kSourceFieldNumber - kVendorAtomOffset] = tmp;
+
+        if (isCCAReady) {
+            tmp.set<VendorAtomValue::intValue>(c1);
+            values[VendorAudioHardwareStatsReported::kCcaActiveCountPerDayFieldNumber -
+                   kVendorAtomOffset] = tmp;
+
+            tmp.set<VendorAtomValue::intValue>(c2);
+            values[VendorAudioHardwareStatsReported::kCcaEnableCountPerDayFieldNumber -
+                   kVendorAtomOffset] = tmp;
+        }
+
+        tmp.set<VendorAtomValue::intValue>(total_call_voice);
+        values[VendorAudioHardwareStatsReported::kTotalCallCountPerDayFieldNumber -
                kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioHardwareStatsReported,
+                            .values = std::move(values)};
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
     }
 
-    if (isCCAReady) {
-        tmp.set<VendorAtomValue::intValue>(cca_active_rate);
-        values[VendorAudioHardwareStatsReported::kRateOfCcaActivePerDayFieldNumber -
+    // Sending total_call, c3 and c4
+    {
+        std::vector<VendorAtomValue> values(7);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(0);
+        values[VendorAudioHardwareStatsReported::kSourceFieldNumber - kVendorAtomOffset] = tmp;
+
+        if (isCCAReady) {
+            tmp.set<VendorAtomValue::intValue>(c3);
+            values[VendorAudioHardwareStatsReported::kCcaActiveCountPerDayFieldNumber -
+                   kVendorAtomOffset] = tmp;
+
+            tmp.set<VendorAtomValue::intValue>(c4);
+            values[VendorAudioHardwareStatsReported::kCcaEnableCountPerDayFieldNumber -
+                   kVendorAtomOffset] = tmp;
+        }
+
+        tmp.set<VendorAtomValue::intValue>(total_call_voip);
+        values[VendorAudioHardwareStatsReported::kTotalCallCountPerDayFieldNumber -
                kVendorAtomOffset] = tmp;
 
-        tmp.set<VendorAtomValue::intValue>(cca_enable_rate);
-        values[VendorAudioHardwareStatsReported::kRateOfCcaEnablePerDayFieldNumber -
-               kVendorAtomOffset] = tmp;
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioHardwareStatsReported,
+                            .values = std::move(values)};
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
     }
-
-    // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = "",
-                        .atomId = PixelAtoms::Atom::kVendorAudioHardwareStatsReported,
-                        .values = std::move(values)};
-
-    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-    if (!ret.isOk())
-        ALOGE("Unable to report VendorAudioHardwareStatsReported to Stats service");
-    else
-        ALOGD("Reported VendorAudioHardwareStatsReported");
 }
 
 /**
@@ -1196,7 +1246,6 @@ void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats
         VendorAtomValue tmp;
 
         if (pdm_states[index] == 0) {
-            ALOGD("Skipped VendorAudioPdmStatsReported at index %d", index);
             continue;
         }
 
@@ -1214,8 +1263,6 @@ void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioPdmStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioPdmStatsReported at index %d", index);
     }
 }
 
@@ -1286,7 +1333,6 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
             }
         }
         if (!has_value) {
-            ALOGD("Skipped VendorAudioThirdPartyEffectStatsReported at index %d", index);
             continue;
         }
 
@@ -1306,8 +1352,6 @@ void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) 
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioThirdPartyEffectStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioThirdPartyEffectStatsReported at index %d", index);
     }
 }
 
@@ -1369,7 +1413,6 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
         VendorAtomValue tmp;
 
         if (count_per_feature[index] == 0 && duration_per_feature[index] == 0) {
-            ALOGD("Skipped VendorAudioAdaptedInfoStatsReported at index %d", index);
             continue;
         }
 
@@ -1393,8 +1436,6 @@ void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_cl
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioAdaptedInfoStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioAdaptedInfoStatsReported at index %d", index);
     }
 }
 
@@ -1478,8 +1519,6 @@ void SysfsCollector::logPcmUsageStats(const std::shared_ptr<IStats> &stats_clien
         const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
         if (!ret.isOk())
             ALOGE("Unable to report VendorAudioPcmStatsReported at index %d", index);
-        else
-            ALOGD("Reported VendorAudioPcmStatsReported at index %d successfully", index);
     }
 }
 
