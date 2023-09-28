@@ -112,6 +112,7 @@ message Atom {
       VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
       GpuEvent gpu_event = 105059;
       VendorAudioPcmStatsReported vendor_audio_pcm_stats_reported = 105060;
+      VendorUsbDataSessionEvent vendor_usb_data_session_event = 105061;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1989,4 +1990,48 @@ message VendorAudioPcmStatsReported {
   optional int32 pcm_open_latency_avg_ms_per_day = 3;
   /* Total active count of the pcm type per day. */
   optional int32 pcm_active_counts_per_day = 4;
+}
+
+/**
+  * Keep track of information about a USB data session, which is defined
+  * as the period when a port enters a data role (either host or device) to
+  * when the port exits the data role.
+  */
+message VendorUsbDataSessionEvent {
+  /* Vendor reverse domain name (expecting "com.google.pixel") */
+  optional string reverse_domain_name = 1;
+
+  enum UsbDataRole {
+    USB_ROLE_UNKNOWN = 0;
+    USB_ROLE_DEVICE = 1;
+    USB_ROLE_HOST = 2;
+  }
+  /**
+    * USB device states are key milestones in a USB connection.
+    * For device data role, a typical transition would be like:
+    * not attached -> default -> addressed -> configured.
+    * For host data role, a typical transition would be like
+    * not attached -> powered -> default -> addressed -> configured.
+    */
+  enum UsbDeviceState {
+    USB_STATE_UNKNOWN = 0;
+    USB_STATE_NOT_ATTACHED = 1;
+    USB_STATE_ATTACHED = 2;
+    USB_STATE_POWERED = 3;
+    USB_STATE_DEFAULT = 4;
+    USB_STATE_ADDRESSED = 5;
+    USB_STATE_CONFIGURED = 6;
+    USB_STATE_SUSPENDED = 7;
+  }
+  /* USB data role of the data session. */
+  optional UsbDataRole usb_role = 2;
+  /* Usb device state transitions during the data session. */
+  repeated UsbDeviceState usb_states = 3;
+  /**
+    * Elapsed time from the start of the data session when entering the
+    * state, mapped 1-1 to the usb_states field.
+    */
+  repeated int64 elapsed_time_ms = 4;
+  // Duration of the data session.
+  optional int64 duration_ms = 5;
 }
