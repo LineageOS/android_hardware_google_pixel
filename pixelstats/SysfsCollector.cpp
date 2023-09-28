@@ -961,22 +961,23 @@ void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_clien
         // The size should be the same as the number of fields in ZramMmStat
         std::vector<VendorAtomValue> values(6);
         VendorAtomValue tmp;
-        tmp.set<VendorAtomValue::intValue>(orig_data_size);
+        tmp.set<VendorAtomValue::longValue>(orig_data_size);
         values[ZramMmStat::kOrigDataSizeFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(compr_data_size);
+        tmp.set<VendorAtomValue::longValue>(compr_data_size);
         values[ZramMmStat::kComprDataSizeFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(mem_used_total);
+        tmp.set<VendorAtomValue::longValue>(mem_used_total);
         values[ZramMmStat::kMemUsedTotalFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(same_pages);
+        tmp.set<VendorAtomValue::longValue>(same_pages);
         values[ZramMmStat::kSamePagesFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(huge_pages);
+        tmp.set<VendorAtomValue::longValue>(huge_pages);
         values[ZramMmStat::kHugePagesFieldNumber - kVendorAtomOffset] = tmp;
 
         // Skip the first data to avoid a big spike in this accumulated value.
         if (prev_huge_pages_since_boot_ == -1)
-            tmp.set<VendorAtomValue::intValue>(0);
+            tmp.set<VendorAtomValue::longValue>(0);
         else
-            tmp.set<VendorAtomValue::intValue>(huge_pages_since_boot - prev_huge_pages_since_boot_);
+            tmp.set<VendorAtomValue::longValue>(huge_pages_since_boot -
+                                                prev_huge_pages_since_boot_);
 
         values[ZramMmStat::kHugePagesSinceBootFieldNumber - kVendorAtomOffset] = tmp;
         prev_huge_pages_since_boot_ = huge_pages_since_boot;
@@ -1015,11 +1016,11 @@ void SysfsCollector::reportZramBdStat(const std::shared_ptr<IStats> &stats_clien
         // Load values array
         std::vector<VendorAtomValue> values(3);
         VendorAtomValue tmp;
-        tmp.set<VendorAtomValue::intValue>(bd_count);
+        tmp.set<VendorAtomValue::longValue>(bd_count);
         values[ZramBdStat::kBdCountFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(bd_reads);
+        tmp.set<VendorAtomValue::longValue>(bd_reads);
         values[ZramBdStat::kBdReadsFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(bd_writes);
+        tmp.set<VendorAtomValue::longValue>(bd_writes);
         values[ZramBdStat::kBdWritesFieldNumber - kVendorAtomOffset] = tmp;
 
         // Send vendor atom to IStats HAL
