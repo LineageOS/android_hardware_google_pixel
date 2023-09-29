@@ -157,9 +157,11 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
         ret = false;
     }
 
-    if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
-                                               cooling_device_info_map_)) {
-        LOG(FATAL) << "Failed to initialize thermal stats";
+    if (ret) {
+        if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
+                                                   cooling_device_info_map_)) {
+            LOG(FATAL) << "Failed to initialize thermal stats";
+        }
     }
 
     for (auto &name_status_pair : sensor_info_map_) {
@@ -377,8 +379,15 @@ bool ThermalHelperImpl::readTemperature(
     std::map<std::string, float> sensor_log_map;
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map) ||
-        std::isnan(temp)) {
+    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
+        LOG(ERROR) << "Failed to read thermal sensor " << sensor_name.data();
+        thermal_stats_helper_.reportThermalAbnormality(ThermalAbnormalityDetected::UNKNOWN,
+                                                       sensor_name, std::nullopt);
+        return false;
+    }
+
+    if (std::isnan(temp)) {
+        LOG(INFO) << "Sensor " << sensor_name.data() << " temperature is nan.";
         return false;
     }
 

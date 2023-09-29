@@ -28,7 +28,6 @@ namespace google {
 namespace pixel {
 
 using aidl::android::frameworks::stats::IStats;
-
 /**
  * A class to listen for uevents and report reliability events to
  * the PixelStats HAL.
@@ -90,7 +89,9 @@ class UeventListener {
     void ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_client);
     void ReportGpuEvent(const std::shared_ptr<IStats> &stats_client, const char *driver,
                         const char *gpu_event_type, const char *gpu_event_info);
-
+    void ReportThermalAbnormalEvent(const std::shared_ptr<IStats> &stats_client,
+                                    const char *devpath, const char *thermal_abnormal_event_type,
+                                    const char *thermal_abnormal_event_info);
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
     const std::string kUsbPortOverheatPath;
@@ -139,6 +140,24 @@ class UeventListener {
                      PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSF_RESET_OK},
                     {"CSF_RESET_FAILED", PixelAtoms::GpuEvent::GpuEventInfo::
                                                  GpuEvent_GpuEventInfo_MALI_CSF_RESET_FAILED}};
+
+    const std::unordered_map<std::string, PixelAtoms::ThermalAbnormalityDetected::AbnormalityType>
+            kThermalAbnormalityTypeStrToEnum{
+                    {"UNKNOWN", PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
+                                        ThermalAbnormalityDetected_AbnormalityType_UNKNOWN},
+                    {"SENSOR_STUCK",
+                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
+                             ThermalAbnormalityDetected_AbnormalityType_SENSOR_STUCK},
+                    {"EXTREME_HIGH_TEMP",
+                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
+                             ThermalAbnormalityDetected_AbnormalityType_EXTREME_HIGH_TEMP},
+                    {"EXTREME_LOW_TEMP",
+                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
+                             ThermalAbnormalityDetected_AbnormalityType_EXTREME_LOW_TEMP},
+                    {"HIGH_RISING_SPEED",
+                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
+                             ThermalAbnormalityDetected_AbnormalityType_HIGH_RISING_SPEED},
+            };
 
     BatteryCapacityReporter battery_capacity_reporter_;
     ChargeStatsReporter charge_stats_reporter_;

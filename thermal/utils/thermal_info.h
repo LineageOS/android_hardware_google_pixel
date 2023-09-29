@@ -93,6 +93,32 @@ struct StatsConfig {
     }
 };
 
+struct TempRangeInfo {
+    int max_temp_threshold;
+    int min_temp_threshold;
+};
+
+struct TempStuckInfo {
+    int min_polling_count;
+    std::chrono::milliseconds min_stuck_duration;
+};
+
+struct AbnormalStatsInfo {
+    struct SensorsTempRangeInfo {
+        std::vector<std::string> sensors;
+        TempRangeInfo temp_range_info;
+    };
+    struct SensorsTempStuckInfo {
+        std::vector<std::string> sensors;
+        TempStuckInfo temp_stuck_info;
+    };
+
+    std::optional<TempRangeInfo> default_temp_range_info;
+    std::vector<SensorsTempRangeInfo> sensors_temp_range_infos;
+    std::optional<TempStuckInfo> default_temp_stuck_info;
+    std::vector<SensorsTempStuckInfo> sensors_temp_stuck_infos;
+};
+
 enum class SensorFusionType : uint32_t {
     SENSOR = 0,
     ODPM,
@@ -209,10 +235,14 @@ bool ParseCoolingDevice(const Json::Value &config,
                         std::unordered_map<std::string, CdevInfo> *cooling_device_parsed);
 bool ParsePowerRailInfo(const Json::Value &config,
                         std::unordered_map<std::string, PowerRailInfo> *power_rail_parsed);
-bool ParseStatsConfig(const Json::Value &config,
-                      const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-                      const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
-                      StatsConfig *stats_config);
+bool ParseSensorStatsConfig(const Json::Value &config,
+                            const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
+                            StatsInfo<float> *sensor_stats_info_parsed,
+                            AbnormalStatsInfo *abnormal_stats_info_parsed);
+bool ParseCoolingDeviceStatsConfig(
+        const Json::Value &config,
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
+        StatsInfo<int> *cooling_device_request_info_parsed);
 }  // namespace implementation
 }  // namespace thermal
 }  // namespace hardware
