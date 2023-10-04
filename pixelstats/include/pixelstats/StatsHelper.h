@@ -50,6 +50,8 @@ void reportUsbPortOverheat(const std::shared_ptr<IStats> &stats_client,
 void reportSpeakerHealthStat(const std::shared_ptr<IStats> &stats_client,
                              const PixelAtoms::VendorSpeakerStatsReported &speakerHealthStat);
 
+void reportUsbDataSessionEvent(const std::shared_ptr<IStats> &stats_client,
+                               const PixelAtoms::VendorUsbDataSessionEvent &usb_session);
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware
