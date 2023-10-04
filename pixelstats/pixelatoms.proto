@@ -114,6 +114,7 @@ message Atom {
       VendorAudioPcmStatsReported vendor_audio_pcm_stats_reported = 105060;
       VendorUsbDataSessionEvent vendor_usb_data_session_event = 105061;
       ThermalAbnormalityDetected thermal_abnormality_detected = 105062;
+      VendorAudioOffloadedEffectStatsReported vendor_audio_offloaded_effect_stats_reported = 105063;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2060,4 +2061,21 @@ message ThermalAbnormalityDetected {
   optional string name = 3;
   /* abnormal value: temp(if sensor)/state(if cooling device)/power(if rail) */
   optional int32 value = 4;
+}
+
+/**
+ * Logs the reported vendor audio offloaded effects usage stats.
+ */
+message VendorAudioOffloadedEffectStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* UUID most significant bit */
+  optional int64 effect_uuid_msb = 2;
+
+  /* UUID least significant bit */
+  optional int64 effect_uuid_lsb = 3;
+
+  /* Active seconds per day. */
+  optional int32 effect_active_seconds_per_day = 4;
 }
