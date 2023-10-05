@@ -29,6 +29,7 @@
 
 #include <mntent.h>
 #include <sys/timerfd.h>
+#include <sys/vfs.h>
 #include <cinttypes>
 #include <string>
 
@@ -49,10 +50,12 @@ using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::F2fsAtomicWriteInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::PartitionsUsedSpaceReported;
 using android::hardware::google::pixel::PixelAtoms::PcieLinkStatsReported;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
@@ -89,6 +92,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
       kEEPROMPath(sysfs_paths.EEPROMPath),
+      kBrownoutLogPath(sysfs_paths.BrownoutLogPath),
+      kBrownoutReasonProp(sysfs_paths.BrownoutReasonProp),
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
@@ -98,7 +103,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAmsRatePath(sysfs_paths.AmsRatePath),
       kThermalStatsPaths(sysfs_paths.ThermalStatsPaths),
       kCCARatePath(sysfs_paths.CCARatePath),
-      kTempResidencyPath(sysfs_paths.TempResidencyPath),
+      kTempResidencyAndResetPaths(sysfs_paths.TempResidencyAndResetPaths),
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
@@ -495,7 +500,7 @@ void SysfsCollector::logUFSErrorStats(const std::shared_ptr<IStats> &stats_clien
     int value, host_reset_count = 0;
 
     if (kUFSErrStatsPath.empty() || strlen(kUFSErrStatsPath.front().c_str()) == 0) {
-        ALOGV("UFS host reset count specified");
+        ALOGV("UFS host reset count path not specified");
         return;
     }
 
@@ -616,6 +621,68 @@ void SysfsCollector::logF2fsStats(const std::shared_ptr<IStats> &stats_client) {
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
         ALOGE("Unable to report F2fs stats to Stats service");
+    }
+}
+
+void SysfsCollector::logF2fsAtomicWriteInfo(const std::shared_ptr<IStats> &stats_client) {
+    int peak_atomic_write, committed_atomic_block, revoked_atomic_block;
+
+    if (kF2fsStatsPath == nullptr) {
+        ALOGV("F2fs stats path not specified");
+        return;
+    }
+
+    std::string userdataBlock = getUserDataBlock();
+
+    std::string path = kF2fsStatsPath + (userdataBlock + "/peak_atomic_write");
+    if (!ReadFileToInt(path, &peak_atomic_write)) {
+        ALOGE("Unable to read peak_atomic_write");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    path = kF2fsStatsPath + (userdataBlock + "/committed_atomic_block");
+    if (!ReadFileToInt(path, &committed_atomic_block)) {
+        ALOGE("Unable to read committed_atomic_block");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    path = kF2fsStatsPath + (userdataBlock + "/revoked_atomic_block");
+    if (!ReadFileToInt(path, &revoked_atomic_block)) {
+        ALOGE("Unable to read revoked_atomic_block");
+        return;
+    } else {
+        if (!WriteStringToFile(std::to_string(0), path)) {
+            ALOGE("Failed to write to file %s", path.c_str());
+            return;
+        }
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(3);
+    values[F2fsAtomicWriteInfo::kPeakAtomicWriteFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::intValue>(peak_atomic_write);
+    values[F2fsAtomicWriteInfo::kCommittedAtomicBlockFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::intValue>(committed_atomic_block);
+    values[F2fsAtomicWriteInfo::kRevokedAtomicBlockFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::intValue>(revoked_atomic_block);
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kF2FsAtomicWriteInfo,
+                        .values = values};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report F2fs Atomic Write info to Stats service");
     }
 }
 
@@ -761,7 +828,7 @@ void SysfsCollector::logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> 
                         .values = std::move(values)};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk()) {
-        ALOGE("Unable to report Boot stats to Stats service");
+        ALOGE("Unable to report F2fsSmartIdleMaintEnabled to Stats service");
     }
 }
 
@@ -828,7 +895,11 @@ void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_
 }
 
 void SysfsCollector::logTempResidencyStats(const std::shared_ptr<IStats> &stats_client) {
-    temp_residency_reporter_.logTempResidencyStats(stats_client, kTempResidencyPath);
+    for (const auto &temp_residency_and_reset_path : kTempResidencyAndResetPaths) {
+        temp_residency_reporter_.logTempResidencyStats(stats_client,
+                                                       temp_residency_and_reset_path.first,
+                                                       temp_residency_and_reset_path.second);
+    }
 }
 
 void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_client) {
@@ -1093,14 +1164,14 @@ void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &
         return;
 
     int64_t max_latency;
-    if (!sscanf(data + offset, "Max Resume Latency: %ld\n%n", &max_latency, &bytes_read))
+    if (!sscanf(data + offset, "Max Resume Latency: %" PRId64 "\n%n", &max_latency, &bytes_read))
         return;
     offset += bytes_read;
     if (offset >= data_len)
         return;
 
     uint64_t sum_latency;
-    if (!sscanf(data + offset, "Sum Resume Latency: %lu\n%n", &sum_latency, &bytes_read))
+    if (!sscanf(data + offset, "Sum Resume Latency: %" PRIu64 "\n%n", &sum_latency, &bytes_read))
         return;
     offset += bytes_read;
     if (offset >= data_len)
@@ -1118,8 +1189,8 @@ void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &
     std::vector<VendorAtomValue> values(curr_bucket_cnt + 2);
     VendorAtomValue tmp;
     // Iterate over resume latency buckets to get latency count within some latency thresholds
-    while (sscanf(data + offset, "%*ld - %*ldms ====> %ld\n%n", &count, &bytes_read) == 1 ||
-           sscanf(data + offset, "%*ld - infms ====> %ld\n%n", &count, &bytes_read) == 1) {
+    while (sscanf(data + offset, "%*ld - %*ldms ====> %" PRId64 "\n%n", &count, &bytes_read) == 1 ||
+           sscanf(data + offset, "%*ld - infms ====> %" PRId64 "\n%n", &count, &bytes_read) == 1) {
         offset += bytes_read;
         if (offset >= data_len && (index + 1 < curr_bucket_cnt + 2))
             return;
@@ -1213,7 +1284,8 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     //  Get, process, store softirq stats
     std::vector<std::pair<int, int64_t>> sorted_softirq_pair;
     int64_t softirq_count;
-    if (sscanf(data + offset, "long SOFTIRQ count: %ld\n%n", &softirq_count, &bytes_read) != 1)
+    if (sscanf(data + offset, "long SOFTIRQ count: %" PRId64 "\n%n", &softirq_count, &bytes_read) !=
+        1)
         return;
     offset += bytes_read;
     if (offset >= data_len)
@@ -1237,7 +1309,8 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     //  Iterate over softirq stats and record top 5 long softirq
     int64_t softirq_latency;
     int softirq_num;
-    while (sscanf(data + offset, "%d %ld\n%n", &softirq_num, &softirq_latency, &bytes_read) == 2) {
+    while (sscanf(data + offset, "%d %" PRId64 "\n%n", &softirq_num, &softirq_latency,
+                  &bytes_read) == 2) {
         sorted_softirq_pair.push_back(std::make_pair(softirq_num, softirq_latency));
         offset += bytes_read;
         if (offset >= data_len)
@@ -1248,7 +1321,7 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     //  Get, process, store irq stats
     std::vector<std::pair<int, int64_t>> sorted_irq_pair;
     int64_t irq_count;
-    if (sscanf(data + offset, "long IRQ count: %ld\n%n", &irq_count, &bytes_read) != 1)
+    if (sscanf(data + offset, "long IRQ count: %" PRId64 "\n%n", &irq_count, &bytes_read) != 1)
         return;
     offset += bytes_read;
     if (offset >= data_len)
@@ -1271,7 +1344,7 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     int irq_num;
     int index = 0;
     //  Iterate over softirq stats and record top 5 long irq
-    while (sscanf(data + offset, "%d %ld\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
+    while (sscanf(data + offset, "%d %" PRId64 "\n%n", &irq_num, &irq_latency, &bytes_read) == 2) {
         sorted_irq_pair.push_back(std::make_pair(irq_num, irq_latency));
         offset += bytes_read;
         if (offset >= data_len && index < 5)
@@ -1289,6 +1362,35 @@ void SysfsCollector::logVendorLongIRQStatsReported(const std::shared_ptr<IStats>
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report kVendorLongIRQStatsReported to Stats service");
+}
+
+void SysfsCollector::logPartitionUsedSpace(const std::shared_ptr<IStats> &stats_client) {
+    struct statfs fs_info;
+    char path[] = "/mnt/vendor/persist";
+
+    if (statfs(path, &fs_info) == -1) {
+        ALOGE("statfs: %s", strerror(errno));
+        return;
+    }
+
+    // Load values array
+    std::vector<VendorAtomValue> values(3);
+    values[PartitionsUsedSpaceReported::kDirectoryFieldNumber - kVendorAtomOffset] =
+                    VendorAtomValue::make<VendorAtomValue::intValue>
+                        (PixelAtoms::PartitionsUsedSpaceReported::PERSIST);
+    values[PartitionsUsedSpaceReported::kFreeBytesFieldNumber - kVendorAtomOffset] =
+            VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_bfree);
+    values[PartitionsUsedSpaceReported::kTotalBytesFieldNumber - kVendorAtomOffset] =
+            VendorAtomValue::make<VendorAtomValue::longValue>(fs_info.f_bsize * fs_info.f_blocks);
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kPartitionUsedSpaceReported,
+                        .values = std::move(values)};
+
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk()) {
+        ALOGE("Unable to report Partitions Used Space Reported to stats service");
+    }
 }
 
 void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1318,12 +1420,16 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
          PcieLinkStatsReported::kModemPcieLinkupFailuresFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkupFailuresFieldNumber},
 
+        {"link_recovery_failures", true, 0, 0,
+         PcieLinkStatsReported::kModemPcieLinkRecoveryFailuresFieldNumber,
+         PcieLinkStatsReported::kWifiPcieLinkRecoveryFailuresFieldNumber},
+
         {"pll_lock_average", false, 0, 0,
          PcieLinkStatsReported::kModemPciePllLockAvgFieldNumber,
          PcieLinkStatsReported::kWifiPciePllLockAvgFieldNumber},
 
         {"link_up_average", false, 0, 0,
-         PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber,
+         PcieLinkStatsReported::kModemPcieLinkUpAvgFieldNumber,
          PcieLinkStatsReported::kWifiPcieLinkUpAvgFieldNumber },
     };
 
@@ -1332,8 +1438,8 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
         ALOGD("Modem PCIe stats path not specified");
     } else {
         for (i=0; i < ARRAY_SIZE(datamap); i++) {
-            std::string modempath = std::string (kModemPcieLinkStatsPath) + \
-                                    "/" + datamap[i].sysfs_path;
+            std::string modempath =
+                    std::string(kModemPcieLinkStatsPath) + "/" + datamap[i].sysfs_path;
 
             if (ReadFileToInt(modempath, &(datamap[i].modem_val))) {
                 reportPcieLinkStats = true;
@@ -1355,8 +1461,8 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
         ALOGD("Wifi PCIe stats path not specified");
     } else {
         for (i=0; i < ARRAY_SIZE(datamap); i++) {
-            std::string wifipath = std::string (kWifiPcieLinkStatsPath) + \
-                                   "/" + datamap[i].sysfs_path;
+            std::string wifipath =
+                    std::string(kWifiPcieLinkStatsPath) + "/" + datamap[i].sysfs_path;
 
             if (ReadFileToInt(wifipath, &(datamap[i].wifi_val))) {
                 reportPcieLinkStats = true;
@@ -1422,6 +1528,7 @@ void SysfsCollector::logPerDay() {
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
     logF2fsStats(stats_client);
+    logF2fsAtomicWriteInfo(stats_client);
     logF2fsCompressionInfo(stats_client);
     logF2fsGcSegmentInfo(stats_client);
     logF2fsSmartIdleMaintEnabled(stats_client);
@@ -1438,11 +1545,27 @@ void SysfsCollector::logPerDay() {
     logTempResidencyStats(stats_client);
     logVendorLongIRQStatsReported(stats_client);
     logVendorResumeLatencyStats(stats_client);
+    logPartitionUsedSpace(stats_client);
     logPcieLinkStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
     mm_metrics_reporter_.aggregatePixelMmMetricsPer5Min();
+}
+
+void SysfsCollector::logBrownout() {
+    const std::shared_ptr<IStats> stats_client = getStatsService();
+    if (!stats_client) {
+        ALOGE("Unable to get AIDL Stats service");
+        return;
+    }
+    if (kBrownoutLogPath != nullptr && strlen(kBrownoutLogPath) > 0)
+        brownout_detected_reporter_.logBrownout(stats_client, kBrownoutLogPath,
+                                                kBrownoutReasonProp);
+}
+
+void SysfsCollector::logOnce() {
+    logBrownout();
 }
 
 void SysfsCollector::logPerHour() {
@@ -1476,6 +1599,7 @@ void SysfsCollector::collect(void) {
     aggregatePer5Min();
 
     // Collect first set of stats on boot.
+    logOnce();
     logPerHour();
     logPerDay();
 
