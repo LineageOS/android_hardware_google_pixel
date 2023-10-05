@@ -35,12 +35,37 @@ namespace google {
 namespace pixel {
 namespace usb {
 
+// Android metrics requires number of elements in any repeated field cannot exceed 127 elements
+constexpr int kWestworldRepeatedFieldSizeLimit = 127;
+
 using ::android::base::GetProperty;
 using ::android::base::SetProperty;
 using ::android::base::WriteStringToFile;
 using ::std::chrono::microseconds;
 using ::std::chrono::steady_clock;
 using ::std::literals::chrono_literals::operator""ms;
+using android::hardware::google::pixel::PixelAtoms::VendorUsbDataSessionEvent;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDataRole_USB_ROLE_DEVICE;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDataRole_USB_ROLE_HOST;
+using android::hardware::google::pixel::PixelAtoms::VendorUsbDataSessionEvent_UsbDeviceState;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_ADDRESSED;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_ATTACHED;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_CONFIGURED;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_DEFAULT;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_NOT_ATTACHED;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_POWERED;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_SUSPENDED;
+using android::hardware::google::pixel::PixelAtoms::
+        VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_UNKNOWN;
 
 int addEpollFd(const base::unique_fd &epfd, const base::unique_fd &fd) {
     struct epoll_event event;
@@ -152,6 +177,51 @@ bool resetGadgetCommon() {
         return false;
 
     return true;
+}
+
+static VendorUsbDataSessionEvent_UsbDeviceState stringToUsbDeviceStateProto(std::string state) {
+    if (state == "not attached\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_NOT_ATTACHED;
+    } else if (state == "attached\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_ATTACHED;
+    } else if (state == "powered\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_POWERED;
+    } else if (state == "default\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_DEFAULT;
+    } else if (state == "addressed\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_ADDRESSED;
+    } else if (state == "configured\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_CONFIGURED;
+    } else if (state == "suspended\n") {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_SUSPENDED;
+    } else {
+        return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_UNKNOWN;
+    }
+}
+
+void BuildVendorUsbDataSessionEvent(bool is_host, steady_clock::time_point currentTime,
+                                    steady_clock::time_point startTime,
+                                    std::vector<std::string> *states,
+                                    std::vector<steady_clock::time_point> *timestamps,
+                                    VendorUsbDataSessionEvent *event) {
+    if (is_host) {
+        event->set_usb_role(VendorUsbDataSessionEvent_UsbDataRole_USB_ROLE_HOST);
+    } else {
+        event->set_usb_role(VendorUsbDataSessionEvent_UsbDataRole_USB_ROLE_DEVICE);
+    }
+
+    for (int i = 0; i < states->size() && i < kWestworldRepeatedFieldSizeLimit; i++) {
+        event->add_usb_states(stringToUsbDeviceStateProto(states->at(i)));
+    }
+
+    for (int i = 0; i < timestamps->size() && i < kWestworldRepeatedFieldSizeLimit; i++) {
+        event->add_elapsed_time_ms(
+                std::chrono::duration_cast<std::chrono::milliseconds>(timestamps->at(i) - startTime)
+                        .count());
+    }
+
+    event->set_duration_ms(
+            std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count());
 }
 
 }  // namespace usb
