@@ -63,6 +63,7 @@ using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioAdaptedInfoStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioOffloadedEffectStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPcmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPdmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioThirdPartyEffectStatsReported;
@@ -123,7 +124,9 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath),
       kPcmLatencyPath(sysfs_paths.PcmLatencyPath),
       kPcmCountPath(sysfs_paths.PcmCountPath),
-      kTotalCallCountPath(sysfs_paths.TotalCallCountPath) {}
+      kTotalCallCountPath(sysfs_paths.TotalCallCountPath),
+      kOffloadEffectsIdPath(sysfs_paths.OffloadEffectsIdPath),
+      kOffloadEffectsDurationPath(sysfs_paths.OffloadEffectsDurationPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1523,6 +1526,86 @@ void SysfsCollector::logPcmUsageStats(const std::shared_ptr<IStats> &stats_clien
 }
 
 /**
+ * Report audio Offload Effects usage stats duration per day.
+ */
+void SysfsCollector::logOffloadEffectsStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> uuids;
+    std::vector<int> durations;
+
+    if (kOffloadEffectsIdPath == nullptr) {
+        ALOGD("Offload Effects ID Path is not specified");
+        return;
+    }
+
+    if (kOffloadEffectsDurationPath == nullptr) {
+        ALOGD("Offload Effects Duration Path is not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kOffloadEffectsIdPath, &file_contents)) {
+        ALOGD("Unable to read Offload Effect ID path %s", kOffloadEffectsIdPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int uuid;
+        while (file_content_stream.good() && file_content_stream >> uuid) {
+            uuids.push_back(uuid);
+        }
+    }
+
+    if (!ReadFileToString(kOffloadEffectsDurationPath, &file_contents)) {
+        ALOGD("Unable to read Offload Effect duration path %s", kOffloadEffectsDurationPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            durations.push_back(duration);
+        }
+    }
+
+    if (durations.size() * 4 != uuids.size()) {
+        ALOGD("ID and duration data does not match: %zu and %zu", durations.size(), uuids.size());
+        return;
+    }
+
+    for (int index = 0; index < durations.size(); index++) {
+        std::vector<VendorAtomValue> values(3);
+        VendorAtomValue tmp;
+        int64_t uuid_msb = ((int64_t)uuids[index * 4] << 32 | uuids[index * 4 + 1]);
+        int64_t uuid_lsb = ((int64_t)uuids[index * 4 + 2] << 32 | uuids[index * 4 + 3]);
+
+        if (uuid_msb == 0 && uuid_lsb == 0) {
+            continue;
+        }
+
+        tmp.set<VendorAtomValue::VendorAtomValue::longValue>(uuid_msb);
+        values[VendorAudioOffloadedEffectStatsReported::kEffectUuidMsbFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::VendorAtomValue::longValue>(uuid_lsb);
+        values[VendorAudioOffloadedEffectStatsReported::kEffectUuidLsbFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(durations[index]);
+        values[VendorAudioOffloadedEffectStatsReported::kEffectActiveSecondsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioOffloadedEffectStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk()) {
+            ALOGE("Unable to report VendorAudioOffloadedEffectStatsReported at index %d", index);
+        } else {
+            ALOGD("Reported VendorAudioOffloadedEffectStatsReported successfully at index %d",
+                  index);
+        }
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1939,6 +2022,7 @@ void SysfsCollector::logPerDay() {
     logWavesStats(stats_client);
     logAdaptedInfoStats(stats_client);
     logPcmUsageStats(stats_client);
+    logOffloadEffectsStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {

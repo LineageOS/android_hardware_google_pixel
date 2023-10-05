@@ -1569,6 +1569,15 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
         dprintf(fd, "  cs40l26-calib.bin: %s\n", ver.c_str());
         verFile.close();
     }
+    verFile.open("/vendor/firmware/cs40l26-dvl.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(36);
+        getline(verFile, ver);
+        ver = ver.substr(0, ver.find('\0') + 1);
+        ver = ver.substr(ver.rfind('\\') + 1);
+        dprintf(fd, "  cs40l26-dvl.bin: %s\n", ver.c_str());
+        verFile.close();
+    }
 
     dprintf(fd, "\n");
 
