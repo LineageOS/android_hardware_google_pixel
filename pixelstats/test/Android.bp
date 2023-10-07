@@ -18,16 +18,16 @@ package {
 
 java_test_host {
     name: "PixelAtomsTest",
-    srcs: [ "**/PixelAtomsTest.java" ],
+    srcs: ["**/PixelAtomsTest.java"],
     libs: [
         "compatibility-tradefed",
         "tradefed",
-        "truth-prebuilt",
+        "truth",
         "host-libprotobuf-java-full",
     ],
     static_libs: [
         "pixelatoms-java_host",
-        "base-pixel-atoms-test-lib"
+        "base-pixel-atoms-test-lib",
     ],
     test_suites: [
         "general-tests",
@@ -37,8 +37,8 @@ java_test_host {
 java_library_host {
     name: "base-pixel-atoms-test-lib",
     srcs: ["**/BasePixelAtomsTest.java"],
-    libs : [
-        "truth-prebuilt",
+    libs: [
+        "truth",
         "host-libprotobuf-java-full",
         "tradefed",
     ],
