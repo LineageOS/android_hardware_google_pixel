@@ -179,7 +179,8 @@ bool resetGadgetCommon() {
     return true;
 }
 
-static VendorUsbDataSessionEvent_UsbDeviceState stringToUsbDeviceStateProto(std::string state) {
+static VendorUsbDataSessionEvent_UsbDeviceState stringToUsbDeviceStateProto(
+        const std::string &state) {
     if (state == "not attached\n") {
         return VendorUsbDataSessionEvent_UsbDeviceState_USB_STATE_NOT_ATTACHED;
     } else if (state == "attached\n") {
