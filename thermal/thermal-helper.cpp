@@ -171,7 +171,7 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 .prev_cold_severity = ThrottlingSeverity::NONE,
                 .last_update_time = boot_clock::time_point::min(),
                 .thermal_cached = {NAN, boot_clock::time_point::min()},
-                .emul_setting = nullptr,
+                .override_status = {nullptr, false, false},
         };
 
         if (name_status_pair.second.throttling_info != nullptr) {
@@ -288,42 +288,82 @@ bool getThermalZoneTypeById(int tz_id, std::string *type) {
     return true;
 }
 
-bool ThermalHelperImpl::emulTemp(std::string_view target_sensor, const float value) {
-    LOG(INFO) << "Set " << target_sensor.data() << " emul_temp "
-              << "to " << value;
+void ThermalHelperImpl::checkUpdateSensorForEmul(std::string_view target_sensor,
+                                                 const bool max_throttling) {
+    // Force update all the sensors which are related to the target emul sensor
+    for (auto &[sensor_name, sensor_info] : sensor_info_map_) {
+        if (sensor_info.virtual_sensor_info == nullptr || !sensor_info.is_watch) {
+            continue;
+        }
+
+        const auto &linked_sensors = sensor_info.virtual_sensor_info->linked_sensors;
+        if (std::find(linked_sensors.begin(), linked_sensors.end(), target_sensor) ==
+            linked_sensors.end()) {
+            continue;
+        }
+
+        auto &sensor_status = sensor_status_map_.at(sensor_name.data());
+        sensor_status.override_status.max_throttling = max_throttling;
+        sensor_status.override_status.pending_update = true;
+
+        checkUpdateSensorForEmul(sensor_name, max_throttling);
+    }
+}
+
+bool ThermalHelperImpl::emulTemp(std::string_view target_sensor, const float temp,
+                                 const bool max_throttling) {
+    LOG(INFO) << "Set " << target_sensor.data() << " emul_temp: " << temp
+              << " max_throttling: " << max_throttling;
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
+
     // Check the target sensor is valid
     if (!sensor_status_map_.count(target_sensor.data())) {
         LOG(ERROR) << "Cannot find target emul sensor: " << target_sensor.data();
         return false;
     }
 
-    sensor_status_map_.at(target_sensor.data())
-            .emul_setting.reset(new EmulSetting{value, -1, true});
+    auto &sensor_status = sensor_status_map_.at(target_sensor.data());
+
+    sensor_status.override_status.emul_temp.reset(new EmulTemp{temp, -1});
+    sensor_status.override_status.max_throttling = max_throttling;
+    sensor_status.override_status.pending_update = true;
+
+    checkUpdateSensorForEmul(target_sensor.data(), max_throttling);
 
     thermal_watcher_->wake();
     return true;
 }
 
-bool ThermalHelperImpl::emulSeverity(std::string_view target_sensor, const int severity) {
-    LOG(INFO) << "Set " << target_sensor.data() << " emul_severity "
-              << "to " << severity;
+bool ThermalHelperImpl::emulSeverity(std::string_view target_sensor, const int severity,
+                                     const bool max_throttling) {
+    LOG(INFO) << "Set " << target_sensor.data() << " emul_severity: " << severity
+              << " max_throttling: " << max_throttling;
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
     // Check the target sensor is valid
-    if (!sensor_status_map_.count(target_sensor.data())) {
+    if (!sensor_status_map_.count(target_sensor.data()) ||
+        !sensor_info_map_.count(target_sensor.data())) {
         LOG(ERROR) << "Cannot find target emul sensor: " << target_sensor.data();
         return false;
     }
+    const auto &sensor_info = sensor_info_map_.at(target_sensor.data());
+
     // Check the emul severity is valid
     if (severity > static_cast<int>(kThrottlingSeverityCount)) {
         LOG(ERROR) << "Invalid emul severity value " << severity;
         return false;
     }
 
-    sensor_status_map_.at(target_sensor.data())
-            .emul_setting.reset(new EmulSetting{NAN, severity, true});
+    const auto temp = sensor_info.hot_thresholds[severity] / sensor_info.multiplier;
+
+    auto &sensor_status = sensor_status_map_.at(target_sensor.data());
+
+    sensor_status.override_status.emul_temp.reset(new EmulTemp{temp, severity});
+    sensor_status.override_status.max_throttling = max_throttling;
+    sensor_status.override_status.pending_update = true;
+
+    checkUpdateSensorForEmul(target_sensor.data(), max_throttling);
 
     thermal_watcher_->wake();
     return true;
@@ -334,19 +374,22 @@ bool ThermalHelperImpl::emulClear(std::string_view target_sensor) {
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
     if (target_sensor == "all") {
-        for (auto &sensor_status : sensor_status_map_) {
-            if (sensor_status.second.emul_setting != nullptr) {
-                sensor_status.second.emul_setting.reset(new EmulSetting{NAN, -1, true});
-            }
+        for (auto &[sensor_name, sensor_status] : sensor_status_map_) {
+            sensor_status.override_status = {
+                    .emul_temp = nullptr, .max_throttling = false, .pending_update = true};
+            checkUpdateSensorForEmul(sensor_name, false);
         }
-    } else if (sensor_status_map_.count(target_sensor.data()) &&
-               sensor_status_map_.at(target_sensor.data()).emul_setting != nullptr) {
-        sensor_status_map_.at(target_sensor.data())
-                .emul_setting.reset(new EmulSetting{NAN, -1, true});
+    } else if (sensor_status_map_.count(target_sensor.data())) {
+        auto &sensor_status = sensor_status_map_.at(target_sensor.data());
+        sensor_status.override_status = {
+                .emul_temp = nullptr, .max_throttling = false, .pending_update = true};
+        checkUpdateSensorForEmul(target_sensor.data(), false);
     } else {
         LOG(ERROR) << "Cannot find target emul sensor: " << target_sensor.data();
         return false;
     }
+
+    thermal_watcher_->wake();
     return true;
 }
 
@@ -416,10 +459,10 @@ bool ThermalHelperImpl::readTemperature(
         *throttling_status = status;
     }
 
-    if (sensor_status.emul_setting != nullptr && sensor_status.emul_setting->emul_severity >= 0) {
+    if (sensor_status.override_status.emul_temp != nullptr) {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
         out->throttlingStatus =
-                static_cast<ThrottlingSeverity>(sensor_status.emul_setting->emul_severity);
+                static_cast<ThrottlingSeverity>(sensor_status.override_status.emul_temp->severity);
     } else {
         out->throttlingStatus =
                 static_cast<size_t>(status.first) > static_cast<size_t>(status.second)
@@ -882,9 +925,8 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
 
     {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
-        if (sensor_status.emul_setting != nullptr &&
-            !isnan(sensor_status.emul_setting->emul_temp)) {
-            *temp = sensor_status.emul_setting->emul_temp;
+        if (sensor_status.override_status.emul_temp != nullptr) {
+            *temp = sensor_status.override_status.emul_temp->temp;
             return true;
         }
     }
@@ -1002,6 +1044,7 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         TemperatureThreshold threshold;
         SensorStatus &sensor_status = name_status_pair.second;
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
+        bool max_throttling = false;
 
         // Only handle the sensors in allow list
         if (!sensor_info.is_watch) {
@@ -1055,12 +1098,10 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         }
         {
             std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
-            if (sensor_status.emul_setting != nullptr &&
-                sensor_status.emul_setting->pending_update) {
-                force_update = true;
-                sensor_status.emul_setting->pending_update = false;
-                LOG(INFO) << "Update " << name_status_pair.first.data()
-                          << " right away with emul setting";
+            max_throttling = sensor_status.override_status.max_throttling;
+            if (sensor_status.override_status.pending_update) {
+                force_update = sensor_status.override_status.pending_update;
+                sensor_status.override_status.pending_update = false;
             }
         }
         LOG(VERBOSE) << "sensor " << name_status_pair.first
@@ -1119,7 +1160,7 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
             // update thermal throttling request
             thermal_throttling_.thermalThrottlingUpdate(
                     temp, sensor_info, sensor_status.severity, time_elapsed_ms,
-                    power_files_.GetPowerStatusMap(), cooling_device_info_map_);
+                    power_files_.GetPowerStatusMap(), cooling_device_info_map_, max_throttling);
         }
 
         thermal_throttling_.computeCoolingDevicesRequest(

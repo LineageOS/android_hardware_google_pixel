@@ -55,9 +55,14 @@ struct ThermalSample {
     boot_clock::time_point timestamp;
 };
 
-struct EmulSetting {
-    float emul_temp;
-    int emul_severity;
+struct EmulTemp {
+    float temp;
+    int severity;
+};
+
+struct OverrideStatus {
+    std::unique_ptr<EmulTemp> emul_temp;
+    bool max_throttling;
     bool pending_update;
 };
 
@@ -67,7 +72,7 @@ struct SensorStatus {
     ThrottlingSeverity prev_cold_severity;
     boot_clock::time_point last_update_time;
     ThermalSample thermal_cached;
-    std::unique_ptr<EmulSetting> emul_setting;
+    OverrideStatus override_status;
 };
 
 class ThermalHelper {
@@ -79,8 +84,10 @@ class ThermalHelper {
                                            std::vector<TemperatureThreshold> *thresholds) const = 0;
     virtual bool fillCurrentCoolingDevices(bool filterType, CoolingType type,
                                            std::vector<CoolingDevice> *coolingdevices) const = 0;
-    virtual bool emulTemp(std::string_view target_sensor, const float temp) = 0;
-    virtual bool emulSeverity(std::string_view target_sensor, const int severity) = 0;
+    virtual bool emulTemp(std::string_view target_sensor, const float temp,
+                          const bool max_throttling) = 0;
+    virtual bool emulSeverity(std::string_view target_sensor, const int severity,
+                              const bool max_throttling) = 0;
     virtual bool emulClear(std::string_view target_sensor) = 0;
     virtual bool isInitializedOk() const = 0;
     virtual bool readTemperature(
@@ -117,8 +124,10 @@ class ThermalHelperImpl : public ThermalHelper {
                                    std::vector<TemperatureThreshold> *thresholds) const override;
     bool fillCurrentCoolingDevices(bool filterType, CoolingType type,
                                    std::vector<CoolingDevice> *coolingdevices) const override;
-    bool emulTemp(std::string_view target_sensor, const float temp) override;
-    bool emulSeverity(std::string_view target_sensor, const int severity) override;
+    bool emulTemp(std::string_view target_sensor, const float temp,
+                  const bool max_throttling) override;
+    bool emulSeverity(std::string_view target_sensor, const int severity,
+                      const bool max_throttling) override;
     bool emulClear(std::string_view target_sensor) override;
 
     // Disallow copy and assign.
@@ -207,6 +216,7 @@ class ThermalHelperImpl : public ThermalHelper {
     // Check the max CDEV state for cdev_ceiling
     void maxCoolingRequestCheck(
             std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map);
+    void checkUpdateSensorForEmul(std::string_view target_sensor, const bool max_throttling);
     sp<ThermalWatcher> thermal_watcher_;
     PowerFiles power_files_;
     ThermalFiles thermal_sensors_;
