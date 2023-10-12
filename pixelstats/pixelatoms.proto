@@ -119,6 +119,7 @@ message Atom {
       PixelImpulseUsageReported pixel_impulse_usage_reported = 105065;
       DisplayPortErrorStats display_port_error_stats = 105066;
       HDCPAuthTypeStats hdcp_auth_type_stats = 105067;
+      DisplayPortUsage display_port_usage = 105068;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2216,4 +2217,25 @@ message HDCPAuthTypeStats {
   optional int32 hdcp1_fail_count = 6;
   /* The count due to hdcp0 */
   optional int32 hdcp0_count = 7;
+}
+
+/**
+ * A message containing how DisplayPort is being used in a day.
+ */
+message DisplayPortUsage {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* resolution width */
+  optional int32 width = 2;
+  /* resolution height */
+  optional int32 height = 3;
+  /* refresh rate */
+  optional float refresh_rate = 4;
+  /* vendor ID. */
+  optional int32 vendor_id = 5;
+  /* product ID. */
+  optional int32 product_id = 6;
+  /* indicated start/stop event of DP usage */
+  optional bool connected = 7;
 }
