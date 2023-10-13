@@ -113,7 +113,7 @@ message Atom {
       GpuEvent gpu_event = 105059;
       VendorAudioPcmStatsReported vendor_audio_pcm_stats_reported = 105060;
       VendorUsbDataSessionEvent vendor_usb_data_session_event = 105061;
-      ThermalAbnormalityDetected thermal_abnormality_detected = 105062;
+      ThermalSensorAbnormalityDetected thermal_sensor_abnormality_detected = 105062;
       VendorAudioOffloadedEffectStatsReported vendor_audio_offloaded_effect_stats_reported = 105063;
     }
     // AOSP atom ID range ends at 109999
@@ -2039,28 +2039,29 @@ message VendorUsbDataSessionEvent {
 }
 
 /*
- * Logs the thermal abnormal event when detected.
+ * Logs the thermal sensor abnormal event when detected.
  * Logged from:
  *    virtual sensors: hardware/google/pixel/thermal/utils/thermal_stats_helper.cpp
  *    thermistors & SoC: hardware/google/pixel/pixelstats/UeventListener.cpp
  */
-message ThermalAbnormalityDetected {
+message ThermalSensorAbnormalityDetected {
   enum AbnormalityType {
     UNKNOWN = 0;
     SENSOR_STUCK = 1;
     EXTREME_HIGH_TEMP = 2;
     EXTREME_LOW_TEMP = 3;
     HIGH_RISING_SPEED = 4;
+    TEMP_READ_FAIL = 5;
   }
 
   /* Vendor reverse domain name */
   optional string reverse_domain_name = 1;
-  /* Type of Thermal Abnormality */
+  /* Type of Thermal Sensor Abnormality */
   optional AbnormalityType type = 2;
-  /* Name of the problematic sensor / cooling device / power rail */
-  optional string name = 3;
-  /* abnormal value: temp(if sensor)/state(if cooling device)/power(if rail) */
-  optional int32 value = 4;
+  /* Name of the problematic sensor */
+  optional string sensor = 3;
+  /* Abnormal temp reading of sensor */
+  optional int32 temp = 4;
 }
 
 /**

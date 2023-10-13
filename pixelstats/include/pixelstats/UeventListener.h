@@ -141,22 +141,26 @@ class UeventListener {
                     {"CSF_RESET_FAILED", PixelAtoms::GpuEvent::GpuEventInfo::
                                                  GpuEvent_GpuEventInfo_MALI_CSF_RESET_FAILED}};
 
-    const std::unordered_map<std::string, PixelAtoms::ThermalAbnormalityDetected::AbnormalityType>
+    const std::unordered_map<std::string,
+                             PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType>
             kThermalAbnormalityTypeStrToEnum{
-                    {"UNKNOWN", PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
-                                        ThermalAbnormalityDetected_AbnormalityType_UNKNOWN},
+                    {"UNKNOWN", PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                                        ThermalSensorAbnormalityDetected_AbnormalityType_UNKNOWN},
                     {"SENSOR_STUCK",
-                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
-                             ThermalAbnormalityDetected_AbnormalityType_SENSOR_STUCK},
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_SENSOR_STUCK},
                     {"EXTREME_HIGH_TEMP",
-                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
-                             ThermalAbnormalityDetected_AbnormalityType_EXTREME_HIGH_TEMP},
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_EXTREME_HIGH_TEMP},
                     {"EXTREME_LOW_TEMP",
-                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
-                             ThermalAbnormalityDetected_AbnormalityType_EXTREME_LOW_TEMP},
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_EXTREME_LOW_TEMP},
                     {"HIGH_RISING_SPEED",
-                     PixelAtoms::ThermalAbnormalityDetected::AbnormalityType::
-                             ThermalAbnormalityDetected_AbnormalityType_HIGH_RISING_SPEED},
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_HIGH_RISING_SPEED},
+                    {"TEMP_READ_FAIL",
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_TEMP_READ_FAIL},
             };
 
     BatteryCapacityReporter battery_capacity_reporter_;
