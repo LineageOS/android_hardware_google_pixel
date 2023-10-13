@@ -424,8 +424,8 @@ bool ThermalHelperImpl::readTemperature(
 
     if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
         LOG(ERROR) << "Failed to read thermal sensor " << sensor_name.data();
-        thermal_stats_helper_.reportThermalAbnormality(ThermalAbnormalityDetected::UNKNOWN,
-                                                       sensor_name, std::nullopt);
+        thermal_stats_helper_.reportThermalAbnormality(
+                ThermalSensorAbnormalityDetected::TEMP_READ_FAIL, sensor_name, std::nullopt);
         return false;
     }
 
