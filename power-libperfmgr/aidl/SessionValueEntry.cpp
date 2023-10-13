@@ -30,7 +30,7 @@ std::ostream &SessionValueEntry::dump(std::ostream &os) const {
     os << "ID.Min.Act(" << idString;
     if (votes) {
         UclampRange uclampRange;
-        votes->getUclampRange(&uclampRange, timeNow);
+        votes->getUclampRange(uclampRange, timeNow);
         os << ", " << uclampRange.uclampMin;
         os << "-" << uclampRange.uclampMax;
     } else {
