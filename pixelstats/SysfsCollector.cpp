@@ -128,7 +128,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kTotalCallCountPath(sysfs_paths.TotalCallCountPath),
       kOffloadEffectsIdPath(sysfs_paths.OffloadEffectsIdPath),
       kOffloadEffectsDurationPath(sysfs_paths.OffloadEffectsDurationPath),
-      kBluetoothAudioUsagePath(sysfs_paths.BluetoothAudioUsagePath) {}
+      kBluetoothAudioUsagePath(sysfs_paths.BluetoothAudioUsagePath),
+      kGMSRPath(sysfs_paths.GMSRPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -197,10 +198,15 @@ void SysfsCollector::logBatteryChargeCycles(const std::shared_ptr<IStats> &stats
 void SysfsCollector::logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client) {
     if (kEEPROMPath == nullptr || strlen(kEEPROMPath) == 0) {
         ALOGV("Battery EEPROM path not specified");
-        return;
+    } else {
+        battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
     }
 
-    battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
+    if (kGMSRPath == nullptr || strlen(kGMSRPath) == 0) {
+         ALOGV("Battery GMSR path not specified");
+    } else {
+        battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
+    }
 }
 
 /**

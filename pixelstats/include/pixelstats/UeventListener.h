@@ -46,6 +46,7 @@ class UeventListener {
         const char *const TypeCPartnerPidPath;
         const char *const WirelessChargerPtmcUevent;  // Deprecated.
         const char *const WirelessChargerPtmcPath;    // Deprecated.
+        const char *const GMSRPath;
     };
     constexpr static const char *const ssoc_details_path =
             "/sys/class/power_supply/battery/ssoc_details";
@@ -58,6 +59,7 @@ class UeventListener {
     constexpr static const char *const typec_partner_pid_path_default =
             "/sys/class/typec/port0-partner/identity/product";
     constexpr static const char *const typec_partner_uevent_default = "DEVTYPE=typec_partner";
+    constexpr static const char *const gmsr_path = "";
 
     UeventListener(const std::string audio_uevent, const std::string ssoc_details_path = "",
                    const std::string overheat_path = overheat_path_default,
@@ -99,6 +101,7 @@ class UeventListener {
     const std::string kTypeCPartnerUevent;
     const std::string kTypeCPartnerVidPath;
     const std::string kTypeCPartnerPidPath;
+    const std::string kBatteryGMSRPath;
 
     const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventType>
             kGpuEventTypeStrToEnum{
