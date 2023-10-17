@@ -313,6 +313,9 @@ int ThermalStatsHelper::reportAllSensorTempStats(const std::shared_ptr<IStats> &
                 count_failed_reporting++;
             }
         }
+        // Reset temp stats after reporting
+        temp_stats.max_temp = std::numeric_limits<float>::min();
+        temp_stats.min_temp = std::numeric_limits<float>::max();
     }
     return count_failed_reporting;
 }
