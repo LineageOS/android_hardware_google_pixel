@@ -349,12 +349,12 @@ void ThermalStatsHelper::verifySensorAbnormality(std::string_view sensor, float 
         if (temp < temp_range_info->min_temp_threshold) {
             LOG(ERROR) << "Outlier Temperature Detected, sensor: " << sensor.data()
                        << " temp: " << temp << " < " << temp_range_info->min_temp_threshold;
-            reportThermalAbnormality(ThermalAbnormalityDetected::EXTREME_LOW_TEMP, sensor,
+            reportThermalAbnormality(ThermalSensorAbnormalityDetected::EXTREME_LOW_TEMP, sensor,
                                      std::round(temp));
         } else if (temp > temp_range_info->max_temp_threshold) {
             LOG(ERROR) << "Outlier Temperature Detected, sensor: " << sensor.data()
                        << " temp: " << temp << " > " << temp_range_info->max_temp_threshold;
-            reportThermalAbnormality(ThermalAbnormalityDetected::EXTREME_HIGH_TEMP, sensor,
+            reportThermalAbnormality(ThermalSensorAbnormalityDetected::EXTREME_HIGH_TEMP, sensor,
                                      std::round(temp));
         }
     }
@@ -374,8 +374,8 @@ void ThermalStatsHelper::verifySensorAbnormality(std::string_view sensor, float 
                                << " temp: " << temp << " repeated "
                                << temp_stuck_info->min_polling_count << " times for "
                                << time_elapsed_ms.count() << "ms";
-                    if (reportThermalAbnormality(ThermalAbnormalityDetected::SENSOR_STUCK, sensor,
-                                                 std::round(temp))) {
+                    if (reportThermalAbnormality(ThermalSensorAbnormalityDetected::SENSOR_STUCK,
+                                                 sensor, std::round(temp))) {
                         // reset current status to verify for sensor stuck with start time as
                         // current polling
                         resetCurrentTempStatus(&curr_temp_status, temp);
@@ -565,7 +565,7 @@ std::vector<int64_t> ThermalStatsHelper::processStatsRecordForReporting(StatsRec
 }
 
 bool ThermalStatsHelper::reportThermalAbnormality(
-        const ThermalAbnormalityDetected::AbnormalityType &type, std::string_view name,
+        const ThermalSensorAbnormalityDetected::AbnormalityType &type, std::string_view name,
         std::optional<int> reading) {
     const auto value_str = reading.has_value() ? std::to_string(reading.value()) : "undefined";
     if (abnormal_stats_reported_per_update_interval >= kMaxAbnormalLoggingPerUpdateInterval) {
@@ -579,15 +579,15 @@ bool ThermalStatsHelper::reportThermalAbnormality(
         return false;
     }
     std::vector<VendorAtomValue> values(3);
-    values[ThermalAbnormalityDetected::kTypeFieldNumber - kVendorAtomOffset] =
+    values[ThermalSensorAbnormalityDetected::kTypeFieldNumber - kVendorAtomOffset] =
             VendorAtomValue::make<VendorAtomValue::intValue>(type);
-    values[ThermalAbnormalityDetected::kNameFieldNumber - kVendorAtomOffset] =
+    values[ThermalSensorAbnormalityDetected::kSensorFieldNumber - kVendorAtomOffset] =
             VendorAtomValue::make<VendorAtomValue::stringValue>(name);
     if (reading.has_value()) {
-        values[ThermalAbnormalityDetected::kValueFieldNumber - kVendorAtomOffset] =
+        values[ThermalSensorAbnormalityDetected::kTempFieldNumber - kVendorAtomOffset] =
                 VendorAtomValue::make<VendorAtomValue::intValue>(reading.value());
     }
-    if (!reportAtom(stats_client, PixelAtoms::Atom::kThermalAbnormalityDetected,
+    if (!reportAtom(stats_client, PixelAtoms::Atom::kThermalSensorAbnormalityDetected,
                     std::move(values))) {
         LOG(ERROR) << "Failed to log thermal abnormal atom for " << name.data() << " with value "
                    << value_str;

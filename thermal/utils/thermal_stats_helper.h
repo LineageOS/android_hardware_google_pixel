@@ -38,7 +38,7 @@ namespace implementation {
 using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using ::android::base::boot_clock;
-using ::android::hardware::google::pixel::PixelAtoms::ThermalAbnormalityDetected;
+using ::android::hardware::google::pixel::PixelAtoms::ThermalSensorAbnormalityDetected;
 using std::chrono::system_clock;
 using SystemTimePoint = std::chrono::time_point<std::chrono::system_clock>;
 
@@ -148,7 +148,7 @@ class ThermalStatsHelper {
      *  >0, count represents the number of stats failed to report.
      */
     int reportStats();
-    bool reportThermalAbnormality(const ThermalAbnormalityDetected::AbnormalityType &type,
+    bool reportThermalAbnormality(const ThermalSensorAbnormalityDetected::AbnormalityType &type,
                                   std::string_view name, std::optional<int> reading);
     // Get a snapshot of Thermal Stats Sensor Map till that point in time
     std::unordered_map<std::string, SensorTempStats> GetSensorTempStatsSnapshot();

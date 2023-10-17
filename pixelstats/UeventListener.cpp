@@ -69,7 +69,7 @@ using android::base::ReadFileToString;
 using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::GpuEvent;
 using android::hardware::google::pixel::PixelAtoms::PdVidPid;
-using android::hardware::google::pixel::PixelAtoms::ThermalAbnormalityDetected;
+using android::hardware::google::pixel::PixelAtoms::ThermalSensorAbnormalityDetected;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorUsbPortOverheat;
 
@@ -378,7 +378,7 @@ void UeventListener::ReportThermalAbnormalEvent(const std::shared_ptr<IStats> &s
     ALOGI("Reporting Thermal Abnormal event of type: %s(%d) for %s with val: %d",
           abnormality_type->first.c_str(), abnormality_type->second, name.c_str(), val);
     VendorAtom event = {.reverseDomainName = "",
-                        .atomId = PixelAtoms::Atom::kThermalAbnormalityDetected,
+                        .atomId = PixelAtoms::Atom::kThermalSensorAbnormalityDetected,
                         .values = {abnormality_type->second, name, val}};
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
