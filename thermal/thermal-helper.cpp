@@ -459,7 +459,8 @@ bool ThermalHelperImpl::readTemperature(
         *throttling_status = status;
     }
 
-    if (sensor_status.override_status.emul_temp != nullptr) {
+    if (sensor_status.override_status.emul_temp != nullptr &&
+        sensor_status.override_status.emul_temp->severity >= 0) {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
         out->throttlingStatus =
                 static_cast<ThrottlingSeverity>(sensor_status.override_status.emul_temp->severity);
