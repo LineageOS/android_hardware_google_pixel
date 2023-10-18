@@ -115,14 +115,14 @@ int64_t PowerHintSession::convertWorkDurationToBoostByPid(
                                  derivative_sum / dt / (length - d_start));
 
     int64_t output = pOut + iOut + dOut;
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_err.c_str(), err_sum / (length - p_start));
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_integral.c_str(), integral_error);
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_derivative.c_str(),
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_err.c_str(), err_sum / (length - p_start));
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_integral.c_str(), integral_error);
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_derivative.c_str(),
                derivative_sum / dt / (length - d_start));
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_pOut.c_str(), pOut);
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_iOut.c_str(), iOut);
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_dOut.c_str(), dOut);
-    ATRACE_INT(mAppDescriptorTrace.trace_pid_output.c_str(), output);
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_pOut.c_str(), pOut);
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_iOut.c_str(), iOut);
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_dOut.c_str(), dOut);
+    ATRACE_INT(mAppDescriptorTrace->trace_pid_output.c_str(), output);
     return output;
 }
 
@@ -148,7 +148,7 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
       mIdString(StringPrintf("%" PRId32 "-%" PRId32 "-%" PRId64, tgid, uid, mSessionId)),
       mDescriptor(std::make_shared<AppHintDesc>(mSessionId, tgid, uid, threadIds, tag,
                                                 std::chrono::nanoseconds(durationNs))),
-      mAppDescriptorTrace(mIdString),
+      mAppDescriptorTrace(std::make_shared<AppDescriptorTrace>(mIdString)),
       mTag(tag),
       mSessionRecords(
               HintManager::GetInstance()->GetAdpfProfile()->mHeuristicBoostOn.has_value() &&
@@ -163,11 +163,11 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
                                                                  ->mJankCheckTimeFactor.value())
                       : nullptr) {
     ATRACE_CALL();
-    ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
-    ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), mDescriptor->is_active.load());
+    ATRACE_INT(mAppDescriptorTrace->trace_target.c_str(), mDescriptor->targetNs.count());
+    ATRACE_INT(mAppDescriptorTrace->trace_active.c_str(), mDescriptor->is_active.load());
 
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
-    mPSManager->addPowerSession(mIdString, mDescriptor, threadIds);
+    mPSManager->addPowerSession(mIdString, mDescriptor, mAppDescriptorTrace, threadIds);
     // init boost
     auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
     mPSManager->voteSet(
@@ -184,9 +184,9 @@ PowerHintSession::~PowerHintSession() {
     ATRACE_CALL();
     close();
     ALOGV("PowerHintSession deleted: %s", mDescriptor->toString().c_str());
-    ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), 0);
-    ATRACE_INT(mAppDescriptorTrace.trace_actl_last.c_str(), 0);
-    ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), 0);
+    ATRACE_INT(mAppDescriptorTrace->trace_target.c_str(), 0);
+    ATRACE_INT(mAppDescriptorTrace->trace_actl_last.c_str(), 0);
+    ATRACE_INT(mAppDescriptorTrace->trace_active.c_str(), 0);
 }
 
 bool PowerHintSession::isAppSession() {
@@ -204,7 +204,7 @@ void PowerHintSession::updatePidControlVariable(int pidControlVariable, bool upd
                                                                 adpfConfig->mStaleTimeFactor),
                                      nanoseconds(adpfConfig->mReportingRateLimitNs) * 2));
     }
-    ATRACE_INT(mAppDescriptorTrace.trace_min.c_str(), pidControlVariable);
+    ATRACE_INT(mAppDescriptorTrace->trace_min.c_str(), pidControlVariable);
 }
 
 void PowerHintSession::tryToSendPowerHint(std::string hint) {
@@ -234,8 +234,8 @@ ndk::ScopedAStatus PowerHintSession::pause() {
     mPSManager->setThreadsFromPowerSession(mSessionId, {});
     mDescriptor->is_active.store(false);
     mPSManager->pause(mSessionId);
-    ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), false);
-    ATRACE_INT(mAppDescriptorTrace.trace_min.c_str(), 0);
+    ATRACE_INT(mAppDescriptorTrace->trace_active.c_str(), false);
+    ATRACE_INT(mAppDescriptorTrace->trace_min.c_str(), 0);
     return ndk::ScopedAStatus::ok();
 }
 
@@ -250,8 +250,8 @@ ndk::ScopedAStatus PowerHintSession::resume() {
     mDescriptor->is_active.store(true);
     // resume boost
     mPSManager->resume(mSessionId);
-    ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), true);
-    ATRACE_INT(mAppDescriptorTrace.trace_min.c_str(), mDescriptor->pidControlVariable);
+    ATRACE_INT(mAppDescriptorTrace->trace_active.c_str(), true);
+    ATRACE_INT(mAppDescriptorTrace->trace_min.c_str(), mDescriptor->pidControlVariable);
     return ndk::ScopedAStatus::ok();
 }
 
@@ -263,7 +263,7 @@ ndk::ScopedAStatus PowerHintSession::close() {
     // Remove the session from PowerSessionManager first to avoid racing.
     mPSManager->removePowerSession(mSessionId);
     mDescriptor->is_active.store(false);
-    ATRACE_INT(mAppDescriptorTrace.trace_min.c_str(), 0);
+    ATRACE_INT(mAppDescriptorTrace->trace_min.c_str(), 0);
     return ndk::ScopedAStatus::ok();
 }
 
@@ -282,7 +282,7 @@ ndk::ScopedAStatus PowerHintSession::updateTargetWorkDuration(int64_t targetDura
     mDescriptor->targetNs = std::chrono::nanoseconds(targetDurationNanos);
     mPSManager->updateTargetWorkDuration(mSessionId, AdpfVoteType::CPU_VOTE_DEFAULT,
                                          mDescriptor->targetNs);
-    ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), targetDurationNanos);
+    ATRACE_INT(mAppDescriptorTrace->trace_target.c_str(), targetDurationNanos);
 
     return ndk::ScopedAStatus::ok();
 }
@@ -317,11 +317,11 @@ bool PowerHintSession::updateHeuristicBoost() {
                maxToAvgRatio < adpfConfig->mHBoostOffMaxAvgRatio.value()) {
         mHeuristicBoostActive = false;
     }
-    ATRACE_INT(mAppDescriptorTrace.trace_heuristic_boost_active.c_str(), mHeuristicBoostActive);
-    ATRACE_INT(mAppDescriptorTrace.trace_missed_cycles.c_str(), numOfMissedCycles);
-    ATRACE_INT(mAppDescriptorTrace.trace_avg_duration.c_str(), avgDurationUs.value());
-    ATRACE_INT(mAppDescriptorTrace.trace_max_duration.c_str(), maxDurationUs.value());
-    ATRACE_INT(mAppDescriptorTrace.trace_low_frame_rate.c_str(),
+    ATRACE_INT(mAppDescriptorTrace->trace_heuristic_boost_active.c_str(), mHeuristicBoostActive);
+    ATRACE_INT(mAppDescriptorTrace->trace_missed_cycles.c_str(), numOfMissedCycles);
+    ATRACE_INT(mAppDescriptorTrace->trace_avg_duration.c_str(), avgDurationUs.value());
+    ATRACE_INT(mAppDescriptorTrace->trace_max_duration.c_str(), maxDurationUs.value());
+    ATRACE_INT(mAppDescriptorTrace->trace_low_frame_rate.c_str(),
                mSessionRecords->isLowFrameRate(adpfConfig->mLowFrameRateThreshold.value()));
     return mHeuristicBoostActive;
 }
@@ -347,16 +347,16 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
     auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
     mDescriptor->update_count++;
     bool isFirstFrame = isTimeout();
-    ATRACE_INT(mAppDescriptorTrace.trace_batch_size.c_str(), actualDurations.size());
-    ATRACE_INT(mAppDescriptorTrace.trace_actl_last.c_str(), actualDurations.back().durationNanos);
-    ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
-    ATRACE_INT(mAppDescriptorTrace.trace_hint_count.c_str(), mDescriptor->update_count);
-    ATRACE_INT(mAppDescriptorTrace.trace_hint_overtime.c_str(),
+    ATRACE_INT(mAppDescriptorTrace->trace_batch_size.c_str(), actualDurations.size());
+    ATRACE_INT(mAppDescriptorTrace->trace_actl_last.c_str(), actualDurations.back().durationNanos);
+    ATRACE_INT(mAppDescriptorTrace->trace_target.c_str(), mDescriptor->targetNs.count());
+    ATRACE_INT(mAppDescriptorTrace->trace_hint_count.c_str(), mDescriptor->update_count);
+    ATRACE_INT(mAppDescriptorTrace->trace_hint_overtime.c_str(),
                actualDurations.back().durationNanos - mDescriptor->targetNs.count() > 0);
-    ATRACE_INT(mAppDescriptorTrace.trace_is_first_frame.c_str(), (isFirstFrame) ? (1) : (0));
-    ATRACE_INT(mAppDescriptorTrace.trace_cpu_duration.c_str(),
+    ATRACE_INT(mAppDescriptorTrace->trace_is_first_frame.c_str(), (isFirstFrame) ? (1) : (0));
+    ATRACE_INT(mAppDescriptorTrace->trace_cpu_duration.c_str(),
                actualDurations.back().cpuDurationNanos);
-    ATRACE_INT(mAppDescriptorTrace.trace_gpu_duration.c_str(),
+    ATRACE_INT(mAppDescriptorTrace->trace_gpu_duration.c_str(),
                actualDurations.back().gpuDurationNanos);
 
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
@@ -406,7 +406,7 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
     }
     auto const additional_gpu_capacity =
             calculate_capacity(actualDurations.back(), mDescriptor->targetNs, *gpu_freq);
-    ATRACE_INT(mAppDescriptorTrace.trace_gpu_capacity.c_str(),
+    ATRACE_INT(mAppDescriptorTrace->trace_gpu_capacity.c_str(),
                static_cast<int>(additional_gpu_capacity));
 
     auto const additional_gpu_capacity_clamped = std::clamp(
@@ -476,8 +476,6 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
     }
     tryToSendPowerHint(toString(hint));
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
-    mLastHintSent = static_cast<int>(hint);
-    ATRACE_INT(mAppDescriptorTrace.trace_session_hint.c_str(), static_cast<int>(hint));
     return ndk::ScopedAStatus::ok();
 }
 
@@ -496,7 +494,7 @@ ndk::ScopedAStatus PowerHintSession::setMode(SessionMode mode, bool enabled) {
     }
 
     mModes[static_cast<size_t>(mode)] = enabled;
-    ATRACE_INT(mAppDescriptorTrace.trace_modes[static_cast<size_t>(mode)].c_str(), enabled);
+    ATRACE_INT(mAppDescriptorTrace->trace_modes[static_cast<size_t>(mode)].c_str(), enabled);
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
     return ndk::ScopedAStatus::ok();
 }
