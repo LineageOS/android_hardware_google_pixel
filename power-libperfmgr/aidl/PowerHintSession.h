@@ -115,7 +115,7 @@ class PowerHintSession : public BnPowerHintSession {
     std::string mIdString;
     std::shared_ptr<AppHintDesc> mDescriptor;
     // Trace strings
-    AppDescriptorTrace mAppDescriptorTrace;
+    std::shared_ptr<AppDescriptorTrace> mAppDescriptorTrace;
     std::atomic<time_point<steady_clock>> mLastUpdatedTime;
     std::atomic<bool> mSessionClosed = false;
     // Are cpu load change related hints are supported
