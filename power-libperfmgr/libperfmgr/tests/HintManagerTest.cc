@@ -847,5 +847,17 @@ TEST_F(HintManagerTest, GetFromJSONAdpfConfigTest) {
     EXPECT_EQ("REFRESH_120FPS", hm->GetAdpfProfile()->mName);
 }
 
+TEST_F(HintManagerTest, IsAdpfProfileSupported) {
+    TemporaryFile json_file;
+    ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
+    std::unique_ptr<HintManager> hm = HintManager::GetFromJSON(json_file.path, false);
+    EXPECT_NE(nullptr, hm.get());
+
+    // Check if given AdpfProfile supported
+    EXPECT_FALSE(hm->IsAdpfProfileSupported("NoSuchProfile"));
+    EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_60FPS"));
+    EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_120FPS"));
+}
+
 }  // namespace perfmgr
 }  // namespace android

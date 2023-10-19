@@ -64,10 +64,11 @@ class MiscWriter {
   static constexpr uint32_t kMaxRamSizeOffsetInVendorSpace = 192;
   static constexpr char kMaxRamSize[] = "max-ram-size=";
   static constexpr uint32_t kSotaStateOffsetInVendorSpace = 224;
-  static constexpr uint32_t kRTimeRtcOffsetValOffsetInVendorSpace = 256;
+  static constexpr uint32_t kRTimeRtcOffsetValOffsetInVendorSpace = 264;
   static constexpr char kTimeRtcOffset[] = "timertcoffset=";
-  static constexpr uint32_t kRTimeMinRtcValOffsetInVendorSpace = 288;
+  static constexpr uint32_t kRTimeMinRtcValOffsetInVendorSpace = 296;
   static constexpr char kTimeMinRtc[] = "timeminrtc=";
+  static constexpr uint32_t kFaceauthEvalValOffsetInVendorSpace = 328;
 
   // Minimum and maximum valid value for max-ram-size
   static constexpr int32_t kRamSizeDefault = -1;

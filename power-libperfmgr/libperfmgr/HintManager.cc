@@ -58,7 +58,7 @@ bool HintManager::ValidateHint(const std::string& hint_type) const {
 
 bool HintManager::IsHintSupported(const std::string& hint_type) const {
     if (actions_.find(hint_type) == actions_.end()) {
-        LOG(INFO) << "Hint type not present in actions: " << hint_type;
+        LOG(DEBUG) << "Hint type not present in actions: " << hint_type;
         return false;
     }
     return true;
@@ -743,6 +743,15 @@ bool HintManager::SetAdpfProfile(const std::string &profile_name) {
     for (std::size_t i = 0; i < adpfs_.size(); ++i) {
         if (adpfs_[i]->mName == profile_name) {
             adpf_index_ = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HintManager::IsAdpfProfileSupported(const std::string &profile_name) const {
+    for (std::size_t i = 0; i < adpfs_.size(); ++i) {
+        if (adpfs_[i]->mName == profile_name) {
             return true;
         }
     }
