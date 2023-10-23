@@ -89,6 +89,17 @@ bool WipeProvisionedFlag() {
     return true;
 }
 
+// Wipes user preferred resolution as part of data wipe
+bool WipeUserPreferredResolution() {
+    MiscWriter misc_writer(MiscWriterActions::kClearDisplayMode);
+    if (!misc_writer.PerformAction()) {
+        LOG(ERROR) << "Failed to clear the user preferred resolution";
+        return false;
+    }
+    LOG(INFO) << "User preferred resolution wiped successful";
+    return true;
+}
+
 // Provision Silent OTA(SOTA) flag while reason is "enable-sota"
 bool ProvisionSilentOtaFlag(const std::string& reason) {
     if (android::base::StartsWith(reason, MiscWriter::kSotaFlag)) {
@@ -129,6 +140,10 @@ class PixelDevice : public ::Device {
         }
 
         if (!WipeProvisionedFlag()) {
+            totalSuccess = false;
+        }
+
+        if (!WipeUserPreferredResolution()) {
             totalSuccess = false;
         }
 
