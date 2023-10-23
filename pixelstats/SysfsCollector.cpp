@@ -62,6 +62,7 @@ using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioAdaptedInfoStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioBtMediaStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioOffloadedEffectStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPcmStatsReported;
@@ -126,7 +127,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kPcmCountPath(sysfs_paths.PcmCountPath),
       kTotalCallCountPath(sysfs_paths.TotalCallCountPath),
       kOffloadEffectsIdPath(sysfs_paths.OffloadEffectsIdPath),
-      kOffloadEffectsDurationPath(sysfs_paths.OffloadEffectsDurationPath) {}
+      kOffloadEffectsDurationPath(sysfs_paths.OffloadEffectsDurationPath),
+      kBluetoothAudioUsagePath(sysfs_paths.BluetoothAudioUsagePath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -1607,6 +1609,67 @@ void SysfsCollector::logOffloadEffectsStats(const std::shared_ptr<IStats> &stats
 }
 
 /**
+ * Report bluetooth audio usage stats.
+ * This function will report at most 5 atoms showing different instance stats.
+ */
+void SysfsCollector::logBluetoothAudioUsage(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> duration_per_codec;
+
+    constexpr int num_codec = 5;
+
+    if (kBluetoothAudioUsagePath == nullptr) {
+        ALOGD("Bluetooth Audio stats path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kBluetoothAudioUsagePath, &file_contents)) {
+        ALOGD("Unable to read Bluetooth Audio stats path %s", kBluetoothAudioUsagePath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            duration_per_codec.push_back(duration);
+        }
+    }
+
+    if (duration_per_codec.size() != num_codec) {
+        ALOGD("Bluetooth Audio num codec != number of codec. %zu / %d", duration_per_codec.size(),
+              num_codec);
+        return;
+    }
+
+    for (int index = 0; index < num_codec; index++) {
+        std::vector<VendorAtomValue> values(2);
+        VendorAtomValue tmp;
+
+        if (duration_per_codec[index] == 0) {
+            ALOGD("Skipped VendorAudioBtMediaStatsReported at codec:%d", index);
+            continue;
+        }
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioBtMediaStatsReported::kBtCodecTypeFieldNumber - kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(duration_per_codec[index]);
+        values[VendorAudioBtMediaStatsReported::kActiveSecondsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioBtMediaStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioBtMediaStatsReported at index %d", index);
+        else
+            ALOGD("Reporting VendorAudioBtMediaStatsReported: codec:%d, duration:%d", index,
+                  duration_per_codec[index]);
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -2024,6 +2087,7 @@ void SysfsCollector::logPerDay() {
     logAdaptedInfoStats(stats_client);
     logPcmUsageStats(stats_client);
     logOffloadEffectsStats(stats_client);
+    logBluetoothAudioUsage(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
