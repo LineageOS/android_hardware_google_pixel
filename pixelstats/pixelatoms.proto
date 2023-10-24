@@ -115,6 +115,7 @@ message Atom {
       VendorUsbDataSessionEvent vendor_usb_data_session_event = 105061;
       ThermalSensorAbnormalityDetected thermal_sensor_abnormality_detected = 105062;
       VendorAudioOffloadedEffectStatsReported vendor_audio_offloaded_effect_stats_reported = 105063;
+      VendorAudioBtMediaStatsReported vendor_audio_bt_media_stats_reported = 105064;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2079,4 +2080,25 @@ message VendorAudioOffloadedEffectStatsReported {
 
   /* Active seconds per day. */
   optional int32 effect_active_seconds_per_day = 4;
+}
+
+/*
+ * Logs the Bluetooth Audio stats.
+ * Two stats are recorded, count and duration (in ms) per features.
+ */
+message VendorAudioBtMediaStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum Codec {
+    UNKNOWN = 0;
+    SBC = 1;
+    AAC = 2;
+    OPUS = 3;
+    LC3 = 4;
+  }
+  /* Codec to record. */
+  optional Codec bt_codec_type = 2;
+  /* Total active seconds to record. */
+  optional int32 active_seconds_per_day = 3;
 }
