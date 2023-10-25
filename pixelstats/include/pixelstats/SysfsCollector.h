@@ -90,6 +90,7 @@ class SysfsCollector {
         const char *const OffloadEffectsIdPath;
         const char *const OffloadEffectsDurationPath;
         const char *const BluetoothAudioUsagePath;
+        const char *const GMSRPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -145,6 +146,7 @@ class SysfsCollector {
     void logPcmUsageStats(const std::shared_ptr<IStats> &stats_client);
     void logOffloadEffectsStats(const std::shared_ptr<IStats> &stats_client);
     void logBluetoothAudioUsage(const std::shared_ptr<IStats> &stats_client);
+    void logBatteryGMSR(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -194,6 +196,7 @@ class SysfsCollector {
     const char *const kOffloadEffectsIdPath;
     const char *const kOffloadEffectsDurationPath;
     const char *const kBluetoothAudioUsagePath;
+    const char *const kGMSRPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
