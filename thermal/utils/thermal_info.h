@@ -20,6 +20,7 @@
 #include <aidl/android/hardware/thermal/TemperatureType.h>
 #include <aidl/android/hardware/thermal/ThrottlingSeverity.h>
 #include <json/value.h>
+#include <virtualtemp_estimator.h>
 
 #include <chrono>
 #include <string>
@@ -53,6 +54,7 @@ enum class FormulaOption : uint32_t {
     WEIGHTED_AVG,
     MAXIMUM,
     MINIMUM,
+    USE_ML_MODEL
 };
 
 template <typename T>
@@ -136,6 +138,8 @@ struct VirtualSensorInfo {
     float offset;
     std::vector<std::string> trigger_sensors;
     FormulaOption formula;
+    std::string vt_estimator_model_file;
+    std::unique_ptr<::thermal::vtestimator::VirtualTempEstimator> vt_estimator;
 };
 
 struct VirtualPowerRailInfo {
