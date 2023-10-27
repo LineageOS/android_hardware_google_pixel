@@ -128,7 +128,7 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         // Scan /dev/input/event* to get the correct input device path for FF effects manipulation.
         // Then constructs the /sys/class/input/event*/../../../ for driver attributes accessing
         // across different platforms and different kernels.
-        for (uint8_t retry = 1; retry < 3 && !mInputFd.ok(); retry++) {
+        for (uint8_t retry = 1; retry < 11 && !mInputFd.ok(); retry++) {
             ret = glob(INPUT_EVENT_PATH.c_str(), 0, nullptr, &g);
             if (ret) {
                 ALOGE("Failed to get input event paths (%d): %s", errno, strerror(errno));
