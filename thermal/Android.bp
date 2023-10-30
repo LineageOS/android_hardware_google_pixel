@@ -36,7 +36,6 @@ cc_binary {
         "android.hardware.thermal-V1-ndk",
         "pixel-power-ext-V1-ndk",
         "pixelatoms-cpp",
-        "libthermal_virtualtemp_estimator"
     ],
     static_libs: [
         "libpixelstats",
@@ -94,7 +93,6 @@ cc_test {
         "android.hardware.thermal-V1-ndk",
         "pixel-power-ext-V1-ndk",
         "pixelatoms-cpp",
-        "libthermal_virtualtemp_estimator"
     ],
     static_libs: [
         "libgmock",
