@@ -1078,9 +1078,7 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         } else {
             time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now - sensor_status.last_update_time);
-            if (uevent_sensors.size() &&
-                (sensor_status.severity == ThrottlingSeverity::NONE ||
-                 sensor_info.passive_delay == std::chrono::milliseconds::max())) {
+            if (uevent_sensors.size()) {
                 if (sensor_info.virtual_sensor_info != nullptr) {
                     for (size_t i = 0; i < sensor_info.virtual_sensor_info->trigger_sensors.size();
                          i++) {
