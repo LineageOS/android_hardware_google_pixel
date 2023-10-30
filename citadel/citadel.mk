@@ -1,3 +1,4 @@
+ifneq ($(wildcard vendor/google_nos),)
 PRODUCT_SOONG_NAMESPACES += vendor/google_nos/init/citadel
 # Citadel
 PRODUCT_PACKAGES += \
@@ -11,8 +12,6 @@ PRODUCT_PACKAGES += \
     android.hardware.weaver-service.citadel \
     android.hardware.keymaster@4.1-service.citadel \
     android.hardware.identity@1.0-service.citadel \
-    android.hardware.fastboot@1.1-impl.pixel \
-    wait_for_strongbox \
     init_citadel
 
 # Citadel debug stuff
@@ -22,6 +21,11 @@ PRODUCT_PACKAGES_DEBUG += \
 # Resume on Reboot support
 PRODUCT_PACKAGES += \
     android.hardware.rebootescrow-service.citadel
+endif
+
+PRODUCT_PACKAGES += \
+    android.hardware.fastboot@1.1-impl.pixel \
+    wait_for_strongbox
 
 ifneq ($(wildcard vendor/google_nos/provision),)
 PRODUCT_PACKAGES_DEBUG += CitadelProvision
@@ -42,7 +46,9 @@ BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/citadel
 
 # USERDEBUG ONLY: Install test packages
 ifneq (,$(filter eng,$(TARGET_BUILD_VARIANT)))
+ifneq ($(wildcard vendor/google_nos),)
 PRODUCT_PACKAGES_DEBUG += citadel_integration_tests \
                           pwntest \
                           nugget_targeted_tests
+endif
 endif
