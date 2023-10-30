@@ -1,3 +1,4 @@
+ifneq ($(wildcard vendor/google_nos),)
 PRODUCT_SOONG_NAMESPACES += vendor/google_nos/init/citadel
 # Citadel
 PRODUCT_PACKAGES += \
@@ -22,6 +23,7 @@ PRODUCT_PACKAGES_DEBUG += \
 # Resume on Reboot support
 PRODUCT_PACKAGES += \
     android.hardware.rebootescrow-service.citadel
+endif
 
 ifneq ($(wildcard vendor/google_nos/provision),)
 PRODUCT_PACKAGES_DEBUG += CitadelProvision
@@ -42,7 +44,9 @@ BOARD_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/citadel
 
 # USERDEBUG ONLY: Install test packages
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
+ifneq ($(wildcard vendor/google_nos),)
 PRODUCT_PACKAGES_DEBUG += citadel_integration_tests \
                           pwntest \
                           nugget_targeted_tests
+endif
 endif
