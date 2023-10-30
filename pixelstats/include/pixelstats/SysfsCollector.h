@@ -197,6 +197,7 @@ class SysfsCollector {
     const char *const kOffloadEffectsDurationPath;
     const char *const kBluetoothAudioUsagePath;
     const char *const kGMSRPath;
+    const char *const kMaxfgHistoryPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
