@@ -906,50 +906,6 @@ bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *read
     return true;
 }
 
-float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
-                                                 std::map<std::string, float> *sensor_log_map) {
-    std::vector<float> model_inputs;
-    float estimated_vt = NAN;
-    constexpr int kCelsius2mC = 1000;
-
-    ATRACE_NAME(StringPrintf("ThermalHelper::runVirtualTempEstimator - %s", sensor_name.data())
-                        .c_str());
-    if (!(sensor_info_map_.count(sensor_name.data()) &&
-          sensor_status_map_.count(sensor_name.data()))) {
-        LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
-        return NAN;
-    }
-
-    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
-    if (!sensor_info.virtual_sensor_info->vt_estimator) {
-        LOG(ERROR) << "vt_estimator not valid for " << sensor_name;
-        return NAN;
-    }
-
-    model_inputs.reserve(sensor_info.virtual_sensor_info->linked_sensors.size());
-
-    for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
-        std::string linked_sensor = sensor_info.virtual_sensor_info->linked_sensors[i];
-
-        if ((*sensor_log_map).count(linked_sensor.data())) {
-            float value = (*sensor_log_map)[linked_sensor.data()];
-            model_inputs.push_back(value / kCelsius2mC);
-        } else {
-            LOG(ERROR) << "failed to read sensor: " << linked_sensor;
-            return NAN;
-        }
-    }
-
-    ::thermal::vtestimator::VtEstimatorStatus ret =
-            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &estimated_vt);
-    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
-        LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
-        return NAN;
-    }
-
-    return (estimated_vt * kCelsius2mC);
-}
-
 constexpr int kTranTimeoutParam = 2;
 
 bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *temp,
@@ -1050,10 +1006,6 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
             }
         }
         *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
-
-        if (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) {
-            *temp = runVirtualTempEstimator(sensor_name, sensor_log_map);
-        }
     }
 
     if (!isnan(sensor_info.step_ratio) && !isnan(sensor_status.thermal_cached.temp) &&
@@ -1126,7 +1078,9 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         } else {
             time_elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now - sensor_status.last_update_time);
-            if (uevent_sensors.size()) {
+            if (uevent_sensors.size() &&
+                (sensor_status.severity == ThrottlingSeverity::NONE ||
+                 sensor_info.passive_delay == std::chrono::milliseconds::max())) {
                 if (sensor_info.virtual_sensor_info != nullptr) {
                     for (size_t i = 0; i < sensor_info.virtual_sensor_info->trigger_sensors.size();
                          i++) {
