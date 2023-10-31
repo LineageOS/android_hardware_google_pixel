@@ -303,6 +303,7 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockApi, setMinOnOffInterval(_)).Times(times);
         EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).Times(times);
         EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, _, _, _)).Times(times);
+        EXPECT_CALL(*mMockApi, isPassthroughI2sHapticSupported()).Times(times);
         EXPECT_CALL(*mMockApi, enableDbc()).Times(times);
 
         EXPECT_CALL(*mMockApi, debug(_)).Times(times);
@@ -384,6 +385,7 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockCal, isRedcCompEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setRedcCompEnable(true)).WillOnce(Return(true));
 
+    EXPECT_CALL(*mMockApi, isPassthroughI2sHapticSupported()).WillOnce(Return(false));
     EXPECT_CALL(*mMockCal, isChirpEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*mMockCal, getSupportedPrimitives(_))
             .InSequence(supportedPrimitivesSeq)
