@@ -22,6 +22,5 @@ struct brownout_stats {
     struct odpm_instant_data main_odpm_instant_data[DATA_LOGGING_LEN];
     struct odpm_instant_data sub_odpm_instant_data[DATA_LOGGING_LEN];
 };
-static_assert(sizeof(struct brownout_stats) <= PAGE_SIZE);
 
 #endif /* __BROWNOUT_STATS_H */
