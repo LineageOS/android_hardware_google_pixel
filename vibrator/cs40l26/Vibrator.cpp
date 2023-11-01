@@ -496,6 +496,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
     mHwApi->setF0CompEnable(mHwCal->isF0CompEnabled());
     mHwApi->setRedcCompEnable(mHwCal->isRedcCompEnabled());
 
+    mHasPassthroughHapticDevice = mHwApi->isPassthroughI2sHapticSupported();
+
     mIsUnderExternalControl = false;
 
     mIsChirpEnabled = mHwCal->isChirpEnabled();
@@ -534,7 +536,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
                   IVibrator::CAP_AMPLITUDE_CONTROL | IVibrator::CAP_GET_RESONANT_FREQUENCY |
                   IVibrator::CAP_GET_Q_FACTOR;
-    if (hasHapticAlsaDevice()) {
+    if (mHasPassthroughHapticDevice || hasHapticAlsaDevice()) {
         ret |= IVibrator::CAP_EXTERNAL_CONTROL;
     } else {
         mStatsApi->logError(kAlsaFailError);
@@ -671,16 +673,21 @@ ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
     ATRACE_NAME("Vibrator::setExternalControl");
     setGlobalAmplitude(enabled);
 
-    if (mHasHapticAlsaDevice || mConfigHapticAlsaDeviceDone || hasHapticAlsaDevice()) {
-        if (!mHwApi->setHapticPcmAmp(&mHapticPcm, enabled, mCard, mDevice)) {
-            mStatsApi->logError(kHwApiError);
-            ALOGE("Failed to %s haptic pcm device: %d", (enabled ? "enable" : "disable"), mDevice);
+    if (!mHasPassthroughHapticDevice) {
+        if (mHasHapticAlsaDevice || mConfigHapticAlsaDeviceDone ||
+            hasHapticAlsaDevice()) {
+            if (!mHwApi->setHapticPcmAmp(&mHapticPcm, enabled, mCard,
+                                         mDevice)) {
+                mStatsApi->logError(kHwApiError);
+                ALOGE("Failed to %s haptic pcm device: %d",
+                      (enabled ? "enable" : "disable"), mDevice);
+                return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+            }
+        } else {
+            mStatsApi->logError(kAlsaFailError);
+            ALOGE("No haptics ALSA device");
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
         }
-    } else {
-        mStatsApi->logError(kAlsaFailError);
-        ALOGE("No haptics ALSA device");
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
 
     mIsUnderExternalControl = enabled;

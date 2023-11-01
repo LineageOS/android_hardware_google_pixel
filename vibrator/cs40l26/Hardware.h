@@ -297,6 +297,9 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *haptic_pcm = NULL;
         return false;
     }
+    bool isPassthroughI2sHapticSupported() override {
+        return utils::getProperty("ro.vendor.vibrator.hal.passthrough_i2s_supported", false);
+    }
     bool uploadOwtEffect(const uint8_t *owtData, const uint32_t numBytes, struct ff_effect *effect,
                          uint32_t *outEffectIndex, int *status) override {
         ATRACE_NAME(__func__);
