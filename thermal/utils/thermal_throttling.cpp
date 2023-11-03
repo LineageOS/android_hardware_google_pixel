@@ -497,7 +497,8 @@ bool ThermalThrottling::allocatePowerToCdev(
                         (power_data_invalid || cdev_power_adjustment < 0)) {
                         const auto target_state = std::min(
                                 curr_cdev_vote + binded_cdev_info_pair.second.max_throttle_step,
-                                cdev_info.max_state);
+                                binded_cdev_info_pair.second
+                                        .cdev_ceiling[static_cast<size_t>(curr_severity)]);
                         cdev_power_budget =
                                 std::max(cdev_power_budget, cdev_info.state2power[target_state]);
                     }
@@ -785,6 +786,7 @@ void ThermalThrottling::computeCoolingDevicesRequest(
         }
         request_state = std::min(request_state, cdev_ceiling);
         if (cdev_request_pair.second != request_state) {
+            ATRACE_INT((atrace_prefix + std::string("-final_request")).c_str(), request_state);
             if (updateCdevMaxRequestAndNotifyIfChange(cdev_name, cdev_request_pair.second,
                                                       request_state)) {
                 cooling_devices_to_update->emplace_back(cdev_name);

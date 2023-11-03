@@ -27,3 +27,27 @@ cc_library_static {
         "librecovery_ui",
     ],
 }
+
+cc_library_static {
+    name: "librecovery_ui_pixel_watch",
+    owner: "google",
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+    ],
+    srcs: [
+        "recovery_watch_ui.cpp",
+    ],
+
+    whole_static_libs: [
+        "libmisc_writer",
+        "libbootloader_message",
+    ],
+
+    shared_libs: [
+        "libbase",
+        "librecovery_ui",
+    ],
+}
