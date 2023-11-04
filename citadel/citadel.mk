@@ -13,7 +13,6 @@ PRODUCT_PACKAGES += \
     android.hardware.keymaster@4.1-service.citadel \
     android.hardware.identity@1.0-service.citadel \
     android.hardware.fastboot@1.1-impl.pixel \
-    wait_for_strongbox \
     init_citadel
 
 # Citadel debug stuff
@@ -24,6 +23,9 @@ PRODUCT_PACKAGES_DEBUG += \
 PRODUCT_PACKAGES += \
     android.hardware.rebootescrow-service.citadel
 endif
+
+PRODUCT_PACKAGES += \
+    wait_for_strongbox
 
 ifneq ($(wildcard vendor/google_nos/provision),)
 PRODUCT_PACKAGES_DEBUG += CitadelProvision
