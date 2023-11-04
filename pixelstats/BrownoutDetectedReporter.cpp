@@ -277,7 +277,7 @@ void BrownoutDetectedReporter::logBrownout(const std::shared_ptr<IStats> &stats_
             max_value.triggered_timestamp_ = parseTimestamp(line.c_str());
             continue;
         }
-        if (updateIfFound(line, kBatterySocPattern, &max_value.battery_soc_, kUpdateMax)) {
+        if (updateIfFound(line, kBatterySocPattern, &max_value.battery_soc_, kUpdateMin)) {
             continue;
         }
         if (updateIfFound(line, kBatteryTempPattern, &max_value.battery_temp_, kUpdateMin)) {
