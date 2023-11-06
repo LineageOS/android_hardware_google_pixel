@@ -22,11 +22,6 @@ namespace hardware {
 namespace google {
 namespace pixel {
 
-struct numericSysfs {
-    std::string name;
-    std::string path;
-};
-
 class MitigationConfig {
   public:
     struct Config {
@@ -37,16 +32,35 @@ class MitigationConfig {
         const char *const TimestampFormat;
     };
 
+    struct numericSysfs {
+        std::string name;
+        std::string path;
+    };
+
+    struct platformSpecific {
+        std::string MainPmicName;
+        std::string SubPmicName;
+        std::string PcieModemPath;
+        std::string PcieWifiPath;
+    };
+
+    struct pmicCommon {
+        const char *const OdpmDir;
+        const char *const OdpmEnabledRailsPath;
+        const char *const PmicNamePath;
+    };
+
     struct EventThreadConfig {
         const std::vector<numericSysfs> NumericSysfsStatPaths;
         const std::vector<numericSysfs> NumericSysfsStatDirs;
         const char *const TriggeredIdxPath;
         const char *const BrownoutStatsPath;
         const char *const StoringPath;
-        const char *const BackupPath;
+        const char *const ParsedThismealPath;
+        const char *const ParsedLastmealPath;
         const char *const FvpStatsPath;
-        const char *const PcieModemPath;
-        const char *const PcieWifiPath;
+        const std::vector<pmicCommon> PmicCommon;
+        const std::vector<platformSpecific> PlatformSpecific;
     };
 
     MitigationConfig(const struct Config &cfg);
