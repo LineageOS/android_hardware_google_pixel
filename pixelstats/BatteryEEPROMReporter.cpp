@@ -58,7 +58,6 @@ void BatteryEEPROMReporter::checkAndReport(const std::shared_ptr<IStats> &stats_
         ALOGE("Unable to read %s - %s", path.c_str(), strerror(errno));
         return;
     }
-    ALOGD("checkAndReport: %s", file_contents.c_str());
 
     int16_t i, num;
     struct BatteryHistory hist;
@@ -282,7 +281,6 @@ void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &st
         ALOGE("Unable to read gmsr path: %s - %s", path.c_str(), strerror(errno));
         return;
     }
-    ALOGD("checkAndReportGMSR:\n%s", file_contents.c_str());
 
     gmsr.checksum = 0xFFFF;
     if (path.find("max77779") == std::string::npos) {

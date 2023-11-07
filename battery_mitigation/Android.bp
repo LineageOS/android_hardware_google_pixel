@@ -24,6 +24,7 @@ cc_library {
     vendor_available: true,
     srcs: [
         "BatteryMitigation.cpp",
+        "BatteryMitigationService.cpp",
         "MitigationThermalManager.cpp",
     ],
     static_libs: [
