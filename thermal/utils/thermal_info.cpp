@@ -332,6 +332,7 @@ bool ParseBindedCdevInfo(const Json::Value &values,
         std::string power_rail;
         bool high_power_check = false;
         bool throttling_with_power_link = false;
+        bool enabled = true;
         CdevArray cdev_floor_with_power_link;
         cdev_floor_with_power_link.fill(0);
 
@@ -387,6 +388,9 @@ bool ParseBindedCdevInfo(const Json::Value &values,
                 }
             }
         }
+        if (values[j]["Disabled"].asBool()) {
+            enabled = false;
+        }
 
         (*binded_cdev_info_map)[cdev_name] = {
                 .limit_info = limit_info,
@@ -400,6 +404,7 @@ bool ParseBindedCdevInfo(const Json::Value &values,
                 .max_throttle_step = max_throttle_step,
                 .cdev_floor_with_power_link = cdev_floor_with_power_link,
                 .power_rail = power_rail,
+                .enabled = enabled,
         };
     }
     return true;
@@ -531,9 +536,48 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
         LOG(ERROR) << "Sensor[" << name << "]: failed to parse BindedCdevInfo";
         return false;
     }
+    Json::Value values;
+    ProfileMap profile_map;
+
+    values = sensor["Profile"];
+    for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
+        Json::Value sub_values;
+        const std::string &mode = values[j]["Mode"].asString();
+        std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map_profile;
+        if (!ParseBindedCdevInfo(values[j]["BindedCdevInfo"], &binded_cdev_info_map_profile,
+                                 support_pid, &support_hard_limit)) {
+            LOG(ERROR) << "Sensor[" << name << " failed to parse BindedCdevInfo profile";
+        }
+        // Check if the binded_cdev_info_map_profile is valid
+        if (binded_cdev_info_map.size() != binded_cdev_info_map_profile.size()) {
+            LOG(ERROR) << "Sensor[" << name << "]:'s profile map size should not be changed";
+            return false;
+        } else {
+            for (const auto &binded_cdev_info_pair : binded_cdev_info_map_profile) {
+                if (binded_cdev_info_map.count(binded_cdev_info_pair.first)) {
+                    if (binded_cdev_info_pair.second.power_rail !=
+                        binded_cdev_info_map.at(binded_cdev_info_pair.first).power_rail) {
+                        LOG(ERROR) << "Sensor[" << name << "]:'s profile " << mode << " binded "
+                                   << binded_cdev_info_pair.first
+                                   << "'s power rail is not included in default rules";
+                        return false;
+                    } else {
+                        LOG(INFO) << "Sensor[" << name << "]:'s profile " << mode
+                                  << " is parsed successfully";
+                    }
+                } else {
+                    LOG(ERROR) << "Sensor[" << name << "]'s profile " << mode << " binded "
+                               << binded_cdev_info_pair.first
+                               << " is not included in default rules";
+                    return false;
+                }
+            }
+        }
+        profile_map[mode] = binded_cdev_info_map_profile;
+    }
 
     std::unordered_map<std::string, ThrottlingArray> excluded_power_info_map;
-    Json::Value values = sensor["ExcludedPowerInfo"];
+    values = sensor["ExcludedPowerInfo"];
     for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
         Json::Value sub_values;
         const std::string &power_rail = values[j]["PowerRail"].asString();
@@ -555,7 +599,7 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
     }
     throttling_info->reset(new ThrottlingInfo{
             k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power, s_power, i_cutoff,
-            i_default, tran_cycle, excluded_power_info_map, binded_cdev_info_map});
+            i_default, tran_cycle, excluded_power_info_map, binded_cdev_info_map, profile_map});
     *support_throttling = support_pid | support_hard_limit;
     return true;
 }

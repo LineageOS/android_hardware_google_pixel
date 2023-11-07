@@ -269,6 +269,15 @@ class Vibrator : public BnVibrator {
     uint32_t mLastEffectPlayedTime = 0;
     float mLastPlayedScale = 0;
     sp<CapoDetector> mContextListener;
+    enum hal_state {
+        IDLE,
+        PREPARING,
+        ISSUED,
+        PLAYING,
+        STOPPED,
+        RESTORED,
+    };
+    hal_state halState = IDLE;
 };
 
 }  // namespace vibrator

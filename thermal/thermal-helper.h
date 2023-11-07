@@ -172,6 +172,9 @@ class ThermalHelper {
     bool connectToPowerHal();
     void updateSupportedPowerHints();
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
+    // Check the max CDEV state for cdev_ceiling
+    void maxCoolingRequestCheck(
+            std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map);
     sp<ThermalWatcher> thermal_watcher_;
     PowerFiles power_files_;
     ThermalFiles thermal_sensors_;
