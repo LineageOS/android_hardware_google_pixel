@@ -58,6 +58,7 @@ class MitigationConfig {
         const char *const StoringPath;
         const char *const ParsedThismealPath;
         const char *const ParsedLastmealPath;
+        const char *const ParsedLastmealCSVPath;
         const char *const FvpStatsPath;
         const std::vector<pmicCommon> PmicCommon;
         const std::vector<platformSpecific> PlatformSpecific;
