@@ -21,6 +21,7 @@ struct brownout_stats {
 
     struct odpm_instant_data main_odpm_instant_data[DATA_LOGGING_LEN];
     struct odpm_instant_data sub_odpm_instant_data[DATA_LOGGING_LEN];
+    unsigned int triggered_state[DATA_LOGGING_LEN];
 };
 
 #endif /* __BROWNOUT_STATS_H */
