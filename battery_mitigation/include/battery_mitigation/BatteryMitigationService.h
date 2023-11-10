@@ -68,6 +68,40 @@ struct OdpmInstantPower {
     double value;
 };
 
+struct BrownoutStatsCSVFields {
+    const char *const triggered_time;
+    const char *const triggered_idx;
+    const char *const battery_temp;
+    const char *const battery_cycle;
+    const char *const voltage_now;
+    const char *const current_now;
+    const char *const cpu0_freq;
+    const char *const cpu1_freq;
+    const char *const cpu2_freq;
+    const char *const gpu_freq;
+    const char *const tpu_freq;
+    const char *const aur_freq;
+    const char *const odpm_prefix;
+};
+
+struct BrownoutStatsCSVRow {
+    struct timespec triggered_time;
+    int triggered_idx;
+    int max_battery_temp;
+    int min_battery_cycle;
+    int min_voltage_now;
+    int max_current_now;
+    int min_cpu0_freq;
+    int min_cpu1_freq;
+    int min_cpu2_freq;
+    int min_gpu_freq;
+    int min_tpu_freq;
+    int min_aur_freq;
+
+    double max_main_odpm_instant_power[METER_CHANNEL_MAX];
+    double max_sub_odpm_instant_power[METER_CHANNEL_MAX];
+};
+
 struct BrownoutStatsExtend {
     struct brownout_stats brownoutStats;
     char fvpStats[FVP_STATS_SIZE];
@@ -91,6 +125,7 @@ class BatteryMitigationService : public RefBase {
     bool isPlatformSupported();
     bool isTimeValid(const char*, std::chrono::system_clock::time_point);
     bool genParsedMeal(const char*);
+    bool genLastmealCSV(const char*);
   private:
     struct MitigationConfig::EventThreadConfig cfg;
     int platformNum;
@@ -100,18 +135,26 @@ class BatteryMitigationService : public RefBase {
     int triggeredIdxEpollFd;
     int wakeupEventFd;
     char *storingAddr;
+    int mainPmicID;
+    int subPmicID;
+    double mainLpfBitResolutions[METER_CHANNEL_MAX];
+    double subLpfBitResolutions[METER_CHANNEL_MAX];
+    char *mainLpfChannelNames[METER_CHANNEL_MAX];
+    char *subLpfChannelNames[METER_CHANNEL_MAX];
     std::vector<MitigationConfig::numericSysfs> totalNumericSysfsStatPaths;
     std::atomic_bool threadStop{false};
     std::thread brownoutEventThread;
 
     void BrownoutEventThread();
     void initTotalNumericSysfsPaths();
+    void initPmicRelated();
     int initThisMeal();
     int initFd();
     void tearDownBrownoutEventThread();
     int readNumericStats(struct BrownoutStatsExtend*);
     bool parseBrownoutStatsExtend(FILE *);
     void printBrownoutStatsExtendSummary(FILE *, struct BrownoutStatsExtend *);
+    void getBrownoutStatsCSVRow(struct BrownoutStatsExtend *, struct BrownoutStatsCSVRow *);
 };
 
 }  // namespace pixel
