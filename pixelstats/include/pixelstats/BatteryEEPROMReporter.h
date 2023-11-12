@@ -46,6 +46,8 @@ class BatteryEEPROMReporter {
     BatteryEEPROMReporter();
     void checkAndReport(const std::shared_ptr<IStats> &stats_client, const std::string &path);
     void checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client, const std::string &path);
+    void checkAndReportMaxfgHistory(const std::shared_ptr<IStats> &stats_client,
+                                    const std::string &path);
 
   private:
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
@@ -139,6 +141,7 @@ class BatteryEEPROMReporter {
 
     const int kNum77759GMSRFields = 11;
     const int kNum77779GMSRFields = 5;
+    const int kNum17201HISTFields = 16;
 };
 
 }  // namespace pixel

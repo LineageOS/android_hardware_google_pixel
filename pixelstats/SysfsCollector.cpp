@@ -129,7 +129,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kOffloadEffectsIdPath(sysfs_paths.OffloadEffectsIdPath),
       kOffloadEffectsDurationPath(sysfs_paths.OffloadEffectsDurationPath),
       kBluetoothAudioUsagePath(sysfs_paths.BluetoothAudioUsagePath),
-      kGMSRPath(sysfs_paths.GMSRPath) {}
+      kGMSRPath(sysfs_paths.GMSRPath),
+      kMaxfgHistoryPath("/dev/maxfg_history") {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -207,6 +208,8 @@ void SysfsCollector::logBatteryEEPROM(const std::shared_ptr<IStats> &stats_clien
     } else {
         battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
     }
+
+    battery_EEPROM_reporter_.checkAndReportMaxfgHistory(stats_client, kMaxfgHistoryPath);
 }
 
 /**
