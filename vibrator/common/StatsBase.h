@@ -31,6 +31,7 @@ namespace frameworks {
 namespace stats {
 
 class VendorAtom;
+class IStats;
 
 }  // namespace stats
 }  // namespace frameworks
@@ -45,6 +46,7 @@ namespace vibrator {
 class StatsBase {
   public:
     using VendorAtom = ::aidl::android::frameworks::stats::VendorAtom;
+    using IStats = ::aidl::android::frameworks::stats::IStats;
 
     StatsBase(const std::string &instance);
     ~StatsBase();
@@ -65,7 +67,7 @@ class StatsBase {
     void runReporterThread();
     void reportVendorAtomAsync(const VendorAtom &atom);
     void uploadDiagnostics();
-    void waitForStatsService() const;
+    std::shared_ptr<IStats> waitForStatsService() const;
     void drainAtomQueue();
 
     void uploadPlaycountAtoms();
