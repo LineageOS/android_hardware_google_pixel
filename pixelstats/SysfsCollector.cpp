@@ -99,6 +99,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
       kEEPROMPath(sysfs_paths.EEPROMPath),
+      kBrownoutCsvPath(sysfs_paths.BrownoutCsvPath),
       kBrownoutLogPath(sysfs_paths.BrownoutLogPath),
       kBrownoutReasonProp(sysfs_paths.BrownoutReasonProp),
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
@@ -2109,7 +2110,10 @@ void SysfsCollector::logBrownout() {
         ALOGE("Unable to get AIDL Stats service");
         return;
     }
-    if (kBrownoutLogPath != nullptr && strlen(kBrownoutLogPath) > 0)
+    if (kBrownoutCsvPath != nullptr && strlen(kBrownoutCsvPath) > 0)
+        brownout_detected_reporter_.logBrownoutCsv(stats_client, kBrownoutCsvPath,
+                                                   kBrownoutReasonProp);
+    else if (kBrownoutLogPath != nullptr && strlen(kBrownoutLogPath) > 0)
         brownout_detected_reporter_.logBrownout(stats_client, kBrownoutLogPath,
                                                 kBrownoutReasonProp);
 }
