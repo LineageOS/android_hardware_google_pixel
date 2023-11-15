@@ -50,7 +50,10 @@ BatteryMitigationService::BatteryMitigationService(
 }
 
 BatteryMitigationService::~BatteryMitigationService() {
-    stopBrownoutEventThread();
+    stopEventThread(threadStop, wakeupEventFd, brownoutEventThread);
+    tearDownBrownoutEventThread();
+    stopEventThread(triggerThreadStop, triggeredStateWakeupEventFd, eventThread);
+    tearDownTriggerEventThread();
 }
 
 bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
@@ -154,21 +157,30 @@ int BatteryMitigationService::readNumericStats(struct BrownoutStatsExtend *brown
 void BatteryMitigationService::startBrownoutEventThread() {
     if (isPlatformSupported() && isBrownoutStatsBinarySupported()) {
         brownoutEventThread = std::thread(&BatteryMitigationService::BrownoutEventThread, this);
+        eventThread = std::thread(&BatteryMitigationService::TriggerEventThread, this);
     }
 }
 
-void BatteryMitigationService::stopBrownoutEventThread() {
-    if (!threadStop.load()) {
-        threadStop.store(true);
+void BatteryMitigationService::stopEventThread(std::atomic_bool &thread_stop, int wakeup_event_fd,
+                                               std::thread &event_thread) {
+    if (!thread_stop.load()) {
+        thread_stop.store(true);
         uint64_t flag = 1;
         /* wakeup epoll_wait */
-        write(wakeupEventFd, &flag, sizeof(flag));
+        write(wakeup_event_fd, &flag, sizeof(flag));
 
-        if (brownoutEventThread.joinable()) {
-            brownoutEventThread.join();
+        if (event_thread.joinable()) {
+            event_thread.join();
         }
+    }
+}
 
-        tearDownBrownoutEventThread();
+void BatteryMitigationService::tearDownTriggerEventThread() {
+    triggerThreadStop.store(true);
+    close(triggeredStateWakeupEventFd);
+    close(triggeredStateEpollFd);
+    LOOP_TRIG_STATS(idx) {
+        close(triggeredStateFd[idx]);
     }
 }
 
@@ -200,10 +212,120 @@ int BatteryMitigationService::initThisMeal() {
     return 0;
 }
 
+int BatteryMitigationService::initTrigFd() {
+    int ret;
+    struct epoll_event trigEvent[MAX_EVENT];
+    struct epoll_event wakeupEvent;
+
+    LOOP_TRIG_STATS(idx) {
+        triggeredStateFd[idx] = open(cfg.triggeredStatePath[idx], O_RDONLY);
+        if (triggeredStateFd[idx] < 0) {
+            for (int i = idx - 1; i >= 0; i--) {
+                close(triggeredStateFd[i]);
+            }
+            return triggeredStateFd[idx];
+        }
+    }
+
+    triggeredStateEpollFd = epoll_create(MAX_EVENT + 1);
+    if (triggeredStateEpollFd < 0) {
+        LOOP_TRIG_STATS(idx) {
+            close(triggeredStateFd[idx]);
+        }
+        return triggeredStateEpollFd;
+    }
+
+    triggeredStateWakeupEventFd = eventfd(0, 0);
+    if (triggeredStateWakeupEventFd < 0) {
+        close(triggeredStateEpollFd);
+        LOOP_TRIG_STATS(idx) {
+            close(triggeredStateFd[idx]);
+        }
+        return triggeredStateWakeupEventFd;
+    }
+
+    LOOP_TRIG_STATS(i) {
+        trigEvent[i] = epoll_event();
+        trigEvent[i].data.fd = triggeredStateFd[i];
+        trigEvent[i].events = EPOLLET;
+        ret = epoll_ctl(triggeredStateEpollFd, EPOLL_CTL_ADD, triggeredStateFd[i], &trigEvent[i]);
+        if (ret < 0) {
+            close(triggeredStateWakeupEventFd);
+            close(triggeredStateEpollFd);
+            LOOP_TRIG_STATS(idx) {
+                close(triggeredStateFd[idx]);
+            }
+            return ret;
+        }
+    }
+
+    wakeupEvent = epoll_event();
+    wakeupEvent.data.fd = triggeredStateWakeupEventFd;
+    wakeupEvent.events = EPOLLIN | EPOLLWAKEUP;
+    ret = epoll_ctl(triggeredStateEpollFd, EPOLL_CTL_ADD, triggeredStateWakeupEventFd,
+                    &wakeupEvent);
+    if (ret < 0) {
+        close(triggeredStateWakeupEventFd);
+        close(triggeredStateEpollFd);
+        LOOP_TRIG_STATS(idx) {
+            close(triggeredStateFd[idx]);
+        }
+        return ret;
+    }
+
+    return 0;
+}
+
+void BatteryMitigationService::TriggerEventThread() {
+    int requestedFd;
+    char buf[BUF_SIZE];
+    struct epoll_event events[EPOLL_MAXEVENTS];
+    std::smatch match;
+    if (initTrigFd() != 0) {
+        LOG(DEBUG) << "failed to init Trig FD";
+        tearDownTriggerEventThread();
+        return;
+    }
+
+    LOOP_TRIG_STATS(idx) {
+        read(triggeredStateFd[idx], buf, BUF_SIZE);
+    }
+
+    while (!triggerThreadStop.load()) {
+        requestedFd = epoll_wait(triggeredStateEpollFd, events, EPOLL_MAXEVENTS, -1);
+        if (requestedFd <= 0) {
+            /* ensure epoll_wait can sleep in the next loop */
+            LOOP_TRIG_STATS(idx) {
+                read(triggeredStateFd[idx], buf, BUF_SIZE);
+            }
+            continue;
+        }
+        std::string state;
+        for (int i = 0; i < requestedFd; i++) {
+            /* triggeredStateFd[i]: triggeredState event from kernel */
+            /* triggeredStateWakeupEventFd: wakeup epoll_wait to stop thread properly */
+            LOOP_TRIG_STATS(idx) {
+                if (events[i].data.fd == triggeredStateFd[idx]) {
+                    read(triggeredStateFd[idx], buf, BUF_SIZE);
+                    if (ReadFileToString(cfg.triggeredStatePath[idx], &state)) {
+                        size_t pos = state.find("_");
+                        std::string tState = state.substr(0, pos);
+                        std::string tModule = state.substr(pos + 1);
+                        LOG(INFO) << idx << " triggered, current state: " << tState << ". throttle "
+                                  << tModule;
+                        /* b/299700579 launch throttling on targeted module */
+                    }
+                    break;
+                }
+            }
+            /* b/299700579 handle wakeupEvent here if we need to do something after this loop */
+        }
+    }
+}
+
 int BatteryMitigationService::initFd() {
     int ret;
-    struct epoll_event triggeredIdxEvent;
-    struct epoll_event wakeupEvent;
+    struct epoll_event triggeredIdxEvent, wakeupEvent;
 
     brownoutStatsFd = open(cfg.BrownoutStatsPath, O_RDONLY);
     if (brownoutStatsFd < 0) {
@@ -232,6 +354,7 @@ int BatteryMitigationService::initFd() {
     if (ret < 0) {
         return ret;
     }
+
     wakeupEvent = epoll_event();
     wakeupEvent.data.fd = wakeupEventFd;
     wakeupEvent.events = EPOLLIN | EPOLLWAKEUP;
@@ -312,15 +435,13 @@ void BatteryMitigationService::BrownoutEventThread() {
         std::string stats;
         for (int i = 0; i < DUMP_TIMES; i++) {
             struct BrownoutStatsExtend *brownoutStatsExtend = brownoutStatsExtendEventHead + i;
+
+            /* kernel needs time to prepare brownoutstats for userland to do mmap */
+            std::this_thread::sleep_for(std::chrono::milliseconds(STATS_PREPARATION_MS));
+
             /* storing by string due the stats msg too complicate */
             if (ReadFileToString(cfg.FvpStatsPath, &stats)) {
                 snprintf(brownoutStatsExtend->fvpStats, FVP_STATS_SIZE, "%s", stats.c_str());
-            }
-            if (ReadFileToString(cfg.PlatformSpecific[platformIdx].PcieModemPath, &stats)) {
-                snprintf(brownoutStatsExtend->pcieModem, UP_DOWN_LINK_SIZE, "%s", stats.c_str());
-            }
-            if (ReadFileToString(cfg.PlatformSpecific[platformIdx].PcieWifiPath, &stats)) {
-                snprintf(brownoutStatsExtend->pcieWifi, UP_DOWN_LINK_SIZE, "%s", stats.c_str());
             }
 
             /* storing numericStats */
@@ -676,31 +797,26 @@ void printBrownoutStatsExtendRaw(FILE *fp, struct BrownoutStatsExtend *brownoutS
     fprintf(fp, "\n");
     fprintf(fp, "triggered_idx: %d\n", brownoutStatsExtend->brownoutStats.triggered_idx);
 
-    fprintf(fp, "main_odpm_instant_data: \n");
+    fprintf(fp, "main_odpm_instant_data:\n");
     for (int d = 0; d < DATA_LOGGING_LEN; d++) {
         printOdpmInstantData(fp, brownoutStatsExtend->brownoutStats.main_odpm_instant_data[d]);
     }
-    fprintf(fp, "sub_odpm_instant_data: \n");
+    fprintf(fp, "sub_odpm_instant_data:\n");
     for (int d = 0; d < DATA_LOGGING_LEN; d++) {
         printOdpmInstantData(fp, brownoutStatsExtend->brownoutStats.sub_odpm_instant_data[d]);
+    }
+    fprintf(fp, "mitigation_state:\n");
+    for (int d = 0; d < DATA_LOGGING_LEN; d++) {
+        fprintf(fp, "%d ", brownoutStatsExtend->brownoutStats.triggered_state[d]);
     }
 
     fprintf(fp, "\n");
     fprintf(fp, "fvp_stats:\n");
-    /* show cur_freq only */
-    std::string fvpStats(brownoutStatsExtend->fvpStats);
-    std::string line;
-    std::istringstream iss(fvpStats);
-    while (getline(iss, line, '\n')) {
-        if (line.find("time_ns") == std::string::npos) {
-            fprintf(fp, "%s\n", line.c_str());
-        }
+    std::vector<numericStat> fvpStats;
+    parseFvpStats(brownoutStatsExtend->fvpStats, fvpStats);
+    for (const auto &fvpStat : fvpStats) {
+        fprintf(fp, "%s_freq: %d\n", fvpStat.name, fvpStat.value);
     }
-    fprintf(fp, "\n");
-    fprintf(fp, "pcie_modem:\n");
-    fprintf(fp, "%s\n\n", brownoutStatsExtend->pcieModem);
-    fprintf(fp, "pcie_wifi:\n");
-    fprintf(fp, "%s\n\n", brownoutStatsExtend->pcieWifi);
     for (int i = 0; i < STATS_MAX_SIZE; i++) {
         if (strlen(brownoutStatsExtend->numericStats[i].name) > 0)
             fprintf(fp, "%s: %d\n", brownoutStatsExtend->numericStats[i].name,
@@ -775,7 +891,7 @@ bool readBrownoutStatsExtend(const char *storingPath,
                              struct BrownoutStatsExtend *brownoutStatsExtends) {
     int fd = open(storingPath, O_RDONLY);
     if (fd < 0) {
-        LOG(DEBUG) << "Failed to open %s " << storingPath;
+        LOG(DEBUG) << "Failed to open " << storingPath;
         return false;
     }
 

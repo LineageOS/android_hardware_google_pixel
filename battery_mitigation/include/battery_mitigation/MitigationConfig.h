@@ -17,10 +17,21 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
 #define HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
 
+#include "uapi/brownout_stats.h"
+
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+
+enum TriggeredEvent {
+    UVLO1,
+    UVLO2,
+    OILO1,
+    OILO2,
+    SMPL,
+    MAX_EVENT,
+};
 
 class MitigationConfig {
   public:
@@ -54,6 +65,7 @@ class MitigationConfig {
         const std::vector<numericSysfs> NumericSysfsStatPaths;
         const std::vector<numericSysfs> NumericSysfsStatDirs;
         const char *const TriggeredIdxPath;
+        const char *const triggeredStatePath[MAX_EVENT];
         const char *const BrownoutStatsPath;
         const char *const StoringPath;
         const char *const ParsedThismealPath;
