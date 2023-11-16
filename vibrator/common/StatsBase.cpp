@@ -129,21 +129,22 @@ void StatsBase::uploadDiagnostics() {
     uploadErrorAtoms();
 }
 
-void StatsBase::waitForStatsService() const {
+std::shared_ptr<IStats> StatsBase::waitForStatsService() const {
     STATS_TRACE("waitForStatsService()");
     if (!AServiceManager_isDeclared(kStatsInstanceName.c_str())) {
         ALOGE("IStats service '%s' is not registered.", kStatsInstanceName.c_str());
-        return;
+        return nullptr;
     }
 
     ALOGI("Waiting for IStats service '%s' to come up.", kStatsInstanceName.c_str());
-    const std::shared_ptr<IStats> statsClient = IStats::fromBinder(
+    std::shared_ptr<IStats> client = IStats::fromBinder(
             ndk::SpAIBinder(AServiceManager_waitForService(kStatsInstanceName.c_str())));
-    if (!statsClient) {
+    if (!client) {
         ALOGE("Failed to get IStats service '%s'.", kStatsInstanceName.c_str());
-        return;
+        return nullptr;
     }
     ALOGI("IStats service online.");
+    return client;
 }
 
 void StatsBase::runReporterThread() {
@@ -151,8 +152,6 @@ void StatsBase::runReporterThread() {
     using clock = std::chrono::steady_clock;
     auto nextUpload = clock::now() + UPLOAD_INTERVAL;
     auto status = std::cv_status::no_timeout;
-
-    waitForStatsService();
 
     while (!mTerminateReporterThread) {
         drainAtomQueue();
@@ -178,15 +177,14 @@ void StatsBase::drainAtomQueue() {
         std::swap(mAtomQueue, tempQueue);
     }
 
-    std::shared_ptr<IStats> statsClient = IStats::fromBinder(
-            ndk::SpAIBinder(AServiceManager_waitForService(kStatsInstanceName.c_str())));
-    if (!statsClient) {
+    std::shared_ptr<IStats> client = waitForStatsService();
+    if (!client) {
         ALOGE("Failed to get IStats service. Atoms are dropped.");
         return;
     }
 
     for (const VendorAtom &atom : tempQueue) {
-        reportVendorAtom(statsClient, atom);
+        reportVendorAtom(client, atom);
     }
 }
 
