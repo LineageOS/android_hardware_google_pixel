@@ -16,39 +16,42 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cmath>
-#include <errno.h>
-#include <unistd.h>
-#include <thread>
-#include <sys/eventfd.h>
-#include <sys/epoll.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/system_properties.h>
-#include <utils/RefBase.h>
 #include <android-base/chrono_utils.h>
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/properties.h>
 #include <android-base/strings.h>
+#include <errno.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/system_properties.h>
+#include <unistd.h>
+#include <utils/RefBase.h>
+
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <regex>
+#include <thread>
 
 #include "MitigationConfig.h"
-#include "uapi/brownout_stats.h"
 
 #define MIN_SUPPORTED_PLATFORM   2 /* CDT */
 #define MAX_SUPPORTED_PLATFORM   5
 #define NSEC_PER_SEC             1000000000L
 #define BROWNOUT_EVENT_BUF_SIZE  10
 #define DUMP_TIMES               12
-#define EPOLL_MAXEVENTS          5
+#define EPOLL_MAXEVENTS 12
 #define BUF_SIZE                 128
-#define FVP_STATS_SIZE           4096
-#define UP_DOWN_LINK_SIZE        512
+#define FVP_STATS_SIZE 4096
 #define STAT_NAME_SIZE           48
 #define STATS_MAX_SIZE           64
 #define PMIC_NUM                 2
+#define STATS_PREPARATION_MS 3
+#define LOOP_TRIG_STATS(idx) for (int idx = 0; idx < MAX_EVENT; idx++)
 
 namespace android {
 namespace hardware {
@@ -105,8 +108,6 @@ struct BrownoutStatsCSVRow {
 struct BrownoutStatsExtend {
     struct brownout_stats brownoutStats;
     char fvpStats[FVP_STATS_SIZE];
-    char pcieModem[UP_DOWN_LINK_SIZE];
-    char pcieWifi[UP_DOWN_LINK_SIZE];
     struct numericStat numericStats[STATS_MAX_SIZE];
     timeval eventReceivedTime;
     timeval dumpTime;
@@ -120,7 +121,8 @@ class BatteryMitigationService : public RefBase {
     ~BatteryMitigationService();
 
     void startBrownoutEventThread();
-    void stopBrownoutEventThread();
+    void stopEventThread(std::atomic_bool &thread_stop, int wakeup_event_fd,
+                         std::thread &event_thread);
     bool isBrownoutStatsBinarySupported();
     bool isPlatformSupported();
     bool isTimeValid(const char*, std::chrono::system_clock::time_point);
@@ -130,10 +132,19 @@ class BatteryMitigationService : public RefBase {
     struct MitigationConfig::EventThreadConfig cfg;
     int platformNum;
     int platformIdx;
+
+    int triggeredStateFd[MAX_EVENT];
+    int triggeredStateEpollFd;
+    int triggeredStateWakeupEventFd;
+    std::thread eventThread;
+    std::atomic_bool triggerThreadStop{false};
     int brownoutStatsFd;
     int triggeredIdxFd;
     int triggeredIdxEpollFd;
     int wakeupEventFd;
+    std::thread brownoutEventThread;
+    std::atomic_bool threadStop{false};
+
     char *storingAddr;
     int mainPmicID;
     int subPmicID;
@@ -142,15 +153,16 @@ class BatteryMitigationService : public RefBase {
     char *mainLpfChannelNames[METER_CHANNEL_MAX];
     char *subLpfChannelNames[METER_CHANNEL_MAX];
     std::vector<MitigationConfig::numericSysfs> totalNumericSysfsStatPaths;
-    std::atomic_bool threadStop{false};
-    std::thread brownoutEventThread;
 
     void BrownoutEventThread();
+    void TriggerEventThread();
     void initTotalNumericSysfsPaths();
     void initPmicRelated();
     int initThisMeal();
     int initFd();
+    int initTrigFd();
     void tearDownBrownoutEventThread();
+    void tearDownTriggerEventThread();
     int readNumericStats(struct BrownoutStatsExtend*);
     bool parseBrownoutStatsExtend(FILE *);
     void printBrownoutStatsExtendSummary(FILE *, struct BrownoutStatsExtend *);
