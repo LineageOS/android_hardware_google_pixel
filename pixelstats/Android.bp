@@ -71,9 +71,11 @@ java_library_host {
 genrule {
     name: "pixelatoms_defs.h",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto $(in)",
+    cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto $(location pixelatoms.proto)",
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-protos",
     ],
     out: [
         "pixelatoms_defs.h",
@@ -93,12 +95,14 @@ genrule {
     cmd: "$(location stats-log-api-gen) --header $(out)" +
         " --module pixelstats" +
         " --namespace android,hardware,google,pixel,PixelAtoms" +
-        " --vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
+        " --vendor-proto $(location pixelatoms.proto)",
     out: [
         "pixelstatsatoms.h",
     ],
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-protos",
     ]
 }
 
@@ -109,12 +113,14 @@ genrule {
         " --module pixelstats" +
         " --importHeader pixelstatsatoms.h" +
         " --namespace android,hardware,google,pixel,PixelAtoms" +
-        " --vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
+        " --vendor-proto $(location pixelatoms.proto)",
     out: [
         "pixelstatsatoms.cpp",
     ],
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-protos",
     ]
 }
 
