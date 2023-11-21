@@ -191,18 +191,16 @@ int getMmapAddr(int &fd, const char *const path, size_t memSize, char **addr) {
     }
     lseek(fd, memSize - 1, SEEK_SET);
     write(fd,  "", 1);
-    *addr = (char *) mmap(NULL, memSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    close(fd);
+    *addr = (char *)mmap(NULL, memSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     return 0;
 }
 
 int BatteryMitigationService::initThisMeal() {
     int ret;
-    int fd;
     size_t memSize = sizeof(struct BrownoutStatsExtend) * DUMP_TIMES * \
                             BROWNOUT_EVENT_BUF_SIZE;
 
-    ret = getMmapAddr(fd, cfg.StoringPath, memSize, &storingAddr);
+    ret = getMmapAddr(storingFd, cfg.StoringPath, memSize, &storingAddr);
     if (ret != 0) {
         LOG(DEBUG) << "can't generate " << cfg.StoringPath;
         return ret;
@@ -454,6 +452,7 @@ void BatteryMitigationService::BrownoutEventThread() {
             brownoutStatsExtend->dumpTime = statStoredTime;
             brownoutStatsExtend->eventReceivedTime = eventReceivedTime;
             brownoutStatsExtend->eventIdx = triggeredIdx;
+            fsync(storingFd);
         }
 
         if (++brownoutEventCounter == BROWNOUT_EVENT_BUF_SIZE) {
@@ -524,6 +523,7 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
     close(brownoutStatsFd);
     close(triggeredIdxEpollFd);
     close(wakeupEventFd);
+    close(storingFd);
     if (storingAddr != nullptr) {
         munmap(storingAddr, sizeof(struct BrownoutStatsExtend) * DUMP_TIMES * \
                BROWNOUT_EVENT_BUF_SIZE);
