@@ -133,6 +133,7 @@ class BatteryMitigationService : public RefBase {
     int platformNum;
     int platformIdx;
 
+    int storingFd;
     int triggeredStateFd[MAX_EVENT];
     int triggeredStateEpollFd;
     int triggeredStateWakeupEventFd;
