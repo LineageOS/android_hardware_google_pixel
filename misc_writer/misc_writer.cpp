@@ -103,6 +103,11 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
         content = std::string(kTimeMinRtc) + stringdata_;
         content.resize(32);
         break;
+    case MiscWriterActions::kSetSotaState:
+        offset = override_offset.value_or(kSotaStateOffsetInVendorSpace);
+        content = stringdata_;
+        content.resize(40);
+        break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
       return false;

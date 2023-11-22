@@ -42,6 +42,7 @@ enum class MiscWriterActions : int32_t {
   kClearMaxRamSize,
   kWriteTimeRtcOffset,
   kWriteTimeMinRtc,
+  kSetSotaState,
 
   kUnset = -1,
 };
