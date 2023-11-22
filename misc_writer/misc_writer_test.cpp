@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <android-base/file.h>
+#include <android-base/properties.h>
 #include <bootloader_message/bootloader_message.h>
 #include <gtest/gtest.h>
 
@@ -94,6 +95,10 @@ TEST_F(MiscWriterTest, SetClearSota) {
   ASSERT_TRUE(misc_writer_->PerformAction());
   std::string expected = "enable-sota";
   CheckMiscPartitionVendorSpaceContent(32, expected);
+
+  expected = ::android::base::GetProperty("persist.vendor.nfc.factoryota.state", "");
+  if (expected.size() != 0 && expected.size() <= 40)
+    CheckMiscPartitionVendorSpaceContent(224, expected);
 
   // Test we can write to the override offset.
   size_t override_offset = 12360;

@@ -102,9 +102,13 @@ message Atom {
       VibratorPlaycountReported vibrator_playcount_reported = 105049;
       VibratorLatencyReported vibrator_latency_reported = 105050;
       VibratorErrorsReported vibrator_errors_reported = 105051;
-
       F2fsAtomicWriteInfo f2fs_atomic_write_info = 105052;
       PartitionsUsedSpaceReported partition_used_space_reported = 105053;
+      PowerMitigationDurationCounts mitigation_duration = 105054; // moved from atoms.proto
+      DisplayPanelErrorStats display_panel_error_stats = 105055;
+      VendorAudioPdmStatsReported vendor_audio_pdm_stats_reported = 105056;
+      VendorAudioThirdPartyEffectStatsReported vendor_audio_third_party_effect_stats_reported = 105057;
+      VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -948,6 +952,21 @@ message ThermalDfsStats {
 }
 
 /**
+ * Log Display Panel error statistics.
+ */
+message DisplayPanelErrorStats {
+ optional string reverse_domain_name = 1;
+ // The error count due to Tear Effect on primary display panel.
+ optional int32 primary_error_count_te = 2;
+ // The error count due to unknown reason on primary display panel.
+ optional int32 primary_error_count_unknown = 3;
+ // The error count due to Tear Effect on primary display panel.
+ optional int32 secondary_error_count_te = 4;
+ // The error count due to unknown reason on secondary display panel.
+ optional int32 secondary_error_count_unknown = 5;
+}
+
+/**
  * Log how many segments have been reclaimed in a specific GC mode.
  */
 message F2fsGcSegmentInfo {
@@ -1308,6 +1327,23 @@ message VendorAudioHardwareStatsReported {
   optional int32 rate_of_cca_enable_per_day = 4;
 }
 
+
+/**
+ * Logs the reported vendor audio PDM stats.
+ * PDM stats are used to show background noise level during voice/voip calling.
+ * Each of the atom will show only one type of background noises. There are at most 4 types.
+ * Thus, this atoms will be reported at most 4 times to show all types.
+ */
+message VendorAudioPdmStatsReported {
+  optional string reverse_domain_name = 1;
+
+  /* index of the pdm to report. There are 4 pdm instances. So, the value is in the range 1-4 */
+  optional int32 pdm_index = 2;
+
+  /* State of the pdm to report. There is only two value 1 for good and 0 for bad. */
+  optional int32 state = 3;
+}
+
 /*
  * Logs vendor stats about long IRQs.
  *
@@ -1560,7 +1596,7 @@ message BrownoutDetected {
     // Triggered DVFS State: Channel 6
     optional int32 dvfs_channel6 = 37;
     // brownout reason
-    optional int32 brownout_reason = 38;
+    optional BrownoutReason brownout_reason = 38;
 }
 
 /*
@@ -1733,4 +1769,121 @@ message PartitionsUsedSpaceReported {
     optional Directory directory = 2;
     optional int64 free_bytes = 3;
     optional int64 total_bytes = 4;
+}
+
+/**
+ * Log mitigation duration.
+ */
+message PowerMitigationDurationCounts {
+ optional string reverse_domain_name = 1;
+ // Count of UVLO1 greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_uvlo1_none = 2;
+ // Count of UVLO1 IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo1_mmwave = 3;
+ // Count of UVLO1 IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo1_rffe = 4;
+ // Count of UVLO2 greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_uvlo2_none = 5;
+ // Count of UVLO2 IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo2_mmwave = 6;
+ // Count of UVLO2 IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo2_rffe = 7;
+ // Count of BATOILO greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_batoilo_none = 8;
+ // Count of BATOILO IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_batoilo_mmwave = 9;
+ // Count of BATOILO IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_batoilo_rffe = 10;
+
+ // IRQ duration of main regulator indices 0-11 greater than threshold.
+ optional int32 greater_than_thresh_main_0 = 11;
+ optional int32 greater_than_thresh_main_1 = 12;
+ optional int32 greater_than_thresh_main_2 = 13;
+ optional int32 greater_than_thresh_main_3 = 14;
+ optional int32 greater_than_thresh_main_4 = 15;
+ optional int32 greater_than_thresh_main_5 = 16;
+ optional int32 greater_than_thresh_main_6 = 17;
+ optional int32 greater_than_thresh_main_7 = 18;
+ optional int32 greater_than_thresh_main_8 = 19;
+ optional int32 greater_than_thresh_main_9 = 20;
+ optional int32 greater_than_thresh_main_10 = 21;
+ optional int32 greater_than_thresh_main_11 = 22;
+
+ // IRQ duration of sub regulator indices 0-11 greater than threshold.
+ optional int32 greater_than_thresh_sub_0 = 23;
+ optional int32 greater_than_thresh_sub_1 = 24;
+ optional int32 greater_than_thresh_sub_2 = 25;
+ optional int32 greater_than_thresh_sub_3 = 26;
+ optional int32 greater_than_thresh_sub_4 = 27;
+ optional int32 greater_than_thresh_sub_5 = 28;
+ optional int32 greater_than_thresh_sub_6 = 29;
+ optional int32 greater_than_thresh_sub_7 = 30;
+ optional int32 greater_than_thresh_sub_8 = 31;
+ optional int32 greater_than_thresh_sub_9 = 32;
+ optional int32 greater_than_thresh_sub_10 = 33;
+ optional int32 greater_than_thresh_sub_11 = 34;
+}
+
+/*
+ * Logs the third party audio effects stats.
+ * Third party audio effects stats includes duration in milliseconds for each
+ * instance of the effects (speaker, USB, etc.).
+ */
+message VendorAudioThirdPartyEffectStatsReported {
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+
+    enum InstanceId {
+        OTHER = 0;
+        SPEAKER = 1;
+        USB = 2;
+        BT_A2DP = 3;
+        BT_LE = 4;
+    }
+    /* Instance of the effect. */
+    optional InstanceId instance = 2;
+    /* Active duration in milliseconds per day for volume range 0. */
+    optional int32 volume_range_0_active_ms_per_day = 3;
+    /* Active duration in milliseconds per day for volume range 1. */
+    optional int32 volume_range_1_active_ms_per_day = 4;
+    /* Active duration in milliseconds per day for volume range 2. */
+    optional int32 volume_range_2_active_ms_per_day = 5;
+    /* Active duration in milliseconds per day for volume range 3. */
+    optional int32 volume_range_3_active_ms_per_day = 6;
+    /* Active duration in milliseconds per day for volume range 4. */
+    optional int32 volume_range_4_active_ms_per_day = 7;
+    /* Active duration in milliseconds per day for volume range 5. */
+    optional int32 volume_range_5_active_ms_per_day = 8;
+    /* Active duration in milliseconds per day for volume range 6. */
+    optional int32 volume_range_6_active_ms_per_day = 9;
+    /* Active duration in milliseconds per day for volume range 7. */
+    optional int32 volume_range_7_active_ms_per_day = 10;
+    /* Active duration in milliseconds per day for volume range 8. */
+    optional int32 volume_range_8_active_ms_per_day = 11;
+    /* Active duration in milliseconds per day for volume range 9. */
+    optional int32 volume_range_9_active_ms_per_day = 12;
+}
+
+/*
+ * Logs the Audio Adapted information stats.
+ * Two stats are recorded, count and duration (in ms) per features.
+ */
+message VendorAudioAdaptedInfoStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum AdaptedInfoFeature {
+    UNKNOWN = 0;
+    BATTERY_ADAPTED_AUDIO_CONTROL = 1;
+    MEDIA_PLAYBACK_THERMAL_THROTTLE = 2;
+    TELEPHONY_THERMAL_THROTTLE = 3;
+    ACOUSTIC_SHOCK = 4;
+    SPATIAL_AUDIO = 5;
+  };
+  /* Feature to record the stats */
+  optional AdaptedInfoFeature feature_id = 2;
+  /* Number of time the feature is active */
+  optional int32 active_counts_per_day = 3;
+  /* Duration the feature is active in milliseconds */
+  optional int32 active_duration_ms_per_day = 4;
 }

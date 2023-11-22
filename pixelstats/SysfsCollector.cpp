@@ -50,6 +50,7 @@ using android::base::WriteStringToFile;
 using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::DisplayPanelErrorStats;
 using android::hardware::google::pixel::PixelAtoms::F2fsAtomicWriteInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
@@ -60,7 +61,10 @@ using android::hardware::google::pixel::PixelAtoms::PcieLinkStatsReported;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioAdaptedInfoStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioPdmStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioThirdPartyEffectStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorChargeCycles;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorLongIRQStatsReported;
@@ -95,6 +99,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kBrownoutLogPath(sysfs_paths.BrownoutLogPath),
       kBrownoutReasonProp(sysfs_paths.BrownoutReasonProp),
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
+      kPowerMitigationDurationPath(sysfs_paths.MitigationDurationPath),
       kSpeakerTemperaturePath(sysfs_paths.SpeakerTemperaturePath),
       kSpeakerExcursionPath(sysfs_paths.SpeakerExcursionPath),
       kSpeakerHeartbeatPath(sysfs_paths.SpeakerHeartBeatPath),
@@ -107,7 +112,12 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kLongIRQMetricsPath(sysfs_paths.LongIRQMetricsPath),
       kResumeLatencyMetricsPath(sysfs_paths.ResumeLatencyMetricsPath),
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
-      kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath) {}
+      kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath),
+      kDisplayStatsPaths(sysfs_paths.DisplayStatsPaths),
+      kPDMStatePath(sysfs_paths.PDMStatePath),
+      kWavesPath(sysfs_paths.WavesPath),
+      kAdaptedInfoCountPath(sysfs_paths.AdaptedInfoCountPath),
+      kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath) {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -383,6 +393,10 @@ void SysfsCollector::logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_
 
         reportSpeakerHealthStat(stats_client, obj[i]);
     }
+}
+
+void SysfsCollector::logDisplayStats(const std::shared_ptr<IStats> &stats_client) {
+    display_stats_reporter_.logDisplayStats(stats_client, kDisplayStatsPaths);
 }
 
 void SysfsCollector::logThermalStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1133,6 +1147,224 @@ void SysfsCollector::logVendorAudioHardwareStats(const std::shared_ptr<IStats> &
 }
 
 /**
+ * Report PDM States which indicates microphone background noise level.
+ * This function will report at most 4 atoms showing different background noise type.
+ */
+void SysfsCollector::logVendorAudioPdmStatsReported(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> pdm_states;
+
+    if (kPDMStatePath == nullptr) {
+        ALOGD("Audio PDM State path not specified");
+    } else {
+        if (!ReadFileToString(kPDMStatePath, &file_contents)) {
+            ALOGD("Unable to read PDM State path %s", kPDMStatePath);
+        } else {
+            std::stringstream file_content_stream(file_contents);
+            while (file_content_stream.good()) {
+                std::string substr;
+                int state;
+                getline(file_content_stream, substr, ',');
+                if (sscanf(substr.c_str(), "%d", &state) != 1) {
+                    ALOGD("Unable to parse PDM State %s", file_contents.c_str());
+                } else {
+                    pdm_states.push_back(state);
+                    ALOGD("Parsed PDM State: %d", state);
+                }
+            }
+        }
+    }
+    if (pdm_states.empty()) {
+        ALOGD("Empty PDM State parsed.");
+        return;
+    }
+
+    if (pdm_states.size() > 4) {
+        ALOGD("Too many values parsed.");
+        return;
+    }
+
+    for (int index = 0; index < pdm_states.size(); index++) {
+        std::vector<VendorAtomValue> values(2);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioPdmStatsReported::kPdmIndexFieldNumber - kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(pdm_states[index]);
+        values[VendorAudioPdmStatsReported::kStateFieldNumber - kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioPdmStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioPdmStatsReported at index %d", index);
+    }
+}
+
+/**
+ * Report Third party audio effects stats.
+ * This function will report at most 5 atoms showing different instance stats.
+ */
+void SysfsCollector::logWavesStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<std::vector<int>> volume_duration_per_instance;
+
+    constexpr int num_instances = 5;
+    constexpr int num_volume = 10;
+
+    if (kWavesPath == nullptr) {
+        ALOGD("Audio Waves stats path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kWavesPath, &file_contents)) {
+        ALOGD("Unable to read Wave stats path %s", kWavesPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        std::vector<int> volume_duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            volume_duration.push_back(duration);
+            if (volume_duration.size() >= num_volume) {
+                volume_duration_per_instance.push_back(volume_duration);
+                volume_duration.clear();
+            }
+        }
+    }
+
+    if (volume_duration_per_instance.size() != num_instances) {
+        ALOGE("Number of instances %zu doesn't match the correct number %d",
+              volume_duration_per_instance.size(), num_instances);
+        return;
+    }
+    for (int i = 0; i < volume_duration_per_instance.size(); i++) {
+        if (volume_duration_per_instance[i].size() != num_volume) {
+            ALOGE("Number of volume %zu doesn't match the correct number %d",
+                  volume_duration_per_instance[i].size(), num_volume);
+            return;
+        }
+    }
+
+    std::vector<int> volume_range_field_numbers = {
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange0ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange1ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange2ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange3ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange4ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange5ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange6ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange7ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange8ActiveMsPerDayFieldNumber,
+            VendorAudioThirdPartyEffectStatsReported::kVolumeRange9ActiveMsPerDayFieldNumber};
+
+    for (int index = 0; index < volume_duration_per_instance.size(); index++) {
+        std::vector<VendorAtomValue> values(11);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioThirdPartyEffectStatsReported::kInstanceFieldNumber - kVendorAtomOffset] =
+                tmp;
+
+        for (int volume_index = 0; volume_index < num_volume; volume_index++) {
+            tmp.set<VendorAtomValue::intValue>(volume_duration_per_instance[index][volume_index]);
+            values[volume_range_field_numbers[volume_index] - kVendorAtomOffset] = tmp;
+        }
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioThirdPartyEffectStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioThirdPartyEffectStatsReported at index %d", index);
+    }
+}
+
+/**
+ * Report Audio Adapted Information stats such as thermal throttling.
+ * This function will report at most 6 atoms showing different instance stats.
+ */
+void SysfsCollector::logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> count_per_feature;
+    std::vector<int> duration_per_feature;
+
+    constexpr int num_features = 6;
+
+    if (kAdaptedInfoCountPath == nullptr) {
+        ALOGD("Audio Adapted Info Count stats path not specified");
+        return;
+    }
+
+    if (kAdaptedInfoDurationPath == nullptr) {
+        ALOGD("Audio Adapted Info Duration stats path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kAdaptedInfoCountPath, &file_contents)) {
+        ALOGD("Unable to read Adapted Info Count stats path %s", kAdaptedInfoCountPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int count;
+        while (file_content_stream.good() && file_content_stream >> count) {
+            count_per_feature.push_back(count);
+        }
+    }
+
+    if (count_per_feature.size() != num_features) {
+        ALOGD("Audio Adapted Info Count doesn't match the number of features. %zu / %d",
+              count_per_feature.size(), num_features);
+        return;
+    }
+
+    if (!ReadFileToString(kAdaptedInfoDurationPath, &file_contents)) {
+        ALOGD("Unable to read Adapted Info Duration stats path %s", kAdaptedInfoDurationPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            duration_per_feature.push_back(duration);
+        }
+    }
+
+    if (duration_per_feature.size() != num_features) {
+        ALOGD("Audio Adapted Info Duration doesn't match the number of features. %zu / %d",
+              duration_per_feature.size(), num_features);
+        return;
+    }
+
+    for (int index = 0; index < num_features; index++) {
+        std::vector<VendorAtomValue> values(3);
+        VendorAtomValue tmp;
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioAdaptedInfoStatsReported::kFeatureIdFieldNumber - kVendorAtomOffset] =
+                tmp;
+
+        tmp.set<VendorAtomValue::intValue>(count_per_feature[index]);
+        values[VendorAudioAdaptedInfoStatsReported::kActiveCountsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(duration_per_feature[index]);
+        values[VendorAudioAdaptedInfoStatsReported::kActiveDurationMsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioAdaptedInfoStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioAdaptedInfoStatsReported at index %d", index);
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1510,6 +1742,17 @@ void SysfsCollector::logPcieLinkStats(const std::shared_ptr<IStats> &stats_clien
     }
 }
 
+/**
+ * Read the contents of kPowerMitigationDurationPath and report them.
+ */
+void SysfsCollector::logMitigationDurationCounts(const std::shared_ptr<IStats> &stats_client) {
+    if (kPowerMitigationDurationPath == nullptr || strlen(kPowerMitigationDurationPath) == 0) {
+        ALOGE("Mitigation Duration path is invalid!");
+        return;
+    }
+    mitigation_duration_reporter_.logMitigationDuration(stats_client, kPowerMitigationDurationPath);
+}
+
 void SysfsCollector::logPerDay() {
     const std::shared_ptr<IStats> stats_client = getStatsService();
     if (!stats_client) {
@@ -1527,6 +1770,7 @@ void SysfsCollector::logPerDay() {
     logBlockStatsReported(stats_client);
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
+    logDisplayStats(stats_client);
     logF2fsStats(stats_client);
     logF2fsAtomicWriteInfo(stats_client);
     logF2fsCompressionInfo(stats_client);
@@ -1547,6 +1791,10 @@ void SysfsCollector::logPerDay() {
     logVendorResumeLatencyStats(stats_client);
     logPartitionUsedSpace(stats_client);
     logPcieLinkStats(stats_client);
+    logMitigationDurationCounts(stats_client);
+    logVendorAudioPdmStatsReported(stats_client);
+    logWavesStats(stats_client);
+    logAdaptedInfoStats(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
