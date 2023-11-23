@@ -53,6 +53,8 @@ class MitigationConfig {
         std::string SubPmicName;
         std::string PcieModemPath;
         std::string PcieWifiPath;
+        const std::vector<numericSysfs> NumericSysfsStatPaths;
+        const std::vector<numericSysfs> NumericSysfsStatDirs;
     };
 
     struct pmicCommon {
