@@ -548,7 +548,7 @@ void printUTC(FILE *fp, struct timespec time, const char *stat) {
     if (strlen(stat) > 0) {
         fprintf(fp, "%s: ", stat);
     }
-    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d_%H:%M:%S", std::localtime(&time.tv_sec));
+    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d %H:%M:%S", std::localtime(&time.tv_sec));
     fprintf(fp, "%s.%09ld",timeBuff, time.tv_nsec);
 }
 
@@ -560,7 +560,7 @@ void printUTC(FILE *fp, timeval time, const char *stat) {
     if (strlen(stat) > 0) {
         fprintf(fp, "%s: ", stat);
     }
-    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d_%H:%M:%S", std::localtime(&time.tv_sec));
+    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d %H:%M:%S", std::localtime(&time.tv_sec));
     /* convert usec to nsec */
     fprintf(fp, "%s.%06ld000",timeBuff, time.tv_usec);
 }
@@ -1038,10 +1038,10 @@ bool BatteryMitigationService::genLastmealCSV(const char *parsedMealCSVPath) {
         fprintf(fp, "%d,", row->min_tpu_freq);
         fprintf(fp, "%d,", row->min_aur_freq);
         for (int c = 0; c < METER_CHANNEL_MAX; c++) {
-            fprintf(fp, "%d,", int(row->max_main_odpm_instant_power[c]));
+            fprintf(fp, "%d,", int(row->max_main_odpm_instant_power[c] * 1000));
         }
         for (int c = 0; c < METER_CHANNEL_MAX; c++) {
-            fprintf(fp, "%d,", int(row->max_sub_odpm_instant_power[c]));
+            fprintf(fp, "%d,", int(row->max_sub_odpm_instant_power[c] * 1000));
         }
         fprintf(fp, "\n");
     }
