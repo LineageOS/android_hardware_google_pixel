@@ -42,6 +42,7 @@ static int Usage(std::string_view name) {
   std::cerr << "  --clear-dark-theme   Clear the dark theme flag\n";
   std::cerr << "  --set-sota           Write the silent OTA flag\n";
   std::cerr << "  --clear-sota         Clear the silent OTA flag\n";
+  std::cerr << "  --set-sota-state     Set the silent OTA state\n";
   std::cerr << "  --set-enable-pkvm    Write the enable pKVM flag\n";
   std::cerr << "  --set-disable-pkvm   Write the disable pKVM flag\n";
   std::cerr << "  --set-wrist-orientation <0-3> Write the wrist orientation flag\n";
@@ -75,6 +76,7 @@ int main(int argc, char** argv) {
     { "set-max-ram-size", required_argument, nullptr, 0},
     { "set-timertcoffset", required_argument, nullptr, 0},
     { "set-minrtc", required_argument, nullptr, 0},
+    { "set-sota-state", required_argument, nullptr, 0 },
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -86,6 +88,7 @@ int main(int argc, char** argv) {
     { "set-enable-pkvm", MiscWriterActions::kSetEnablePkvmFlag },
     { "set-disable-pkvm", MiscWriterActions::kSetDisablePkvmFlag },
     { "clear-wrist-orientation", MiscWriterActions::kClearWristOrientationFlag },
+    { "set-sota-state", MiscWriterActions::kSetSotaState },
   };
 
   std::unique_ptr<MiscWriter> misc_writer;
@@ -201,6 +204,16 @@ int main(int argc, char** argv) {
       }
       misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeMinRtc,
                                                      std::to_string(minrtc));
+    } else if (option_name == "set-sota-state"s) {
+      const char *char_state = optarg;
+      std::string state(char_state);
+
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kSetSotaState,
+                                                     state);
     } else if (auto iter = action_map.find(option_name); iter != action_map.end()) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";
