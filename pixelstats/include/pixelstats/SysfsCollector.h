@@ -62,6 +62,7 @@ class SysfsCollector {
         const char *const EEPROMPath;
         const char *const MitigationPath;
         const char *const MitigationDurationPath;
+        const char *const BrownoutCsvPath;
         const char *const BrownoutLogPath;
         const char *const BrownoutReasonProp;
         const char *const SpeakerTemperaturePath;
@@ -166,6 +167,7 @@ class SysfsCollector {
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
+    const char *const kBrownoutCsvPath;
     const char *const kBrownoutLogPath;
     const char *const kBrownoutReasonProp;
     const char *const kPowerMitigationStatsPath;
