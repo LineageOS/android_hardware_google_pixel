@@ -231,7 +231,7 @@ int BrownoutDetectedReporter::brownoutReasonCheck(const std::string &brownoutRea
     return key->second;
 }
 
-int parseIRQ(const std::string element) {
+int parseIRQ(const std::string &element) {
     int idx = atoi(element.c_str());
     if (idx == SMPL_WARN) {
         return BrownoutDetected::SMPL_WARN;
