@@ -121,3 +121,38 @@ sh_binary {
         "pixel-thermal-symlinks.rc",
     ],
 }
+
+
+cc_binary {
+    name: "virtualtemp_estimator_test",
+    srcs: [
+        "virtualtemp_estimator/virtualtemp_estimator.cpp",
+        "virtualtemp_estimator/virtualtemp_estimator_test.cpp"
+        ],
+    shared_libs: [
+        "libc",
+        "liblog",
+        "libcutils",
+        "libbinder",
+        "libhidlbase",
+        "libutils",
+        "libjsoncpp",],
+    vendor: true,
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+        "-Wunused",
+    ],
+    tidy: true,
+    tidy_checks: [
+        "android-*",
+        "cert-*",
+        "clang-analyzer-security*",
+    ],
+    tidy_checks_as_errors: [
+        "android-*",
+        "clang-analyzer-security*",
+        "cert-*",
+    ],
+}
