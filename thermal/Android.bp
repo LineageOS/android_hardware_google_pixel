@@ -15,6 +15,7 @@ cc_binary {
         "utils/powerhal_helper.cpp",
         "utils/thermal_stats_helper.cpp",
         "utils/thermal_watcher.cpp",
+        "virtualtemp_estimator/virtualtemp_estimator.cpp",
     ],
     vendor: true,
     relative_install_path: "hw",
@@ -79,6 +80,7 @@ cc_test {
         "utils/thermal_watcher.cpp",
         "tests/mock_thermal_helper.cpp",
         "tests/thermal_looper_test.cpp",
+        "virtualtemp_estimator/virtualtemp_estimator.cpp",
     ],
     shared_libs: [
         "libbase",

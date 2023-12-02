@@ -200,10 +200,10 @@ static VendorUsbDataSessionEvent_UsbDeviceState stringToUsbDeviceStateProto(
     }
 }
 
-void BuildVendorUsbDataSessionEvent(bool is_host, steady_clock::time_point currentTime,
-                                    steady_clock::time_point startTime,
+void BuildVendorUsbDataSessionEvent(bool is_host, boot_clock::time_point currentTime,
+                                    boot_clock::time_point startTime,
                                     std::vector<std::string> *states,
-                                    std::vector<steady_clock::time_point> *timestamps,
+                                    std::vector<boot_clock::time_point> *timestamps,
                                     VendorUsbDataSessionEvent *event) {
     if (is_host) {
         event->set_usb_role(VendorUsbDataSessionEvent_UsbDataRole_USB_ROLE_HOST);

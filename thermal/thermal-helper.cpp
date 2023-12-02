@@ -906,12 +906,55 @@ bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *read
     return true;
 }
 
+float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
+                                                 std::map<std::string, float> *sensor_log_map) {
+    std::vector<float> model_inputs;
+    float estimated_vt = NAN;
+    constexpr int kCelsius2mC = 1000;
+
+    ATRACE_NAME(StringPrintf("ThermalHelper::runVirtualTempEstimator - %s", sensor_name.data())
+                        .c_str());
+    if (!(sensor_info_map_.count(sensor_name.data()) &&
+          sensor_status_map_.count(sensor_name.data()))) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
+        return NAN;
+    }
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (!sensor_info.virtual_sensor_info->vt_estimator) {
+        LOG(ERROR) << "vt_estimator not valid for " << sensor_name;
+        return NAN;
+    }
+
+    model_inputs.reserve(sensor_info.virtual_sensor_info->linked_sensors.size());
+
+    for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
+        std::string linked_sensor = sensor_info.virtual_sensor_info->linked_sensors[i];
+
+        if ((*sensor_log_map).count(linked_sensor.data())) {
+            float value = (*sensor_log_map)[linked_sensor.data()];
+            model_inputs.push_back(value / kCelsius2mC);
+        } else {
+            LOG(ERROR) << "failed to read sensor: " << linked_sensor;
+            return NAN;
+        }
+    }
+
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &estimated_vt);
+    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+        LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
+        return NAN;
+    }
+
+    return (estimated_vt * kCelsius2mC);
+}
+
 constexpr int kTranTimeoutParam = 2;
 
 bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *temp,
                                           const bool force_no_cache,
                                           std::map<std::string, float> *sensor_log_map) {
-    float temp_val = 0.0;
     std::string file_reading;
     boot_clock::time_point now = boot_clock::now();
 
@@ -955,57 +998,75 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         }
         *temp = std::stof(::android::base::Trim(file_reading));
     } else {
-        for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
-            float sensor_reading = 0.0;
-            // Get the sensor reading data
-            if (!readDataByType(sensor_info.virtual_sensor_info->linked_sensors[i], &sensor_reading,
+        const auto &linked_sensors_size = sensor_info.virtual_sensor_info->linked_sensors.size();
+        std::vector<float> sensor_readings(linked_sensors_size, 0.0);
+
+        // Calculate temperature of each of the linked sensor
+        for (size_t i = 0; i < linked_sensors_size; i++) {
+            if (!readDataByType(sensor_info.virtual_sensor_info->linked_sensors[i],
+                                &sensor_readings[i],
                                 sensor_info.virtual_sensor_info->linked_sensors_type[i],
                                 force_no_cache, sensor_log_map)) {
                 LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s linked sensor "
                            << sensor_info.virtual_sensor_info->linked_sensors[i];
                 return false;
             }
-
-            float coefficient = 0.0;
-            if (!readDataByType(sensor_info.virtual_sensor_info->coefficients[i], &coefficient,
-                                sensor_info.virtual_sensor_info->coefficients_type[i],
-                                force_no_cache, sensor_log_map)) {
-                LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s coefficient "
-                           << sensor_info.virtual_sensor_info->coefficients[i];
-                return false;
-            }
-
-            if (std::isnan(sensor_reading) || std::isnan(coefficient)) {
+            if (std::isnan(sensor_readings[i])) {
                 LOG(INFO) << sensor_name << " data is under collecting";
                 return true;
             }
-
-            switch (sensor_info.virtual_sensor_info->formula) {
-                case FormulaOption::COUNT_THRESHOLD:
-                    if ((coefficient < 0 && sensor_reading < -coefficient) ||
-                        (coefficient >= 0 && sensor_reading >= coefficient))
-                        temp_val += 1;
-                    break;
-                case FormulaOption::WEIGHTED_AVG:
-                    temp_val += sensor_reading * coefficient;
-                    break;
-                case FormulaOption::MAXIMUM:
-                    if (i == 0)
-                        temp_val = std::numeric_limits<float>::lowest();
-                    if (sensor_reading * coefficient > temp_val)
-                        temp_val = sensor_reading * coefficient;
-                    break;
-                case FormulaOption::MINIMUM:
-                    if (i == 0)
-                        temp_val = std::numeric_limits<float>::max();
-                    if (sensor_reading * coefficient < temp_val)
-                        temp_val = sensor_reading * coefficient;
-                    break;
-                default:
-                    break;
-            }
         }
-        *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
+
+        if (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) {
+            *temp = runVirtualTempEstimator(sensor_name, sensor_log_map);
+
+            if (std::isnan(*temp)) {
+                LOG(ERROR) << "VirtualEstimator returned NAN for " << sensor_name;
+                return false;
+            }
+        } else {
+            float temp_val = 0.0;
+            for (size_t i = 0; i < linked_sensors_size; i++) {
+                float coefficient = 0.0;
+                if (!readDataByType(sensor_info.virtual_sensor_info->coefficients[i], &coefficient,
+                                    sensor_info.virtual_sensor_info->coefficients_type[i],
+                                    force_no_cache, sensor_log_map)) {
+                    LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s coefficient "
+                               << sensor_info.virtual_sensor_info->coefficients[i];
+                    return false;
+                }
+                if (std::isnan(coefficient)) {
+                    LOG(INFO) << sensor_name << " data is under collecting";
+                    return true;
+                }
+                switch (sensor_info.virtual_sensor_info->formula) {
+                    case FormulaOption::COUNT_THRESHOLD:
+                        if ((coefficient < 0 && sensor_readings[i] < -coefficient) ||
+                            (coefficient >= 0 && sensor_readings[i] >= coefficient))
+                            temp_val += 1;
+                        break;
+                    case FormulaOption::WEIGHTED_AVG:
+                        temp_val += sensor_readings[i] * coefficient;
+                        break;
+                    case FormulaOption::MAXIMUM:
+                        if (i == 0)
+                            temp_val = std::numeric_limits<float>::lowest();
+                        if (sensor_readings[i] * coefficient > temp_val)
+                            temp_val = sensor_readings[i] * coefficient;
+                        break;
+                    case FormulaOption::MINIMUM:
+                        if (i == 0)
+                            temp_val = std::numeric_limits<float>::max();
+                        if (sensor_readings[i] * coefficient < temp_val)
+                            temp_val = sensor_readings[i] * coefficient;
+                        break;
+                    default:
+                        LOG(ERROR) << "Unknown formula type for sensor " << sensor_name.data();
+                        return false;
+                }
+            }
+            *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
+        }
     }
 
     if (!isnan(sensor_info.step_ratio) && !isnan(sensor_status.thermal_cached.temp) &&

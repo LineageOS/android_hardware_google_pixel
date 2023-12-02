@@ -42,7 +42,7 @@ enum class MiscWriterActions : int32_t {
   kClearMaxRamSize,
   kWriteTimeRtcOffset,
   kWriteTimeMinRtc,
-  kSetSotaState,
+  kSetSotaConfig,
 
   kUnset = -1,
 };
@@ -70,6 +70,7 @@ class MiscWriter {
   static constexpr uint32_t kRTimeMinRtcValOffsetInVendorSpace = 296;
   static constexpr char kTimeMinRtc[] = "timeminrtc=";
   static constexpr uint32_t kFaceauthEvalValOffsetInVendorSpace = 328;
+  static constexpr uint32_t kSotaScheduleShipmodeOffsetInVendorSpace = 360;
 
   // Minimum and maximum valid value for max-ram-size
   static constexpr int32_t kRamSizeDefault = -1;
