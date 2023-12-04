@@ -48,13 +48,14 @@ class MitigationConfig {
         std::string path;
     };
 
+    struct numericSysfsList {
+        std::string name;
+        std::vector<std::string> paths;
+    };
+
     struct platformSpecific {
-        std::string MainPmicName;
-        std::string SubPmicName;
-        std::string PcieModemPath;
-        std::string PcieWifiPath;
-        const std::vector<numericSysfs> NumericSysfsStatPaths;
-        const std::vector<numericSysfs> NumericSysfsStatDirs;
+        const std::vector<numericSysfsList> NumericSysfsStatPaths;
+        const std::vector<numericSysfsList> NumericSysfsStatDirs;
     };
 
     struct pmicCommon {
@@ -75,7 +76,7 @@ class MitigationConfig {
         const char *const ParsedLastmealCSVPath;
         const char *const FvpStatsPath;
         const std::vector<pmicCommon> PmicCommon;
-        const std::vector<platformSpecific> PlatformSpecific;
+        const platformSpecific PlatformSpecific;
     };
 
     MitigationConfig(const struct Config &cfg);
