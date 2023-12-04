@@ -46,6 +46,7 @@ struct VirtualTempEstimatorTFLiteData {
         input_buffer = new float[num_input_samples];
         input_buffer_size = num_input_samples;
         is_initialized = false;
+        tflite_wrapper = nullptr;
 
         tflite_methods.create = nullptr;
         tflite_methods.init = nullptr;
