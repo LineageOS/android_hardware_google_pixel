@@ -117,8 +117,7 @@ struct BrownoutStatsExtend {
 
 class BatteryMitigationService : public RefBase {
   public:
-    BatteryMitigationService(const struct MitigationConfig::EventThreadConfig &eventThreadCfg,
-                             int platformNum);
+    BatteryMitigationService(const struct MitigationConfig::EventThreadConfig &eventThreadCfg);
     ~BatteryMitigationService();
 
     void startBrownoutEventThread();
@@ -131,8 +130,6 @@ class BatteryMitigationService : public RefBase {
     bool genLastmealCSV(const char*);
   private:
     struct MitigationConfig::EventThreadConfig cfg;
-    int platformNum;
-    int platformIdx;
 
     int storingFd;
     int triggeredStateFd[MAX_EVENT];

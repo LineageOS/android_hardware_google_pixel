@@ -43,10 +43,8 @@ const struct BrownoutStatsCSVFields brownoutStatsCSVFields = {
 };
 
 BatteryMitigationService::BatteryMitigationService(
-                          const struct MitigationConfig::EventThreadConfig &eventThreadCfg,
-                          int platformNum)
-                          :cfg(eventThreadCfg), platformNum(platformNum) {
-    platformIdx = platformNum - MIN_SUPPORTED_PLATFORM;
+                          const struct MitigationConfig::EventThreadConfig &eventThreadCfg)
+                          :cfg(eventThreadCfg) {
     initTotalNumericSysfsPaths();
     initPmicRelated();
 }
@@ -61,14 +59,6 @@ BatteryMitigationService::~BatteryMitigationService() {
 bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
     if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
         access(cfg.BrownoutStatsPath, F_OK) == 0) {
-        return true;
-    }
-    return false;
-}
-
-bool BatteryMitigationService::isPlatformSupported() {
-    if (platformNum >= MIN_SUPPORTED_PLATFORM &&
-        platformNum <= MAX_SUPPORTED_PLATFORM) {
         return true;
     }
     return false;
@@ -116,32 +106,43 @@ int getFilesInDir(const char *directory, std::vector<std::string> *files) {
     return 0;
 }
 
-void addNumericSysfsStatPathinDirs(
-        std::vector<MitigationConfig::numericSysfs> numericSysfsStatDirs,
+void addNumericSysfsStatPathinDir(
+        std::string numericSysfsStatDir,
         std::vector<MitigationConfig::numericSysfs> totalNumericSysfsStatPaths) {
     std::vector<std::string> files;
-    for (const auto &sysfsStat : numericSysfsStatDirs) {
-        if (getFilesInDir(sysfsStat.path.c_str(), &files) < 0) {
-            continue;
-        }
-        for (auto &file : files) {
-            std::string fullPath = sysfsStat.path + file;
-            totalNumericSysfsStatPaths.push_back({file, fullPath});
-        }
+    if (getFilesInDir(numericSysfsStatDir.c_str(), &files) < 0) {
+        return;
+    }
+    for (auto &file : files) {
+        std::string fullPath = numericSysfsStatDir + file;
+        totalNumericSysfsStatPaths.push_back({file, fullPath});
     }
 }
 
 void BatteryMitigationService::initTotalNumericSysfsPaths() {
     totalNumericSysfsStatPaths.assign(cfg.NumericSysfsStatPaths.begin(),
                                       cfg.NumericSysfsStatPaths.end());
-    addNumericSysfsStatPathinDirs(cfg.NumericSysfsStatDirs, totalNumericSysfsStatPaths);
+    for (const auto &sysfsStat : cfg.NumericSysfsStatDirs) {
+        addNumericSysfsStatPathinDir(sysfsStat.path.c_str(), totalNumericSysfsStatPaths);
+    }
 
-    /* add NumericSysfsStatPaths from PlatformSpecific */
-    totalNumericSysfsStatPaths.insert(totalNumericSysfsStatPaths.end(),
-                                  cfg.PlatformSpecific[platformIdx].NumericSysfsStatPaths.begin(),
-                                  cfg.PlatformSpecific[platformIdx].NumericSysfsStatPaths.end());
-    addNumericSysfsStatPathinDirs(cfg.PlatformSpecific[platformIdx].NumericSysfsStatDirs,
-                                  totalNumericSysfsStatPaths);
+    /* Append first available path in PlatformSpecific */
+    for (const auto &sysfsStatList : cfg.PlatformSpecific.NumericSysfsStatPaths) {
+        for (const auto &sysfsStatPath : sysfsStatList.paths) {
+            if (access(sysfsStatPath.c_str(), F_OK) == 0) {
+                totalNumericSysfsStatPaths.push_back({sysfsStatList.name, sysfsStatPath});
+                break;
+            }
+        }
+    }
+    for (const auto &sysfsStatList : cfg.PlatformSpecific.NumericSysfsStatDirs) {
+        for (const auto &sysfsStatPath : sysfsStatList.paths) {
+            if (access(sysfsStatPath.c_str(), F_OK) == 0) {
+                addNumericSysfsStatPathinDir(sysfsStatPath, totalNumericSysfsStatPaths);
+                break;
+            }
+        }
+    }
 }
 
 int BatteryMitigationService::readNumericStats(struct BrownoutStatsExtend *brownoutStatsExtend) {
@@ -168,7 +169,7 @@ int BatteryMitigationService::readNumericStats(struct BrownoutStatsExtend *brown
 
 
 void BatteryMitigationService::startBrownoutEventThread() {
-    if (isPlatformSupported() && isBrownoutStatsBinarySupported()) {
+    if (isBrownoutStatsBinarySupported()) {
         brownoutEventThread = std::thread(&BatteryMitigationService::BrownoutEventThread, this);
         eventThread = std::thread(&BatteryMitigationService::TriggerEventThread, this);
     }
@@ -492,16 +493,25 @@ void readLPFChannelNames(const char *odpmEnabledRailsPath, char **lpfChannelName
         free(line);
 }
 
-int getMainPmicID(const std::string &mainPmicNamePath, const std::string &mainPmicName) {
+int getMainPmicID(const std::string &mainPmicNamePath, const std::string &subPmicNamePath) {
     std::string content;
     int ret = 0;
+    int mainPmicVer, subPmicVer;
 
     if (!ReadFileToString(mainPmicNamePath, &content)) {
         LOG(DEBUG) << "Failed to open " << mainPmicNamePath << " set device0 as main pmic";
         return ret;
     }
+    /* ODPM pmic name: s2mpgXX-odpm */
+    mainPmicVer = atoi(content.substr(5, 2).c_str());
 
-    if (content.compare(mainPmicName) != 0) {
+    if (!ReadFileToString(subPmicNamePath, &content)) {
+        LOG(DEBUG) << "Failed to open " << subPmicNamePath << " set device0 as main pmic";
+        return ret;
+    }
+    subPmicVer = atoi(content.substr(5, 2).c_str());
+
+    if (mainPmicVer > subPmicVer) {
         ret = 1;
     }
 
@@ -529,7 +539,7 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
 void BatteryMitigationService::initPmicRelated() {
     mainPmicID = 0;
     mainPmicID = getMainPmicID(cfg.PmicCommon[mainPmicID].PmicNamePath,
-                               cfg.PlatformSpecific[platformIdx].MainPmicName);
+                               cfg.PmicCommon[subPmicID].PmicNamePath);
     subPmicID = !mainPmicID;
 
     /* read odpm resolutions and channel names */
