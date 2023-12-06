@@ -22,6 +22,7 @@ namespace google {
 namespace pixel {
 
 using android::base::ReadFileToString;
+using android::base::WriteStringToFile;
 using android::base::StartsWith;
 using android::hardware::google::pixel::MitigationConfig;
 
@@ -56,14 +57,6 @@ BatteryMitigationService::~BatteryMitigationService() {
     tearDownTriggerEventThread();
 }
 
-bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
-    if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
-        access(cfg.BrownoutStatsPath, F_OK) == 0) {
-        return true;
-    }
-    return false;
-}
-
 bool readSysfsToInt(const std::string &path, int *val) {
     std::string file_contents;
 
@@ -88,6 +81,39 @@ bool readSysfsToDouble(const std::string &path, double *val) {
         return false;
     }
     return true;
+}
+
+bool readSysfsToInt(const char *path, int *val) {
+    std::string strPath = path;
+    return readSysfsToInt(strPath, val);
+}
+
+bool readSysfsToDouble(const char *path, double *val) {
+    std::string strPath = path;
+    return readSysfsToDouble(strPath, val);
+}
+
+bool WriteStringToFile(const std::string& content, const char *path) {
+    std::string strPath = path;
+    return WriteStringToFile(content, strPath);
+}
+
+bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
+    int isEnabled;
+    if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
+        access(cfg.BrownoutStatsPath, F_OK) == 0 &&
+        access(cfg.BrownoutStatsEnablePath, F_OK) == 0) {
+        if (!WriteStringToFile("1", cfg.BrownoutStatsEnablePath)) {
+            return false;
+        }
+        if (!readSysfsToInt(cfg.BrownoutStatsEnablePath, &isEnabled)) {
+            return false;
+        }
+        if (isEnabled) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int getFilesInDir(const char *directory, std::vector<std::string> *files) {
@@ -533,7 +559,10 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
     threadStop.store(true);
     freeLpfChannelNames(mainLpfChannelNames);
     freeLpfChannelNames(subLpfChannelNames);
-
+    /* disable br_stats */
+    if (!WriteStringToFile("0", cfg.BrownoutStatsEnablePath)) {
+        LOG(ERROR) << "failed to disable br_stats";
+    }
 }
 
 void BatteryMitigationService::initPmicRelated() {
