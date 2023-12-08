@@ -37,6 +37,8 @@ cc_defaults {
     shared_libs: [
         "libcutils",
         "libtinyalsa",
+        "libbase",
+        "libutils",
     ],
 }
 
