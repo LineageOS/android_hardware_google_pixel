@@ -47,6 +47,7 @@ struct ThermalThrottlingStatus {
     float prev_power_budget;
     float budget_transient;
     int tran_cycle;
+    std::string profile;
 };
 
 // Return the control temp target of PID algorithm
@@ -61,6 +62,8 @@ class ThermalThrottling {
     ThermalThrottling(const ThermalThrottling &) = delete;
     void operator=(const ThermalThrottling &) = delete;
 
+    // Check if the thermal throttling profile need to be switched
+    void parseProfileProperty(std::string_view sensor_name, const SensorInfo &sensor_info);
     // Clear throttling data
     void clearThrottlingData(std::string_view sensor_name, const SensorInfo &sensor_info);
     // Register map for throttling algo

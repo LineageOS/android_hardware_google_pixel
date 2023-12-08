@@ -106,6 +106,11 @@ class Vibrator : public BnVibrator {
                                      int *status) = 0;
         // Erase OWT waveform
         virtual bool eraseOwtEffect(int8_t effectIndex, std::vector<ff_effect> *effect) = 0;
+        // Checks to see if DBC (Dynamic Boost Control) feature is supported
+        // by the target device.
+        virtual bool isDbcSupported() = 0;
+        // Configures and enables the DBC feature and all associated parameters
+        virtual bool enableDbc() = 0;
         // Emit diagnostic information to the given file.
         virtual void debug(int fd) = 0;
     };
@@ -266,9 +271,19 @@ class Vibrator : public BnVibrator {
     uint32_t mScalingFactor;
     uint32_t mScaleCooldown;
     bool mContextEnable;
+    bool mContextEnabledPreviously{false};
     uint32_t mLastEffectPlayedTime = 0;
     float mLastPlayedScale = 0;
     sp<CapoDetector> mContextListener;
+    enum hal_state {
+        IDLE,
+        PREPARING,
+        ISSUED,
+        PLAYING,
+        STOPPED,
+        RESTORED,
+    };
+    hal_state halState = IDLE;
 };
 
 }  // namespace vibrator

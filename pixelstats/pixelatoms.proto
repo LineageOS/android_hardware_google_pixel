@@ -103,9 +103,15 @@ message Atom {
       VibratorPlaycountReported vibrator_playcount_reported = 105049;
       VibratorLatencyReported vibrator_latency_reported = 105050;
       VibratorErrorsReported vibrator_errors_reported = 105051;
-
       F2fsAtomicWriteInfo f2fs_atomic_write_info = 105052;
       PartitionsUsedSpaceReported partition_used_space_reported = 105053;
+      PowerMitigationDurationCounts mitigation_duration = 105054; // moved from atoms.proto
+      DisplayPanelErrorStats display_panel_error_stats = 105055;
+      VendorAudioPdmStatsReported vendor_audio_pdm_stats_reported = 105056;
+      VendorAudioThirdPartyEffectStatsReported vendor_audio_third_party_effect_stats_reported = 105057;
+      VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
+      GpuEvent gpu_event = 105059;
+      VendorAudioPcmStatsReported vendor_audio_pcm_stats_reported = 105060;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -152,6 +158,8 @@ message ChargeStats {
         ADAPTER_TYPE_EXT1 = 27;
         ADAPTER_TYPE_EXT2 = 28;
         ADAPTER_TYPE_EXT_UNKNOWN = 29;
+        ADAPTER_TYPE_USB_UNKNOWN = 30;
+        ADAPTER_TYPE_WLC_UNKNOWN = 31;
     }
     optional string reverse_domain_name = 1;
     /* Type of charge adapter, enumerated above. */
@@ -949,6 +957,21 @@ message ThermalDfsStats {
 }
 
 /**
+ * Log Display Panel error statistics.
+ */
+message DisplayPanelErrorStats {
+ optional string reverse_domain_name = 1;
+ // The error count due to Tear Effect on primary display panel.
+ optional int32 primary_error_count_te = 2;
+ // The error count due to unknown reason on primary display panel.
+ optional int32 primary_error_count_unknown = 3;
+ // The error count due to Tear Effect on primary display panel.
+ optional int32 secondary_error_count_te = 4;
+ // The error count due to unknown reason on secondary display panel.
+ optional int32 secondary_error_count_unknown = 5;
+}
+
+/**
  * Log how many segments have been reclaimed in a specific GC mode.
  */
 message F2fsGcSegmentInfo {
@@ -1290,23 +1313,51 @@ message BlockStatsReported {
  */
 message VendorAudioHardwareStatsReported {
   optional string reverse_domain_name = 1;
-  /* The percentage of calls in a day where auto-mic-switch triggered.
-   * It represented as a fixed-point integer with three decimal place.
-   * E.g.:12.345% is repsented by 12345.
+  /* The number of calls in a day where CCA is active.
+   * CCA can only be applied under some radio bands.
    */
   optional int32 milli_rate_of_ams_per_day = 2;
 
-  /* The percentage of calls in a day where CCA is active.
-  * It represented as a fixed-point and rounded integer.
-  * E.g.:12.345% is represented by 12.
-  * CCA can only be applied under some radio bands.
-  */
+  // cca_active: obsoleted UI enable & algorithm is active (C1)
+  // replaced by cca_active_count_per_day
+  optional int32 rate_of_cca_active_per_day = 3 [deprecated = true];
 
-  /* cca_active: UI enable & algorithm is active (C1) */
-  optional int32 rate_of_cca_active_per_day = 3;
+  // cca_enable: obsoleted UI enable & algorithm is inactive field (C2)
+  // replaced by cca_enable_count_per_day
+  optional int32 rate_of_cca_enable_per_day = 4 [deprecated = true];
 
-  /* cca_enable: UI enable & algorithm is inactive. (C2) */
-  optional int32 rate_of_cca_enable_per_day = 4;
+  enum Source {
+    VOIP = 0;
+    VOICE = 1;
+  }
+
+  /* source: identify whether this atom is for voice or voip case. */
+  optional Source source = 5;
+
+  /* total_call_count_per_day: count total number of call per day. */
+  optional int32 total_call_count_per_day = 6;
+
+  /* cca_active: UI enable & algorithm is active (C1 or C3) */
+  optional int32 cca_active_count_per_day = 7;
+
+  /* cca_enable: UI enable & algorithm is inactive (C2 or C4) */
+  optional int32 cca_enable_count_per_day = 8;
+}
+
+/**
+ * Logs the reported vendor audio PDM stats.
+ * PDM stats are used to show background noise level during voice/voip calling.
+ * Each of the atom will show only one type of background noises. There are at most 4 types.
+ * Thus, this atoms will be reported at most 4 times to show all types.
+ */
+message VendorAudioPdmStatsReported {
+  optional string reverse_domain_name = 1;
+
+  /* index of the pdm to report. There are 4 pdm instances. So, the value is in the range 1-4 */
+  optional int32 pdm_index = 2;
+
+  /* State of the pdm to report. There is only two value 1 for good and 0 for bad. */
+  optional int32 state = 3;
 }
 
 /*
@@ -1346,6 +1397,17 @@ message VendorLongIRQStatsReported {
   optional int64 top4_irq_latency_us = 21;
   optional int64 top5_irq_num = 22;
   optional int64 top5_irq_latency_us = 23;
+
+  optional int64 storm_irq_top1_num = 24;
+  optional int64 storm_irq_top1_count = 25;
+  optional int64 storm_irq_top2_num = 26;
+  optional int64 storm_irq_top2_count = 27;
+  optional int64 storm_irq_top3_num = 28;
+  optional int64 storm_irq_top3_count = 29;
+  optional int64 storm_irq_top4_num = 30;
+  optional int64 storm_irq_top4_count = 31;
+  optional int64 storm_irq_top5_num= 32;
+  optional int64 storm_irq_top5_count = 33;
 }
 
 /**
@@ -1561,7 +1623,7 @@ message BrownoutDetected {
     // Triggered DVFS State: Channel 6
     optional int32 dvfs_channel6 = 37;
     // brownout reason
-    optional int32 brownout_reason = 38;
+    optional BrownoutReason brownout_reason = 38;
 }
 
 /*
@@ -1734,4 +1796,197 @@ message PartitionsUsedSpaceReported {
     optional Directory directory = 2;
     optional int64 free_bytes = 3;
     optional int64 total_bytes = 4;
+}
+
+message GpuEvent {
+    enum GpuEventType {
+      MALI_TYPE_NONE = 0;
+      MALI_KMD_ERROR = 1;
+      MALI_GPU_RESET = 2;
+    }
+    enum GpuEventInfo {
+      MALI_INFO_NONE = 0;
+      MALI_CSG_REQ_STATUS_UPDATE = 1;
+      MALI_CSG_SUSPEND = 2;
+      MALI_CSG_SLOTS_SUSPEND = 3;
+      MALI_CSG_GROUP_SUSPEND = 4;
+      MALI_CSG_EP_CFG = 5;
+      MALI_CSG_SLOTS_START = 6;
+      MALI_GROUP_TERM = 7;
+      MALI_QUEUE_START = 8;
+      MALI_QUEUE_STOP = 9;
+      MALI_QUEUE_STOP_ACK = 10;
+      MALI_CSG_SLOT_READY = 11;
+      MALI_L2_PM_TIMEOUT = 12;
+      MALI_PM_TIMEOUT = 13;
+      MALI_CSF_RESET_OK = 14;
+      MALI_CSF_RESET_FAILED = 15;
+    }
+
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+    /*
+     * Type of the GPU event. Possible values depend on the platform GPU.
+     * Eg, MALI_KMD_ERROR, MALI_GPU_RESET.
+     */
+    optional GpuEventType gpu_event_type = 2;
+    /*
+     * Additional information about the GPU event. Possible values depend
+     * on the platform GPU.
+     * Eg, MALI_PM_TIMEOUT, MALI_CSF_RESET_OK.
+     */
+    optional GpuEventInfo gpu_event_info = 3;
+}
+/**
+ * Log mitigation duration.
+ */
+message PowerMitigationDurationCounts {
+ optional string reverse_domain_name = 1;
+ // Count of UVLO1 greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_uvlo1_none = 2;
+ // Count of UVLO1 IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo1_mmwave = 3;
+ // Count of UVLO1 IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo1_rffe = 4;
+ // Count of UVLO2 greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_uvlo2_none = 5;
+ // Count of UVLO2 IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo2_mmwave = 6;
+ // Count of UVLO2 IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_uvlo2_rffe = 7;
+ // Count of BATOILO greater than threshold without any other concurrent IRQs.
+ optional int32 greater_than_thresh_batoilo_none = 8;
+ // Count of BATOILO IRQ + MMWAVE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_batoilo_mmwave = 9;
+ // Count of BATOILO IRQ + RFFE IRQ with duration greater than threshold.
+ optional int32 greater_than_thresh_batoilo_rffe = 10;
+
+ // IRQ duration of main regulator indices 0-11 greater than threshold.
+ optional int32 greater_than_thresh_main_0 = 11;
+ optional int32 greater_than_thresh_main_1 = 12;
+ optional int32 greater_than_thresh_main_2 = 13;
+ optional int32 greater_than_thresh_main_3 = 14;
+ optional int32 greater_than_thresh_main_4 = 15;
+ optional int32 greater_than_thresh_main_5 = 16;
+ optional int32 greater_than_thresh_main_6 = 17;
+ optional int32 greater_than_thresh_main_7 = 18;
+ optional int32 greater_than_thresh_main_8 = 19;
+ optional int32 greater_than_thresh_main_9 = 20;
+ optional int32 greater_than_thresh_main_10 = 21;
+ optional int32 greater_than_thresh_main_11 = 22;
+
+ // IRQ duration of sub regulator indices 0-11 greater than threshold.
+ optional int32 greater_than_thresh_sub_0 = 23;
+ optional int32 greater_than_thresh_sub_1 = 24;
+ optional int32 greater_than_thresh_sub_2 = 25;
+ optional int32 greater_than_thresh_sub_3 = 26;
+ optional int32 greater_than_thresh_sub_4 = 27;
+ optional int32 greater_than_thresh_sub_5 = 28;
+ optional int32 greater_than_thresh_sub_6 = 29;
+ optional int32 greater_than_thresh_sub_7 = 30;
+ optional int32 greater_than_thresh_sub_8 = 31;
+ optional int32 greater_than_thresh_sub_9 = 32;
+ optional int32 greater_than_thresh_sub_10 = 33;
+ optional int32 greater_than_thresh_sub_11 = 34;
+}
+
+/*
+ * Logs the third party audio effects stats.
+ * Third party audio effects stats includes duration in milliseconds for each
+ * instance of the effects (speaker, USB, etc.).
+ */
+message VendorAudioThirdPartyEffectStatsReported {
+    /* Vendor reverse domain name (expecting "com.google.pixel"). */
+    optional string reverse_domain_name = 1;
+
+    enum InstanceId {
+        OTHER = 0;
+        SPEAKER = 1;
+        USB = 2;
+        BT_A2DP = 3;
+        BT_LE = 4;
+    }
+    /* Instance of the effect. */
+    optional InstanceId instance = 2;
+    /* Active duration in milliseconds per day for volume range 0. */
+    optional int32 volume_range_0_active_ms_per_day = 3;
+    /* Active duration in milliseconds per day for volume range 1. */
+    optional int32 volume_range_1_active_ms_per_day = 4;
+    /* Active duration in milliseconds per day for volume range 2. */
+    optional int32 volume_range_2_active_ms_per_day = 5;
+    /* Active duration in milliseconds per day for volume range 3. */
+    optional int32 volume_range_3_active_ms_per_day = 6;
+    /* Active duration in milliseconds per day for volume range 4. */
+    optional int32 volume_range_4_active_ms_per_day = 7;
+    /* Active duration in milliseconds per day for volume range 5. */
+    optional int32 volume_range_5_active_ms_per_day = 8;
+    /* Active duration in milliseconds per day for volume range 6. */
+    optional int32 volume_range_6_active_ms_per_day = 9;
+    /* Active duration in milliseconds per day for volume range 7. */
+    optional int32 volume_range_7_active_ms_per_day = 10;
+    /* Active duration in milliseconds per day for volume range 8. */
+    optional int32 volume_range_8_active_ms_per_day = 11;
+    /* Active duration in milliseconds per day for volume range 9. */
+    optional int32 volume_range_9_active_ms_per_day = 12;
+}
+
+/*
+ * Logs the Audio Adapted information stats.
+ * Two stats are recorded, count and duration (in ms) per features.
+ */
+message VendorAudioAdaptedInfoStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum AdaptedInfoFeature {
+    UNKNOWN = 0;
+    BATTERY_ADAPTED_AUDIO_CONTROL = 1;
+    MEDIA_PLAYBACK_THERMAL_THROTTLE = 2;
+    TELEPHONY_THERMAL_THROTTLE = 3;
+    ACOUSTIC_SHOCK = 4;
+    SPATIAL_AUDIO = 5;
+  };
+  /* Feature to record the stats */
+  optional AdaptedInfoFeature feature_id = 2;
+  /* Number of time the feature is active */
+  optional int32 active_counts_per_day = 3;
+  /* Duration the feature is active in milliseconds */
+  optional int32 active_duration_ms_per_day = 4;
+}
+
+/*
+ * Logs the audio PCM usage stats.
+ * PCM usage includes average latency and total active count per day.
+ */
+message VendorAudioPcmStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum HalPcmType {
+    UNKNOWN = 0;
+    DEEPBUFFER = 1;
+    LOWLATENCY = 2;
+    MMAP_PLAY = 3;
+    RAW_PLAY = 4;
+    IMMERSIVE = 5;
+    HAPTIC = 6;
+    COMPRESS = 7;
+    MMAP_REC = 8;
+    RAW_REC = 9;
+    AUDIO_REC = 10;
+    HIFI_RX = 11;
+    HIFI_TX = 12;
+    IMMUTABLE_RX = 13;
+    CUSTOM_PCM_1 = 14;
+    CUSTOM_PCM_2 = 15;
+    CUSTOM_PCM_3 = 16;
+    CUSTOM_PCM_4 = 17;
+    CUSTOM_PCM_5 = 18;
+  };
+  /* Type of PCM */
+  optional HalPcmType type = 2;
+  /* Average latency in millisecond of the pcm type per day. */
+  optional int32 pcm_open_latency_avg_ms_per_day = 3;
+  /* Total active count of the pcm type per day. */
+  optional int32 pcm_active_counts_per_day = 4;
 }

@@ -88,7 +88,7 @@ static const std::map<Effect, EffectIndex> EFFECT_INDEX{
 static constexpr uint32_t MIN_ON_OFF_INTERVAL_US = 8500;
 static constexpr uint8_t VOLTAGE_SCALE_MAX = 100;
 static constexpr int8_t MAX_COLD_START_LATENCY_MS = 6;  // I2C Transaction + DSP Return-From-Standby
-static constexpr auto POLLING_TIMEOUT = 20;
+static constexpr auto POLLING_TIMEOUT = 50;  // POLLING_TIMEOUT < ASYNC_COMPLETION_TIMEOUT
 enum WaveformIndex : uint16_t {
     /* Physical waveform */
     WAVEFORM_LONG_VIBRATION_EFFECT_INDEX = 0,
@@ -303,6 +303,7 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockApi, setMinOnOffInterval(_)).Times(times);
         EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).Times(times);
         EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, _, _, _)).Times(times);
+        EXPECT_CALL(*mMockApi, enableDbc()).Times(times);
 
         EXPECT_CALL(*mMockApi, debug(_)).Times(times);
 
@@ -396,6 +397,7 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockApi, getContextSettlingTime()).WillRepeatedly(Return(0));
     EXPECT_CALL(*mMockApi, getContextCooldownTime()).WillRepeatedly(Return(0));
     EXPECT_CALL(*mMockApi, getContextFadeEnable()).WillRepeatedly(Return(false));
+    EXPECT_CALL(*mMockApi, enableDbc()).WillOnce(Return(true));
     createVibrator(std::move(mockapi), std::move(mockcal), std::move(mockstats), false);
 }
 
