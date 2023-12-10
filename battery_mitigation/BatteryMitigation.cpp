@@ -18,7 +18,8 @@
 
 #include <sstream>
 
-#define MAX_BROWNOUT_DATA_AGE_SECONDS 300
+#define MAX_BROWNOUT_DATA_AGE_MINUTES 5
+#define ONE_SECOND_IN_US 1000000
 
 namespace android {
 namespace hardware {
@@ -48,8 +49,24 @@ bool BatteryMitigation::isMitigationLogTimeValid(std::chrono::system_clock::time
             std::istringstream ss(pattern_match.str());
             ss >> std::get_time(&triggeredTimestamp, timestampFormat);
             auto logFileTime = std::chrono::system_clock::from_time_t(mktime(&triggeredTimestamp));
-            auto delta = std::chrono::duration_cast<std::chrono::seconds>(startTime - logFileTime);
-            if ((delta.count() < MAX_BROWNOUT_DATA_AGE_SECONDS) && (delta.count() > 0)) {
+            auto epoch_logFileTime = logFileTime.time_since_epoch().count() / ONE_SECOND_IN_US;
+
+            // Convert start time to same format
+            auto time_sec = std::chrono::system_clock::to_time_t(startTime);
+            struct tm start_tm;
+            std::stringstream oss;
+            localtime_r(&time_sec, &start_tm);
+            oss << std::put_time(&start_tm, timestampFormat) << std::flush;
+            std::tm startTimestamp = {};
+            std::istringstream st(oss.str());
+            st >> std::get_time(&startTimestamp, timestampFormat);
+            auto start = std::chrono::system_clock::from_time_t(mktime(&startTimestamp));
+            auto epoch_startTime = start.time_since_epoch().count() / ONE_SECOND_IN_US;
+
+            auto delta = epoch_startTime - epoch_logFileTime;
+            auto delta_minutes = delta / 60;
+
+            if ((delta_minutes < MAX_BROWNOUT_DATA_AGE_MINUTES) && (delta_minutes >= 0)) {
                 return true;
             }
         }

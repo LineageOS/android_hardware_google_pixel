@@ -49,6 +49,8 @@ class MockApi : public ::aidl::android::hardware::vibrator::Vibrator::HwApi {
                  bool(const uint8_t *owtData, const uint32_t numBytes, struct ff_effect *effect,
                       uint32_t *outEffectIndex, int *status));
     MOCK_METHOD2(eraseOwtEffect, bool(int8_t effectIndex, std::vector<ff_effect> *effect));
+    MOCK_METHOD0(isDbcSupported, bool());
+    MOCK_METHOD0(enableDbc, bool());
     MOCK_METHOD1(debug, void(int fd));
 
     ~MockApi() override { destructor(); };

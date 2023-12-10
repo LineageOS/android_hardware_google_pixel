@@ -40,6 +40,9 @@ using ThrottlingArray = std::array<float, static_cast<size_t>(kThrottlingSeverit
 using CdevArray = std::array<int, static_cast<size_t>(kThrottlingSeverityCount)>;
 constexpr std::chrono::milliseconds kMinPollIntervalMs = std::chrono::milliseconds(2000);
 constexpr std::chrono::milliseconds kUeventPollTimeoutMs = std::chrono::milliseconds(300000);
+// TODO(b/292044404): Add debug config to make them easily configurable
+constexpr std::chrono::milliseconds kPowerLogIntervalMs = std::chrono::milliseconds(60000);
+constexpr int kMaxPowerLogPerLine = 6;
 // Max number of time_in_state buckets is 20 in atoms
 // VendorSensorCoolingDeviceStats, VendorTempResidencyStats
 constexpr int kMaxStatsResidencyCount = 20;
@@ -93,12 +96,15 @@ struct StatsConfig {
 enum SensorFusionType : uint32_t {
     SENSOR = 0,
     ODPM,
+    CONSTANT,
 };
 
 struct VirtualSensorInfo {
     std::vector<std::string> linked_sensors;
     std::vector<SensorFusionType> linked_sensors_type;
-    std::vector<float> coefficients;
+    std::vector<std::string> coefficients;
+    std::vector<SensorFusionType> coefficients_type;
+
     float offset;
     std::vector<std::string> trigger_sensors;
     FormulaOption formula;
@@ -134,7 +140,11 @@ struct BindedCdevInfo {
     bool high_power_check;
     // The flag for only triggering throttling until all power samples are collected
     bool throttling_with_power_link;
+    bool enabled;
 };
+
+// The map to store the CDEV throttling info for each profile
+using ProfileMap = std::unordered_map<std::string, std::unordered_map<std::string, BindedCdevInfo>>;
 
 struct ThrottlingInfo {
     ThrottlingArray k_po;
@@ -150,6 +160,7 @@ struct ThrottlingInfo {
     int tran_cycle;
     std::unordered_map<std::string, ThrottlingArray> excluded_power_info_map;
     std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
+    ProfileMap profile_map;
 };
 
 struct SensorInfo {
@@ -164,6 +175,9 @@ struct SensorInfo {
     std::chrono::milliseconds polling_delay;
     std::chrono::milliseconds passive_delay;
     std::chrono::milliseconds time_resolution;
+    // The StepRatio value which is used for smoothing transient w/ the equation:
+    // Temp = CurrentTemp * StepRatio + LastTemp * (1 - StepRatio)
+    float step_ratio;
     bool send_cb;
     bool send_powerhint;
     bool is_watch;

@@ -22,6 +22,7 @@
 #include <log/log.h>
 #include <utils/Trace.h>
 
+#include <chrono>
 #include <cinttypes>
 #include <cmath>
 #include <fstream>
@@ -63,7 +64,7 @@ static constexpr int8_t MAX_PAUSE_TIMING_ERROR_MS = 1;    // ALERT Irq Handling
 static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 
 static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
-static constexpr auto POLLING_TIMEOUT = 20;
+static constexpr auto POLLING_TIMEOUT = 50;  // POLLING_TIMEOUT < ASYNC_COMPLETION_TIMEOUT
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
 
 /* nsections is 8 bits. Need to preserve 1 section for the first delay before the first effect. */
@@ -518,14 +519,11 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
     createPwleMaxLevelLimitMap();
     createBandwidthAmplitudeMap();
 
+    // We need to do this until it's supported through WISCE
+    mHwApi->enableDbc();
+
 #ifdef ADAPTIVE_HAPTICS_V1
-    mContextListener = CapoDetector::start();
-    if (mContextListener == nullptr) {
-        ALOGE("%s, CapoDetector failed to start", __func__);
-    } else {
-        ALOGD("%s, CapoDetector started successfully! NanoAppID: 0x%x", __func__,
-              (uint32_t)mContextListener->getNanoppAppId());
-    }
+    updateContext();
 #endif /*ADAPTIVE_HAPTICS_V1*/
 }
 
@@ -558,6 +556,20 @@ ndk::ScopedAStatus Vibrator::off() {
     bool ret{true};
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
 
+    const auto startTime = std::chrono::system_clock::now();
+    const auto endTime = startTime + std::chrono::milliseconds(POLLING_TIMEOUT);
+    auto now = startTime;
+    while (halState == ISSUED && now <= endTime) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        now = std::chrono::system_clock::now();
+    }
+    if (halState == ISSUED && now > endTime) {
+        ALOGE("Timeout waiting for the actuator activation! (%d ms)", POLLING_TIMEOUT);
+    } else if (halState == PLAYING) {
+        ALOGD("Took %lld ms to wait for the actuator activation.",
+              std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count());
+    }
+
     if (mActiveId >= 0) {
         /* Stop the active effect. */
         if (!mHwApi->setFFPlay(mActiveId, false)) {
@@ -565,6 +577,7 @@ ndk::ScopedAStatus Vibrator::off() {
             ALOGE("Failed to stop effect %d (%d): %s", mActiveId, errno, strerror(errno));
             ret = false;
         }
+        halState = STOPPED;
 
         if ((mActiveId >= WAVEFORM_MAX_PHYSICAL_INDEX) &&
             (!mHwApi->eraseOwtEffect(mActiveId, &mFfEffects))) {
@@ -581,6 +594,7 @@ ndk::ScopedAStatus Vibrator::off() {
     if (mF0Offset) {
         mHwApi->setF0Offset(0);
     }
+    halState = RESTORED;
 
     if (ret) {
         return ndk::ScopedAStatus::ok();
@@ -877,6 +891,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const 
         ALOGE("Failed to play effect %d (%d): %s", effectIndex, errno, strerror(errno));
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
+    halState = ISSUED;
 
     mAsyncHandle = std::async(&Vibrator::waitForComplete, this, callback);
     return ndk::ScopedAStatus::ok();
@@ -894,7 +909,7 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
         ratio = 100;
 
 #ifdef ADAPTIVE_HAPTICS_V1
-    if (scalable && mContextEnable) {
+    if (scalable && mContextEnable && mContextListener) {
         uint32_t now = CapoDetector::getCurrentTimeInMs();
         uint32_t last_played = mLastEffectPlayedTime;
         uint32_t lastFaceUpTime = 0;
@@ -947,10 +962,24 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
 
 void Vibrator::updateContext() {
     mContextEnable = mHwApi->getContextEnable();
-    mFadeEnable = mHwApi->getContextFadeEnable();
-    mScalingFactor = mHwApi->getContextScale();
-    mScaleTime = mHwApi->getContextSettlingTime();
-    mScaleCooldown = mHwApi->getContextCooldownTime();
+    if (mContextEnable && !mContextEnabledPreviously) {
+        mContextListener = CapoDetector::start();
+        if (mContextListener == nullptr) {
+            ALOGE("%s, CapoDetector failed to start", __func__);
+        } else {
+            mFadeEnable = mHwApi->getContextFadeEnable();
+            mScalingFactor = mHwApi->getContextScale();
+            mScaleTime = mHwApi->getContextSettlingTime();
+            mScaleCooldown = mHwApi->getContextCooldownTime();
+            ALOGD("%s, CapoDetector started successfully! NanoAppID: 0x%x, Scaling Factor: %d, "
+                  "Scaling Time: %d, Cooldown Time: %d",
+                  __func__, (uint32_t)mContextListener->getNanoppAppId(), mScalingFactor,
+                  mScaleTime, mScaleCooldown);
+
+            /* We no longer need to use this path */
+            mContextEnabledPreviously = true;
+        }
+    }
 }
 
 ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, bool scalable) {
@@ -959,9 +988,7 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, 
     uint16_t scale;
 
 #ifdef ADAPTIVE_HAPTICS_V1
-    if (scalable) {
-        updateContext();
-    }
+    updateContext();
 #endif /*ADAPTIVE_HAPTICS_V1*/
 
     scale = amplitudeToScale(amplitude, maximum, scalable);
@@ -1443,7 +1470,12 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     dprintf(fd, "AIDL:\n");
 
+    dprintf(fd, "  Global Gain: %0.2f\n", mLongEffectScale);
+    dprintf(fd, "  Active Effect ID: %" PRId32 "\n", mActiveId);
+    dprintf(fd, "  F0: %.02f\n", mResonantFrequency);
     dprintf(fd, "  F0 Offset: %" PRIu32 "\n", mF0Offset);
+    dprintf(fd, "  Redc: %.02f\n", mRedc);
+    dprintf(fd, "  HAL State: %" PRIu32 "\n", halState);
 
     dprintf(fd, "  Voltage Levels:\n");
     dprintf(fd, "    Tick Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mTickEffectVol[0],
@@ -1453,15 +1485,15 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     dprintf(fd, "    Long Effect Min: %" PRIu32 " Max: %" PRIu32 "\n", mLongEffectVol[0],
             mLongEffectVol[1]);
 
-    dprintf(fd, "  FF effect:\n");
-    dprintf(fd, "    Physical waveform:\n");
+    dprintf(fd, "  FF Effect:\n");
+    dprintf(fd, "    Physical Waveform:\n");
     dprintf(fd, "\tId\tIndex\tt   ->\tt'\n");
     for (uint8_t effectId = 0; effectId < WAVEFORM_MAX_PHYSICAL_INDEX; effectId++) {
         dprintf(fd, "\t%d\t%d\t%d\t%d\n", mFfEffects[effectId].id,
                 mFfEffects[effectId].u.periodic.custom_data[1], mEffectDurations[effectId],
                 mFfEffects[effectId].replay.length);
     }
-    dprintf(fd, "    OWT waveform:\n");
+    dprintf(fd, "    OWT Waveform:\n");
     dprintf(fd, "\tId\tBytes\tData\n");
     for (uint8_t effectId = WAVEFORM_MAX_PHYSICAL_INDEX; effectId < WAVEFORM_MAX_INDEX;
          effectId++) {
@@ -1479,6 +1511,65 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
     }
 
     dprintf(fd, "\n");
+
+    dprintf(fd, "Versions:\n");
+    std::ifstream verFile;
+    const auto verBinFileMode = std::ifstream::in | std::ifstream::binary;
+    std::string ver;
+    verFile.open("/sys/module/cs40l26_core/version");
+    if (verFile.is_open()) {
+        getline(verFile, ver);
+        dprintf(fd, "  Haptics Driver: %s\n", ver.c_str());
+        verFile.close();
+    }
+    verFile.open("/sys/module/cl_dsp_core/version");
+    if (verFile.is_open()) {
+        getline(verFile, ver);
+        dprintf(fd, "  DSP Driver: %s\n", ver.c_str());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26.wmfw", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(113);
+        dprintf(fd, "  cs40l26.wmfw: %d.%d.%d\n", verFile.get(), verFile.get(), verFile.get());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26-calib.wmfw", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(113);
+        dprintf(fd, "  cs40l26-calib.wmfw: %d.%d.%d\n", verFile.get(), verFile.get(),
+                verFile.get());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        while (getline(verFile, ver)) {
+            auto pos = ver.find("Date: ");
+            if (pos != std::string::npos) {
+                ver = ver.substr(pos + 6, pos + 15);
+                dprintf(fd, "  cs40l26.bin: %s\n", ver.c_str());
+                break;
+            }
+        }
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26-svc.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(36);
+        getline(verFile, ver);
+        ver = ver.substr(ver.rfind('\\') + 1);
+        dprintf(fd, "  cs40l26-svc.bin: %s\n", ver.c_str());
+        verFile.close();
+    }
+    verFile.open("/vendor/firmware/cs40l26-calib.bin", verBinFileMode);
+    if (verFile.is_open()) {
+        verFile.seekg(36);
+        getline(verFile, ver);
+        ver = ver.substr(ver.rfind('\\') + 1);
+        dprintf(fd, "  cs40l26-calib.bin: %s\n", ver.c_str());
+        verFile.close();
+    }
+
     dprintf(fd, "\n");
 
     mHwApi->debug(fd);
@@ -1487,13 +1578,22 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     mHwCal->debug(fd);
 
-    dprintf(fd, "Capo Info\n");
+    dprintf(fd, "\n");
+
+    dprintf(fd, "Capo Info:\n");
+    dprintf(fd, "Capo Enabled: %d\n", mContextEnable);
     if (mContextListener) {
         dprintf(fd, "Capo ID: 0x%x\n", (uint32_t)(mContextListener->getNanoppAppId()));
         dprintf(fd, "Capo State: %d\n", mContextListener->getCarriedPosition());
     }
 
+    dprintf(fd, "\n");
+
     mStatsApi->debug(fd);
+
+    if (mHwApi->isDbcSupported()) {
+        dprintf(fd, "\nDBC Enabled\n");
+    }
 
     fsync(fd);
     return STATUS_OK;
@@ -1729,9 +1829,11 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGW("Failed to get state \"Haptic\"");
     }
+    halState = PLAYING;
     ATRACE_BEGIN("Vibrating");
     mHwApi->pollVibeState(VIBE_STATE_STOPPED);
     ATRACE_END();
+    halState = STOPPED;
 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     uint32_t effectCount = WAVEFORM_MAX_PHYSICAL_INDEX;
@@ -1751,6 +1853,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     }
 
     mActiveId = -1;
+    halState = RESTORED;
 
     if (callback) {
         auto ret = callback->onComplete();

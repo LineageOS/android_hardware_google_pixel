@@ -47,6 +47,7 @@ using android::hardware::google::pixel::PixelAtoms::BrownoutDetected;
 #define DEFAULT_BATTERY_TEMP 9999999
 #define DEFAULT_BATTERY_SOC 100
 #define DEFAULT_BATTERY_VOLT 5000000
+#define ONE_SECOND_IN_US 1000000
 
 const std::regex kTimestampPattern("^\\S+\\s[0-9]+:[0-9]+:[0-9]+\\S+$");
 const std::regex kIrqPattern("^(\\S+)\\striggered\\sat\\s\\S+$");
@@ -212,7 +213,7 @@ long BrownoutDetectedReporter::parseTimestamp(std::string timestamp) {
     std::string timestampFormat = "%Y-%m-%d %H:%M:%S";
     if (strptime(timestamp.substr(0, 19).c_str(), timestampFormat.c_str(), &triggeredTimestamp)) {
         auto logFileTime = std::chrono::system_clock::from_time_t(mktime(&triggeredTimestamp));
-        return logFileTime.time_since_epoch().count();
+        return logFileTime.time_since_epoch().count() / ONE_SECOND_IN_US;
     }
     return 0;
 }

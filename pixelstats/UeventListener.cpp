@@ -66,6 +66,7 @@ using aidl::android::frameworks::stats::VendorAtomValue;
 using android::sp;
 using android::base::ReadFileToString;
 using android::base::WriteStringToFile;
+using android::hardware::google::pixel::PixelAtoms::GpuEvent;
 using android::hardware::google::pixel::PixelAtoms::PdVidPid;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorUsbPortOverheat;
@@ -271,6 +272,34 @@ void UeventListener::ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_c
     }
 }
 
+void UeventListener::ReportGpuEvent(const std::shared_ptr<IStats> &stats_client, const char *driver,
+                                    const char *gpu_event_type, const char *gpu_event_info) {
+    if (!stats_client || !driver || strncmp(driver, "DRIVER=mali", strlen("DRIVER=mali")) ||
+        !gpu_event_type || !gpu_event_info)
+        return;
+
+    std::vector<std::string> type = android::base::Split(gpu_event_type, "=");
+    std::vector<std::string> info = android::base::Split(gpu_event_info, "=");
+
+    if (type.size() != 2 || info.size() != 2)
+        return;
+
+    if (type[0] != "GPU_UEVENT_TYPE" || info[0] != "GPU_UEVENT_INFO")
+        return;
+
+    auto event_type = kGpuEventTypeStrToEnum.find(type[1]);
+    auto event_info = kGpuEventInfoStrToEnum.find(info[1]);
+    if (event_type == kGpuEventTypeStrToEnum.end() || event_info == kGpuEventInfoStrToEnum.end())
+        return;
+
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kGpuEvent,
+                        .values = {event_type->second, event_info->second}};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report GPU event.");
+}
+
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
@@ -278,6 +307,7 @@ bool UeventListener::ProcessUevent() {
     const char *mic_break_status, *mic_degrade_status;
     const char *devpath;
     bool collect_partner_id = false;
+    const char *gpu_event_type = nullptr, *gpu_event_info = nullptr;
     int n;
 
     if (uevent_fd_ < 0) {
@@ -333,6 +363,10 @@ bool UeventListener::ProcessUevent() {
             subsystem = cp;
         } else if (!strncmp(cp, kTypeCPartnerUevent.c_str(), kTypeCPartnerUevent.size())) {
             collect_partner_id = true;
+        } else if (!strncmp(cp, "GPU_UEVENT_TYPE=", strlen("GPU_UEVENT_TYPE="))) {
+            gpu_event_type = cp;
+        } else if (!strncmp(cp, "GPU_UEVENT_INFO=", strlen("GPU_UEVENT_INFO="))) {
+            gpu_event_info = cp;
         }
         /* advance to after the next \0 */
         while (*cp++) {
@@ -352,6 +386,7 @@ bool UeventListener::ProcessUevent() {
         if (collect_partner_id) {
             ReportTypeCPartnerId(stats_client);
         }
+        ReportGpuEvent(stats_client, driver, gpu_event_type, gpu_event_info);
     }
 
     if (log_fd_ > 0) {
