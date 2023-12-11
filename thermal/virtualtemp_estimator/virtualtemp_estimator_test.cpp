@@ -42,8 +42,9 @@
 #include <fstream>
 #include <iostream>
 
-static char default_model[] = "/vendor/etc/vt_estimation_model.tflite";
-static char default_thermal_config[] = "/vendor/etc/thermal_info_config.json";
+constexpr std::string_view kDefaultModel("/vendor/etc/vt_estimation_model.tflite");
+constexpr std::string_view kConfigProperty("vendor.thermal.config");
+constexpr std::string_view kConfigDefaultFileName("thermal_info_config.json");
 constexpr int kmillion = 1000000;
 constexpr int klog_interval_usec = 10 * kmillion;
 
@@ -54,11 +55,11 @@ static inline unsigned long get_elapsed_time_usec(struct timeval start, struct t
     return elapsed_time;
 }
 
-static std::vector<std::string> get_input_combination(const char *thermal_config_path) {
+static std::vector<std::string> get_input_combination(std::string_view thermal_config_path) {
     std::vector<std::string> result;
     std::string json_doc;
-    if (!android::base::ReadFileToString(thermal_config_path, &json_doc)) {
-        std::cout << "Failed to read JSON config from " << thermal_config_path;
+    if (!android::base::ReadFileToString(thermal_config_path.data(), &json_doc)) {
+        std::cout << "Failed to read JSON config from " << thermal_config_path.data();
         return result;
     }
 
@@ -95,17 +96,18 @@ static std::vector<std::string> get_input_combination(const char *thermal_config
     return result;
 }
 
-static int run_random_input_inference(char *model_path, const char *thermal_config_path,
-                                      int min_inference_count, int inference_delay_sec) {
+static int run_random_input_inference(std::string_view model_path,
+                                      std::string_view thermal_config_path, int min_inference_count,
+                                      int inference_delay_sec) {
     float output;
     unsigned long prev_log_time = 0;
     thermal::vtestimator::VtEstimatorStatus ret;
-    std::vector<std::string> input_combination = get_input_combination(thermal_config_path);
+    std::vector<std::string> input_combination = get_input_combination(thermal_config_path.data());
     int input_size = input_combination.size();
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(input_size);
 
     std::cout << "Initialize estimator\n";
-    ret = vt_estimator_.Initialize(model_path);
+    ret = vt_estimator_.Initialize(model_path.data());
     if (ret != thermal::vtestimator::kVtEstimatorOk) {
         std::cout << "Failed to Initialize estimator (ret: " << ret << ")\n";
         return -1;
@@ -174,7 +176,7 @@ static int run_random_input_inference(char *model_path, const char *thermal_conf
     return 0;
 }
 
-static int run_single_inference(char *model_path, char *input) {
+static int run_single_inference(std::string_view model_path, char *input) {
     if (!input) {
         std::cout << "input is nullptr" << std::endl;
         return -1;
@@ -206,7 +208,7 @@ static int run_single_inference(char *model_path, char *input) {
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermistors.size());
 
     std::cout << "Initialize estimator\n";
-    ret = vt_estimator_.Initialize(model_path);
+    ret = vt_estimator_.Initialize(model_path.data());
     if (ret != thermal::vtestimator::kVtEstimatorOk) {
         std::cout << "Failed to Initialize estimator (ret: " << ret << ")\n";
         return -1;
@@ -223,7 +225,7 @@ static int run_single_inference(char *model_path, char *input) {
     return 0;
 }
 
-static int run_batch_process(const char *model_path, const char *thermal_config_path,
+static int run_batch_process(std::string_view model_path, std::string_view thermal_config_path,
                              const char *input_file, const char *output_file) {
     if (!input_file || !output_file) {
         std::cout << "input and output files required for batch process\n";
@@ -231,7 +233,7 @@ static int run_batch_process(const char *model_path, const char *thermal_config_
     }
 
     std::cout << "get_input_combination(): ";
-    std::vector<std::string> input_combination = get_input_combination(thermal_config_path);
+    std::vector<std::string> input_combination = get_input_combination(thermal_config_path.data());
     if (input_combination.size() == 0) {
         LOG(ERROR) << "Invalid input_combination";
         return -1;
@@ -241,7 +243,7 @@ static int run_batch_process(const char *model_path, const char *thermal_config_
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(input_combination.size());
 
     std::cout << "Initialize estimator\n";
-    ret = vt_estimator_.Initialize(model_path);
+    ret = vt_estimator_.Initialize(model_path.data());
     if (ret != thermal::vtestimator::kVtEstimatorOk) {
         std::cout << "Failed to Initialize estimator (ret: " << ret << ")\n";
         return -1;
@@ -336,7 +338,7 @@ void print_usage() {
 int main(int argc, char *argv[]) {
     int c, mode = -1;
     char *input = nullptr, *output = nullptr;
-    char *model_path = nullptr, *thermal_config_path = nullptr;
+    std::string model_path, thermal_config_path;
     int min_inference_count = -1;
     int inference_delay_sec = 0;
 
@@ -377,13 +379,15 @@ int main(int argc, char *argv[]) {
                 abort();
         }
 
-    if (!model_path) {
-        model_path = default_model;
+    if (model_path.empty()) {
+        model_path = kDefaultModel;
         std::cout << "Using default model_path: " << model_path << std::endl;
     }
 
-    if (!thermal_config_path) {
-        thermal_config_path = default_thermal_config;
+    if (thermal_config_path.empty()) {
+        thermal_config_path =
+                "/vendor/etc/" +
+                android::base::GetProperty(kConfigProperty.data(), kConfigDefaultFileName.data());
         std::cout << "Using default thermal config: " << thermal_config_path << std::endl;
     }
 
@@ -407,5 +411,6 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Exiting" << std::endl;
     fflush(stdout);
+
     return ret;
 }
