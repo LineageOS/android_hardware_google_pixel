@@ -23,10 +23,13 @@
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
+#include <fmq/AidlMessageQueue.h>
+#include <fmq/EventFlag.h>
 #include <perfmgr/HintManager.h>
 #include <utils/Log.h>
 
 #include <mutex>
+#include <optional>
 
 #include "PowerHintSession.h"
 #include "PowerSessionManager.h"
@@ -41,6 +44,11 @@ namespace pixel {
 
 using ::aidl::google::hardware::power::impl::pixel::PowerHintSession;
 using ::android::perfmgr::HintManager;
+
+using ::aidl::android::hardware::common::fmq::MQDescriptor;
+using ::aidl::android::hardware::common::fmq::SynchronizedReadWrite;
+using ::aidl::android::hardware::power::ChannelMessage;
+using ::android::AidlMessageQueue;
 
 constexpr char kPowerHalStateProp[] = "vendor.powerhal.state";
 constexpr char kPowerHalAudioProp[] = "vendor.powerhal.audio";
@@ -291,6 +299,27 @@ ndk::ScopedAStatus Power::getHintSessionPreferredRate(int64_t *outNanoseconds) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
     }
 
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Power::createHintSessionWithConfig(
+        int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds, int64_t durationNanos,
+        SessionTag, SessionConfig *config, std::shared_ptr<IPowerHintSession> *_aidl_return) {
+    auto out = createHintSession(tgid, uid, threadIds, durationNanos, _aidl_return);
+    static_cast<PowerHintSession *>(_aidl_return->get())->getSessionConfig(config);
+    return out;
+}
+
+ndk::ScopedAStatus Power::getSessionChannel(int32_t, int32_t, ChannelConfig *_aidl_return) {
+    static AidlMessageQueue<ChannelMessage, SynchronizedReadWrite> stubQueue{1, true};
+    _aidl_return->channelDescriptor = stubQueue.dupeDesc();
+    _aidl_return->readFlagBitmask = 0;
+    _aidl_return->writeFlagBitmask = 0;
+    _aidl_return->eventFlagDescriptor = std::nullopt;
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Power::closeSessionChannel(int32_t, int32_t) {
     return ndk::ScopedAStatus::ok();
 }
 

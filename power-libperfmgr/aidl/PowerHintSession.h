@@ -36,6 +36,7 @@ namespace impl {
 namespace pixel {
 
 using aidl::android::hardware::power::BnPowerHintSession;
+using aidl::android::hardware::power::SessionConfig;
 using aidl::android::hardware::power::SessionHint;
 using aidl::android::hardware::power::SessionMode;
 using aidl::android::hardware::power::WorkDuration;
@@ -87,6 +88,8 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus sendHint(SessionHint hint) override;
     ndk::ScopedAStatus setMode(SessionMode mode, bool enabled) override;
     ndk::ScopedAStatus setThreads(const std::vector<int32_t> &threadIds) override;
+    ndk::ScopedAStatus getSessionConfig(SessionConfig *_aidl_return) override;
+
     bool isActive();
     bool isTimeout();
     // Is hint session for a user application

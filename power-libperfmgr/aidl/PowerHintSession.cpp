@@ -399,6 +399,11 @@ ndk::ScopedAStatus PowerHintSession::setThreads(const std::vector<int32_t> &thre
     return ndk::ScopedAStatus::ok();
 }
 
+ndk::ScopedAStatus PowerHintSession::getSessionConfig(SessionConfig *_aidl_return) {
+    _aidl_return->id = mSessionId;
+    return ndk::ScopedAStatus::ok();
+}
+
 std::string AppHintDesc::toString() const {
     std::string out = StringPrintf("session %" PRId64 "\n", sessionId);
     out.append(
