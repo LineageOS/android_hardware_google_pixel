@@ -1518,6 +1518,7 @@ message BrownoutDetected {
         SMPL_WARN = 1;
         UVLO2 = 2;
         BATOILO = 3;
+        BATOILO2 = 4;
     }
 
     enum BrownoutReason {

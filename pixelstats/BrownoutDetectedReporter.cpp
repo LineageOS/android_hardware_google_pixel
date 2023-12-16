@@ -218,6 +218,92 @@ long BrownoutDetectedReporter::parseTimestamp(std::string timestamp) {
     return 0;
 }
 
+int BrownoutDetectedReporter::brownoutReasonCheck(const std::string &brownoutReasonProp) {
+    std::string reason = android::base::GetProperty(brownoutReasonProp.c_str(), "");
+    if (reason.empty()) {
+        // Brownout not found
+        return -1;
+    }
+    auto key = kBrownoutReason.find(reason);
+    if (key == kBrownoutReason.end()) {
+        return -1;
+    }
+    return key->second;
+}
+
+int parseIRQ(const std::string &element) {
+    int idx = atoi(element.c_str());
+    if (idx == SMPL_WARN) {
+        return BrownoutDetected::SMPL_WARN;
+    } else if (idx == UVLO1) {
+        return BrownoutDetected::UVLO1;
+    } else if (idx == UVLO2) {
+        return BrownoutDetected::UVLO2;
+    } else if (idx == BATOILO) {
+        return BrownoutDetected::BATOILO;
+    } else if (idx == BATOILO2) {
+        return BrownoutDetected::BATOILO2;
+    }
+    return -1;
+}
+
+void BrownoutDetectedReporter::logBrownoutCsv(const std::shared_ptr<IStats> &stats_client,
+                                              const std::string &CsvFilePath,
+                                              const std::string &brownoutReasonProp) {
+    std::string csvFile;
+    if (!android::base::ReadFileToString(CsvFilePath, &csvFile)) {
+        return;
+    }
+    std::istringstream content(csvFile);
+    std::string line;
+    struct BrownoutDetectedInfo max_value = {};
+    max_value.voltage_now_ = DEFAULT_BATTERY_VOLT;
+    max_value.battery_soc_ = DEFAULT_BATTERY_SOC;
+    max_value.battery_temp_ = DEFAULT_BATTERY_TEMP;
+    std::smatch pattern_match;
+    max_value.brownout_reason_ = brownoutReasonCheck(brownoutReasonProp);
+    if (max_value.brownout_reason_ < 0) {
+        return;
+    }
+    bool isAlreadyUpdated = false;
+    std::vector<std::vector<std::string>> rows;
+    int row_num = 0;
+    while (std::getline(content, line)) {
+        if (std::regex_match(line, pattern_match, kAlreadyUpdatedPattern)) {
+            isAlreadyUpdated = true;
+            break;
+        }
+        row_num++;
+        if (row_num == 1) {
+            continue;
+        }
+        std::vector<std::string> row;
+        std::stringstream ss(line);
+        std::string field;
+        while (getline(ss, field, ',')) {
+            row.push_back(field);
+        }
+
+        max_value.triggered_timestamp_ = parseTimestamp(row[TIMESTAMP_IDX].c_str());
+        max_value.triggered_irq_ = parseIRQ(row[IRQ_IDX]);
+        max_value.battery_soc_ = atoi(row[SOC_IDX].c_str());
+        max_value.battery_temp_ = atoi(row[TEMP_IDX].c_str());
+        max_value.battery_cycle_ = atoi(row[CYCLE_IDX].c_str());
+        max_value.voltage_now_ = atoi(row[VOLTAGE_IDX].c_str());
+        for (int i = 0; i < DVFS_MAX_IDX; i++) {
+            max_value.dvfs_value_[i] = atoi(row[i + DVFS_CHANNEL_0].c_str());
+        }
+        for (int i = 0; i < ODPM_MAX_IDX; i++) {
+            max_value.odpm_value_[i] = atoi(row[i + ODPM_CHANNEL_0].c_str());
+        }
+    }
+    if (!isAlreadyUpdated && max_value.battery_temp_ != DEFAULT_BATTERY_TEMP) {
+        std::string file_content = "LASTMEAL_UPDATED\n" + csvFile;
+        android::base::WriteStringToFile(file_content, CsvFilePath);
+        uploadData(stats_client, max_value);
+    }
+}
+
 void BrownoutDetectedReporter::logBrownout(const std::shared_ptr<IStats> &stats_client,
                                            const std::string &logFilePath,
                                            const std::string &brownoutReasonProp) {
@@ -233,17 +319,10 @@ void BrownoutDetectedReporter::logBrownout(const std::shared_ptr<IStats> &stats_
     max_value.battery_temp_ = DEFAULT_BATTERY_TEMP;
     std::smatch pattern_match;
     int odpm_index = 0, dvfs_index = 0;
-    std::string reason = android::base::GetProperty(brownoutReasonProp.c_str(), "");
-    if (reason.empty()) {
-        // Brownout not found
+    max_value.brownout_reason_ = brownoutReasonCheck(brownoutReasonProp);
+    if (max_value.brownout_reason_ < 0) {
         return;
     }
-
-    auto key = kBrownoutReason.find(reason);
-    if (key == kBrownoutReason.end()) {
-        return;
-    }
-    max_value.brownout_reason_ = key->second;
     bool isAlreadyUpdated = false;
     while (std::getline(content, line)) {
         if (std::regex_match(line, pattern_match, kAlreadyUpdatedPattern)) {

@@ -49,8 +49,7 @@
 #define FVP_STATS_SIZE 4096
 #define STAT_NAME_SIZE           48
 #define STATS_MAX_SIZE           64
-#define PMIC_NUM                 2
-#define STATS_PREPARATION_MS 3
+#define PMIC_NUM 2
 #define LOOP_TRIG_STATS(idx) for (int idx = 0; idx < MAX_EVENT; idx++)
 
 namespace android {
@@ -74,6 +73,7 @@ struct OdpmInstantPower {
 struct BrownoutStatsCSVFields {
     const char *const triggered_time;
     const char *const triggered_idx;
+    const char *const battery_soc;
     const char *const battery_temp;
     const char *const battery_cycle;
     const char *const voltage_now;
@@ -90,6 +90,7 @@ struct BrownoutStatsCSVFields {
 struct BrownoutStatsCSVRow {
     struct timespec triggered_time;
     int triggered_idx;
+    int min_battery_soc;
     int max_battery_temp;
     int min_battery_cycle;
     int min_voltage_now;
@@ -116,8 +117,7 @@ struct BrownoutStatsExtend {
 
 class BatteryMitigationService : public RefBase {
   public:
-    BatteryMitigationService(const struct MitigationConfig::EventThreadConfig &eventThreadCfg,
-                             int platformNum);
+    BatteryMitigationService(const struct MitigationConfig::EventThreadConfig &eventThreadCfg);
     ~BatteryMitigationService();
 
     void startBrownoutEventThread();
@@ -130,9 +130,8 @@ class BatteryMitigationService : public RefBase {
     bool genLastmealCSV(const char*);
   private:
     struct MitigationConfig::EventThreadConfig cfg;
-    int platformNum;
-    int platformIdx;
 
+    int storingFd;
     int triggeredStateFd[MAX_EVENT];
     int triggeredStateEpollFd;
     int triggeredStateWakeupEventFd;
@@ -145,7 +144,6 @@ class BatteryMitigationService : public RefBase {
     std::thread brownoutEventThread;
     std::atomic_bool threadStop{false};
 
-    char *storingAddr;
     int mainPmicID;
     int subPmicID;
     double mainLpfBitResolutions[METER_CHANNEL_MAX];
@@ -158,7 +156,6 @@ class BatteryMitigationService : public RefBase {
     void TriggerEventThread();
     void initTotalNumericSysfsPaths();
     void initPmicRelated();
-    int initThisMeal();
     int initFd();
     int initTrigFd();
     void tearDownBrownoutEventThread();

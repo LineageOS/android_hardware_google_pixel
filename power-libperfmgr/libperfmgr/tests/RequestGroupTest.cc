@@ -63,7 +63,7 @@ TEST(RequestGroupTest, AddRequestNoExpireTest) {
         ReqTime::max() - std::chrono::steady_clock::now());
     EXPECT_NEAR(expect.count(), expire_time.count(), kTIMING_TOLERANCE_MS);
     // expire time is greater than 1 year
-    EXPECT_LE(365 * 24 * 60 * 60 * 1000, expire_time.count());
+    EXPECT_LE(365ll * 24 * 60 * 60 * 1000, expire_time.count());
     EXPECT_EQ(true, active);
 }
 

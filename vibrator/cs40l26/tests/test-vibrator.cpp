@@ -340,9 +340,11 @@ TEST_F(VibratorTest, Constructor) {
     std::unique_ptr<MockApi> mockapi;
     std::unique_ptr<MockCal> mockcal;
     std::unique_ptr<MockStats> mockstats;
-    std::string f0Val = std::to_string(std::rand());
-    std::string redcVal = std::to_string(std::rand());
-    std::string qVal = std::to_string(std::rand());
+    int min_val = 0xC8000;
+    int max_val = 0x7FC000;
+    std::string f0Val = std::to_string(std::rand() % (max_val - min_val + 1) + min_val);
+    std::string redcVal = std::to_string(std::rand() % (max_val - min_val + 1) + min_val);
+    std::string qVal = std::to_string(std::rand() % (max_val - min_val + 1) + min_val);
     uint32_t calVer;
     uint32_t supportedPrimitivesBits = 0x0;
     Expectation volGet;

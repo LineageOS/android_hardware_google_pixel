@@ -42,6 +42,7 @@ static int Usage(std::string_view name) {
   std::cerr << "  --clear-dark-theme   Clear the dark theme flag\n";
   std::cerr << "  --set-sota           Write the silent OTA flag\n";
   std::cerr << "  --clear-sota         Clear the silent OTA flag\n";
+  std::cerr << "  --set-sota-config    Set the silent OTA configs\n";
   std::cerr << "  --set-enable-pkvm    Write the enable pKVM flag\n";
   std::cerr << "  --set-disable-pkvm   Write the disable pKVM flag\n";
   std::cerr << "  --set-wrist-orientation <0-3> Write the wrist orientation flag\n";
@@ -75,6 +76,7 @@ int main(int argc, char** argv) {
     { "set-max-ram-size", required_argument, nullptr, 0},
     { "set-timertcoffset", required_argument, nullptr, 0},
     { "set-minrtc", required_argument, nullptr, 0},
+    { "set-sota-config", no_argument, nullptr, 0 },
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -86,6 +88,7 @@ int main(int argc, char** argv) {
     { "set-enable-pkvm", MiscWriterActions::kSetEnablePkvmFlag },
     { "set-disable-pkvm", MiscWriterActions::kSetDisablePkvmFlag },
     { "clear-wrist-orientation", MiscWriterActions::kClearWristOrientationFlag },
+    { "set-sota-config", MiscWriterActions::kSetSotaConfig },
   };
 
   std::unique_ptr<MiscWriter> misc_writer;

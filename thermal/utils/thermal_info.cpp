@@ -232,6 +232,8 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     std::vector<std::string> coefficients;
     std::vector<SensorFusionType> coefficients_type;
     FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
+    std::string vt_estimator_model_file;
+    std::unique_ptr<::thermal::vtestimator::VirtualTempEstimator> vt_estimator;
 
     Json::Value values = sensor["Combination"];
     if (values.size()) {
@@ -242,6 +244,21 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         }
     } else {
         LOG(ERROR) << "Sensor[" << name << "] has no Combination setting";
+        return false;
+    }
+
+    if (sensor["Formula"].asString().compare("COUNT_THRESHOLD") == 0) {
+        formula = FormulaOption::COUNT_THRESHOLD;
+    } else if (sensor["Formula"].asString().compare("WEIGHTED_AVG") == 0) {
+        formula = FormulaOption::WEIGHTED_AVG;
+    } else if (sensor["Formula"].asString().compare("MAXIMUM") == 0) {
+        formula = FormulaOption::MAXIMUM;
+    } else if (sensor["Formula"].asString().compare("MINIMUM") == 0) {
+        formula = FormulaOption::MINIMUM;
+    } else if (sensor["Formula"].asString().compare("USE_ML_MODEL") == 0) {
+        formula = FormulaOption::USE_ML_MODEL;
+    } else {
+        LOG(ERROR) << "Sensor[" << name << "]'s Formula is invalid";
         return false;
     }
 
@@ -283,7 +300,8 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         LOG(ERROR) << "Sensor[" << name << "] has no Coefficient setting";
         return false;
     }
-    if (linked_sensors.size() != coefficients.size()) {
+    if ((linked_sensors.size() != coefficients.size()) &&
+        (formula != FormulaOption::USE_ML_MODEL)) {
         LOG(ERROR) << "Sensor[" << name << "] has invalid Coefficient size";
         return false;
     }
@@ -347,21 +365,43 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         }
     }
 
-    if (sensor["Formula"].asString().compare("COUNT_THRESHOLD") == 0) {
-        formula = FormulaOption::COUNT_THRESHOLD;
-    } else if (sensor["Formula"].asString().compare("WEIGHTED_AVG") == 0) {
-        formula = FormulaOption::WEIGHTED_AVG;
-    } else if (sensor["Formula"].asString().compare("MAXIMUM") == 0) {
-        formula = FormulaOption::MAXIMUM;
-    } else if (sensor["Formula"].asString().compare("MINIMUM") == 0) {
-        formula = FormulaOption::MINIMUM;
-    } else {
-        LOG(ERROR) << "Sensor[" << name << "]'s Formula is invalid";
-        return false;
+    if (formula == FormulaOption::USE_ML_MODEL) {
+        if (sensor["ModelPath"].empty()) {
+            LOG(ERROR) << "Sensor[" << name << "] has no ModelPath";
+            return false;
+        }
+
+        if (!linked_sensors.size()) {
+            LOG(ERROR) << "Sensor[" << name << "] uses USE_ML_MODEL and has zero linked_sensors";
+            return false;
+        }
+
+        vt_estimator = std::make_unique<::thermal::vtestimator::VirtualTempEstimator>(
+                linked_sensors.size());
+        if (!vt_estimator) {
+            LOG(ERROR) << "Failed to create vt estimator for Sensor[" << name
+                       << "] with linked sensor size : " << linked_sensors.size();
+            return false;
+        }
+
+        vt_estimator_model_file = "vendor/etc/" + sensor["ModelPath"].asString();
+
+        ::thermal::vtestimator::VtEstimatorStatus ret =
+                vt_estimator->Initialize(vt_estimator_model_file.c_str());
+        if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+            LOG(ERROR) << "Failed to initialize vt estimator for Sensor[" << name
+                       << "] with ModelPath: " << vt_estimator_model_file
+                       << " with ret code : " << ret;
+            return false;
+        }
+
+        LOG(INFO) << "Successfully created vt_estimator for Sensor[" << name
+                  << "] with input samples: " << linked_sensors.size();
     }
-    virtual_sensor_info->reset(new VirtualSensorInfo{linked_sensors, linked_sensors_type,
-                                                     coefficients, coefficients_type, offset,
-                                                     trigger_sensors, formula});
+
+    virtual_sensor_info->reset(new VirtualSensorInfo{
+            linked_sensors, linked_sensors_type, coefficients, coefficients_type, offset,
+            trigger_sensors, formula, vt_estimator_model_file, std::move(vt_estimator)});
     return true;
 }
 

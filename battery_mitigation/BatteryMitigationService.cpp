@@ -23,30 +23,30 @@ namespace pixel {
 
 using android::base::ReadFileToString;
 using android::base::StartsWith;
+using android::hardware::google::pixel::MitigationConfig;
 
 const struct BrownoutStatsCSVFields brownoutStatsCSVFields = {
-    .triggered_time = "triggered_timestamp",
-    .triggered_idx = "triggered_irq",
-    .battery_temp = "battery_temp",
-    .battery_cycle = "battery_cycle",
-    .voltage_now = "voltage_now",
-    .current_now = "current_now",
-    .cpu0_freq = "dvfs_channel1",
-    .cpu1_freq = "dvfs_channel2",
-    .cpu2_freq = "dvfs_channel3",
-    .gpu_freq = "dvfs_channel4",
-    .tpu_freq = "dvfs_channel5",
-    .aur_freq = "dvfs_channel6",
-    .odpm_prefix = "odpm_channel_",
+        .triggered_time = "triggered_timestamp",
+        .triggered_idx = "triggered_irq",
+        .battery_soc = "battery_soc",
+        .battery_temp = "battery_temp",
+        .battery_cycle = "battery_cycle",
+        .voltage_now = "voltage_now",
+        .current_now = "current_now",
+        .cpu0_freq = "dvfs_channel1",
+        .cpu1_freq = "dvfs_channel2",
+        .cpu2_freq = "dvfs_channel3",
+        .gpu_freq = "dvfs_channel4",
+        .tpu_freq = "dvfs_channel5",
+        .aur_freq = "dvfs_channel6",
+        .odpm_prefix = "odpm_channel_",
 };
 
 BatteryMitigationService::BatteryMitigationService(
-                          const struct MitigationConfig::EventThreadConfig &eventThreadCfg,
-                          int platformNum)
-                          :cfg(eventThreadCfg), platformNum(platformNum) {
+                          const struct MitigationConfig::EventThreadConfig &eventThreadCfg)
+                          :cfg(eventThreadCfg) {
     initTotalNumericSysfsPaths();
     initPmicRelated();
-    platformIdx = platformNum - MIN_SUPPORTED_PLATFORM;
 }
 
 BatteryMitigationService::~BatteryMitigationService() {
@@ -59,14 +59,6 @@ BatteryMitigationService::~BatteryMitigationService() {
 bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
     if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
         access(cfg.BrownoutStatsPath, F_OK) == 0) {
-        return true;
-    }
-    return false;
-}
-
-bool BatteryMitigationService::isPlatformSupported() {
-    if (platformNum >= MIN_SUPPORTED_PLATFORM &&
-        platformNum <= MAX_SUPPORTED_PLATFORM) {
         return true;
     }
     return false;
@@ -114,19 +106,41 @@ int getFilesInDir(const char *directory, std::vector<std::string> *files) {
     return 0;
 }
 
-void BatteryMitigationService::initTotalNumericSysfsPaths() {
+void addNumericSysfsStatPathinDir(
+        std::string numericSysfsStatDir,
+        std::vector<MitigationConfig::numericSysfs> totalNumericSysfsStatPaths) {
     std::vector<std::string> files;
+    if (getFilesInDir(numericSysfsStatDir.c_str(), &files) < 0) {
+        return;
+    }
+    for (auto &file : files) {
+        std::string fullPath = numericSysfsStatDir + file;
+        totalNumericSysfsStatPaths.push_back({file, fullPath});
+    }
+}
 
+void BatteryMitigationService::initTotalNumericSysfsPaths() {
     totalNumericSysfsStatPaths.assign(cfg.NumericSysfsStatPaths.begin(),
                                       cfg.NumericSysfsStatPaths.end());
-
     for (const auto &sysfsStat : cfg.NumericSysfsStatDirs) {
-        if (getFilesInDir(sysfsStat.path.c_str(), &files) < 0) {
-            continue;
+        addNumericSysfsStatPathinDir(sysfsStat.path.c_str(), totalNumericSysfsStatPaths);
+    }
+
+    /* Append first available path in PlatformSpecific */
+    for (const auto &sysfsStatList : cfg.PlatformSpecific.NumericSysfsStatPaths) {
+        for (const auto &sysfsStatPath : sysfsStatList.paths) {
+            if (access(sysfsStatPath.c_str(), F_OK) == 0) {
+                totalNumericSysfsStatPaths.push_back({sysfsStatList.name, sysfsStatPath});
+                break;
+            }
         }
-        for (auto &file : files) {
-            std::string fullPath = sysfsStat.path + file;
-            totalNumericSysfsStatPaths.push_back({file, fullPath});
+    }
+    for (const auto &sysfsStatList : cfg.PlatformSpecific.NumericSysfsStatDirs) {
+        for (const auto &sysfsStatPath : sysfsStatList.paths) {
+            if (access(sysfsStatPath.c_str(), F_OK) == 0) {
+                addNumericSysfsStatPathinDir(sysfsStatPath, totalNumericSysfsStatPaths);
+                break;
+            }
         }
     }
 }
@@ -155,7 +169,7 @@ int BatteryMitigationService::readNumericStats(struct BrownoutStatsExtend *brown
 
 
 void BatteryMitigationService::startBrownoutEventThread() {
-    if (isPlatformSupported() && isBrownoutStatsBinarySupported()) {
+    if (isBrownoutStatsBinarySupported()) {
         brownoutEventThread = std::thread(&BatteryMitigationService::BrownoutEventThread, this);
         eventThread = std::thread(&BatteryMitigationService::TriggerEventThread, this);
     }
@@ -191,24 +205,7 @@ int getMmapAddr(int &fd, const char *const path, size_t memSize, char **addr) {
     }
     lseek(fd, memSize - 1, SEEK_SET);
     write(fd,  "", 1);
-    *addr = (char *) mmap(NULL, memSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    close(fd);
-    return 0;
-}
-
-int BatteryMitigationService::initThisMeal() {
-    int ret;
-    int fd;
-    size_t memSize = sizeof(struct BrownoutStatsExtend) * DUMP_TIMES * \
-                            BROWNOUT_EVENT_BUF_SIZE;
-
-    ret = getMmapAddr(fd, cfg.StoringPath, memSize, &storingAddr);
-    if (ret != 0) {
-        LOG(DEBUG) << "can't generate " << cfg.StoringPath;
-        return ret;
-    }
-    memset(storingAddr, 0, memSize);
-
+    *addr = (char *)mmap(NULL, memSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     return 0;
 }
 
@@ -332,6 +329,11 @@ int BatteryMitigationService::initFd() {
         return brownoutStatsFd;
     }
 
+    storingFd = open(cfg.StoringPath, O_RDWR | O_CREAT | O_TRUNC, (mode_t) 0644);
+    if (storingFd < 0) {
+        return storingFd;
+    }
+
     triggeredIdxFd = open(cfg.TriggeredIdxPath, O_RDONLY);
     if (triggeredIdxFd < 0) {
         return triggeredIdxFd;
@@ -373,32 +375,25 @@ void BatteryMitigationService::BrownoutEventThread() {
     struct timeval eventReceivedTime;
     struct timeval statStoredTime;
     struct epoll_event events[EPOLL_MAXEVENTS];
-    struct BrownoutStatsExtend *brownoutStatsExtendHead;
+    struct BrownoutStatsExtend brownoutStatsExtend;
     size_t brownoutStatsSize = sizeof(struct brownout_stats);
+    size_t brownoutStatsExtendSize = sizeof(struct BrownoutStatsExtend);
     bool stopByEvent = false;
     /* BrownoutEventThread store multiple brownout event (BROWNOUT_EVENT_BUF_SIZE)
      * and each event contains several dumps (DUMP_TIMES).
      */
     int brownoutEventCounter = 0;
 
-    if (initThisMeal() != 0) {
-        LOG(DEBUG) << "failed to init thismeal.bin";
-        tearDownBrownoutEventThread();
-        return;
-    }
     if (initFd() != 0) {
         LOG(DEBUG) << "failed to init FD";
         tearDownBrownoutEventThread();
         return;
     }
-    brownoutStatsExtendHead = (struct BrownoutStatsExtend *)storingAddr;
 
     /* allow epoll_wait sleep in the first loop */
     read(triggeredIdxFd, buf, BUF_SIZE);
 
     while (!threadStop.load()) {
-        struct BrownoutStatsExtend *brownoutStatsExtendEventHead = brownoutStatsExtendHead + \
-                                                                   (brownoutEventCounter * DUMP_TIMES);
         requestedFd = epoll_wait(triggeredIdxEpollFd, events, EPOLL_MAXEVENTS, -1);
         if (requestedFd <= 0) {
             /* ensure epoll_wait can sleep in the next loop */
@@ -420,7 +415,6 @@ void BatteryMitigationService::BrownoutEventThread() {
 
         /* record brownout event idx and received time */
         gettimeofday(&eventReceivedTime, NULL);
-        brownoutStatsExtendEventHead->eventReceivedTime = eventReceivedTime;
         lseek(triggeredIdxFd, 0, SEEK_SET);
         if (read(triggeredIdxFd, buf, BUF_SIZE) == -1) {
             continue;
@@ -429,31 +423,33 @@ void BatteryMitigationService::BrownoutEventThread() {
         if (triggeredIdx >= TRIGGERED_SOURCE_MAX || triggeredIdx < 0) {
             continue;
         }
-        brownoutStatsExtendEventHead->eventIdx = triggeredIdx;
 
         /* dump brownout related stats */
         std::string stats;
         for (int i = 0; i < DUMP_TIMES; i++) {
-            struct BrownoutStatsExtend *brownoutStatsExtend = brownoutStatsExtendEventHead + i;
-
-            /* kernel needs time to prepare brownoutstats for userland to do mmap */
-            std::this_thread::sleep_for(std::chrono::milliseconds(STATS_PREPARATION_MS));
+            memset(&brownoutStatsExtend, 0 , brownoutStatsExtendSize);
 
             /* storing by string due the stats msg too complicate */
             if (ReadFileToString(cfg.FvpStatsPath, &stats)) {
-                snprintf(brownoutStatsExtend->fvpStats, FVP_STATS_SIZE, "%s", stats.c_str());
+                snprintf(brownoutStatsExtend.fvpStats, FVP_STATS_SIZE, "%s", stats.c_str());
             }
 
             /* storing numericStats */
-            readNumericStats(brownoutStatsExtend);
+            readNumericStats(&brownoutStatsExtend);
 
             /* storing brownoutStats */
             lseek(brownoutStatsFd, 0, SEEK_SET);
-            read(brownoutStatsFd, &brownoutStatsExtend->brownoutStats, brownoutStatsSize);
+            read(brownoutStatsFd, &brownoutStatsExtend.brownoutStats, brownoutStatsSize);
             gettimeofday(&statStoredTime, NULL);
-            brownoutStatsExtend->dumpTime = statStoredTime;
-            brownoutStatsExtend->eventReceivedTime = eventReceivedTime;
-            brownoutStatsExtend->eventIdx = triggeredIdx;
+            brownoutStatsExtend.dumpTime = statStoredTime;
+            brownoutStatsExtend.eventReceivedTime = eventReceivedTime;
+            brownoutStatsExtend.eventIdx = triggeredIdx;
+
+            /* write to file */
+            lseek(storingFd,
+                  brownoutStatsExtendSize * (brownoutEventCounter * DUMP_TIMES + i), SEEK_SET);
+            write(storingFd, &brownoutStatsExtend, brownoutStatsExtendSize);
+            fsync(storingFd);
         }
 
         if (++brownoutEventCounter == BROWNOUT_EVENT_BUF_SIZE) {
@@ -497,16 +493,25 @@ void readLPFChannelNames(const char *odpmEnabledRailsPath, char **lpfChannelName
         free(line);
 }
 
-int getMainPmicID(const std::string &mainPmicNamePath, const std::string &mainPmicName) {
+int getMainPmicID(const std::string &mainPmicNamePath, const std::string &subPmicNamePath) {
     std::string content;
     int ret = 0;
+    int mainPmicVer, subPmicVer;
 
     if (!ReadFileToString(mainPmicNamePath, &content)) {
         LOG(DEBUG) << "Failed to open " << mainPmicNamePath << " set device0 as main pmic";
         return ret;
     }
+    /* ODPM pmic name: s2mpgXX-odpm */
+    mainPmicVer = atoi(content.substr(5, 2).c_str());
 
-    if (content.compare(mainPmicName) != 0) {
+    if (!ReadFileToString(subPmicNamePath, &content)) {
+        LOG(DEBUG) << "Failed to open " << subPmicNamePath << " set device0 as main pmic";
+        return ret;
+    }
+    subPmicVer = atoi(content.substr(5, 2).c_str());
+
+    if (mainPmicVer > subPmicVer) {
         ret = 1;
     }
 
@@ -524,10 +529,7 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
     close(brownoutStatsFd);
     close(triggeredIdxEpollFd);
     close(wakeupEventFd);
-    if (storingAddr != nullptr) {
-        munmap(storingAddr, sizeof(struct BrownoutStatsExtend) * DUMP_TIMES * \
-               BROWNOUT_EVENT_BUF_SIZE);
-    }
+    close(storingFd);
     threadStop.store(true);
     freeLpfChannelNames(mainLpfChannelNames);
     freeLpfChannelNames(subLpfChannelNames);
@@ -537,7 +539,7 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
 void BatteryMitigationService::initPmicRelated() {
     mainPmicID = 0;
     mainPmicID = getMainPmicID(cfg.PmicCommon[mainPmicID].PmicNamePath,
-                               cfg.PlatformSpecific[platformIdx].MainPmicName);
+                               cfg.PmicCommon[subPmicID].PmicNamePath);
     subPmicID = !mainPmicID;
 
     /* read odpm resolutions and channel names */
@@ -556,7 +558,7 @@ void printUTC(FILE *fp, struct timespec time, const char *stat) {
     if (strlen(stat) > 0) {
         fprintf(fp, "%s: ", stat);
     }
-    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d_%H:%M:%S", std::localtime(&time.tv_sec));
+    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d %H:%M:%S", std::localtime(&time.tv_sec));
     fprintf(fp, "%s.%09ld",timeBuff, time.tv_nsec);
 }
 
@@ -568,7 +570,7 @@ void printUTC(FILE *fp, timeval time, const char *stat) {
     if (strlen(stat) > 0) {
         fprintf(fp, "%s: ", stat);
     }
-    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d_%H:%M:%S", std::localtime(&time.tv_sec));
+    std::strftime(timeBuff, BUF_SIZE, "%Y-%m-%d %H:%M:%S", std::localtime(&time.tv_sec));
     /* convert usec to nsec */
     fprintf(fp, "%s.%06ld000",timeBuff, time.tv_usec);
 }
@@ -877,6 +879,7 @@ void setMinNumericStat(const char *statName, int *minValue,
 
 void initBrownoutStatsCSVRow(struct BrownoutStatsCSVRow *row) {
     memset(row, 0, sizeof(struct BrownoutStatsCSVRow));
+    row->min_battery_soc = INT_MAX;
     row->min_battery_cycle = INT_MAX;
     row->min_voltage_now = INT_MAX;
     row->min_cpu0_freq = INT_MAX;
@@ -895,14 +898,7 @@ bool readBrownoutStatsExtend(const char *storingPath,
         return false;
     }
 
-    size_t memSize = sizeof(struct BrownoutStatsExtend) * DUMP_TIMES * BROWNOUT_EVENT_BUF_SIZE;
     size_t logFileSize = lseek(fd, 0, SEEK_END);
-    if (memSize != logFileSize) {
-        LOG(DEBUG) << storingPath << " size not match";
-        close(fd);
-        return false;
-    }
-
     char *logFileAddr = (char *) mmap(NULL, logFileSize, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
 
@@ -942,6 +938,10 @@ void BatteryMitigationService::getBrownoutStatsCSVRow(
                 }
             }
         }
+        /* min_battery_soc */
+        setMinNumericStat("battery_soc",
+                          &row->min_battery_soc,
+                          brownoutStatsExtendPerEvent[i].numericStats);
         /* max_battery_temp */
         setMaxNumericStat("battery_temp",
                           &row->max_battery_temp,
@@ -1016,19 +1016,13 @@ bool BatteryMitigationService::genLastmealCSV(const char *parsedMealCSVPath) {
         return false;
 
     /* print csv fields */
-    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,",
-            brownoutStatsCSVFields.triggered_time,
-            brownoutStatsCSVFields.triggered_idx,
-            brownoutStatsCSVFields.battery_temp,
-            brownoutStatsCSVFields.battery_cycle,
-            brownoutStatsCSVFields.voltage_now,
-            brownoutStatsCSVFields.current_now,
-            brownoutStatsCSVFields.cpu0_freq,
-            brownoutStatsCSVFields.cpu1_freq,
-            brownoutStatsCSVFields.cpu2_freq,
-            brownoutStatsCSVFields.gpu_freq,
-            brownoutStatsCSVFields.tpu_freq,
-            brownoutStatsCSVFields.aur_freq);
+    fprintf(fp, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,", brownoutStatsCSVFields.triggered_time,
+            brownoutStatsCSVFields.triggered_idx, brownoutStatsCSVFields.battery_soc,
+            brownoutStatsCSVFields.battery_temp, brownoutStatsCSVFields.battery_cycle,
+            brownoutStatsCSVFields.voltage_now, brownoutStatsCSVFields.current_now,
+            brownoutStatsCSVFields.cpu0_freq, brownoutStatsCSVFields.cpu1_freq,
+            brownoutStatsCSVFields.cpu2_freq, brownoutStatsCSVFields.gpu_freq,
+            brownoutStatsCSVFields.tpu_freq, brownoutStatsCSVFields.aur_freq);
     for (int c = 1; c <= METER_CHANNEL_MAX; c++) {
         fprintf(fp, "%s%02d,", brownoutStatsCSVFields.odpm_prefix, c);
     }
@@ -1042,6 +1036,7 @@ bool BatteryMitigationService::genLastmealCSV(const char *parsedMealCSVPath) {
         printUTC(fp, row->triggered_time, "");
         fprintf(fp, ",");
         fprintf(fp, "%d,", row->triggered_idx);
+        fprintf(fp, "%d,", row->min_battery_soc);
         fprintf(fp, "%d,", row->max_battery_temp);
         fprintf(fp, "%d,", row->min_battery_cycle);
         fprintf(fp, "%d,", row->min_voltage_now);
@@ -1053,10 +1048,10 @@ bool BatteryMitigationService::genLastmealCSV(const char *parsedMealCSVPath) {
         fprintf(fp, "%d,", row->min_tpu_freq);
         fprintf(fp, "%d,", row->min_aur_freq);
         for (int c = 0; c < METER_CHANNEL_MAX; c++) {
-            fprintf(fp, "%.2f,", row->max_main_odpm_instant_power[c]);
+            fprintf(fp, "%d,", int(row->max_main_odpm_instant_power[c] * 1000));
         }
         for (int c = 0; c < METER_CHANNEL_MAX; c++) {
-            fprintf(fp, "%.2f,", row->max_sub_odpm_instant_power[c]);
+            fprintf(fp, "%d,", int(row->max_sub_odpm_instant_power[c] * 1000));
         }
         fprintf(fp, "\n");
     }
