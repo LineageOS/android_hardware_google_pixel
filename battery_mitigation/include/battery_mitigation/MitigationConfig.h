@@ -67,6 +67,7 @@ class MitigationConfig {
     struct EventThreadConfig {
         const std::vector<numericSysfs> NumericSysfsStatPaths;
         const std::vector<numericSysfs> NumericSysfsStatDirs;
+        const char *const BrownoutStatsEnablePath;
         const char *const TriggeredIdxPath;
         const char *const triggeredStatePath[MAX_EVENT];
         const char *const BrownoutStatsPath;
