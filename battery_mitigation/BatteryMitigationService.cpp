@@ -224,17 +224,6 @@ void BatteryMitigationService::tearDownTriggerEventThread() {
     }
 }
 
-int getMmapAddr(int &fd, const char *const path, size_t memSize, char **addr) {
-    fd = open(path, O_RDWR | O_CREAT, (mode_t) 0644);
-    if (fd < 0) {
-        return fd;
-    }
-    lseek(fd, memSize - 1, SEEK_SET);
-    write(fd,  "", 1);
-    *addr = (char *)mmap(NULL, memSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    return 0;
-}
-
 int BatteryMitigationService::initTrigFd() {
     int ret;
     struct epoll_event trigEvent[MAX_EVENT];
@@ -936,7 +925,13 @@ bool readBrownoutStatsExtend(const char *storingPath,
         close(fd);
         return false;
     }
-    char *logFileAddr = (char *) mmap(NULL, logFileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+
+    void *logFileAddr = mmap(NULL, logFileSize, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (logFileAddr == MAP_FAILED) {
+        LOG(INFO) << "Error mm apping file: " << strerror(errno);
+        close(fd);
+        return false;
+    }
     close(fd);
     memcpy(brownoutStatsExtends, logFileAddr, logFileSize);
     munmap(logFileAddr, logFileSize);
