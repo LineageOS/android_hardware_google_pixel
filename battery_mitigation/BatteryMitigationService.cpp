@@ -22,6 +22,7 @@ namespace google {
 namespace pixel {
 
 using android::base::ReadFileToString;
+using android::base::WriteStringToFile;
 using android::base::StartsWith;
 using android::hardware::google::pixel::MitigationConfig;
 
@@ -56,14 +57,6 @@ BatteryMitigationService::~BatteryMitigationService() {
     tearDownTriggerEventThread();
 }
 
-bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
-    if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
-        access(cfg.BrownoutStatsPath, F_OK) == 0) {
-        return true;
-    }
-    return false;
-}
-
 bool readSysfsToInt(const std::string &path, int *val) {
     std::string file_contents;
 
@@ -88,6 +81,39 @@ bool readSysfsToDouble(const std::string &path, double *val) {
         return false;
     }
     return true;
+}
+
+bool readSysfsToInt(const char *path, int *val) {
+    std::string strPath = path;
+    return readSysfsToInt(strPath, val);
+}
+
+bool readSysfsToDouble(const char *path, double *val) {
+    std::string strPath = path;
+    return readSysfsToDouble(strPath, val);
+}
+
+bool WriteStringToFile(const std::string& content, const char *path) {
+    std::string strPath = path;
+    return WriteStringToFile(content, strPath);
+}
+
+bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
+    int isEnabled;
+    if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
+        access(cfg.BrownoutStatsPath, F_OK) == 0 &&
+        access(cfg.BrownoutStatsEnablePath, F_OK) == 0) {
+        if (!WriteStringToFile("1", cfg.BrownoutStatsEnablePath)) {
+            return false;
+        }
+        if (!readSysfsToInt(cfg.BrownoutStatsEnablePath, &isEnabled)) {
+            return false;
+        }
+        if (isEnabled) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int getFilesInDir(const char *directory, std::vector<std::string> *files) {
@@ -533,7 +559,10 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
     threadStop.store(true);
     freeLpfChannelNames(mainLpfChannelNames);
     freeLpfChannelNames(subLpfChannelNames);
-
+    /* disable br_stats */
+    if (!WriteStringToFile("0", cfg.BrownoutStatsEnablePath)) {
+        LOG(ERROR) << "failed to disable br_stats";
+    }
 }
 
 void BatteryMitigationService::initPmicRelated() {
@@ -891,7 +920,8 @@ void initBrownoutStatsCSVRow(struct BrownoutStatsCSVRow *row) {
 }
 
 bool readBrownoutStatsExtend(const char *storingPath,
-                             struct BrownoutStatsExtend *brownoutStatsExtends) {
+                             struct BrownoutStatsExtend *brownoutStatsExtends,
+                             size_t brownoutStatsExtendsSize) {
     int fd = open(storingPath, O_RDONLY);
     if (fd < 0) {
         LOG(DEBUG) << "Failed to open " << storingPath;
@@ -899,9 +929,15 @@ bool readBrownoutStatsExtend(const char *storingPath,
     }
 
     size_t logFileSize = lseek(fd, 0, SEEK_END);
+    if (logFileSize == 0 ||
+        brownoutStatsExtendsSize < logFileSize ||
+        brownoutStatsExtendsSize % logFileSize != 0) {
+        LOG(ERROR) << "invalid size of thismeal.bin";
+        close(fd);
+        return false;
+    }
     char *logFileAddr = (char *) mmap(NULL, logFileSize, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
-
     memcpy(brownoutStatsExtends, logFileAddr, logFileSize);
     munmap(logFileAddr, logFileSize);
 
@@ -992,7 +1028,9 @@ bool BatteryMitigationService::genLastmealCSV(const char *parsedMealCSVPath) {
     }
 
     struct BrownoutStatsExtend brownoutStatsExtends[BROWNOUT_EVENT_BUF_SIZE][DUMP_TIMES];
-    if (!readBrownoutStatsExtend(cfg.StoringPath, brownoutStatsExtends[0])) {
+    if (!readBrownoutStatsExtend(cfg.StoringPath,
+                                 brownoutStatsExtends[0],
+                                 sizeof(brownoutStatsExtends))) {
         return false;
     }
 
@@ -1063,7 +1101,9 @@ bool BatteryMitigationService::genLastmealCSV(const char *parsedMealCSVPath) {
 bool BatteryMitigationService::isTimeValid(const char *storingPath,
                                            std::chrono::system_clock::time_point startTime) {
     struct BrownoutStatsExtend brownoutStatsExtends[BROWNOUT_EVENT_BUF_SIZE][DUMP_TIMES];
-    if (!readBrownoutStatsExtend(storingPath, brownoutStatsExtends[0])) {
+    if (!readBrownoutStatsExtend(storingPath,
+                                 brownoutStatsExtends[0],
+                                 sizeof(brownoutStatsExtends))) {
         return false;
     }
     time_t sec =
@@ -1086,7 +1126,9 @@ bool BatteryMitigationService::parseBrownoutStatsExtend(FILE *fp) {
         return false;
     }
     struct BrownoutStatsExtend brownoutStatsExtends[BROWNOUT_EVENT_BUF_SIZE][DUMP_TIMES];
-    if (!readBrownoutStatsExtend(cfg.StoringPath, brownoutStatsExtends[0])) {
+    if (!readBrownoutStatsExtend(cfg.StoringPath,
+                                 brownoutStatsExtends[0],
+                                 sizeof(brownoutStatsExtends))) {
         return false;
     }
 
