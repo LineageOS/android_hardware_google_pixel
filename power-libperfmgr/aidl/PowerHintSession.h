@@ -61,7 +61,7 @@ struct AppHintDesc {
     const int32_t tgid;
     const int32_t uid;
     nanoseconds targetNs;
-    int pidSetPoint;
+    int pidControlVariable;
     // status
     std::atomic<bool> is_active;
     // pid
@@ -98,7 +98,7 @@ class PowerHintSession : public BnPowerHintSession {
 
   private:
     void tryToSendPowerHint(std::string hint);
-    void updatePidSetPoint(int pidSetPoint, bool updateVote = true);
+    void updatePidControlVariable(int pidControlVariable, bool updateVote = true);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
     // Data
     sp<PowerSessionManager> mPSManager;
