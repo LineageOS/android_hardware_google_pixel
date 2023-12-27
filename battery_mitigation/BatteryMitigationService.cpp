@@ -918,9 +918,12 @@ bool readBrownoutStatsExtend(const char *storingPath,
     }
 
     size_t logFileSize = lseek(fd, 0, SEEK_END);
-    if (logFileSize == 0 ||
-        brownoutStatsExtendsSize < logFileSize ||
-        brownoutStatsExtendsSize % logFileSize != 0) {
+    if (logFileSize == 0) {
+        LOG(INFO) << "no brownout stats in thismeal.bin";
+        close(fd);
+        return false;
+    }
+    if (brownoutStatsExtendsSize < logFileSize) {
         LOG(ERROR) << "invalid size of thismeal.bin";
         close(fd);
         return false;
