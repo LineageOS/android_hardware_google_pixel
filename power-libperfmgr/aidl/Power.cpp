@@ -275,20 +275,9 @@ ndk::ScopedAStatus Power::createHintSession(int32_t tgid, int32_t uid,
                                             const std::vector<int32_t> &threadIds,
                                             int64_t durationNanos,
                                             std::shared_ptr<IPowerHintSession> *_aidl_return) {
-    if (!HintManager::GetInstance()->GetAdpfProfile() ||
-        HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs <= 0) {
-        *_aidl_return = nullptr;
-        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-    }
-    if (threadIds.size() == 0) {
-        LOG(ERROR) << "Error: threadIds.size() shouldn't be " << threadIds.size();
-        *_aidl_return = nullptr;
-        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
-    }
-    std::shared_ptr<IPowerHintSession> session =
-            ndk::SharedRefBase::make<PowerHintSession>(tgid, uid, threadIds, durationNanos);
-    *_aidl_return = session;
-    return ndk::ScopedAStatus::ok();
+    SessionConfig config;
+    return createHintSessionWithConfig(tgid, uid, threadIds, durationNanos, SessionTag::OTHER,
+                                       &config, _aidl_return);
 }
 
 ndk::ScopedAStatus Power::getHintSessionPreferredRate(int64_t *outNanoseconds) {
@@ -304,10 +293,22 @@ ndk::ScopedAStatus Power::getHintSessionPreferredRate(int64_t *outNanoseconds) {
 
 ndk::ScopedAStatus Power::createHintSessionWithConfig(
         int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds, int64_t durationNanos,
-        SessionTag, SessionConfig *config, std::shared_ptr<IPowerHintSession> *_aidl_return) {
-    auto out = createHintSession(tgid, uid, threadIds, durationNanos, _aidl_return);
+        SessionTag tag, SessionConfig *config, std::shared_ptr<IPowerHintSession> *_aidl_return) {
+    if (!HintManager::GetInstance()->GetAdpfProfile() ||
+        HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs <= 0) {
+        *_aidl_return = nullptr;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
+    if (threadIds.size() == 0) {
+        LOG(ERROR) << "Error: threadIds.size() shouldn't be " << threadIds.size();
+        *_aidl_return = nullptr;
+        return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+    }
+    std::shared_ptr<IPowerHintSession> session =
+            ndk::SharedRefBase::make<PowerHintSession>(tgid, uid, threadIds, durationNanos, tag);
+    *_aidl_return = session;
     static_cast<PowerHintSession *>(_aidl_return->get())->getSessionConfig(config);
-    return out;
+    return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Power::getSessionChannel(int32_t, int32_t, ChannelConfig *_aidl_return) {
