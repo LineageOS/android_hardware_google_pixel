@@ -55,7 +55,8 @@ enum class FormulaOption : uint32_t {
     WEIGHTED_AVG,
     MAXIMUM,
     MINIMUM,
-    USE_ML_MODEL
+    USE_ML_MODEL,
+    USE_LINEAR_MODEL
 };
 
 template <typename T>

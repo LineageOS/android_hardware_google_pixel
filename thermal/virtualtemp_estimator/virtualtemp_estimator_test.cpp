@@ -98,16 +98,21 @@ static std::vector<std::string> get_input_combination(std::string_view thermal_c
 
 static int run_random_input_inference(std::string_view model_path,
                                       std::string_view thermal_config_path, int min_inference_count,
-                                      int inference_delay_sec) {
+                                      int inference_delay_sec, int prev_samples_order) {
     float output;
     unsigned long prev_log_time = 0;
     thermal::vtestimator::VtEstimatorStatus ret;
     std::vector<std::string> input_combination = get_input_combination(thermal_config_path.data());
     int input_size = input_combination.size();
-    thermal::vtestimator::VirtualTempEstimator vt_estimator_(input_size);
+    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
+                                                             input_size);
+    ::thermal::vtestimator::VtEstimationInitData init_data;
+    init_data.ml_model_init_data.model_path = model_path;
+    init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
+    init_data.ml_model_init_data.use_prev_samples = (prev_samples_order > 1) ? true : false;
 
     std::cout << "Initialize estimator\n";
-    ret = vt_estimator_.Initialize(model_path.data());
+    ret = vt_estimator_.Initialize(init_data);
     if (ret != thermal::vtestimator::kVtEstimatorOk) {
         std::cout << "Failed to Initialize estimator (ret: " << ret << ")\n";
         return -1;
@@ -176,7 +181,7 @@ static int run_random_input_inference(std::string_view model_path,
     return 0;
 }
 
-static int run_single_inference(std::string_view model_path, char *input) {
+static int run_single_inference(std::string_view model_path, char *input, int prev_samples_order) {
     if (!input) {
         std::cout << "input is nullptr" << std::endl;
         return -1;
@@ -205,10 +210,15 @@ static int run_single_inference(std::string_view model_path, char *input) {
 
     float output;
     thermal::vtestimator::VtEstimatorStatus ret;
-    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermistors.size());
+    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
+                                                             thermistors.size());
+    ::thermal::vtestimator::VtEstimationInitData init_data;
+    init_data.ml_model_init_data.model_path = model_path;
+    init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
+    init_data.ml_model_init_data.use_prev_samples = (prev_samples_order > 1) ? true : false;
 
     std::cout << "Initialize estimator\n";
-    ret = vt_estimator_.Initialize(model_path.data());
+    ret = vt_estimator_.Initialize(init_data);
     if (ret != thermal::vtestimator::kVtEstimatorOk) {
         std::cout << "Failed to Initialize estimator (ret: " << ret << ")\n";
         return -1;
@@ -226,7 +236,8 @@ static int run_single_inference(std::string_view model_path, char *input) {
 }
 
 static int run_batch_process(std::string_view model_path, std::string_view thermal_config_path,
-                             const char *input_file, const char *output_file) {
+                             const char *input_file, const char *output_file,
+                             int prev_samples_order) {
     if (!input_file || !output_file) {
         std::cout << "input and output files required for batch process\n";
         return -1;
@@ -240,10 +251,15 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
     }
 
     thermal::vtestimator::VtEstimatorStatus ret;
-    thermal::vtestimator::VirtualTempEstimator vt_estimator_(input_combination.size());
+    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
+                                                             input_combination.size());
+    ::thermal::vtestimator::VtEstimationInitData init_data;
+    init_data.ml_model_init_data.model_path = model_path;
+    init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
+    init_data.ml_model_init_data.use_prev_samples = (prev_samples_order > 1) ? true : false;
 
     std::cout << "Initialize estimator\n";
-    ret = vt_estimator_.Initialize(model_path.data());
+    ret = vt_estimator_.Initialize(init_data);
     if (ret != thermal::vtestimator::kVtEstimatorOk) {
         std::cout << "Failed to Initialize estimator (ret: " << ret << ")\n";
         return -1;
@@ -331,6 +347,7 @@ void print_usage() {
     message += "-o : output file (mode 1) \n";
     message += "-d : delay between inferences in seconds (mode 2) \n";
     message += "-c : inference count (mode 2)";
+    message += "-s : prev_samples_order";
 
     std::cout << message << std::endl;
 }
@@ -341,8 +358,9 @@ int main(int argc, char *argv[]) {
     std::string model_path, thermal_config_path;
     int min_inference_count = -1;
     int inference_delay_sec = 0;
+    int prev_samples_order = 1;
 
-    while ((c = getopt(argc, argv, "hm:p:i:c:o:d:t:")) != -1) switch (c) {
+    while ((c = getopt(argc, argv, "hm:p:i:c:o:d:t:s:")) != -1) switch (c) {
             case 'm':
                 mode = atoi(optarg);
                 std::cout << "mode: " << mode << std::endl;
@@ -350,6 +368,10 @@ int main(int argc, char *argv[]) {
             case 'p':
                 model_path = optarg;
                 std::cout << "model_path: " << model_path << std::endl;
+                break;
+            case 's':
+                prev_samples_order = atoi(optarg);
+                std::cout << "prev_samples_order: " << prev_samples_order << std::endl;
                 break;
             case 't':
                 thermal_config_path = optarg;
@@ -394,14 +416,15 @@ int main(int argc, char *argv[]) {
     int ret = -1;
     switch (mode) {
         case 0:
-            ret = run_single_inference(model_path, input);
+            ret = run_single_inference(model_path, input, prev_samples_order);
             break;
         case 1:
-            ret = run_batch_process(model_path, thermal_config_path, input, output);
+            ret = run_batch_process(model_path, thermal_config_path, input, output,
+                                    prev_samples_order);
             break;
         case 2:
             ret = run_random_input_inference(model_path, thermal_config_path, min_inference_count,
-                                             inference_delay_sec);
+                                             inference_delay_sec, prev_samples_order);
             break;
         default:
             std::cout << "unsupported mode" << std::endl;
