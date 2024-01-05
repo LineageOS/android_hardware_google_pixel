@@ -296,6 +296,7 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
             std::vector<float> model_inputs;
             float model_output;
             int num_inputs = input_combination.size();
+            constexpr int kCelsius2mC = 1000;
 
             for (int j = 0; j < num_inputs; ++j) {
                 std::string input_name = input_combination[j];
@@ -309,7 +310,7 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
                     std::cout << "Failed to parse value_str : " << value_str << " to float\n";
                 }
 
-                model_inputs.push_back(value);
+                model_inputs.push_back(value * kCelsius2mC);
             }
 
             ret = vt_estimator_.Estimate(model_inputs, &model_output);
@@ -317,6 +318,8 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
                 std::cout << "Failed to run estimator (ret: " << ret << ")\n";
                 return -1;
             }
+
+            model_output /= kCelsius2mC;
 
             model_vt_outputs[std::to_string(i)] = std::to_string(model_output);
         }
