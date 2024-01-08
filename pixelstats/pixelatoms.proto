@@ -1826,6 +1826,14 @@ message GpuEvent {
       MALI_PM_TIMEOUT = 13;
       MALI_CSF_RESET_OK = 14;
       MALI_CSF_RESET_FAILED = 15;
+      MALI_TILER_OOM = 16;
+      MALI_PROGRESS_TIMER = 17;
+      MALI_CS_ERROR = 18;
+      MALI_FW_ERROR = 19;
+      MALI_PMODE_EXIT_TIMEOUT = 20;
+      MALI_PMODE_ENTRY_FAILURE = 21;
+      MALI_GPU_PAGE_FAULT = 22;
+      MALI_MMU_AS_ACTIVE_STUCK = 23;
     }
 
     /* Vendor reverse domain name (expecting "com.google.pixel"). */
