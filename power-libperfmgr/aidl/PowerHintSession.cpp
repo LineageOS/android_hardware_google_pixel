@@ -353,6 +353,15 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
                                 duration_cast<nanoseconds>(mDescriptor->targetNs *
                                                            adpfConfig->mStaleTimeFactor / 2.0));
             break;
+        case SessionHint::GPU_LOAD_UP:
+            // TODO(kevindubois): add impl
+            break;
+        case SessionHint::GPU_LOAD_DOWN:
+            // TODO(kevindubois): add impl
+            break;
+        case SessionHint::GPU_LOAD_RESET:
+            // TODO(kevindubois): add impl
+            break;
         default:
             ALOGE("Error: hint is invalid");
             return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
