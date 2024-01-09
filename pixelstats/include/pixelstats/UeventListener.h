@@ -142,7 +142,24 @@ class UeventListener {
                     {"CSF_RESET_OK",
                      PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSF_RESET_OK},
                     {"CSF_RESET_FAILED", PixelAtoms::GpuEvent::GpuEventInfo::
-                                                 GpuEvent_GpuEventInfo_MALI_CSF_RESET_FAILED}};
+                                                 GpuEvent_GpuEventInfo_MALI_CSF_RESET_FAILED},
+                    {"TILER_OOM",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_TILER_OOM},
+                    {"PROGRESS_TIMER",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_PROGRESS_TIMER},
+                    {"CS_ERROR",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CS_ERROR},
+                    {"FW_ERROR",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_FW_ERROR},
+                    {"PMODE_EXIT_TIMEOUT", PixelAtoms::GpuEvent::GpuEventInfo::
+                                                   GpuEvent_GpuEventInfo_MALI_PMODE_EXIT_TIMEOUT},
+                    {"PMODE_ENTRY_FAILURE", PixelAtoms::GpuEvent::GpuEventInfo::
+                                                    GpuEvent_GpuEventInfo_MALI_PMODE_ENTRY_FAILURE},
+                    {"GPU_PAGE_FAULT",
+                     PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_GPU_PAGE_FAULT},
+                    {"MMU_AS_ACTIVE_STUCK",
+                     PixelAtoms::GpuEvent::GpuEventInfo::
+                             GpuEvent_GpuEventInfo_MALI_MMU_AS_ACTIVE_STUCK}};
 
     const std::unordered_map<std::string,
                              PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType>
