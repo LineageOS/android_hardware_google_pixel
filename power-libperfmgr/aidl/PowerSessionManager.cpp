@@ -342,7 +342,8 @@ void PowerSessionManager::disableBoosts(int64_t sessionId) {
         // sessValPtr->disableBoosts();
         for (auto vid :
              {AdpfHintType::ADPF_CPU_LOAD_UP, AdpfHintType::ADPF_CPU_LOAD_RESET,
-              AdpfHintType::ADPF_CPU_LOAD_RESUME, AdpfHintType::ADPF_VOTE_POWER_EFFICIENCY}) {
+              AdpfHintType::ADPF_CPU_LOAD_RESUME, AdpfHintType::ADPF_VOTE_POWER_EFFICIENCY,
+              AdpfHintType::ADPF_GPU_LOAD_UP, AdpfHintType::ADPF_GPU_LOAD_RESET}) {
             auto vint = static_cast<std::underlying_type_t<AdpfHintType>>(vid);
             sessValPtr->votes->setUseVote(vint, false);
         }

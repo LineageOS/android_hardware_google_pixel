@@ -32,7 +32,10 @@ enum class AdpfHintType : int32_t {
     ADPF_CPU_LOAD_UP = 2,
     ADPF_CPU_LOAD_RESET = 3,
     ADPF_CPU_LOAD_RESUME = 4,
-    ADPF_VOTE_POWER_EFFICIENCY = 5
+    ADPF_VOTE_POWER_EFFICIENCY = 5,
+    ADPF_GPU_LOAD_UP = 6,
+    ADPF_GPU_LOAD_DOWN = 7,
+    ADPF_GPU_LOAD_RESET = 8,
 };
 
 constexpr int kUclampMin{0};
