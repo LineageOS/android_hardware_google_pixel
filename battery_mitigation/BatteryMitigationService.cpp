@@ -51,10 +51,10 @@ BatteryMitigationService::BatteryMitigationService(
 }
 
 BatteryMitigationService::~BatteryMitigationService() {
-    stopEventThread(threadStop, wakeupEventFd, brownoutEventThread);
-    tearDownBrownoutEventThread();
-    stopEventThread(triggerThreadStop, triggeredStateWakeupEventFd, eventThread);
-    tearDownTriggerEventThread();
+    stopEventThread(threadStop, wakeupEventFd, brownoutEventThread,
+                    &BatteryMitigationService::tearDownBrownoutEventThread);
+    stopEventThread(triggerThreadStop, triggeredStateWakeupEventFd, eventThread,
+                    &BatteryMitigationService::tearDownTriggerEventThread);
 }
 
 bool readSysfsToInt(const std::string &path, int *val) {
@@ -99,18 +99,32 @@ bool WriteStringToFile(const std::string& content, const char *path) {
 }
 
 bool BatteryMitigationService::isBrownoutStatsBinarySupported() {
-    int isEnabled;
     if (access(cfg.TriggeredIdxPath, F_OK) == 0 &&
         access(cfg.BrownoutStatsPath, F_OK) == 0 &&
         access(cfg.BrownoutStatsEnablePath, F_OK) == 0) {
-        if (!WriteStringToFile("1", cfg.BrownoutStatsEnablePath)) {
+        return true;
+    }
+    return false;
+}
+
+bool BatteryMitigationService::enableBrownoutStatsBinary(bool enable) {
+    int isEnabled;
+    if (isBrownoutStatsBinarySupported()) {
+        if (!WriteStringToFile(enable ? "1" : "0", cfg.BrownoutStatsEnablePath)) {
             return false;
         }
         if (!readSysfsToInt(cfg.BrownoutStatsEnablePath, &isEnabled)) {
             return false;
         }
         if (isEnabled) {
+            LOG(INFO) << "br_stats is on";
+        } else {
+            LOG(INFO) << "br_stats is off";
+        }
+        if (isEnabled == enable) {
             return true;
+        } else {
+            return false;
         }
     }
     return false;
@@ -193,16 +207,18 @@ int BatteryMitigationService::readNumericStats(struct BrownoutStatsExtend *brown
     return i;
 }
 
-
 void BatteryMitigationService::startBrownoutEventThread() {
-    if (isBrownoutStatsBinarySupported()) {
+    if (isBrownoutStatsBinarySupported() && enableBrownoutStatsBinary(true)) {
+        threadStop.store(false);
         brownoutEventThread = std::thread(&BatteryMitigationService::BrownoutEventThread, this);
+        triggerThreadStop.store(false);
         eventThread = std::thread(&BatteryMitigationService::TriggerEventThread, this);
     }
 }
 
 void BatteryMitigationService::stopEventThread(std::atomic_bool &thread_stop, int wakeup_event_fd,
-                                               std::thread &event_thread) {
+                                               std::thread &event_thread,
+                                               void (BatteryMitigationService::*tearDown)()) {
     if (!thread_stop.load()) {
         thread_stop.store(true);
         uint64_t flag = 1;
@@ -212,6 +228,7 @@ void BatteryMitigationService::stopEventThread(std::atomic_bool &thread_stop, in
         if (event_thread.joinable()) {
             event_thread.join();
         }
+        (this->*tearDown)();
     }
 }
 
@@ -303,6 +320,10 @@ void BatteryMitigationService::TriggerEventThread() {
         read(triggeredStateFd[idx], buf, BUF_SIZE);
     }
 
+    if (!triggerThreadStop.load()) {
+        LOG(INFO) << "Start TriggerEventThread";
+    }
+
     while (!triggerThreadStop.load()) {
         requestedFd = epoll_wait(triggeredStateEpollFd, events, EPOLL_MAXEVENTS, -1);
         if (requestedFd <= 0) {
@@ -333,6 +354,7 @@ void BatteryMitigationService::TriggerEventThread() {
             /* b/299700579 handle wakeupEvent here if we need to do something after this loop */
         }
     }
+    LOG(INFO) << "Stop TriggerEventThread";
 }
 
 int BatteryMitigationService::initFd() {
@@ -408,6 +430,10 @@ void BatteryMitigationService::BrownoutEventThread() {
     /* allow epoll_wait sleep in the first loop */
     read(triggeredIdxFd, buf, BUF_SIZE);
 
+    if (!threadStop.load()) {
+        LOG(INFO) << "Start BrownoutEventThread";
+    }
+
     while (!threadStop.load()) {
         requestedFd = epoll_wait(triggeredIdxEpollFd, events, EPOLL_MAXEVENTS, -1);
         if (requestedFd <= 0) {
@@ -471,6 +497,7 @@ void BatteryMitigationService::BrownoutEventThread() {
             brownoutEventCounter = 0;
         }
     }
+    LOG(INFO) << "Stop BrownoutEventThread";
 }
 
 void readLPFPowerBitResolutions(const char *odpmDir, double *bitResolutions) {
@@ -549,7 +576,7 @@ void BatteryMitigationService::tearDownBrownoutEventThread() {
     freeLpfChannelNames(mainLpfChannelNames);
     freeLpfChannelNames(subLpfChannelNames);
     /* disable br_stats */
-    if (!WriteStringToFile("0", cfg.BrownoutStatsEnablePath)) {
+    if (!enableBrownoutStatsBinary(false)) {
         LOG(ERROR) << "failed to disable br_stats";
     }
 }
