@@ -122,8 +122,9 @@ class BatteryMitigationService : public RefBase {
 
     void startBrownoutEventThread();
     void stopEventThread(std::atomic_bool &thread_stop, int wakeup_event_fd,
-                         std::thread &event_thread);
+                         std::thread &event_thread, void (BatteryMitigationService::*tearDown)());
     bool isBrownoutStatsBinarySupported();
+    bool enableBrownoutStatsBinary(bool);
     bool isPlatformSupported();
     bool isTimeValid(const char*, std::chrono::system_clock::time_point);
     bool genParsedMeal(const char*);
@@ -136,13 +137,13 @@ class BatteryMitigationService : public RefBase {
     int triggeredStateEpollFd;
     int triggeredStateWakeupEventFd;
     std::thread eventThread;
-    std::atomic_bool triggerThreadStop{false};
+    std::atomic_bool triggerThreadStop{true};
     int brownoutStatsFd;
     int triggeredIdxFd;
     int triggeredIdxEpollFd;
     int wakeupEventFd;
     std::thread brownoutEventThread;
-    std::atomic_bool threadStop{false};
+    std::atomic_bool threadStop{true};
 
     int mainPmicID;
     int subPmicID;
