@@ -50,12 +50,16 @@ class SessionTaskMap {
     void addVote(int64_t sessionId, int voteId, int uclampMin, int uclampMax,
                  std::chrono::steady_clock::time_point startTime,
                  std::chrono::nanoseconds durationNs);
+    void addGpuVote(int64_t sessionId, Cycles capacity,
+                    std::chrono::steady_clock::time_point startTime,
+                    std::chrono::nanoseconds durationNs);
 
     // Find session id and run callback on session value, linked tasks
-    std::shared_ptr<SessionValueEntry> findSession(int64_t sessionId);
+    std::shared_ptr<SessionValueEntry> findSession(int64_t sessionId) const;
 
     void getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::time_point timeNow,
                           int *uclampMin, int *uclampmax) const;
+    Cycles getSessionsGpuCapacity(std::chrono::steady_clock::time_point time_point) const;
 
     // Find session ids given a task id if it exists
     std::vector<int64_t> getSessionIds(pid_t taskId) const;

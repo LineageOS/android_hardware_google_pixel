@@ -164,7 +164,7 @@ size_t Votes::size() const {
     return mCpuVotes.size() + mGpuVotes.size();
 }
 
-bool Votes::voteIsActive(int voteId) {
+bool Votes::voteIsActive(int voteId) const {
     if (isGpuVote(voteId)) {
         auto const itr = mGpuVotes.find(voteId);
         if (itr == mGpuVotes.end()) {
@@ -180,7 +180,7 @@ bool Votes::voteIsActive(int voteId) {
     return itr->second.active();
 }
 
-std::chrono::steady_clock::time_point Votes::voteTimeout(int voteId) {
+std::chrono::steady_clock::time_point Votes::voteTimeout(int voteId) const {
     if (isGpuVote(voteId)) {
         auto const itr = mGpuVotes.find(voteId);
         if (itr == mGpuVotes.end()) {

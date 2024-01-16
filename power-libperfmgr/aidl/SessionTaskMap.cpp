@@ -58,7 +58,19 @@ void SessionTaskMap::addVote(int64_t sessionId, int voteId, int uclampMin, int u
                                     CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
 }
 
-std::shared_ptr<SessionValueEntry> SessionTaskMap::findSession(int64_t sessionId) {
+void SessionTaskMap::addGpuVote(int64_t sessionId, Cycles capacity,
+                                std::chrono::steady_clock::time_point startTime,
+                                std::chrono::nanoseconds durationNs) {
+    auto sessItr = mSessions.find(sessionId);
+    if (sessItr == mSessions.end()) {
+        return;
+    }
+
+    sessItr->second.val->votes->add(static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY),
+                                    GpuVote(true, startTime, durationNs, capacity));
+}
+
+std::shared_ptr<SessionValueEntry> SessionTaskMap::findSession(int64_t sessionId) const {
     auto sessItr = mSessions.find(sessionId);
     if (sessItr == mSessions.end()) {
         return nullptr;
@@ -82,6 +94,17 @@ void SessionTaskMap::getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::t
     }
     *uclampMin = uclampRange.uclampMin;
     *uclampMax = uclampRange.uclampMax;
+}
+
+Cycles SessionTaskMap::getSessionsGpuCapacity(
+        std::chrono::steady_clock::time_point time_point) const {
+    Cycles max(0);
+    for (auto const &session : mTasks) {
+        for (auto const &vote : session.second) {
+            max = std::max(max, vote->votes->getGpuCapacityRequest(time_point).value_or(Cycles(0)));
+        }
+    }
+    return max;
 }
 
 std::vector<int64_t> SessionTaskMap::getSessionIds(pid_t taskId) const {
