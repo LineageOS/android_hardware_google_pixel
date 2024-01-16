@@ -84,12 +84,17 @@ string getI2cClientPath(const string hsi2cPath, const string devName, const stri
     dp = opendir(i2cPathPartial.c_str());
     if (dp != NULL) {
         struct dirent *ep;
+        string i2cClientDevice = strBusNumber + "-" + clientId;
 
         while ((ep = readdir(dp))) {
             if (ep->d_type == DT_DIR) {
                 if (string::npos != string(ep->d_name).find(devName)) {
                     closedir(dp);
                     return string(i2cPathPartial + "/" + devName + "/");
+                }
+                if (string::npos != string(ep->d_name).find(i2cClientDevice)) {
+                    closedir(dp);
+                    return i2cPathPartial + "/" + i2cClientDevice + "/";
                 }
             }
         }
