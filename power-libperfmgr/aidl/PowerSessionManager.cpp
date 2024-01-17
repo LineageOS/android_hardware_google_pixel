@@ -247,7 +247,7 @@ void PowerSessionManager::pause(int64_t sessionId) {
         }
         sessValPtr->isActive = false;
     }
-    applyUclamp(sessionId, std::chrono::steady_clock::now());
+    applyCpuAndGpuVotes(sessionId, std::chrono::steady_clock::now());
     updateUniversalBoostMode();
 }
 
@@ -266,7 +266,7 @@ void PowerSessionManager::resume(int64_t sessionId) {
         }
         sessValPtr->isActive = true;
     }
-    applyUclamp(sessionId, std::chrono::steady_clock::now());
+    applyCpuAndGpuVotes(sessionId, std::chrono::steady_clock::now());
     updateUniversalBoostMode();
 }
 
@@ -310,9 +310,8 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uc
         scheduleTimeout = shouldScheduleTimeout(*session->votes, voteIdInt, timeoutDeadline),
         session->votes->add(voteIdInt, CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
         session->lastUpdatedTime = startTime;
+        applyUclampLocked(sessionId, startTime);
     }
-
-    applyUclamp(sessionId, startTime);  // std::chrono::steady_clock::now());
 
     if (scheduleTimeout) {
         mEventSessionTimeoutWorker.schedule(
@@ -337,9 +336,8 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, Cycles
         scheduleTimeout = shouldScheduleTimeout(*session->votes, voteIdInt, timeoutDeadline),
         session->votes->add(voteIdInt, GpuVote(true, startTime, durationNs, capacity));
         session->lastUpdatedTime = startTime;
+        applyGpuVotesLocked(sessionId, startTime);
     }
-
-    applyUclamp(sessionId, startTime);
 
     if (scheduleTimeout) {
         mEventSessionTimeoutWorker.schedule(
@@ -425,16 +423,16 @@ void PowerSessionManager::handleEvent(const EventSessionTimeout &eventTimeout) {
     // It is important to use the correct time here, time now is more reasonable
     // than trying to use the event's timestamp which will be slightly off given
     // the background priority queue introduces latency
-    applyUclamp(eventTimeout.sessionId, tNow);
+    applyCpuAndGpuVotes(eventTimeout.sessionId, tNow);
     updateUniversalBoostMode();
 }
 
-void PowerSessionManager::applyUclamp(int64_t sessionId,
-                                      std::chrono::steady_clock::time_point timePoint) {
+void PowerSessionManager::applyUclampLocked(int64_t sessionId,
+                                            std::chrono::steady_clock::time_point timePoint) {
     const bool uclampMinOn = HintManager::GetInstance()->GetAdpfProfile()->mUclampMinOn;
 
     {
-        std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
+        // TODO(kevindubois) un-indent this in followup patch to reduce churn.
         auto sessValPtr = mSessionTaskMap.findSession(sessionId);
         if (nullptr == sessValPtr) {
             return;
@@ -467,6 +465,36 @@ void PowerSessionManager::applyUclamp(int64_t sessionId,
     }
 }
 
+void PowerSessionManager::applyGpuVotesLocked(int64_t sessionId,
+                                              std::chrono::steady_clock::time_point timePoint) {
+    auto const sessValPtr = mSessionTaskMap.findSession(sessionId);
+    if (!sessValPtr) {
+        return;
+    }
+
+    auto const gpuVotingOn = HintManager::GetInstance()->GetAdpfProfile()->mGpuBoostOn;
+    if (mGpuCapacityNode && gpuVotingOn) {
+        auto const capacity = mSessionTaskMap.getSessionsGpuCapacity(timePoint);
+        (*mGpuCapacityNode)->set_gpu_capacity(capacity);
+    }
+
+    sessValPtr->lastUpdatedTime = timePoint;
+}
+
+void PowerSessionManager::applyCpuAndGpuVotes(int64_t sessionId,
+                                              std::chrono::steady_clock::time_point timePoint) {
+    std::lock_guard lock(mSessionTaskMapMutex);
+    applyUclampLocked(sessionId, timePoint);
+    applyGpuVotesLocked(sessionId, timePoint);
+}
+
+std::optional<Frequency> PowerSessionManager::gpuFrequency() const {
+    if (mGpuCapacityNode) {
+        return (*mGpuCapacityNode)->gpu_frequency();
+    }
+    return {};
+}
+
 void PowerSessionManager::forceSessionActive(int64_t sessionId, bool isActive) {
     {
         std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
@@ -480,7 +508,7 @@ void PowerSessionManager::forceSessionActive(int64_t sessionId, bool isActive) {
     // As currently written, call needs to occur synchronously so as to ensure
     // that the SessionId remains valid and mapped to the proper threads/tasks
     // which enables apply u clamp to work correctly
-    applyUclamp(sessionId, std::chrono::steady_clock::now());
+    applyCpuAndGpuVotes(sessionId, std::chrono::steady_clock::now());
     updateUniversalBoostMode();
 }
 
