@@ -303,6 +303,7 @@ class VibratorTest : public Test {
         EXPECT_CALL(*mMockApi, setMinOnOffInterval(_)).Times(times);
         EXPECT_CALL(*mMockApi, getHapticAlsaDevice(_, _)).Times(times);
         EXPECT_CALL(*mMockApi, setHapticPcmAmp(_, _, _, _)).Times(times);
+        EXPECT_CALL(*mMockApi, isPassthroughI2sHapticSupported()).Times(times);
         EXPECT_CALL(*mMockApi, enableDbc()).Times(times);
 
         EXPECT_CALL(*mMockApi, debug(_)).Times(times);
@@ -339,9 +340,11 @@ TEST_F(VibratorTest, Constructor) {
     std::unique_ptr<MockApi> mockapi;
     std::unique_ptr<MockCal> mockcal;
     std::unique_ptr<MockStats> mockstats;
-    std::string f0Val = std::to_string(std::rand());
-    std::string redcVal = std::to_string(std::rand());
-    std::string qVal = std::to_string(std::rand());
+    int min_val = 0xC8000;
+    int max_val = 0x7FC000;
+    std::string f0Val = std::to_string(std::rand() % (max_val - min_val + 1) + min_val);
+    std::string redcVal = std::to_string(std::rand() % (max_val - min_val + 1) + min_val);
+    std::string qVal = std::to_string(std::rand() % (max_val - min_val + 1) + min_val);
     uint32_t calVer;
     uint32_t supportedPrimitivesBits = 0x0;
     Expectation volGet;
@@ -384,6 +387,7 @@ TEST_F(VibratorTest, Constructor) {
     EXPECT_CALL(*mMockCal, isRedcCompEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*mMockApi, setRedcCompEnable(true)).WillOnce(Return(true));
 
+    EXPECT_CALL(*mMockApi, isPassthroughI2sHapticSupported()).WillOnce(Return(false));
     EXPECT_CALL(*mMockCal, isChirpEnabled()).WillOnce(Return(true));
     EXPECT_CALL(*mMockCal, getSupportedPrimitives(_))
             .InSequence(supportedPrimitivesSeq)

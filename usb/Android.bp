@@ -20,7 +20,7 @@ package {
 
 cc_library_static {
     name: "libpixelusb",
-    vendor_available: true,
+    vendor: true,
     export_include_dirs: [
         "hidl/include",
         "include",
@@ -45,10 +45,15 @@ cc_library_static {
         "libhidlbase",
         "libutils",
         "libbinder_ndk",
+        "pixelatoms-cpp",
         "android.hardware.usb.gadget@1.0",
         "android.hardware.thermal@1.0",
         "android.hardware.thermal@2.0",
         "android.hardware.thermal-V1-ndk"
+    ],
+
+    export_shared_lib_headers: [
+        "pixelatoms-cpp",
     ],
 
     static_libs: [
@@ -58,7 +63,7 @@ cc_library_static {
 
 cc_library_static {
     name: "libpixelusb-aidl",
-    vendor_available: true,
+    vendor: true,
     export_include_dirs: [
         "aidl/include",
         "include",
@@ -81,10 +86,15 @@ cc_library_static {
         "libbinder",
         "libcutils",
         "libutils",
+        "pixelatoms-cpp",
         "android.hardware.usb.gadget-V1-ndk",
         "android.hardware.thermal@1.0",
         "android.hardware.thermal@2.0",
         "android.hardware.thermal-V1-ndk"
+    ],
+
+    export_shared_lib_headers: [
+        "pixelatoms-cpp",
     ],
 
     static_libs: [
@@ -94,6 +104,7 @@ cc_library_static {
 
 cc_fuzz {
     name: "libpixelusb_gadgetutils_fuzzer",
+    vendor: true,
 
     srcs:[
         "UsbGadgetUtils_fuzz.cpp"

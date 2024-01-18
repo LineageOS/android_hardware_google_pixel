@@ -112,6 +112,10 @@ message Atom {
       VendorAudioAdaptedInfoStatsReported vendor_audio_adapted_info_stats_reported = 105058;
       GpuEvent gpu_event = 105059;
       VendorAudioPcmStatsReported vendor_audio_pcm_stats_reported = 105060;
+      VendorUsbDataSessionEvent vendor_usb_data_session_event = 105061;
+      ThermalSensorAbnormalityDetected thermal_sensor_abnormality_detected = 105062;
+      VendorAudioOffloadedEffectStatsReported vendor_audio_offloaded_effect_stats_reported = 105063;
+      VendorAudioBtMediaStatsReported vendor_audio_bt_media_stats_reported = 105064;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -1514,6 +1518,7 @@ message BrownoutDetected {
         SMPL_WARN = 1;
         UVLO2 = 2;
         BATOILO = 3;
+        BATOILO2 = 4;
     }
 
     enum BrownoutReason {
@@ -1989,4 +1994,112 @@ message VendorAudioPcmStatsReported {
   optional int32 pcm_open_latency_avg_ms_per_day = 3;
   /* Total active count of the pcm type per day. */
   optional int32 pcm_active_counts_per_day = 4;
+}
+
+/**
+  * Keep track of information about a USB data session, which is defined
+  * as the period when a port enters a data role (either host or device) to
+  * when the port exits the data role.
+  */
+message VendorUsbDataSessionEvent {
+  /* Vendor reverse domain name (expecting "com.google.pixel") */
+  optional string reverse_domain_name = 1;
+
+  enum UsbDataRole {
+    USB_ROLE_UNKNOWN = 0;
+    USB_ROLE_DEVICE = 1;
+    USB_ROLE_HOST = 2;
+  }
+  /**
+    * USB device states are key milestones in a USB connection.
+    * For device data role, a typical transition would be like:
+    * not attached -> default -> addressed -> configured.
+    * For host data role, a typical transition would be like
+    * not attached -> powered -> default -> addressed -> configured.
+    */
+  enum UsbDeviceState {
+    USB_STATE_UNKNOWN = 0;
+    USB_STATE_NOT_ATTACHED = 1;
+    USB_STATE_ATTACHED = 2;
+    USB_STATE_POWERED = 3;
+    USB_STATE_DEFAULT = 4;
+    USB_STATE_ADDRESSED = 5;
+    USB_STATE_CONFIGURED = 6;
+    USB_STATE_SUSPENDED = 7;
+  }
+  /* USB data role of the data session. */
+  optional UsbDataRole usb_role = 2;
+  /* Usb device state transitions during the data session. */
+  repeated UsbDeviceState usb_states = 3;
+  /**
+    * Elapsed time from the start of the data session when entering the
+    * state, mapped 1-1 to the usb_states field.
+    */
+  repeated int64 elapsed_time_ms = 4;
+  // Duration of the data session.
+  optional int64 duration_ms = 5;
+}
+
+/*
+ * Logs the thermal sensor abnormal event when detected.
+ * Logged from:
+ *    virtual sensors: hardware/google/pixel/thermal/utils/thermal_stats_helper.cpp
+ *    thermistors & SoC: hardware/google/pixel/pixelstats/UeventListener.cpp
+ */
+message ThermalSensorAbnormalityDetected {
+  enum AbnormalityType {
+    UNKNOWN = 0;
+    SENSOR_STUCK = 1;
+    EXTREME_HIGH_TEMP = 2;
+    EXTREME_LOW_TEMP = 3;
+    HIGH_RISING_SPEED = 4;
+    TEMP_READ_FAIL = 5;
+  }
+
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+  /* Type of Thermal Sensor Abnormality */
+  optional AbnormalityType type = 2;
+  /* Name of the problematic sensor */
+  optional string sensor = 3;
+  /* Abnormal temp reading of sensor */
+  optional int32 temp = 4;
+}
+
+/**
+ * Logs the reported vendor audio offloaded effects usage stats.
+ */
+message VendorAudioOffloadedEffectStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* UUID most significant bit */
+  optional int64 effect_uuid_msb = 2;
+
+  /* UUID least significant bit */
+  optional int64 effect_uuid_lsb = 3;
+
+  /* Active seconds per day. */
+  optional int32 effect_active_seconds_per_day = 4;
+}
+
+/*
+ * Logs the Bluetooth Audio stats.
+ * Two stats are recorded, count and duration (in ms) per features.
+ */
+message VendorAudioBtMediaStatsReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum Codec {
+    UNKNOWN = 0;
+    SBC = 1;
+    AAC = 2;
+    OPUS = 3;
+    LC3 = 4;
+  }
+  /* Codec to record. */
+  optional Codec bt_codec_type = 2;
+  /* Total active seconds to record. */
+  optional int32 active_seconds_per_day = 3;
 }

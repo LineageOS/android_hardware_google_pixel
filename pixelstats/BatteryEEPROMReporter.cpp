@@ -38,6 +38,7 @@ using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
 
 #define LINESIZE 71
 #define LINESIZE_V2 31
+#define LINESIZE_MAX17201_HIST 80
 
 BatteryEEPROMReporter::BatteryEEPROMReporter() {}
 
@@ -58,7 +59,6 @@ void BatteryEEPROMReporter::checkAndReport(const std::shared_ptr<IStats> &stats_
         ALOGE("Unable to read %s - %s", path.c_str(), strerror(errno));
         return;
     }
-    ALOGD("checkAndReport: %s", file_contents.c_str());
 
     int16_t i, num;
     struct BatteryHistory hist;
@@ -267,6 +267,112 @@ void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_cli
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report BatteryEEPROM to Stats service");
+}
+
+void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client,
+                                               const std::string &path) {
+    struct BatteryHistory gmsr;
+    std::string file_contents;
+    int16_t num;
+
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read gmsr path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    gmsr.checksum = 0xFFFF;
+    if (path.find("max77779") == std::string::npos) {
+        num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
+                     "\nfullcaprep\t:%4" SCNx16 "\ncycles\t:%4" SCNx16 "\nfullcapnom\t:%4" SCNx16
+                     "\nqresidual00\t:%4" SCNx16 "\nqresidual10\t:%4" SCNx16
+                     "\nqresidual20\t:%4" SCNx16 "\nqresidual30\t:%4" SCNx16
+                     "\ncv_mixcap\t:%4" SCNx16 "\nhalftime\t:%4" SCNx16,
+                     &gmsr.rcomp0, &gmsr.tempco, &gmsr.full_rep, &gmsr.cycle_cnt, &gmsr.full_cap,
+                     &gmsr.max_vbatt, &gmsr.min_vbatt, &gmsr.max_ibatt, &gmsr.min_ibatt,
+                     &gmsr.esr, &gmsr.rslow);
+        if (num != kNum77759GMSRFields) {
+            ALOGE("Couldn't process 77759GMSR. num=%d\n", num);
+            return;
+        }
+    } else {
+        num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
+                     "\nfullcaprep\t:%4" SCNx16 "\ncycles\t:%4" SCNx16 "\nfullcapnom\t:%4" SCNx16,
+                     &gmsr.rcomp0, &gmsr.tempco, &gmsr.full_rep, &gmsr.cycle_cnt, &gmsr.full_cap);
+        if (num != kNum77779GMSRFields) {
+            ALOGE("Couldn't process 77779GMSR. num=%d\n", num);
+            return;
+        }
+    }
+
+    reportEvent(stats_client, gmsr);
+}
+
+void BatteryEEPROMReporter::checkAndReportMaxfgHistory(const std::shared_ptr<IStats> &stats_client,
+                                                       const std::string &path) {
+    std::string file_contents;
+    int16_t i;
+
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGD("Unable to read maxfg_hist path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    std::string hist_each;
+    const int kHistTotalLen = file_contents.size();
+
+    ALOGD("checkAndReportMaxfgHistory:size=%d\n%s", kHistTotalLen, file_contents.c_str());
+
+    for (i = 0; i < kHistTotalLen; i++) {
+        struct BatteryHistory maxfg_hist;
+        uint16_t nQRTable00, nQRTable10, nQRTable20, nQRTable30, nCycles, nFullCapNom;
+        uint16_t nRComp0, nTempCo, nIAvgEmpty, nFullCapRep, nVoltTemp, nMaxMinCurr, nMaxMinVolt;
+        uint16_t nMaxMinTemp, nSOC, nTimerH;
+        int16_t num;
+        size_t hist_offset = i * LINESIZE_MAX17201_HIST;
+
+        if (hist_offset >= file_contents.size())
+            break;
+
+        hist_each = file_contents.substr(hist_offset, LINESIZE_MAX17201_HIST);
+        num = sscanf(hist_each.c_str(), "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16
+                     "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16
+                     "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16 "%4" SCNx16,
+                     &nQRTable00, &nQRTable10, &nQRTable20, &nQRTable30, &nCycles, &nFullCapNom,
+                     &nRComp0, &nTempCo, &nIAvgEmpty, &nFullCapRep, &nVoltTemp, &nMaxMinCurr,
+                     &nMaxMinVolt, &nMaxMinTemp, &nSOC, &nTimerH);
+
+        if (num != kNum17201HISTFields) {
+            ALOGE("Couldn't process %s (num=%d)", hist_each.c_str(), num);
+            continue;
+        }
+
+        /* not assign: nQRTable00, nQRTable10, nQRTable20, nQRTable30 */
+        maxfg_hist.reserve = 0xFF;
+        maxfg_hist.tempco = nTempCo;
+        maxfg_hist.rcomp0 = nRComp0;
+        maxfg_hist.full_rep = nFullCapNom;
+        maxfg_hist.full_cap = nFullCapRep;
+        maxfg_hist.cycle_cnt = nCycles * 16 / 100; // LSB: 16%;
+        maxfg_hist.timer_h = (nTimerH * 32 / 10) / 24; // LSB: 3.2 hours
+        maxfg_hist.batt_soc = (nSOC >> 8) & 0x00FF;
+        maxfg_hist.msoc = nSOC & 0x00FF;
+        maxfg_hist.max_ibatt = ((nMaxMinCurr >> 8) & 0x00FF) * 80;
+        maxfg_hist.min_ibatt = (nMaxMinCurr & 0x00FF) * 80 * (-1);
+        maxfg_hist.max_vbatt = ((nMaxMinVolt >> 8) & 0x00FF) * 20;
+        maxfg_hist.min_vbatt = (nMaxMinVolt & 0x00FF) * 20;
+        maxfg_hist.max_temp = (nMaxMinTemp >> 8) & 0x00FF;
+        maxfg_hist.min_temp = nMaxMinTemp & 0x00FF;
+        maxfg_hist.esr = nIAvgEmpty;
+        maxfg_hist.rslow = nVoltTemp;
+
+        reportEvent(stats_client, maxfg_hist);
+    }
 }
 
 }  // namespace pixel

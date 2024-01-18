@@ -56,8 +56,6 @@ void AdpfConfig::dumpToFd(int fd) {
     dump_buf << "UclampMin_High: " << mUclampMinHigh << "\n";
     dump_buf << "UclampMin_Low: " << mUclampMinLow << "\n";
     dump_buf << "ReportingRateLimitNs: " << mReportingRateLimitNs << "\n";
-    dump_buf << "EarlyBoost_On: " << mEarlyBoostOn << "\n";
-    dump_buf << "EarlyBoost_TimeFactor: " << mEarlyBoostTimeFactor << "\n";
     dump_buf << "TargetTimeFactor: " << mTargetTimeFactor << "\n";
     dump_buf << "StaleTimeFactor: " << mStaleTimeFactor << "\n";
     if (!android::base::WriteStringToFd(dump_buf.str(), fd)) {

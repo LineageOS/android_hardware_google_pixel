@@ -18,7 +18,6 @@
 
 #include <sstream>
 
-#define MAX_BROWNOUT_DATA_AGE_MINUTES 5
 #define ONE_SECOND_IN_US 1000000
 
 namespace android {
@@ -26,9 +25,11 @@ namespace hardware {
 namespace google {
 namespace pixel {
 
+using android::base::ReadFileToString;
+
 BatteryMitigation::BatteryMitigation(const struct MitigationConfig::Config &cfg) {
-        mThermalMgr = &MitigationThermalManager::getInstance();
-        mThermalMgr->updateConfig(cfg);
+    mThermalMgr = &MitigationThermalManager::getInstance();
+    mThermalMgr->updateConfig(cfg);
 }
 
 bool BatteryMitigation::isMitigationLogTimeValid(std::chrono::system_clock::time_point startTime,
@@ -36,7 +37,7 @@ bool BatteryMitigation::isMitigationLogTimeValid(std::chrono::system_clock::time
                                                  const char *const timestampFormat,
                                                  const std::regex pattern) {
     std::string logFile;
-    if (!android::base::ReadFileToString(logFilePath, &logFile)) {
+    if (!ReadFileToString(logFilePath, &logFile)) {
         return false;
     }
     std::istringstream content(logFile);
@@ -66,7 +67,7 @@ bool BatteryMitigation::isMitigationLogTimeValid(std::chrono::system_clock::time
             auto delta = epoch_startTime - epoch_logFileTime;
             auto delta_minutes = delta / 60;
 
-            if ((delta_minutes < MAX_BROWNOUT_DATA_AGE_MINUTES) && (delta_minutes >= 0)) {
+            if (delta_minutes >= 0) {
                 return true;
             }
         }

@@ -24,6 +24,7 @@ cc_library {
         "disp-power/DisplayLowPower.cpp",
         "disp-power/InteractionHandler.cpp",
     ],
+    cpp_std: "gnu++20",
     shared_libs: [
         "libbase",
         "libcutils",
@@ -41,14 +42,49 @@ cc_library_headers {
     export_include_dirs: ["hidl"],
 }
 
+cc_test {
+    name: "libadpf_test",
+    defaults: ["android.hardware.power-ndk_static"],
+    proprietary: true,
+    vendor: true,
+    require_root: true,
+    srcs: [
+        "aidl/tests/BackgroundWorkerTest.cpp",
+        "aidl/tests/PowerHintSessionTest.cpp",
+        "aidl/tests/SessionTaskMapTest.cpp",
+        "aidl/tests/UClampVoterTest.cpp",
+        "aidl/BackgroundWorker.cpp",
+        "aidl/PowerHintSession.cpp",
+        "aidl/PowerSessionManager.cpp",
+        "aidl/SessionTaskMap.cpp",
+        "aidl/SessionValueEntry.cpp",
+        "aidl/UClampVoter.cpp",
+    ],
+    cpp_std: "gnu++20",
+    static_libs: [
+        "libgmock",
+    ],
+    shared_libs: [
+        "liblog",
+        "libbase",
+        "libcutils",
+        "libutils",
+        "libperfmgr",
+        "libbinder_ndk",
+        "libprocessgroup",
+        "pixel-power-ext-V1-ndk",
+    ],
+    test_suites: ["device-tests"],
+}
+
 cc_binary {
     name: "android.hardware.power-service.pixel-libperfmgr",
+    defaults: ["android.hardware.power-ndk_shared"],
     relative_install_path: "hw",
     init_rc: ["aidl/android.hardware.power-service.pixel-libperfmgr.rc"],
     vintf_fragments: ["aidl/android.hardware.power-service.pixel.xml"],
     vendor: true,
     shared_libs: [
-        "android.hardware.power-V4-ndk",
         "libbase",
         "libcutils",
         "liblog",
@@ -58,22 +94,26 @@ cc_binary {
         "libperfmgr",
         "libprocessgroup",
         "pixel-power-ext-V1-ndk",
-        "libprotobuf-cpp-full",
     ],
     srcs: [
+        "aidl/BackgroundWorker.cpp",
         "aidl/service.cpp",
         "aidl/Power.cpp",
         "aidl/PowerExt.cpp",
         "aidl/PowerHintSession.cpp",
         "aidl/PowerSessionManager.cpp",
+        "aidl/UClampVoter.cpp",
+        "aidl/SessionTaskMap.cpp",
+        "aidl/SessionValueEntry.cpp",
     ],
+    cpp_std: "gnu++20",
 }
 
 cc_binary {
     name: "sendhint",
+    defaults: ["android.hardware.power-ndk_shared"],
     vendor: true,
     shared_libs: [
-        "android.hardware.power-V3-ndk",
         "libbase",
         "libcutils",
         "liblog",

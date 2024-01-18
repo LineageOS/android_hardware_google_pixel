@@ -34,6 +34,39 @@ using aidl::android::frameworks::stats::VendorAtomValue;
 
 #define ODPM_MAX_IDX 24
 #define DVFS_MAX_IDX 6
+
+enum CsvIdx {
+    TIMESTAMP_IDX,
+    IRQ_IDX,
+    SOC_IDX,
+    TEMP_IDX,
+    CYCLE_IDX,
+    VOLTAGE_IDX,
+    CURRENT_IDX,
+    DVFS_CHANNEL_0 = 7,
+    ODPM_CHANNEL_0 = 12,
+};
+
+enum Irq {
+    SMPL_WARN,
+    OCP_WARN_CPUCL1,
+    OCP_WARN_CPUCL2,
+    SOFT_OCP_WARN_CPUCL1,
+    SOFT_OCP_WARN_CPUCL2,
+    OCP_WARN_TPU,
+    SOFT_OCP_WARN_TPU,
+    OCP_WARN_GPU,
+    SOFT_OCP_WARN_GPU,
+    PMIC_SOC,
+    UVLO1,
+    UVLO2,
+    BATOILO,
+    BATOILO2,
+    PMIC_120C,
+    PMIC_140C,
+    PMIC_OVERHEAT,
+};
+
 enum Update { kUpdateMax, kUpdateMin };
 
 /**
@@ -43,6 +76,9 @@ class BrownoutDetectedReporter {
   public:
     void logBrownout(const std::shared_ptr<IStats> &stats_client, const std::string &logFilePath,
                      const std::string &brownoutReasonProp);
+    void logBrownoutCsv(const std::shared_ptr<IStats> &stats_client, const std::string &logFilePath,
+                        const std::string &brownoutReasonProp);
+    int brownoutReasonCheck(const std::string &brownoutReasonProp);
 
   private:
     struct BrownoutDetectedInfo {
