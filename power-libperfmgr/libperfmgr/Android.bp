@@ -65,7 +65,7 @@ cc_library {
 cc_test {
     name: "libperfmgr_test",
     defaults: ["libperfmgr_defaults"],
-    static_libs: ["libperfmgr"],
+    static_libs: ["libperfmgr", "libgmock" ],
     srcs: [
         "tests/RequestGroupTest.cc",
         "tests/FileNodeTest.cc",

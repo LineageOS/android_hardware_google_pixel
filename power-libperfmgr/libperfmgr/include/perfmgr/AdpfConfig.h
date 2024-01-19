@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 
 namespace android {
@@ -47,6 +48,9 @@ struct AdpfConfig {
     // Stale control
     double mStaleTimeFactor;
 
+    std::optional<bool> mGpuBoostOn;
+    std::optional<uint64_t> mGpuBoostCapacityMax;
+
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
     int64_t getPidILowDivI();
@@ -57,7 +61,8 @@ struct AdpfConfig {
                bool uclampMinOn, uint32_t uclampMinInit, uint32_t uclampMinHigh,
                uint32_t uclampMinLow, uint64_t samplingWindowP, uint64_t samplingWindowI,
                uint64_t samplingWindowD, int64_t reportingRateLimitNs, double targetTimeFactor,
-               double staleTimeFactor)
+               double staleTimeFactor, std::optional<bool> gpuBoostOn,
+               std::optional<uint64_t> gpuBoostCapacityMax)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -77,7 +82,9 @@ struct AdpfConfig {
           mSamplingWindowD(samplingWindowD),
           mReportingRateLimitNs(reportingRateLimitNs),
           mTargetTimeFactor(targetTimeFactor),
-          mStaleTimeFactor(staleTimeFactor) {}
+          mStaleTimeFactor(staleTimeFactor),
+          mGpuBoostOn(gpuBoostOn),
+          mGpuBoostCapacityMax(gpuBoostCapacityMax) {}
 };
 
 }  // namespace perfmgr
