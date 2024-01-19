@@ -126,7 +126,7 @@ class PowerSessionManager : public ::android::RefBase {
           mEventSessionTimeoutWorker([&](auto e) { handleEvent(e); }, mPriorityQueueWorkerPool),
           mGpuCapacityNode(createGpuCapacityNode()) {}
     PowerSessionManager(PowerSessionManager const &) = delete;
-    void operator=(PowerSessionManager const &) = delete;
+    PowerSessionManager &operator=(PowerSessionManager const &) = delete;
 
     std::optional<std::unique_ptr<GpuCapacityNode>> const mGpuCapacityNode;
 };
