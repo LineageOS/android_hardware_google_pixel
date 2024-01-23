@@ -2150,7 +2150,7 @@ message PixelImpulseUsageReported {
   optional int64 usage_start_uptime_millis = 7;
 
   /* Duration of the usage */
-  optional uint64 usage_duration_millis = 8;
+  optional int64 usage_duration_millis = 8;
 
   /* Whether the invocation was successful */
   optional bool success = 9;
