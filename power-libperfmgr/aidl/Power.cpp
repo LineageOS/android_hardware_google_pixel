@@ -91,6 +91,9 @@ Power::Power(std::shared_ptr<DisplayLowPower> dlpw)
         LOG(INFO) << "Initialize with EXPENSIVE_RENDERING on";
         HintManager::GetInstance()->DoHint("EXPENSIVE_RENDERING");
     }
+
+    auto status = this->getInterfaceVersion(&mServiceVersion);
+    LOG(INFO) << "PowerHAL InterfaceVersion:" << mServiceVersion << " isOK: " << status.isOk();
 }
 
 ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
@@ -186,6 +189,27 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
 }
 
 ndk::ScopedAStatus Power::isModeSupported(Mode type, bool *_aidl_return) {
+    switch (mServiceVersion) {
+        case 5:
+            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Mode::AUTOMOTIVE_PROJECTION))
+                break;
+            [[fallthrough]];
+        case 4:
+            [[fallthrough]];
+        case 3:
+            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Mode::GAME_LOADING))
+                break;
+            [[fallthrough]];
+        case 2:
+            [[fallthrough]];
+        case 1:
+            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Mode::CAMERA_STREAMING_HIGH))
+                break;
+            [[fallthrough]];
+        default:
+            *_aidl_return = false;
+            return ndk::ScopedAStatus::ok();
+    }
     bool supported = HintManager::GetInstance()->IsHintSupported(toString(type));
     // LOW_POWER handled insides PowerHAL specifically
     if (type == Mode::LOW_POWER) {
@@ -241,6 +265,23 @@ ndk::ScopedAStatus Power::setBoost(Boost type, int32_t durationMs) {
 }
 
 ndk::ScopedAStatus Power::isBoostSupported(Boost type, bool *_aidl_return) {
+    switch (mServiceVersion) {
+        case 5:
+            [[fallthrough]];
+        case 4:
+            [[fallthrough]];
+        case 3:
+            [[fallthrough]];
+        case 2:
+            [[fallthrough]];
+        case 1:
+            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Boost::CAMERA_SHOT))
+                break;
+            [[fallthrough]];
+        default:
+            *_aidl_return = false;
+            return ndk::ScopedAStatus::ok();
+    }
     bool supported = HintManager::GetInstance()->IsHintSupported(toString(type));
     if (!supported && HintManager::GetInstance()->IsAdpfProfileSupported(toString(type))) {
         supported = true;
