@@ -421,7 +421,8 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
             mFfEffects[effectIndex] = {
                     .type = FF_PERIODIC,
                     .id = -1,
-                    .replay.length = static_cast<uint16_t>(mEffectDurations[effectIndex]),
+                    // Length == 0 to allow firmware control of the duration
+                    .replay.length = 0,
                     .u.periodic.waveform = FF_CUSTOM,
                     .u.periodic.custom_data = mEffectCustomData[effectIndex].data(),
                     .u.periodic.custom_len =
@@ -429,9 +430,9 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
             };
             // Bypass the waveform update due to different input name
             if (INPUT_EVENT_NAME.find("cs40l26") != std::string::npos) {
-                if (!mHwApi->setFFEffect(
-                            &mFfEffects[effectIndex],
-                            static_cast<uint16_t>(mFfEffects[effectIndex].replay.length))) {
+                // Let the firmware control the playback duration to avoid
+                // cutting any effect that is played short
+                if (!mHwApi->setFFEffect(&mFfEffects[effectIndex], mEffectDurations[effectIndex])) {
                     mStatsApi->logError(kHwApiError);
                     ALOGE("Failed upload effect %d (%d): %s", effectIndex, errno, strerror(errno));
                 }
@@ -826,7 +827,8 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
         mStatsApi->logError(kComposeFailError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
-        mFfEffects[WAVEFORM_COMPOSE].replay.length = totalDuration;
+        // Composition duration should be 0 to allow firmware to play the whole effect
+        mFfEffects[WAVEFORM_COMPOSE].replay.length = 0;
         return performEffect(WAVEFORM_MAX_INDEX /*ignored*/, VOLTAGE_SCALE_MAX /*ignored*/, &ch,
                              callback);
     }
@@ -881,6 +883,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const 
     } else if (effectIndex == WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX ||
                effectIndex == WAVEFORM_LONG_VIBRATION_EFFECT_INDEX) {
         /* Update duration for long/short vibration. */
+        // We can pass in the timeout for long/short vibration effects
         mFfEffects[effectIndex].replay.length = static_cast<uint16_t>(timeoutMs);
         if (!mHwApi->setFFEffect(&mFfEffects[effectIndex], static_cast<uint16_t>(timeoutMs))) {
             mStatsApi->logError(kHwApiError);
@@ -1440,6 +1443,7 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
         ALOGE("Total duration is too long (%d)!", totalDuration);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     } else {
+        // For now, let's pass the duration for PWLEs
         mFfEffects[WAVEFORM_PWLE].replay.length = totalDuration;
     }
 
@@ -1738,7 +1742,8 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
     }
 
     *outTimeMs = timeMs;
-    mFfEffects[WAVEFORM_COMPOSE].replay.length = static_cast<uint16_t>(timeMs);
+    // Compositions should have 0 duration
+    mFfEffects[WAVEFORM_COMPOSE].replay.length = 0;
 
     return ndk::ScopedAStatus::ok();
 }

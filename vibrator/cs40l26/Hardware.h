@@ -210,12 +210,11 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
             ALOGE("Invalid ff_effect");
             return false;
         }
-        if (((*effect).replay.length != timeoutMs) || (ioctl(mInputFd, EVIOCSFF, effect) < 0)) {
+        if (ioctl(mInputFd, EVIOCSFF, effect) < 0) {
             ALOGE("setFFEffect fail");
             return false;
         }
-        HWAPI_RECORD(StringPrintf("#%d: %dms", (*effect).id, (*effect).replay.length),
-                     &mInputIoStream);
+        HWAPI_RECORD(StringPrintf("#%d: %dms", (*effect).id, timeoutMs), &mInputIoStream);
         return true;
     }
     bool setFFPlay(int8_t index, bool value) override {
