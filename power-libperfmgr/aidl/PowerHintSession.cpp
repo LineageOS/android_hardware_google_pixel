@@ -129,13 +129,14 @@ AppHintDesc::AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid,
       previous_error(0) {}
 
 PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
-                                   int64_t durationNs)
+                                   int64_t durationNs, SessionTag tag)
     : mPSManager(PowerSessionManager::getInstance()),
       mSessionId(++sSessionIDCounter),
       mIdString(StringPrintf("%" PRId32 "-%" PRId32 "-%" PRId64, tgid, uid, mSessionId)),
       mDescriptor(std::make_shared<AppHintDesc>(mSessionId, tgid, uid,
                                                 std::chrono::nanoseconds(durationNs))),
-      mAppDescriptorTrace(mIdString) {
+      mAppDescriptorTrace(mIdString),
+      mTag(tag) {
     ATRACE_CALL();
     ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
     ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), mDescriptor->is_active.load());
@@ -412,6 +413,10 @@ ndk::ScopedAStatus PowerHintSession::setThreads(const std::vector<int32_t> &thre
 ndk::ScopedAStatus PowerHintSession::getSessionConfig(SessionConfig *_aidl_return) {
     _aidl_return->id = mSessionId;
     return ndk::ScopedAStatus::ok();
+}
+
+SessionTag PowerHintSession::getSessionTag() const {
+    return mTag;
 }
 
 std::string AppHintDesc::toString() const {

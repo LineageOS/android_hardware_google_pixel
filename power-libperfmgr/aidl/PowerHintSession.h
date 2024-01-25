@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
 #include <aidl/android/hardware/power/SessionHint.h>
 #include <aidl/android/hardware/power/SessionMode.h>
+#include <aidl/android/hardware/power/SessionTag.h>
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <utils/Looper.h>
 #include <utils/Thread.h>
@@ -39,6 +40,7 @@ using aidl::android::hardware::power::BnPowerHintSession;
 using aidl::android::hardware::power::SessionConfig;
 using aidl::android::hardware::power::SessionHint;
 using aidl::android::hardware::power::SessionMode;
+using aidl::android::hardware::power::SessionTag;
 using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
@@ -77,7 +79,7 @@ struct AppHintDesc {
 class PowerHintSession : public BnPowerHintSession {
   public:
     explicit PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
-                              int64_t durationNanos);
+                              int64_t durationNanos, SessionTag tag);
     ~PowerHintSession();
     ndk::ScopedAStatus close() override;
     ndk::ScopedAStatus pause() override;
@@ -95,6 +97,7 @@ class PowerHintSession : public BnPowerHintSession {
     // Is hint session for a user application
     bool isAppSession();
     void dumpToStream(std::ostream &stream);
+    SessionTag getSessionTag() const;
 
   private:
     void tryToSendPowerHint(std::string hint);
@@ -115,6 +118,8 @@ class PowerHintSession : public BnPowerHintSession {
     int mLastHintSent = -1;
     // Use the value of the last enum in enum_range +1 as array size
     std::array<bool, enum_size<SessionMode>()> mModes{};
+    // Tag labeling what kind of session this is
+    SessionTag mTag;
 };
 
 }  // namespace pixel
