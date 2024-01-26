@@ -2128,11 +2128,15 @@ message PixelImpulseUsageReported {
 
   enum ApiName {
       API_UNKNOWN = 0;
+      /* Server side */
       API_SERVICE_BIND = 1;
       API_SERVICE_UNBIND = 2;
       API_REGISTER = 3;
       API_UNREGISTER = 4;
       API_CLEAR_APP_DATA = 100;
+      /* Client side */
+      API_SERVER_START = 1001;
+      API_PIXEL_STATE_CHANGE = 1002;
   }
   /* Invoked API name */
   optional ApiName api_name = 4;
@@ -2157,6 +2161,11 @@ message PixelImpulseUsageReported {
 
   enum FailReason {
       FAIL_REASON_UNKNOWN = 0;
+      FAIL_REASON_INVALID_ARGUMENT = 1;
+      FAIL_REASON_UNAUTHORIZED = 2;
+      FAIL_REASON_TIMEOUT = 3;
+      FAIL_REASON_NOT_FOUND = 4;
+      FAIL_REASON_INVALID_STATE = 5;
   }
   /* Fail reason (if success == false) */
   optional FailReason fail_reason = 10;
