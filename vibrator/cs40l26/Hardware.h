@@ -470,9 +470,9 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
     static constexpr int32_t DEFAULT_FREQUENCY_SHIFT = 0;
     static constexpr float DEFAULT_DEVICE_MASS = 0.21;
     static constexpr float DEFAULT_LOC_COEFF = 2.5;
-    static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {1, 100};
-    static constexpr std::array<uint32_t, 2> V_CLICK_DEFAULT = {1, 100};
-    static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {1, 100};
+    static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {5, 95};
+    static constexpr std::array<uint32_t, 2> V_CLICK_DEFAULT = {5, 95};
+    static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {5, 95};
 
   public:
     HwCal() {}
@@ -500,22 +500,19 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         if (getPersist(TICK_VOLTAGES_CONFIG, value)) {
             return true;
         }
-        *value = V_TICK_DEFAULT;
-        return true;
+        return getProperty(TICK_VOLTAGES_CONFIG, value, V_TICK_DEFAULT);
     }
     bool getClickVolLevels(std::array<uint32_t, 2> *value) override {
         if (getPersist(CLICK_VOLTAGES_CONFIG, value)) {
             return true;
         }
-        *value = V_CLICK_DEFAULT;
-        return true;
+        return getProperty(CLICK_VOLTAGES_CONFIG, value, V_CLICK_DEFAULT);
     }
     bool getLongVolLevels(std::array<uint32_t, 2> *value) override {
         if (getPersist(LONG_VOLTAGES_CONFIG, value)) {
             return true;
         }
-        *value = V_LONG_DEFAULT;
-        return true;
+        return getProperty(LONG_VOLTAGES_CONFIG, value, V_LONG_DEFAULT);
     }
     bool isChirpEnabled() override {
         return utils::getProperty("persist.vendor.vibrator.hal.chirp.enabled", false);
