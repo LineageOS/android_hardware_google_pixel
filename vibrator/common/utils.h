@@ -103,6 +103,19 @@ inline Enable_If_Unsigned<T, T> getProperty(const std::string &key, const T def)
     return ::android::base::GetUintProperty(key, def);
 }
 
+template <typename T, size_t N>
+inline std::array<T, N> getProperty(const std::string &key, const std::array<T, N> &def) {
+    std::string value = ::android::base::GetProperty(key, "");
+    if (!value.empty()) {
+        std::array<T, N> result{0};
+        std::stringstream stream{value};
+        utils::unpack(stream, &result);
+        if (stream && stream.eof())
+            return result;
+    }
+    return def;
+}
+
 template <>
 inline bool getProperty<bool>(const std::string &key, const bool def) {
     return ::android::base::GetBoolProperty(key, def);
