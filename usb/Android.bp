@@ -31,6 +31,7 @@ cc_library_static {
         "UsbOverheatEvent.cpp",
         "CommonUtils.cpp",
         "MonitorFfs.cpp",
+        "I2cHelper.cpp",
     ],
 
     cflags: [
@@ -49,7 +50,7 @@ cc_library_static {
         "android.hardware.usb.gadget@1.0",
         "android.hardware.thermal@1.0",
         "android.hardware.thermal@2.0",
-        "android.hardware.thermal-V1-ndk"
+        "android.hardware.thermal-V1-ndk",
     ],
 
     export_shared_lib_headers: [
@@ -58,7 +59,7 @@ cc_library_static {
 
     static_libs: [
         "libthermalutils",
-    ]
+    ],
 }
 
 cc_library_static {
@@ -74,6 +75,7 @@ cc_library_static {
         "UsbOverheatEvent.cpp",
         "CommonUtils.cpp",
         "MonitorFfs.cpp",
+        "I2cHelper.cpp",
     ],
 
     cflags: [
@@ -90,7 +92,7 @@ cc_library_static {
         "android.hardware.usb.gadget-V1-ndk",
         "android.hardware.thermal@1.0",
         "android.hardware.thermal@2.0",
-        "android.hardware.thermal-V1-ndk"
+        "android.hardware.thermal-V1-ndk",
     ],
 
     export_shared_lib_headers: [
@@ -99,15 +101,15 @@ cc_library_static {
 
     static_libs: [
         "libthermalutils",
-    ]
+    ],
 }
 
 cc_fuzz {
     name: "libpixelusb_gadgetutils_fuzzer",
     vendor: true,
 
-    srcs:[
-        "UsbGadgetUtils_fuzz.cpp"
+    srcs: [
+        "UsbGadgetUtils_fuzz.cpp",
     ],
 
     shared_libs: [
