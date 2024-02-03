@@ -53,6 +53,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --set-max-ram-size <-1>         Clear the sw limit max ram size\n";
   std::cerr << "  --set-timertcoffset           Write the time offset value (utc_time - rtc_time)\n";
   std::cerr << "  --set-minrtc                  Write the minimum expected rtc value for tilb\n";
+  std::cerr << "  --set-dsttransition           Write the next dst transition in the current timezone\n";
+  std::cerr << "  --set-dstoffset               Write the time offset during the next dst transition\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -77,6 +79,8 @@ int main(int argc, char** argv) {
     { "set-timertcoffset", required_argument, nullptr, 0},
     { "set-minrtc", required_argument, nullptr, 0},
     { "set-sota-config", no_argument, nullptr, 0 },
+    { "set-dsttransition", required_argument, nullptr, 0},
+    { "set-dstoffset", required_argument, nullptr, 0 },
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -210,6 +214,30 @@ int main(int argc, char** argv) {
         return Usage(argv[0]);
       }
       misc_writer = std::make_unique<MiscWriter>(iter->second);
+    } else if (option_name == "set-dsttransition"s) {
+      long long int dst_transition = strtoll(optarg, NULL, 10);
+      if (0 == dst_transition) {
+        LOG(ERROR) << "Failed to parse the dst transition:" << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteDstTransition,
+                                                     std::to_string(dst_transition));
+    } else if (option_name == "set-dstoffset"s) {
+      int dst_offset;
+      if (!android::base::ParseInt(optarg, &dst_offset)) {
+        LOG(ERROR) << "Failed to parse the dst offset: " << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteDstOffset,
+                                                     std::to_string(dst_offset));
     } else {
       LOG(FATAL) << "Unreachable path, option_name: " << option_name;
     }
