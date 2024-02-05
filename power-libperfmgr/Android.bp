@@ -50,6 +50,7 @@ cc_test {
     require_root: true,
     srcs: [
         "aidl/tests/BackgroundWorkerTest.cpp",
+        "aidl/tests/PhysicalQuantityTypeTest.cpp",
         "aidl/tests/PowerHintSessionTest.cpp",
         "aidl/tests/SessionTaskMapTest.cpp",
         "aidl/tests/UClampVoterTest.cpp",
