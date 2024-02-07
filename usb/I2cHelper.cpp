@@ -43,8 +43,9 @@ static string getI2cBusNumberString(const string hsi2cPath) {
                 // Supposed that there is only one sub dir in the pattern "i2c-"
                 if (string::npos != string(ep->d_name).find("i2c-")) {
                     std::strtok(ep->d_name, "-");
+                    string busNumber = std::strtok(NULL, "-");
                     closedir(dp);
-                    return std::strtok(NULL, "-");
+                    return busNumber;
                 }
             }
         }
@@ -94,12 +95,11 @@ string getI2cClientPath(const string hsi2cPath, const string devName, const stri
                 }
                 if (string::npos != string(ep->d_name).find(i2cClientDevice)) {
                     closedir(dp);
-                    return i2cPathPartial + "/" + i2cClientDevice + "/";
+                    return string(i2cPathPartial + "/" + i2cClientDevice + "/");
                 }
             }
         }
         closedir(dp);
-        return i2cPathPartial + "/" + strBusNumber + "-" + clientId + "/";
     }
 
     ALOGE("Failed to open %s", i2cPathPartial.c_str());
