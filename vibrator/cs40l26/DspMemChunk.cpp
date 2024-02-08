@@ -18,13 +18,32 @@
 
 #include <linux/version.h>
 #include <log/log.h>
+#include <utils/Trace.h>
 
 #include <cmath>
+
+#include "Trace.h"
 
 namespace aidl {
 namespace android {
 namespace hardware {
 namespace vibrator {
+
+#ifdef VIBRATOR_TRACE
+/* Function Trace */
+#define VFTRACE(...)                                                             \
+    ATRACE_NAME(StringPrintf("Vibrator::%s", __func__).c_str());                 \
+    auto f_trace_ = std::make_unique<FunctionTrace>("Vibrator", __func__);       \
+    __VA_OPT__(f_trace_->addParameter(PREPEND_EACH_ARG_WITH_NAME(__VA_ARGS__))); \
+    f_trace_->save()
+/* Effect Trace */
+#define VETRACE(i, s, d, ch)                                    \
+    auto e_trace_ = std::make_unique<EffectTrace>(i, s, d, ch); \
+    e_trace_->save()
+#else
+#define VFTRACE(...) ATRACE_NAME(StringPrintf("Vibrator::%s", __func__).c_str())
+#define VETRACE(...)
+#endif
 
 enum WaveformIndex : uint16_t {
     /* Physical waveform */
@@ -55,6 +74,7 @@ enum WaveformIndex : uint16_t {
 };
 
 DspMemChunk::DspMemChunk(uint8_t type, size_t size) : head(new uint8_t[size]{0x00}) {
+    VFTRACE(type, size);
     waveformType = type;
     _current = head.get();
     _max = _current + size;
@@ -81,6 +101,7 @@ DspMemChunk::DspMemChunk(uint8_t type, size_t size) : head(new uint8_t[size]{0x0
 }
 
 int DspMemChunk::write(int nbits, uint32_t val) {
+    VFTRACE(nbits, val);
     int nwrite;
 
     nwrite = min(24 - _cachebits, nbits);
@@ -108,6 +129,7 @@ int DspMemChunk::write(int nbits, uint32_t val) {
 }
 
 int DspMemChunk::fToU16(float input, uint16_t *output, float scale, float min, float max) {
+    VFTRACE(input, output, scale, min, max);
     if (input < min || input > max)
         return -ERANGE;
 
@@ -117,6 +139,7 @@ int DspMemChunk::fToU16(float input, uint16_t *output, float scale, float min, f
 
 void DspMemChunk::constructPwleSegment(uint16_t delay, uint16_t amplitude, uint16_t frequency,
                                        uint8_t flags, uint32_t vbemfTarget) {
+    VFTRACE(delay, amplitude, frequency, flags, vbemfTarget);
     write(16, delay);
     write(12, amplitude);
     write(12, frequency);
@@ -128,6 +151,7 @@ void DspMemChunk::constructPwleSegment(uint16_t delay, uint16_t amplitude, uint1
 }
 
 int DspMemChunk::flush() {
+    VFTRACE();
     if (!_cachebits)
         return 0;
 
@@ -136,6 +160,7 @@ int DspMemChunk::flush() {
 
 int DspMemChunk::constructComposeSegment(uint32_t effectVolLevel, uint32_t effectIndex,
                                          uint8_t repeat, uint8_t flags, uint16_t nextEffectDelay) {
+    VFTRACE(effectVolLevel, effectIndex, repeat, flags, nextEffectDelay);
     if (waveformType != WAVEFORM_COMPOSE) {
         ALOGE("%s: Invalid type: %d", __func__, waveformType);
         return -EDOM;
@@ -154,6 +179,7 @@ int DspMemChunk::constructComposeSegment(uint32_t effectVolLevel, uint32_t effec
 
 int DspMemChunk::constructActiveSegment(int duration, float amplitude, float frequency,
                                         bool chirp) {
+    VFTRACE(duration, amplitude, frequency, chirp);
     uint16_t delay = 0;
     uint16_t amp = 0;
     uint16_t freq = 0;
@@ -176,6 +202,7 @@ int DspMemChunk::constructActiveSegment(int duration, float amplitude, float fre
 }
 
 int DspMemChunk::constructBrakingSegment(int duration, Braking brakingType) {
+    VFTRACE(duration, brakingType);
     uint16_t delay = 0;
     uint16_t freq = 0;
     uint8_t flags = 0x00;
@@ -197,6 +224,7 @@ int DspMemChunk::constructBrakingSegment(int duration, Braking brakingType) {
 }
 
 int DspMemChunk::updateWLength(uint32_t totalDuration) {
+    VFTRACE(totalDuration);
     uint8_t *f = front();
     if (f == nullptr) {
         ALOGE("%s: head does not exist!", __func__);
@@ -223,6 +251,7 @@ int DspMemChunk::updateWLength(uint32_t totalDuration) {
 }
 
 int DspMemChunk::updateNSection(int segmentIdx) {
+    VFTRACE(segmentIdx);
     uint8_t *f = front();
     if (f == nullptr) {
         ALOGE("%s: head does not exist!", __func__);
