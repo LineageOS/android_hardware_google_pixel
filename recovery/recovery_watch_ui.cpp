@@ -49,6 +49,18 @@ bool ProvisionSilentOtaFlag(const std::string& reason) {
     return true;
 }
 
+/** Call device-specifc WipeEse function, if any. */
+bool WipeEseHook(::RecoveryUI *const ui) {
+    bool *(*WipeEseFunc)(::RecoveryUI *const);
+    reinterpret_cast<void *&>(WipeEseFunc) = dlsym(RTLD_DEFAULT, "WipeEse");
+    if (WipeEseFunc == nullptr) {
+        LOG(INFO) << "No WipeEse implementation";
+        return true;
+    }
+
+    return (*WipeEseFunc)(ui);
+}
+
 }  // namespace
 
 class PixelWatchDevice : public ::Device {
@@ -58,12 +70,18 @@ class PixelWatchDevice : public ::Device {
     /** Hook to wipe user data not stored in /data */
     bool PostWipeData() override {
         // Try to do everything but report a failure if anything wasn't successful
-        bool totalSuccess = false;
+        bool totalSuccess = true;
 
         // Additional behavior along with wiping data
         auto reason = GetReason();
         CHECK(reason.has_value());
         if (!ProvisionSilentOtaFlag(reason.value())) {
+            totalSuccess = false;
+        }
+
+        ::RecoveryUI *const ui = GetUI();
+
+        if (!WipeEseHook(ui)) {
             totalSuccess = false;
         }
 
