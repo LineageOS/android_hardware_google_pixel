@@ -254,6 +254,72 @@ void DisplayStatsReporter::logDisplayPortErrorStats(
         ALOGE("Unable to report DisplayPort stats to Stats service");
 }
 
+bool DisplayStatsReporter::captureHDCPAuthTypeStats(
+        const std::vector<std::string> &hdcp_stats_paths, int64_t *pcur_data) {
+    int64_t path_index;
+    bool report_stats = false;
+    std::string path;
+
+    if (hdcp_stats_paths.size() < HDCP_AUTH_TYPE_STATS_SIZE)
+        return false;
+
+    for (int i = 0; i < HDCP_AUTH_TYPE_STATS_SIZE; i++) {
+        path_index = hdcp_auth_type_path_index[i];
+        path_index = path_index - kVendorAtomOffset;
+        path = hdcp_stats_paths[path_index];
+
+        if (!readDisplayErrorCount(path, &(pcur_data[i]))) {
+            pcur_data[i] = prev_hdcp_data_[i];
+        } else {
+            report_stats |= (pcur_data[i] > prev_hdcp_data_[i]);
+        }
+    }
+
+    return report_stats;
+}
+
+void DisplayStatsReporter::logHDCPAuthTypeStats(const std::shared_ptr<IStats> &stats_client,
+                                                const std::vector<std::string> &hdcp_stats_paths) {
+    int64_t cur_data[HDCP_AUTH_TYPE_STATS_SIZE];
+    int64_t path_index;
+    bool report_stats = false;
+
+    memcpy(cur_data, prev_hdcp_data_, sizeof(prev_hdcp_data_));
+    if (!captureHDCPAuthTypeStats(hdcp_stats_paths, &cur_data[0])) {
+        memcpy(prev_hdcp_data_, cur_data, sizeof(cur_data));
+        return;
+    }
+
+    VendorAtomValue tmp;
+    int64_t max_error_count = static_cast<int64_t>(INT32_MAX);
+    int error_count;
+    std::vector<VendorAtomValue> values(HDCP_AUTH_TYPE_STATS_SIZE);
+
+    for (int i = 0; i < HDCP_AUTH_TYPE_STATS_SIZE; i++) {
+        error_count = std::min<int64_t>(cur_data[i] - prev_hdcp_data_[i], max_error_count);
+        if (verifyCount(error_count, &report_stats) < 0)
+            return;
+
+        tmp.set<VendorAtomValue::intValue>(error_count);
+        path_index = hdcp_auth_type_path_index[i];
+        path_index = path_index - kVendorAtomOffset;
+        values[path_index] = tmp;
+    }
+
+    memcpy(prev_hdcp_data_, cur_data, sizeof(cur_data));
+
+    if (!report_stats)
+        return;
+
+    ALOGD("Report updated hdcp metrics to stats service");
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kHdcpAuthTypeStats,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report hdcp stats to Stats service");
+}
 void DisplayStatsReporter::logDisplayStats(const std::shared_ptr<IStats> &stats_client,
                                            const std::vector<std::string> &display_stats_paths,
                                            const display_stats_type stats_type) {
@@ -263,6 +329,9 @@ void DisplayStatsReporter::logDisplayStats(const std::shared_ptr<IStats> &stats_
             break;
         case DISP_PORT_STATE:
             logDisplayPortErrorStats(stats_client, display_stats_paths);
+            break;
+        case HDCP_STATE:
+            logHDCPAuthTypeStats(stats_client, display_stats_paths);
             break;
         default:
             ALOGE("Unsupport display state type(%d)", stats_type);
