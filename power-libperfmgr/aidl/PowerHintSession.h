@@ -28,6 +28,7 @@
 #include <unordered_map>
 
 #include "AppDescriptorTrace.h"
+#include "SessionRecords.h"
 
 namespace aidl {
 namespace google {
@@ -107,6 +108,7 @@ class PowerHintSession : public BnPowerHintSession {
     void tryToSendPowerHint(std::string hint);
     void updatePidControlVariable(int pidControlVariable, bool updateVote = true);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
+    bool updateHeuristicBoost();
     // Data
     sp<PowerSessionManager> mPSManager;
     int64_t mSessionId = 0;
@@ -124,6 +126,8 @@ class PowerHintSession : public BnPowerHintSession {
     std::array<bool, enum_size<SessionMode>()> mModes{};
     // Tag labeling what kind of session this is
     SessionTag mTag;
+    std::unique_ptr<SessionRecords> mSessionRecords;
+    bool mHeuristicBoostActive{false};
 };
 
 }  // namespace pixel
