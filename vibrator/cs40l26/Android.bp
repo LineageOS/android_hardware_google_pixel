@@ -37,6 +37,8 @@ cc_defaults {
     shared_libs: [
         "libcutils",
         "libtinyalsa",
+        "libbase",
+        "libutils",
     ],
 }
 
@@ -62,6 +64,7 @@ cc_library {
     ],
     srcs: [
         "Vibrator.cpp",
+        "DspMemChunk.cpp",
     ],
     export_include_dirs: [
         ".",
@@ -105,7 +108,10 @@ cc_binary {
 
 filegroup {
     name: "haptics_srcs",
-    srcs: ["service.cpp", "Vibrator.cpp"],
+    srcs: [
+        "service.cpp",
+        "Vibrator.cpp",
+    ],
 }
 
 filegroup {

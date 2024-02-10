@@ -117,6 +117,8 @@ message Atom {
       VendorAudioOffloadedEffectStatsReported vendor_audio_offloaded_effect_stats_reported = 105063;
       VendorAudioBtMediaStatsReported vendor_audio_bt_media_stats_reported = 105064;
       PixelImpulseUsageReported pixel_impulse_usage_reported = 105065;
+      DisplayPortErrorStats display_port_error_stats = 105066;
+      HDCPAuthTypeStats hdcp_auth_type_stats = 105067;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2172,4 +2174,46 @@ message PixelImpulseUsageReported {
 
   /* Size of the arguments */
   optional int32 request_size = 11;
+}
+
+/**
+ * Log DisplayPort link error statistics.
+ */
+message DisplayPortErrorStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* The error count due to link training failed. */
+  optional int32 link_negotiation_failures = 2;
+  /* The error count due to read EDID failed. */
+  optional int32 edid_read_failures = 3;
+  /* The error count due to read dpcd failed. */
+  optional int32 dpcd_read_failures = 4;
+  /* The error count due to EDID is invalid. */
+  optional int32 edid_invalid_failures = 5;
+  /* The error count due to sink count is invalid. */
+  optional int32 sink_count_invalid_failures = 6;
+  /* The error count due to link unstable. */
+  optional int32 link_unstable_failures = 7;
+}
+
+/**
+ * Log HDCP authentication type statistics.
+ */
+message HDCPAuthTypeStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* The count due to hdcp2 success */
+  optional int32 hdcp2_success_count = 2;
+  /* The count due to hdcp2 fallback */
+  optional int32 hdcp2_fallback_count = 3;
+  /* The count due to hdcp2 fail */
+  optional int32 hdcp2_fail_count = 4;
+  /* The count due to hdcp1 success */
+  optional int32 hdcp1_success_count = 5;
+  /* The count due to hdcp1 fail */
+  optional int32 hdcp1_fail_count = 6;
+  /* The count due to hdcp0 */
+  optional int32 hdcp0_count = 7;
 }
