@@ -33,7 +33,9 @@
 #include <optional>
 #include <sstream>
 
+#include "DspMemChunk.h"
 #include "Stats.h"
+#include "Trace.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
@@ -44,10 +46,20 @@ namespace android {
 namespace hardware {
 namespace vibrator {
 
-#ifdef HAPTIC_TRACE
-#define HAPTICS_TRACE(...) ALOGD(__VA_ARGS__)
+#ifdef VIBRATOR_TRACE
+/* Function Trace */
+#define VFTRACE(...)                                                             \
+    ATRACE_NAME(StringPrintf("Vibrator::%s", __func__).c_str());                 \
+    auto f_trace_ = std::make_unique<FunctionTrace>("Vibrator", __func__);       \
+    __VA_OPT__(f_trace_->addParameter(PREPEND_EACH_ARG_WITH_NAME(__VA_ARGS__))); \
+    f_trace_->save()
+/* Effect Trace */
+#define VETRACE(i, s, d, ch)                                    \
+    auto e_trace_ = std::make_unique<EffectTrace>(i, s, d, ch); \
+    e_trace_->save()
 #else
-#define HAPTICS_TRACE(...)
+#define VFTRACE(...) ATRACE_NAME(StringPrintf("Vibrator::%s", __func__).c_str())
+#define VETRACE(...)
 #endif
 
 static constexpr uint16_t FF_CUSTOM_DATA_LEN_MAX_COMP = 2044;  // (COMPOSE_SIZE_MAX + 1) * 8 + 4
@@ -67,10 +79,6 @@ static constexpr uint32_t MAX_TIME_MS = UINT16_MAX;
 static constexpr auto ASYNC_COMPLETION_TIMEOUT = std::chrono::milliseconds(100);
 static constexpr auto POLLING_TIMEOUT = 50;  // POLLING_TIMEOUT < ASYNC_COMPLETION_TIMEOUT
 static constexpr int32_t COMPOSE_DELAY_MAX_MS = 10000;
-
-/* nsections is 8 bits. Need to preserve 1 section for the first delay before the first effect. */
-static constexpr int32_t COMPOSE_SIZE_MAX = 254;
-static constexpr int32_t COMPOSE_PWLE_SIZE_MAX_DEFAULT = 127;
 
 // Measured resonant frequency, f0_measured, is represented by Q10.14 fixed
 // point format on cs40l26 devices. The expression to calculate f0 is:
@@ -92,45 +100,10 @@ static constexpr int32_t Q15_BIT_SHIFT = 15;
 // See the LRA Calibration Support documentation for more details.
 static constexpr int32_t Q16_BIT_SHIFT = 16;
 
-static constexpr int32_t COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS = 16383;
-
-static constexpr uint32_t WT_LEN_CALCD = 0x00800000;
-static constexpr uint8_t PWLE_CHIRP_BIT = 0x8;  // Dynamic/static frequency and voltage
-static constexpr uint8_t PWLE_BRAKE_BIT = 0x4;
-static constexpr uint8_t PWLE_AMP_REG_BIT = 0x2;
-
-static constexpr uint8_t PWLE_WT_TYPE = 12;
-static constexpr uint8_t PWLE_HEADER_WORD_COUNT = 3;
-static constexpr uint8_t PWLE_HEADER_FTR_SHIFT = 8;
-static constexpr uint8_t PWLE_SVC_METADATA_WORD_COUNT = 3;
-static constexpr uint32_t PWLE_SVC_METADATA_TERMINATOR = 0xFFFFFF;
-static constexpr uint8_t PWLE_SEGMENT_WORD_COUNT = 2;
-static constexpr uint8_t PWLE_HEADER_WCOUNT_WORD_OFFSET = 2;
-static constexpr uint8_t PWLE_WORD_SIZE = sizeof(uint32_t);
-
-static constexpr uint8_t PWLE_SVC_NO_BRAKING = -1;
-static constexpr uint8_t PWLE_SVC_CAT_BRAKING = 0;
-static constexpr uint8_t PWLE_SVC_OPEN_BRAKING = 1;
-static constexpr uint8_t PWLE_SVC_CLOSED_BRAKING = 2;
-static constexpr uint8_t PWLE_SVC_MIXED_BRAKING = 3;
-
-static constexpr uint32_t PWLE_SVC_MAX_BRAKING_TIME_MS = 1000;
-
-static constexpr uint8_t PWLE_FTR_BUZZ_BIT = 0x80;
-static constexpr uint8_t PWLE_FTR_CLICK_BIT = 0x00;
-static constexpr uint8_t PWLE_FTR_DYNAMIC_F0_BIT = 0x10;
-static constexpr uint8_t PWLE_FTR_SVC_METADATA_BIT = 0x04;
-static constexpr uint8_t PWLE_FTR_DVL_BIT = 0x02;
-static constexpr uint8_t PWLE_FTR_LF0T_BIT = 0x01;
-
 static constexpr float PWLE_LEVEL_MIN = 0.0;
 static constexpr float PWLE_LEVEL_MAX = 1.0;
-static constexpr float CS40L26_PWLE_LEVEL_MIN = -1.0;
-static constexpr float CS40L26_PWLE_LEVEL_MAX = 0.9995118;
 static constexpr float PWLE_FREQUENCY_RESOLUTION_HZ = 1.00;
-static constexpr float PWLE_FREQUENCY_MIN_HZ = 30.0f;
 static constexpr float RESONANT_FREQUENCY_DEFAULT = 145.0f;
-static constexpr float PWLE_FREQUENCY_MAX_HZ = 300.0f;
 static constexpr float PWLE_BW_MAP_SIZE =
         1 + ((PWLE_FREQUENCY_MAX_HZ - PWLE_FREQUENCY_MIN_HZ) / PWLE_FREQUENCY_RESOLUTION_HZ);
 
@@ -178,273 +151,6 @@ enum vibe_state {
 };
 
 std::mutex mActiveId_mutex;  // protects mActiveId
-
-class DspMemChunk {
-  private:
-    std::unique_ptr<uint8_t[]> head;
-    size_t bytes = 0;
-    uint8_t waveformType;
-    uint8_t *_current;
-    const uint8_t *_max;
-    uint32_t _cache = 0;
-    int _cachebits = 0;
-
-    bool isEnd() const { return _current == _max; }
-    int min(int x, int y) { return x < y ? x : y; }
-
-    int write(int nbits, uint32_t val) {
-        HAPTICS_TRACE("     DspMemChunk::write(nbits:%d, val:%u)", nbits, val);
-        int nwrite, i;
-
-        nwrite = min(24 - _cachebits, nbits);
-        _cache <<= nwrite;
-        _cache |= val >> (nbits - nwrite);
-        _cachebits += nwrite;
-        nbits -= nwrite;
-
-        if (_cachebits == 24) {
-            if (isEnd())
-                return -ENOSPC;
-
-            _cache &= 0xFFFFFF;
-            for (i = 0; i < sizeof(_cache); i++, _cache <<= 8)
-                *_current++ = (_cache & 0xFF000000) >> 24;
-
-            bytes += sizeof(_cache);
-            _cachebits = 0;
-        }
-
-        if (nbits)
-            return write(nbits, val);
-
-        return 0;
-    }
-
-    int fToU16(float input, uint16_t *output, float scale, float min, float max) {
-        HAPTICS_TRACE("     DspMemChunk::fToU16(input:%f, output, scale:%f, min:%f, max:%f", input,
-                      scale, min, max);
-        if (input < min || input > max)
-            return -ERANGE;
-
-        *output = roundf(input * scale);
-        return 0;
-    }
-
-    void constructPwleSegment(uint16_t delay, uint16_t amplitude, uint16_t frequency, uint8_t flags,
-                              uint32_t vbemfTarget = 0) {
-        HAPTICS_TRACE(
-                "     constructPwleSegment(ch, delay:%u, amplitude:%u, frequency:%u, flags:%u"
-                ", vbemfTarget:%u)",
-                delay, amplitude, frequency, flags, vbemfTarget);
-        write(16, delay);
-        write(12, amplitude);
-        write(12, frequency);
-        /* feature flags to control the chirp, CLAB braking, back EMF amplitude regulation */
-        write(8, (flags | 1) << 4);
-        if (flags & PWLE_AMP_REG_BIT) {
-            write(24, vbemfTarget); /* target back EMF voltage */
-        }
-    }
-
-  public:
-    uint8_t *front() const { return head.get(); }
-    uint8_t type() const { return waveformType; }
-    size_t size() const { return bytes; }
-
-    DspMemChunk(uint8_t type, size_t size) : head(new uint8_t[size]{0x00}) {
-        HAPTICS_TRACE("     DspMemChunk(size:%zu)", size);
-        waveformType = type;
-        _current = head.get();
-        _max = _current + size;
-
-        if (waveformType == WAVEFORM_COMPOSE) {
-            write(8, 0); /* Padding */
-            write(8, 0); /* nsections placeholder */
-            write(8, 0); /* repeat */
-        } else if (waveformType == WAVEFORM_PWLE) {
-            write(16, (PWLE_FTR_BUZZ_BIT | PWLE_FTR_DVL_BIT)
-                              << PWLE_HEADER_FTR_SHIFT); /* Feature flag */
-            write(8, PWLE_WT_TYPE);                      /* type12 */
-            write(24, PWLE_HEADER_WORD_COUNT);           /* Header word count */
-            write(24, 0);                                /* Body word count placeholder */
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-            write(24, 0); /* Waveform length placeholder */
-            write(8, 0);  /* Repeat */
-            write(12, 0); /* Wait time between repeats */
-            write(8, 0);  /* nsections placeholder */
-#endif
-        } else {
-            ALOGE("%s: Invalid type: %u", __func__, waveformType);
-        }
-    }
-
-    int flush() {
-        HAPTICS_TRACE("     DspMemChunk::flush()");
-        if (!_cachebits)
-            return 0;
-
-        return write(24 - _cachebits, 0);
-    }
-
-    int constructComposeSegment(uint32_t effectVolLevel, uint32_t effectIndex, uint8_t repeat,
-                                uint8_t flags, uint16_t nextEffectDelay) {
-        HAPTICS_TRACE(
-                "     constructComposeSegment(effectVolLevel:%u, effectIndex:%u, repeat:%d, "
-                "flags:%d, nextEffectDelay:%u",
-                effectVolLevel, effectIndex, repeat, flags, nextEffectDelay);
-        if (waveformType != WAVEFORM_COMPOSE) {
-            ALOGE("%s: Invalid type: %d", __func__, waveformType);
-            return -EDOM;
-        }
-        if (effectVolLevel > 100 || effectIndex > WAVEFORM_MAX_PHYSICAL_INDEX) {
-            ALOGE("%s: Invalid argument: %u, %u", __func__, effectVolLevel, effectIndex);
-            return -EINVAL;
-        }
-        write(8, effectVolLevel);   /* amplitude */
-        write(8, effectIndex);      /* index */
-        write(8, repeat);           /* repeat */
-        write(8, flags);            /* flags */
-        write(16, nextEffectDelay); /* delay */
-        return 0;
-    }
-
-    int constructActiveSegment(int duration, float amplitude, float frequency, bool chirp) {
-        HAPTICS_TRACE("     constructActiveSegment(duration:%d, amplitude:%f, frequency:%f)",
-                      duration, amplitude, frequency);
-        uint16_t delay = 0;
-        uint16_t amp = 0;
-        uint16_t freq = 0;
-        uint8_t flags = 0x0;
-        if (waveformType != WAVEFORM_PWLE) {
-            ALOGE("%s: Invalid type: %d", __func__, waveformType);
-            return -EDOM;
-        }
-        if ((fToU16(duration, &delay, 4, 0.0f, COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) < 0) ||
-            (fToU16(amplitude, &amp, 2048, CS40L26_PWLE_LEVEL_MIN, CS40L26_PWLE_LEVEL_MAX) < 0) ||
-            (fToU16(frequency, &freq, 4, PWLE_FREQUENCY_MIN_HZ, PWLE_FREQUENCY_MAX_HZ) < 0)) {
-            ALOGE("%s: Invalid argument: %d, %f, %f", __func__, duration, amplitude, frequency);
-            return -ERANGE;
-        }
-        if (chirp) {
-            flags |= PWLE_CHIRP_BIT;
-        }
-        constructPwleSegment(delay, amp, freq, flags, 0 /*ignored*/);
-        return 0;
-    }
-
-    int constructBrakingSegment(int duration, Braking brakingType) {
-        HAPTICS_TRACE("     constructBrakingSegment(duration:%d, brakingType:%s)", duration,
-                      toString(brakingType).c_str());
-        uint16_t delay = 0;
-        uint16_t freq = 0;
-        uint8_t flags = 0x00;
-        if (waveformType != WAVEFORM_PWLE) {
-            ALOGE("%s: Invalid type: %d", __func__, waveformType);
-            return -EDOM;
-        }
-        if (fToU16(duration, &delay, 4, 0.0f, COMPOSE_PWLE_PRIMITIVE_DURATION_MAX_MS) < 0) {
-            ALOGE("%s: Invalid argument: %d", __func__, duration);
-            return -ERANGE;
-        }
-        fToU16(PWLE_FREQUENCY_MIN_HZ, &freq, 4, PWLE_FREQUENCY_MIN_HZ, PWLE_FREQUENCY_MAX_HZ);
-        if (static_cast<std::underlying_type<Braking>::type>(brakingType)) {
-            flags |= PWLE_BRAKE_BIT;
-        }
-
-        constructPwleSegment(delay, 0 /*ignored*/, freq, flags, 0 /*ignored*/);
-        return 0;
-    }
-
-    int updateWLength(uint32_t totalDuration) {
-        HAPTICS_TRACE("     updateWLength(totalDuration:%u)", totalDuration);
-        uint8_t *f = front();
-        if (f == nullptr) {
-            ALOGE("%s: head does not exist!", __func__);
-            return -ENOMEM;
-        }
-        if (waveformType != WAVEFORM_PWLE) {
-            ALOGE("%s: Invalid type: %d", __func__, waveformType);
-            return -EDOM;
-        }
-        if (totalDuration > 0x7FFFF) {
-            ALOGE("%s: Invalid argument: %u", __func__, totalDuration);
-            return -EINVAL;
-        }
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-        f += PWLE_HEADER_WORD_COUNT * PWLE_WORD_SIZE;
-#endif
-        totalDuration *= 8; /* Unit: 0.125 ms (since wlength played @ 8kHz). */
-        totalDuration |=
-                WT_LEN_CALCD; /* Bit 23 is for WT_LEN_CALCD; Bit 22 is for WT_INDEFINITE. */
-        *(f + 0) = (totalDuration >> 24) & 0xFF;
-        *(f + 1) = (totalDuration >> 16) & 0xFF;
-        *(f + 2) = (totalDuration >> 8) & 0xFF;
-        *(f + 3) = totalDuration & 0xFF;
-        return 0;
-    }
-
-    int updateNSection(int segmentIdx) {
-        HAPTICS_TRACE("     updateNSection(segmentIdx:%u)", segmentIdx);
-        uint8_t *f = front();
-        if (f == nullptr) {
-            ALOGE("%s: head does not exist!", __func__);
-            return -ENOMEM;
-        }
-
-        if (waveformType == WAVEFORM_COMPOSE) {
-            if (segmentIdx > COMPOSE_SIZE_MAX + 1 /*1st effect may have a delay*/) {
-                ALOGE("%s: Invalid argument: %d", __func__, segmentIdx);
-                return -EINVAL;
-            }
-            *(f + 2) = (0xFF & segmentIdx);
-        } else if (waveformType == WAVEFORM_PWLE) {
-            if (segmentIdx > COMPOSE_PWLE_SIZE_MAX_DEFAULT) {
-                ALOGE("%s: Invalid argument: %d", __func__, segmentIdx);
-                return -EINVAL;
-            }
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-            f += PWLE_HEADER_WORD_COUNT * PWLE_WORD_SIZE;
-#endif
-            *(f + 7) |= (0xF0 & segmentIdx) >> 4; /* Bit 4 to 7 */
-            *(f + 9) |= (0x0F & segmentIdx) << 4; /* Bit 3 to 0 */
-        } else {
-            ALOGE("%s: Invalid type: %d", __func__, waveformType);
-            return -EDOM;
-        }
-
-        return 0;
-    }
-
-    int updateWCount(int segmentCount) {
-        HAPTICS_TRACE("     updateWCount(segmentIdx:%d)", segmentCount);
-        uint8_t *f = front();
-
-        if (segmentCount > COMPOSE_SIZE_MAX + 1 /*1st effect may have a delay*/) {
-            ALOGE("%s: Invalid argument: %d", __func__, segmentCount);
-            return -EINVAL;
-        }
-        if (f == nullptr) {
-            ALOGE("%s: head does not exist!", __func__);
-            return -ENOMEM;
-        }
-        if (waveformType != WAVEFORM_PWLE) {
-            ALOGE("%s: Invalid type: %d", __func__, waveformType);
-            return -EDOM;
-        }
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-        f += PWLE_HEADER_WORD_COUNT * PWLE_WORD_SIZE;
-#endif
-        uint32_t dataSize = segmentCount * PWLE_SEGMENT_WORD_COUNT + PWLE_HEADER_WORD_COUNT;
-        *(f + 0) = (dataSize >> 24) & 0xFF;
-        *(f + 1) = (dataSize >> 16) & 0xFF;
-        *(f + 2) = (dataSize >> 8) & 0xFF;
-        *(f + 3) = dataSize & 0xFF;
-
-        return 0;
-    }
-};
 
 // Discrete points of frequency:max_level pairs around resonant(145Hz default) frequency
 // Initialize the actuator LUXSHARE_ICT_081545 limits to 0.447 and others 1.0
@@ -560,7 +266,6 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
     } else {
         ALOGD("Unsupported calibration version: %u!", calVer);
     }
-    HAPTICS_TRACE("Vibrator(hwapi, hwcal:%u)", calVer);
 
     mHwApi->setF0CompEnable(mHwCal->isF0CompEnabled());
     mHwApi->setRedcCompEnable(mHwCal->isRedcCompEnabled());
@@ -599,8 +304,7 @@ Vibrator::Vibrator(std::unique_ptr<HwApi> hwapi, std::unique_ptr<HwCal> hwcal,
 }
 
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
-    HAPTICS_TRACE("getCapabilities(_aidl_return)");
-    ATRACE_NAME("Vibrator::getCapabilities");
+    VFTRACE(_aidl_return);
 
     int32_t ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
                   IVibrator::CAP_AMPLITUDE_CONTROL | IVibrator::CAP_GET_RESONANT_FREQUENCY |
@@ -622,8 +326,7 @@ ndk::ScopedAStatus Vibrator::getCapabilities(int32_t *_aidl_return) {
 }
 
 ndk::ScopedAStatus Vibrator::off() {
-    HAPTICS_TRACE("off()");
-    ATRACE_NAME("Vibrator::off");
+    VFTRACE();
     bool ret{true};
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
 
@@ -676,8 +379,7 @@ ndk::ScopedAStatus Vibrator::off() {
 
 ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
-    ATRACE_NAME(StringPrintf("Vibrator::on %dms", timeoutMs).c_str());
-    HAPTICS_TRACE("on(timeoutMs:%d, callback)", timeoutMs);
+    VFTRACE(timeoutMs, callback);
 
     mStatsApi->logLatencyStart(kWaveformEffectLatency);
     if (timeoutMs > MAX_TIME_MS) {
@@ -702,11 +404,7 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
 ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
                                      const std::shared_ptr<IVibratorCallback> &callback,
                                      int32_t *_aidl_return) {
-    ATRACE_NAME(StringPrintf("Vibrator::perform %s,%s", toString(effect).c_str(),
-                             toString(strength).c_str())
-                        .c_str());
-    HAPTICS_TRACE("perform(effect:%s, strength:%s, callback, _aidl_return)",
-                  toString(effect).c_str(), toString(strength).c_str());
+    VFTRACE(effect, strength, callback, _aidl_return);
 
     mStatsApi->logLatencyStart(kPrebakedEffectLatency);
 
@@ -714,15 +412,14 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength strength,
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedEffects(std::vector<Effect> *_aidl_return) {
-    HAPTICS_TRACE("getSupportedEffects(_aidl_return)");
+    VFTRACE(_aidl_return);
     *_aidl_return = {Effect::TEXTURE_TICK, Effect::TICK, Effect::CLICK, Effect::HEAVY_CLICK,
                      Effect::DOUBLE_CLICK};
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
-    HAPTICS_TRACE("setAmplitude(amplitude:%f)", amplitude);
-    ATRACE_NAME("Vibrator::setAmplitude");
+    VFTRACE(amplitude);
     if (amplitude <= 0.0f || amplitude > 1.0f) {
         mStatsApi->logError(kBadAmplitudeError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
@@ -738,8 +435,7 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
 }
 
 ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
-    HAPTICS_TRACE("setExternalControl(enabled:%u)", enabled);
-    ATRACE_NAME("Vibrator::setExternalControl");
+    VFTRACE(enabled);
     setGlobalAmplitude(enabled);
 
     if (!mHasPassthroughHapticDevice) {
@@ -764,28 +460,26 @@ ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
 }
 
 ndk::ScopedAStatus Vibrator::getCompositionDelayMax(int32_t *maxDelayMs) {
-    HAPTICS_TRACE("getCompositionDelayMax(maxDelayMs)");
-    ATRACE_NAME("Vibrator::getCompositionDelayMax");
+    VFTRACE(maxDelayMs);
     *maxDelayMs = COMPOSE_DELAY_MAX_MS;
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::getCompositionSizeMax(int32_t *maxSize) {
-    HAPTICS_TRACE("getCompositionSizeMax(maxSize)");
-    ATRACE_NAME("Vibrator::getCompositionSizeMax");
+    VFTRACE(maxSize);
     *maxSize = COMPOSE_SIZE_MAX;
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedPrimitives(std::vector<CompositePrimitive> *supported) {
-    HAPTICS_TRACE("getSupportedPrimitives(supported)");
+    VFTRACE(supported);
     *supported = mSupportedPrimitives;
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::getPrimitiveDuration(CompositePrimitive primitive,
                                                   int32_t *durationMs) {
-    HAPTICS_TRACE("getPrimitiveDuration(primitive:%s, durationMs)", toString(primitive).c_str());
+    VFTRACE(primitive, durationMs);
     ndk::ScopedAStatus status;
     uint32_t effectIndex;
     if (primitive != CompositePrimitive::NOOP) {
@@ -803,8 +497,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDuration(CompositePrimitive primitive,
 
 ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composite,
                                      const std::shared_ptr<IVibratorCallback> &callback) {
-    ATRACE_NAME(StringPrintf("Vibrator::compose size=%zu", composite.size()).c_str());
-    HAPTICS_TRACE("compose(composite, callback)");
+    VFTRACE(composite, callback);
     uint16_t size;
     uint16_t nextEffectDelay;
     uint16_t totalDuration = 0;
@@ -904,7 +597,7 @@ ndk::ScopedAStatus Vibrator::compose(const std::vector<CompositeEffect> &composi
 
 ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const DspMemChunk *ch,
                                 const std::shared_ptr<IVibratorCallback> &callback) {
-    HAPTICS_TRACE("on(timeoutMs:%u, effectIndex:%u, ch, callback)", timeoutMs, effectIndex);
+    VFTRACE(timeoutMs, effectIndex, ch, callback);
     ndk::ScopedAStatus status = ndk::ScopedAStatus::ok();
 
     if (effectIndex >= FF_MAX_EFFECTS) {
@@ -963,6 +656,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     mActiveId = effectIndex;
     /* Play the event now. */
+    VETRACE(effectIndex, mLongEffectScale, timeoutMs, ch);
     mStatsApi->logLatencyEnd();
     if (!mHwApi->setFFPlay(effectIndex, true)) {
         mStatsApi->logError(kHwApiError);
@@ -976,8 +670,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const 
 }
 
 uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalable) {
-    HAPTICS_TRACE("amplitudeToScale(amplitude:%f, maximum:%f, scalable:%d)", amplitude, maximum,
-                  scalable ? 1 : 0);
+    VFTRACE(amplitude, maximum, scalable);
     float ratio = 100; /* Unit: % */
 
     if (maximum != 0)
@@ -1039,6 +732,7 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
 }
 
 void Vibrator::updateContext() {
+    VFTRACE();
     mContextEnable = mHwApi->getContextEnable();
     if (mContextEnable && !mContextEnabledPreviously) {
         mContextListener = CapoDetector::start();
@@ -1061,8 +755,7 @@ void Vibrator::updateContext() {
 }
 
 ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, bool scalable) {
-    HAPTICS_TRACE("setEffectAmplitude(amplitude:%f, maximum:%f, scalable:%d)", amplitude, maximum,
-                  scalable ? 1 : 0);
+    VFTRACE(amplitude, maximum, scalable);
     uint16_t scale;
 
 #ifdef ADAPTIVE_HAPTICS_V1
@@ -1080,7 +773,7 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, 
 }
 
 ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
-    HAPTICS_TRACE("setGlobalAmplitude(set:%u)", set);
+    VFTRACE(set);
     uint8_t amplitude = set ? roundf(mLongEffectScale * mLongEffectVol[1]) : VOLTAGE_SCALE_MAX;
     if (!set) {
         mLongEffectScale = 1.0;  // Reset the scale for the later new effect.
@@ -1089,12 +782,14 @@ ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> * /*_aidl_return*/) {
+    VFTRACE();
     mStatsApi->logError(kUnsupportedOpError);
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ndk::ScopedAStatus Vibrator::alwaysOnEnable(int32_t /*id*/, Effect /*effect*/,
                                             EffectStrength /*strength*/) {
+    VFTRACE();
     mStatsApi->logError(kUnsupportedOpError);
     return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
@@ -1104,14 +799,14 @@ ndk::ScopedAStatus Vibrator::alwaysOnDisable(int32_t /*id*/) {
 }
 
 ndk::ScopedAStatus Vibrator::getResonantFrequency(float *resonantFreqHz) {
-    HAPTICS_TRACE("getResonantFrequency(resonantFreqHz)");
+    VFTRACE(resonantFreqHz);
     *resonantFreqHz = mResonantFrequency;
 
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Vibrator::getQFactor(float *qFactor) {
-    HAPTICS_TRACE("getQFactor(qFactor)");
+    VFTRACE(qFactor);
     std::string caldata{8, '0'};
     if (!mHwCal->getQ(&caldata)) {
         mStatsApi->logError(kHwCalError);
@@ -1124,7 +819,7 @@ ndk::ScopedAStatus Vibrator::getQFactor(float *qFactor) {
 }
 
 ndk::ScopedAStatus Vibrator::getFrequencyResolution(float *freqResolutionHz) {
-    HAPTICS_TRACE("getFrequencyResolution(freqResolutionHz)");
+    VFTRACE(freqResolutionHz);
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
@@ -1137,7 +832,7 @@ ndk::ScopedAStatus Vibrator::getFrequencyResolution(float *freqResolutionHz) {
 }
 
 ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
-    HAPTICS_TRACE("getFrequencyMinimum(freqMinimumHz)");
+    VFTRACE(freqMinimumHz);
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
@@ -1150,6 +845,7 @@ ndk::ScopedAStatus Vibrator::getFrequencyMinimum(float *freqMinimumHz) {
 }
 
 void Vibrator::createPwleMaxLevelLimitMap() {
+    VFTRACE();
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (!(capabilities & IVibrator::CAP_FREQUENCY_CONTROL)) {
@@ -1201,6 +897,7 @@ void Vibrator::createPwleMaxLevelLimitMap() {
 }
 
 void Vibrator::createBandwidthAmplitudeMap() {
+    VFTRACE();
     // Use constant Q Factor of 10 from HW's suggestion
     const float qFactor = 10.0f;
     const float blSys = 1.1f;
@@ -1275,7 +972,7 @@ void Vibrator::createBandwidthAmplitudeMap() {
 }
 
 ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_return) {
-    HAPTICS_TRACE("getBandwidthAmplitudeMap(_aidl_return)");
+    VFTRACE(_aidl_return);
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_FREQUENCY_CONTROL) {
@@ -1294,7 +991,7 @@ ndk::ScopedAStatus Vibrator::getBandwidthAmplitudeMap(std::vector<float> *_aidl_
 }
 
 ndk::ScopedAStatus Vibrator::getPwlePrimitiveDurationMax(int32_t *durationMs) {
-    HAPTICS_TRACE("getPwlePrimitiveDurationMax(durationMs)");
+    VFTRACE(durationMs);
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
@@ -1307,7 +1004,7 @@ ndk::ScopedAStatus Vibrator::getPwlePrimitiveDurationMax(int32_t *durationMs) {
 }
 
 ndk::ScopedAStatus Vibrator::getPwleCompositionSizeMax(int32_t *maxSize) {
-    HAPTICS_TRACE("getPwleCompositionSizeMax(maxSize)");
+    VFTRACE(maxSize);
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
@@ -1320,7 +1017,7 @@ ndk::ScopedAStatus Vibrator::getPwleCompositionSizeMax(int32_t *maxSize) {
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported) {
-    HAPTICS_TRACE("getSupportedBraking(supported)");
+    VFTRACE(supported);
     int32_t capabilities;
     Vibrator::getCapabilities(&capabilities);
     if (capabilities & IVibrator::CAP_COMPOSE_PWLE_EFFECTS) {
@@ -1336,20 +1033,21 @@ ndk::ScopedAStatus Vibrator::getSupportedBraking(std::vector<Braking> *supported
 
 static void resetPreviousEndAmplitudeEndFrequency(float *prevEndAmplitude,
                                                   float *prevEndFrequency) {
-    HAPTICS_TRACE("     resetPreviousEndAmplitudeEndFrequency(prevEndAmplitude, prevEndFrequency)");
+    VFTRACE(prevEndAmplitude, prevEndFrequency);
     const float reset = -1.0;
     *prevEndAmplitude = reset;
     *prevEndFrequency = reset;
 }
 
 static void incrementIndex(int *index) {
+    VFTRACE(index);
     *index += 1;
 }
 
 ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &composite,
                                          const std::shared_ptr<IVibratorCallback> &callback) {
-    ATRACE_NAME(StringPrintf("Vibrator::composePwle size=%zu", composite.size()).c_str());
-    HAPTICS_TRACE("composePwle(composite, callback)");
+    VFTRACE(composite, callback);
+    ALOGI("composePwle: %s", __PRETTY_FUNCTION__);
     int32_t capabilities;
 
     mStatsApi->logLatencyStart(kPwleEffectLatency);
@@ -1541,12 +1239,11 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 }
 
 bool Vibrator::isUnderExternalControl() {
-    HAPTICS_TRACE("isUnderExternalControl()");
+    VFTRACE();
     return mIsUnderExternalControl;
 }
 
 binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
-    HAPTICS_TRACE("dump(fd:%d, args, numArgs:%u)", fd, numArgs);
     if (fd < 0) {
         ALOGE("Called debug() with invalid fd.");
         return STATUS_OK;
@@ -1691,12 +1388,16 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
         dprintf(fd, "\nDBC Enabled\n");
     }
 
+#ifdef VIBRATOR_TRACE
+    Trace::debug(fd);
+#endif
+
     fsync(fd);
     return STATUS_OK;
 }
 
 bool Vibrator::hasHapticAlsaDevice() {
-    HAPTICS_TRACE("hasHapticAlsaDevice()");
+    VFTRACE();
     // We need to call findHapticAlsaDevice once only. Calling in the
     // constructor is too early in the boot process and the pcm file contents
     // are empty. Hence we make the call here once only right before we need to.
@@ -1717,10 +1418,7 @@ bool Vibrator::hasHapticAlsaDevice() {
 ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength strength,
                                               uint32_t *outEffectIndex, uint32_t *outTimeMs,
                                               uint32_t *outVolLevel) {
-    HAPTICS_TRACE(
-            "getSimpleDetails(effect:%s, strength:%s, outEffectIndex, outTimeMs"
-            ", outVolLevel)",
-            toString(effect).c_str(), toString(strength).c_str());
+    VFTRACE(effect, strength, outEffectIndex, outTimeMs, outVolLevel);
     uint32_t effectIndex;
     uint32_t timeMs;
     float intensity;
@@ -1773,8 +1471,7 @@ ndk::ScopedAStatus Vibrator::getSimpleDetails(Effect effect, EffectStrength stre
 
 ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength strength,
                                                 uint32_t *outTimeMs, DspMemChunk *outCh) {
-    HAPTICS_TRACE("getCompoundDetails(effect:%s, strength:%s, outTimeMs, outCh)",
-                  toString(effect).c_str(), toString(strength).c_str());
+    VFTRACE(effect, strength, outTimeMs, outCh);
     ndk::ScopedAStatus status;
     uint32_t timeMs = 0;
     uint32_t thisEffectIndex;
@@ -1826,7 +1523,7 @@ ndk::ScopedAStatus Vibrator::getCompoundDetails(Effect effect, EffectStrength st
 
 ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
                                                  uint32_t *outEffectIndex) {
-    HAPTICS_TRACE("getPrimitiveDetails(primitive:%s, outEffectIndex)", toString(primitive).c_str());
+    VFTRACE(primitive, outEffectIndex);
     uint32_t effectIndex;
     uint32_t primitiveBit = 1 << int32_t(primitive);
     if ((primitiveBit & mSupportedPrimitivesBits) == 0x0) {
@@ -1874,8 +1571,7 @@ ndk::ScopedAStatus Vibrator::getPrimitiveDetails(CompositePrimitive primitive,
 ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strength,
                                            const std::shared_ptr<IVibratorCallback> &callback,
                                            int32_t *outTimeMs) {
-    HAPTICS_TRACE("performEffect(effect:%s, strength:%s, callback, outTimeMs)",
-                  toString(effect).c_str(), toString(strength).c_str());
+    VFTRACE(effect, strength, callback, outTimeMs);
     ndk::ScopedAStatus status;
     uint32_t effectIndex;
     uint32_t timeMs = 0;
@@ -1913,15 +1609,15 @@ ndk::ScopedAStatus Vibrator::performEffect(Effect effect, EffectStrength strengt
 ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLevel,
                                            const DspMemChunk *ch,
                                            const std::shared_ptr<IVibratorCallback> &callback) {
-    HAPTICS_TRACE("performEffect(effectIndex:%u, volLevel:%u, ch, callback)", effectIndex,
-                  volLevel);
+    VFTRACE(effectIndex, volLevel, ch, callback);
     setEffectAmplitude(volLevel, VOLTAGE_SCALE_MAX, false);
 
     return on(MAX_TIME_MS, effectIndex, ch, callback);
 }
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
-    HAPTICS_TRACE("waitForComplete(callback)");
+    VFTRACE(callback);
+    ALOGI("waitForComplete: %s", __PRETTY_FUNCTION__);
 
     if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGW("Failed to get state \"Haptic\"");
@@ -1961,7 +1657,7 @@ void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
 }
 
 uint32_t Vibrator::intensityToVolLevel(float intensity, uint32_t effectIndex) {
-    HAPTICS_TRACE("intensityToVolLevel(intensity:%f, effectIndex:%u)", intensity, effectIndex);
+    VFTRACE(intensity, effectIndex);
 
     uint32_t volLevel;
     auto calc = [](float intst, std::array<uint32_t, 2> v) -> uint32_t {
