@@ -50,11 +50,13 @@ cc_test {
     require_root: true,
     srcs: [
         "aidl/tests/BackgroundWorkerTest.cpp",
+        "aidl/tests/GpuCapacityNodeTest.cpp",
         "aidl/tests/PhysicalQuantityTypeTest.cpp",
         "aidl/tests/PowerHintSessionTest.cpp",
         "aidl/tests/SessionTaskMapTest.cpp",
         "aidl/tests/UClampVoterTest.cpp",
         "aidl/BackgroundWorker.cpp",
+        "aidl/GpuCapacityNode.cpp",
         "aidl/PowerHintSession.cpp",
         "aidl/PowerSessionManager.cpp",
         "aidl/SessionTaskMap.cpp",
@@ -103,6 +105,7 @@ cc_binary {
     ],
     srcs: [
         "aidl/BackgroundWorker.cpp",
+        "aidl/GpuCapacityNode.cpp",
         "aidl/service.cpp",
         "aidl/Power.cpp",
         "aidl/PowerExt.cpp",
