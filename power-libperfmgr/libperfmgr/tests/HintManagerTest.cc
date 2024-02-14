@@ -168,7 +168,15 @@ constexpr char kJSON_RAW[] = R"(
             "EarlyBoost_On": false,
             "EarlyBoost_TimeFactor": 0.8,
             "TargetTimeFactor": 1.0,
-            "StaleTimeFactor": 10.0
+            "StaleTimeFactor": 10.0,
+            "HeuristicBoost_On": true,
+            "HBoostOnMissedCycles": 4,
+            "HBoostOffMaxAvgRatio": 4.0,
+            "HBoostOffMissedCycles": 2,
+            "HBoostPidPuFactor": 0.5,
+            "HBoostUclampMin": 800,
+            "LowFrameRateThreshold": 25,
+            "MaxRecordsNum": 50
         },
         {
             "Name": "REFRESH_60FPS",
@@ -807,6 +815,22 @@ TEST_F(HintManagerTest, ParseAdpfConfigsTest) {
     EXPECT_EQ(1.4, adpfs[1]->mTargetTimeFactor);
     EXPECT_EQ(10.0, adpfs[0]->mStaleTimeFactor);
     EXPECT_EQ(5.0, adpfs[1]->mStaleTimeFactor);
+    EXPECT_TRUE(adpfs[0]->mHeuristicBoostOn.value());
+    EXPECT_FALSE(adpfs[1]->mHeuristicBoostOn.has_value());
+    EXPECT_EQ(4U, adpfs[0]->mHBoostOnMissedCycles.value());
+    EXPECT_FALSE(adpfs[1]->mHBoostOnMissedCycles.has_value());
+    EXPECT_EQ(4.0, adpfs[0]->mHBoostOffMaxAvgRatio.value());
+    EXPECT_FALSE(adpfs[1]->mHBoostOffMaxAvgRatio.has_value());
+    EXPECT_EQ(2U, adpfs[0]->mHBoostOffMissedCycles.value());
+    EXPECT_FALSE(adpfs[1]->mHBoostOffMissedCycles.has_value());
+    EXPECT_EQ(0.5, adpfs[0]->mHBoostPidPuFactor.value());
+    EXPECT_FALSE(adpfs[1]->mHBoostPidPuFactor.has_value());
+    EXPECT_EQ(800U, adpfs[0]->mHBoostUclampMin.value());
+    EXPECT_FALSE(adpfs[1]->mHBoostUclampMin.has_value());
+    EXPECT_EQ(25U, adpfs[0]->mLowFrameRateThreshold.value());
+    EXPECT_FALSE(adpfs[1]->mLowFrameRateThreshold.has_value());
+    EXPECT_EQ(50U, adpfs[0]->mMaxRecordsNum.value());
+    EXPECT_FALSE(adpfs[1]->mMaxRecordsNum.has_value());
 }
 
 // Test parsing adpf configs with duplicate name
@@ -821,6 +845,15 @@ TEST_F(HintManagerTest, ParseAdpfConfigsDuplicateNameTest) {
 // Test parsing adpf configs without PID_Po
 TEST_F(HintManagerTest, ParseAdpfConfigsWithoutPIDPoTest) {
     std::string from = "\"PID_Po\": 0,";
+    size_t start_pos = json_doc_.find(from);
+    json_doc_.replace(start_pos, from.length(), "");
+    std::vector<std::shared_ptr<AdpfConfig>> adpfs = HintManager::ParseAdpfConfigs(json_doc_);
+    EXPECT_EQ(0u, adpfs.size());
+}
+
+// Test parsing adpf configs with partially missing heuristic boost config
+TEST_F(HintManagerTest, ParseAdpfConfigsWithBrokenHBoostConfig) {
+    std::string from = "\"HBoostUclampMin\": 800,";
     size_t start_pos = json_doc_.find(from);
     json_doc_.replace(start_pos, from.length(), "");
     std::vector<std::shared_ptr<AdpfConfig>> adpfs = HintManager::ParseAdpfConfigs(json_doc_);
