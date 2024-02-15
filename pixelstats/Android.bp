@@ -103,7 +103,7 @@ genrule {
         "pixelatoms.proto",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-protos",
-    ]
+    ],
 }
 
 genrule {
@@ -121,7 +121,7 @@ genrule {
         "pixelatoms.proto",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-protos",
-    ]
+    ],
 }
 
 cc_library_static {
@@ -132,61 +132,62 @@ cc_library_static {
     export_generated_headers: ["pixelstatsatoms.h"],
     shared_libs: [
         "android.frameworks.stats-V2-ndk",
-    ]
+    ],
 }
 
 cc_library {
-  name: "libpixelstats",
-  vendor: true,
-  export_include_dirs: ["include"],
+    name: "libpixelstats",
+    vendor: true,
+    export_include_dirs: ["include"],
 
-  tidy_disabled_srcs: [
-    "MmMetricsReporter.cpp", // b/215238264
-  ],
-  srcs: [
-    "BatteryCapacityReporter.cpp",
-    "BatteryEEPROMReporter.cpp",
-    "BatteryHealthReporter.cpp",
-    "BrownoutDetectedReporter.cpp",
-    "ChargeStatsReporter.cpp",
-    "DisplayStatsReporter.cpp",
-    "DropDetect.cpp",
-    "MmMetricsReporter.cpp",
-    "MitigationStatsReporter.cpp",
-    "MitigationDurationReporter.cpp",
-    "PcaChargeStats.cpp",
-    "StatsHelper.cpp",
-    "SysfsCollector.cpp",
-    "ThermalStatsReporter.cpp",
-    "TempResidencyReporter.cpp",
-    "UeventListener.cpp",
-    "WirelessChargeStats.cpp",
-  ],
-  cflags: [
-    "-Wall",
-    "-Werror",
-  ],
-  shared_libs: [
-    "android.frameworks.stats-V2-ndk",
-    "libbase",
-    "libbinder_ndk",
-    "libcutils",
-    "libhidlbase",
-    "liblog",
-    "libprotobuf-cpp-lite",
-    "libutils",
-    "libsensorndkbridge",
-    "pixelatoms-cpp",
-  ],
-  export_shared_lib_headers: [
-    "android.frameworks.stats-V2-ndk",
-    "pixelatoms-cpp",
-  ],
-  static_libs: [
-    "chre_client",
-    "libpixelstatsatoms",
-  ],
-  header_libs: ["chre_api"],
+    tidy_disabled_srcs: [
+        "MmMetricsReporter.cpp", // b/215238264
+    ],
+    srcs: [
+        "BatteryCapacityReporter.cpp",
+        "BatteryEEPROMReporter.cpp",
+        "BatteryHealthReporter.cpp",
+        "BatteryFGReporter.cpp",
+        "BrownoutDetectedReporter.cpp",
+        "ChargeStatsReporter.cpp",
+        "DisplayStatsReporter.cpp",
+        "DropDetect.cpp",
+        "MmMetricsReporter.cpp",
+        "MitigationStatsReporter.cpp",
+        "MitigationDurationReporter.cpp",
+        "PcaChargeStats.cpp",
+        "StatsHelper.cpp",
+        "SysfsCollector.cpp",
+        "ThermalStatsReporter.cpp",
+        "TempResidencyReporter.cpp",
+        "UeventListener.cpp",
+        "WirelessChargeStats.cpp",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    shared_libs: [
+        "android.frameworks.stats-V2-ndk",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libprotobuf-cpp-lite",
+        "libutils",
+        "libsensorndkbridge",
+        "pixelatoms-cpp",
+    ],
+    export_shared_lib_headers: [
+        "android.frameworks.stats-V2-ndk",
+        "pixelatoms-cpp",
+    ],
+    static_libs: [
+        "chre_client",
+        "libpixelstatsatoms",
+    ],
+    header_libs: ["chre_api"],
 }
 
 filegroup {
