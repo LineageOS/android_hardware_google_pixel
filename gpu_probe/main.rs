@@ -18,7 +18,7 @@ fn main() {
     android_logger::init_once(
         android_logger::Config::default()
             .with_tag("gpu_probe")
-            .with_min_level(log::Level::Info),
+            .with_max_level(log::LevelFilter::Info),
     );
 
     log::info!("Starting pixel gpu_probe");
