@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a8b66b90_132659c6",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4550
+      },
+      "writtenOn": "2024-02-19T21:58:35Z",
+      "side": 1,
+      "message": "A more complete way would be this:\nhttps://github.com/LineageOS/android_device_google_redbull/commit/7d286db7379edfdb184e4ac683bb0c464c417b64\nhttps://github.com/LineageOS/android_device_google_redbull/commit/6f7d9d78c9096bdd0f572da6c5cff237e42f6c2e",
+      "revId": "9aa96f89e66ca85297b5fc2e7a2fdb851471a275",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
