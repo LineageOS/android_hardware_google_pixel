@@ -17,6 +17,7 @@
 #include "Vibrator.h"
 
 #include <android-base/properties.h>
+#include <com_google_android_haptics_flags.h>
 #include <hardware/hardware.h>
 #include <hardware/vibrator.h>
 #include <linux/version.h>
@@ -40,6 +41,8 @@
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
 #endif
+
+namespace haptic_aconfig_flags = com::google::android::haptics::flags;
 
 namespace aidl {
 namespace android {
@@ -732,6 +735,12 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
 }
 
 void Vibrator::updateContext() {
+    /* Don't enable capo from HAL when vendor vibrator control is enabled */
+    if (haptic_aconfig_flags::vendor_vibration_control()) {
+        mContextEnable = false;
+        return;
+    }
+
     VFTRACE();
     mContextEnable = mHwApi->getContextEnable();
     if (mContextEnable && !mContextEnabledPreviously) {
