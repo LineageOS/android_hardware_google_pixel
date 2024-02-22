@@ -1047,7 +1047,6 @@ static void incrementIndex(int *index) {
 ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &composite,
                                          const std::shared_ptr<IVibratorCallback> &callback) {
     VFTRACE(composite, callback);
-    ALOGI("composePwle: %s", __PRETTY_FUNCTION__);
     int32_t capabilities;
 
     mStatsApi->logLatencyStart(kPwleEffectLatency);
@@ -1155,8 +1154,8 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
                 auto braking = e.get<PrimitivePwle::braking>();
                 if (braking.braking > Braking::CLAB) {
                     mStatsApi->logError(kBadPrimitiveError);
-                    ALOGE("%s: #%u: braking: Invalid braking type %d", __func__, c,
-                          braking.braking);
+                    ALOGE("%s: #%u: braking: Invalid braking type %s", __func__, c,
+                          toString(braking.braking).c_str());
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 } else if (!isClabSupported && (braking.braking == Braking::CLAB)) {
                     mStatsApi->logError(kBadPrimitiveError);
@@ -1172,16 +1171,16 @@ ndk::ScopedAStatus Vibrator::composePwle(const std::vector<PrimitivePwle> &compo
 
                 if (ch.constructBrakingSegment(0, braking.braking) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
-                    ALOGE("%s: #%u: braking: Failed to construct for type %d", __func__, c,
-                          braking.braking);
+                    ALOGE("%s: #%u: braking: Failed to construct for type %s", __func__, c,
+                          toString(braking.braking).c_str());
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
 
                 if (ch.constructBrakingSegment(braking.duration, braking.braking) < 0) {
                     mStatsApi->logError(kPwleConstructionFailError);
-                    ALOGE("%s: #%u: braking: Failed to construct for type %d with duration %d",
-                          __func__, c, braking.braking, braking.duration);
+                    ALOGE("%s: #%u: braking: Failed to construct for type %s with duration %d",
+                          __func__, c, toString(braking.braking).c_str(), braking.duration);
                     return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
                 }
                 incrementIndex(&segmentIdx);
@@ -1617,7 +1616,6 @@ ndk::ScopedAStatus Vibrator::performEffect(uint32_t effectIndex, uint32_t volLev
 
 void Vibrator::waitForComplete(std::shared_ptr<IVibratorCallback> &&callback) {
     VFTRACE(callback);
-    ALOGI("waitForComplete: %s", __PRETTY_FUNCTION__);
 
     if (!mHwApi->pollVibeState(VIBE_STATE_HAPTIC, POLLING_TIMEOUT)) {
         ALOGW("Failed to get state \"Haptic\"");
