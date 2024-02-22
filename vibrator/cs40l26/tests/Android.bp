@@ -31,6 +31,5 @@ cc_test {
     ],
     shared_libs: [
         "libbase",
-        "com.google.android.haptics-aconfig_c_lib_test",
     ],
 }

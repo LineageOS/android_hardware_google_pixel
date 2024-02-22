@@ -69,9 +69,6 @@ cc_library {
     export_include_dirs: [
         ".",
     ],
-    shared_libs: [
-        "com.google.android.haptics-aconfig_c_lib",
-    ],
     vendor_available: true,
     visibility: [":__subpackages__"],
 }
