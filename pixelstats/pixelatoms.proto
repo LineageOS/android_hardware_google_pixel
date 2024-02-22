@@ -620,6 +620,10 @@ message PixelMmMetricsPerHour {
     optional int32 psi_mem_some_avg300_min = 58;
     optional int32 psi_mem_some_avg300_max = 59;
     optional int32 psi_mem_some_avg300_avg = 60;
+    optional int32 version = 61 [deprecated = true];
+    optional int64 shmem_pages = 62;
+    optional int64 page_tables_pages = 63;
+    optional int64 dmabuf_pages = 64;
 }
 
 /* A message containing Pixel memory metrics collected daily. */
@@ -683,6 +687,11 @@ message PixelMmMetricsPerDay {
     optional int64 thp_split_page = 57;
     optional int64 thp_migration_split = 58;
     optional int64 thp_deferred_split_page = 59;
+    optional int64 version = 60 [deprecated = true];
+    optional int64 cpu_total_time = 61;
+    optional int64 cpu_idle_time = 62;
+    optional int64 cpu_io_wait_time = 63;
+    optional int64 kswapd_pageout_run = 64;
 }
 
 /* A message containing CMA metrics collected from dogfooding only. */
