@@ -307,6 +307,11 @@ void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &st
         }
     }
 
+    if (gmsr.tempco == 0xFFFF || gmsr.rcomp0 == 0xFFFF || gmsr.full_cap == 0xFFFF) {
+	    ALOGD("Ignore invalid gmsr");
+	    return;
+    }
+
     reportEvent(stats_client, gmsr);
 }
 
