@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <ostream>
 #include <unordered_map>
 
 #include "AdpfTypes.h"
+#include "PhysicalQuantityTypes.h"
 
 namespace aidl {
 namespace google {
@@ -38,27 +40,23 @@ struct UclampRange {
 };
 
 // --------------------------------------------------------
-// Hold a min max range of acceptable votes, is active status, time duration
-// info, and helper methods for consistent use
+// Hold the common timing state of the of acceptable votes:
+// is active status, time duration info, and helper methods for consistent use
 class VoteRange {
   public:
-    VoteRange() {}
+    VoteRange() = default;
+    VoteRange(VoteRange const &) = default;
+    VoteRange(VoteRange &&) = default;
+    VoteRange &operator=(VoteRange const &) = default;
+    VoteRange &operator=(VoteRange &&) = default;
+    virtual ~VoteRange() = default;
 
-    VoteRange(bool active, int uclampMin, int uclampMax,
-              std::chrono::steady_clock::time_point startTime, std::chrono::nanoseconds durationNs)
-        : mActive(active),
-          mUclampRange({std::min(uclampMin, uclampMax), std::max(uclampMin, uclampMax)}),
-          mStartTime(startTime),
-          mDurationNs(durationNs) {}
+    VoteRange(bool active, std::chrono::steady_clock::time_point startTime,
+              std::chrono::nanoseconds durationNs)
+        : mActive(active), mStartTime(startTime), mDurationNs(durationNs) {}
 
     // Returns true if this vote range is active, false if it is not active
     bool active() const { return mActive; }
-
-    // Returns the utilization clamp minimum
-    int uclampMin() const { return mUclampRange.uclampMin; }
-
-    // Returns the utilization clamp maximum
-    int uclampMax() const { return mUclampRange.uclampMax; }
 
     // Returns the start time of this vote range
     std::chrono::steady_clock::time_point startTime() const { return mStartTime; }
@@ -77,15 +75,26 @@ class VoteRange {
         return mActive && ((mStartTime <= t) && ((mStartTime + mDurationNs) >= t));
     }
 
-    // Factory method to make a vote range
-    static VoteRange makeMinRange(int uclampMin, std::chrono::steady_clock::time_point startTime,
-                                  std::chrono::nanoseconds durationNs);
-
   private:
     bool mActive{true};
-    UclampRange mUclampRange;
     std::chrono::steady_clock::time_point mStartTime{};
     std::chrono::nanoseconds mDurationNs{};
+};
+
+struct CpuVote final : VoteRange {
+    CpuVote() = default;
+    CpuVote(bool active, std::chrono::steady_clock::time_point startTime,
+            std::chrono::nanoseconds durationNs, int uclamp_min, int uclamp_max)
+        : VoteRange(active, startTime, durationNs), mUclampRange{uclamp_min, uclamp_max} {}
+    UclampRange mUclampRange;
+};
+
+struct GpuVote final : VoteRange {
+    GpuVote() = default;
+    GpuVote(bool active, std::chrono::steady_clock::time_point startTime,
+            std::chrono::nanoseconds durationNs, Cycles capacity)
+        : VoteRange(active, startTime, durationNs), mCapacity(capacity) {}
+    Cycles mCapacity;
 };
 
 // Helper for logging
@@ -98,8 +107,11 @@ class Votes {
   public:
     Votes();
 
-    // Add a vote and associate with vote id, overwrites existing vote
-    void add(int voteId, const VoteRange &v);
+    // Add a vote and associate with vote id, overwrites existing vote.
+    // ADPF_VOTE_GPU_CAPACITY is an invalid value and will be ignored.
+    // For this vote, set_gpu_capacity_node should be used.
+    void add(int, CpuVote const &vote);
+    void add(int, GpuVote const &vote);
 
     // Update the duration of a vote given a vote id
     void updateDuration(int voteId, std::chrono::nanoseconds durationNs);
@@ -109,6 +121,7 @@ class Votes {
     // the largest min and the smallest max
     void getUclampRange(UclampRange *uclampRange, std::chrono::steady_clock::time_point t) const;
 
+    std::optional<Cycles> getGpuCapacityRequest(std::chrono::steady_clock::time_point t) const;
     // Return true if any vote has timed out, otherwise return false
     bool anyTimedOut(std::chrono::steady_clock::time_point t) const;
 
@@ -130,7 +143,8 @@ class Votes {
     std::chrono::steady_clock::time_point voteTimeout(int voteId);
 
   private:
-    std::unordered_map<int, VoteRange> mVotes;
+    std::unordered_map<int, CpuVote> mCpuVotes;
+    std::unordered_map<int, GpuVote> mGpuVotes;
 };
 
 }  // namespace pixel

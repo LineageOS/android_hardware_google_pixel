@@ -23,35 +23,61 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-static void confine(UclampRange *uclampRange, const VoteRange &vr,
+static void confine(UclampRange *uclampRange, const CpuVote &cpu_vote,
                     std::chrono::steady_clock::time_point t) {
-    if (!vr.isTimeInRange(t)) {
+    if (!cpu_vote.isTimeInRange(t)) {
         return;
     }
-    uclampRange->uclampMin = std::max(uclampRange->uclampMin, vr.uclampMin());
-    uclampRange->uclampMax = std::min(uclampRange->uclampMax, vr.uclampMax());
+    uclampRange->uclampMin = std::max(uclampRange->uclampMin, cpu_vote.mUclampRange.uclampMin);
+    uclampRange->uclampMax = std::min(uclampRange->uclampMax, cpu_vote.mUclampRange.uclampMax);
 }
 
-VoteRange VoteRange::makeMinRange(int uclampMin, std::chrono::steady_clock::time_point startTime,
-                                  std::chrono::nanoseconds durationNs) {
-    VoteRange v(true, uclampMin, kUclampMax, startTime, durationNs);
-    return v;
-}
-
-std::ostream &operator<<(std::ostream &o, const VoteRange &vr) {
-    o << "[" << vr.uclampMin() << "," << vr.uclampMax() << "]";
+std::ostream &operator<<(std::ostream &o, const UclampRange &uc) {
+    o << "[" << uc.uclampMin << "," << uc.uclampMax << "]";
     return o;
 }
 
 Votes::Votes() {}
 
-void Votes::add(int voteId, const VoteRange &v) {
-    mVotes[voteId] = v;
+constexpr static auto gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+
+static inline bool isGpuVote(int type_raw) {
+    AdpfHintType const type = static_cast<AdpfHintType>(type_raw);
+    return type == AdpfHintType::ADPF_GPU_CAPACITY || type == AdpfHintType::ADPF_GPU_LOAD_UP ||
+           type == AdpfHintType::ADPF_GPU_LOAD_DOWN || type == AdpfHintType::ADPF_GPU_LOAD_RESET;
+}
+
+void Votes::add(int id, CpuVote const &vote) {
+    if (!isGpuVote(id)) {
+        mCpuVotes[id] = vote;
+    }
+}
+
+std::optional<Cycles> Votes::getGpuCapacityRequest(std::chrono::steady_clock::time_point t) const {
+    auto it = mGpuVotes.find(static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY));
+    if (it != mGpuVotes.end() && it->second.isTimeInRange(t)) {
+        return {it->second.mCapacity};
+    }
+    return {};
+}
+
+void Votes::add(int id, GpuVote const &vote) {
+    if (isGpuVote(id)) {
+        mGpuVotes[id] = vote;
+    }
 }
 
 void Votes::updateDuration(int voteId, std::chrono::nanoseconds durationNs) {
-    auto voteItr = mVotes.find(voteId);
-    if (voteItr != mVotes.end()) {
+    if (isGpuVote(voteId)) {
+        auto const it = mGpuVotes.find(voteId);
+        if (it != mGpuVotes.end()) {
+            it->second.updateDuration(durationNs);
+        }
+        return;
+    }
+
+    auto const voteItr = mCpuVotes.find(voteId);
+    if (voteItr != mCpuVotes.end()) {
         voteItr->second.updateDuration(durationNs);
     }
 }
@@ -61,13 +87,20 @@ void Votes::getUclampRange(UclampRange *uclampRange,
     if (nullptr == uclampRange) {
         return;
     }
-    for (const auto &v : mVotes) {
-        confine(uclampRange, v.second, t);
+    for (auto it = mCpuVotes.begin(); it != mCpuVotes.end(); it++) {
+        auto timings_it = mCpuVotes.find(it->first);
+        confine(uclampRange, it->second, t);
     }
 }
 
 bool Votes::anyTimedOut(std::chrono::steady_clock::time_point t) const {
-    for (const auto &v : mVotes) {
+    for (const auto &v : mGpuVotes) {
+        if (!v.second.isTimeInRange(t)) {
+            return true;
+        }
+    }
+
+    for (const auto &v : mCpuVotes) {
         if (!v.second.isTimeInRange(t)) {
             return true;
         }
@@ -76,7 +109,13 @@ bool Votes::anyTimedOut(std::chrono::steady_clock::time_point t) const {
 }
 
 bool Votes::allTimedOut(std::chrono::steady_clock::time_point t) const {
-    for (const auto &v : mVotes) {
+    for (const auto &v : mGpuVotes) {
+        if (v.second.isTimeInRange(t)) {
+            return false;
+        }
+    }
+
+    for (const auto &v : mCpuVotes) {
         if (v.second.isTimeInRange(t)) {
             return false;
         }
@@ -85,17 +124,36 @@ bool Votes::allTimedOut(std::chrono::steady_clock::time_point t) const {
 }
 
 bool Votes::remove(int voteId) {
-    auto itr = mVotes.find(voteId);
-    if (itr == mVotes.end()) {
+    if (isGpuVote(voteId)) {
+        auto const it = mGpuVotes.find(voteId);
+        if (it != mGpuVotes.end()) {
+            mGpuVotes.erase(it);
+            return true;
+        }
         return false;
     }
-    mVotes.erase(itr);
-    return true;
+
+    auto const it = mCpuVotes.find(voteId);
+    if (it != mCpuVotes.end()) {
+        mCpuVotes.erase(it);
+        return true;
+    }
+
+    return false;
 }
 
 bool Votes::setUseVote(int voteId, bool active) {
-    auto itr = mVotes.find(voteId);
-    if (itr == mVotes.end()) {
+    if (isGpuVote(voteId)) {
+        auto const itr = mGpuVotes.find(voteId);
+        if (itr == mGpuVotes.end()) {
+            return false;
+        }
+        itr->second.setActive(active);
+        return true;
+    }
+
+    auto const itr = mCpuVotes.find(voteId);
+    if (itr == mCpuVotes.end()) {
         return false;
     }
     itr->second.setActive(active);
@@ -103,20 +161,36 @@ bool Votes::setUseVote(int voteId, bool active) {
 }
 
 size_t Votes::size() const {
-    return mVotes.size();
+    return mCpuVotes.size() + mGpuVotes.size();
 }
 
 bool Votes::voteIsActive(int voteId) {
-    auto itr = mVotes.find(voteId);
-    if (itr == mVotes.end()) {
+    if (isGpuVote(voteId)) {
+        auto const itr = mGpuVotes.find(voteId);
+        if (itr == mGpuVotes.end()) {
+            return false;
+        }
+        return itr->second.active();
+    }
+
+    auto const itr = mCpuVotes.find(voteId);
+    if (itr == mCpuVotes.end()) {
         return false;
     }
     return itr->second.active();
 }
 
 std::chrono::steady_clock::time_point Votes::voteTimeout(int voteId) {
-    auto itr = mVotes.find(voteId);
-    if (itr == mVotes.end()) {
+    if (isGpuVote(voteId)) {
+        auto const itr = mGpuVotes.find(voteId);
+        if (itr == mGpuVotes.end()) {
+            return std::chrono::steady_clock::time_point{};
+        }
+        return itr->second.startTime() + itr->second.durationNs();
+    }
+
+    auto const itr = mCpuVotes.find(voteId);
+    if (itr == mCpuVotes.end()) {
         return std::chrono::steady_clock::time_point{};
     }
     return itr->second.startTime() + itr->second.durationNs();

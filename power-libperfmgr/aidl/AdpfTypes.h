@@ -36,6 +36,7 @@ enum class AdpfHintType : int32_t {
     ADPF_GPU_LOAD_UP = 6,
     ADPF_GPU_LOAD_DOWN = 7,
     ADPF_GPU_LOAD_RESET = 8,
+    ADPF_GPU_CAPACITY = 9,
 };
 
 constexpr int kUclampMin{0};
