@@ -111,8 +111,6 @@ void PowerSessionManager::addPowerSession(const std::string &idString,
         return;
     }
     const auto timeNow = std::chrono::steady_clock::now();
-    VoteRange pidVoteRange(false, kUclampMin, kUclampMax, timeNow, sessionDescriptor->targetNs);
-
     SessionValueEntry sve;
     sve.tgid = sessionDescriptor->tgid;
     sve.uid = sessionDescriptor->uid;
@@ -123,7 +121,7 @@ void PowerSessionManager::addPowerSession(const std::string &idString,
     sve.votes = std::make_shared<Votes>();
     sve.votes->add(
             static_cast<std::underlying_type_t<AdpfHintType>>(AdpfHintType::ADPF_VOTE_DEFAULT),
-            pidVoteRange);
+            CpuVote(false, timeNow, sessionDescriptor->targetNs, kUclampMin, kUclampMax));
 
     bool addedRes = false;
     {
@@ -293,7 +291,6 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uc
                                   std::chrono::nanoseconds durationNs) {
     const int voteIdInt = static_cast<std::underlying_type_t<AdpfHintType>>(voteId);
     const auto timeoutDeadline = startTime + durationNs;
-    const VoteRange vr(true, uclampMin, uclampMax, startTime, durationNs);
     bool scheduleTimeout = false;
 
     {
@@ -312,7 +309,8 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uc
         if (timeoutDeadline < sessValPtr->votes->voteTimeout(voteIdInt)) {
             scheduleTimeout = true;
         }
-        sessValPtr->votes->add(voteIdInt, vr);
+        sessValPtr->votes->add(voteIdInt,
+                               CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
         sessValPtr->lastUpdatedTime = startTime;
     }
 

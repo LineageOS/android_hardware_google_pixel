@@ -21,6 +21,7 @@
 #include <android-base/chrono_utils.h>
 #include <pixelstats/BatteryCapacityReporter.h>
 #include <pixelstats/ChargeStatsReporter.h>
+#include <pixelstats/BatteryFGReporter.h>
 
 namespace android {
 namespace hardware {
@@ -46,7 +47,9 @@ class UeventListener {
         const char *const TypeCPartnerPidPath;
         const char *const WirelessChargerPtmcUevent;  // Deprecated.
         const char *const WirelessChargerPtmcPath;    // Deprecated.
-        const char *const GMSRPath;
+        const std::vector<std::string> FGLearningPath;
+        const char *const FwUpdatePath;
+        const std::vector<std::string> FGModelLoadingPath;
     };
     constexpr static const char *const ssoc_details_path =
             "/sys/class/power_supply/battery/ssoc_details";
@@ -59,13 +62,15 @@ class UeventListener {
     constexpr static const char *const typec_partner_pid_path_default =
             "/sys/class/typec/port0-partner/identity/product";
     constexpr static const char *const typec_partner_uevent_default = "DEVTYPE=typec_partner";
-    constexpr static const char *const gmsr_path = "";
 
     UeventListener(const std::string audio_uevent, const std::string ssoc_details_path = "",
                    const std::string overheat_path = overheat_path_default,
                    const std::string charge_metrics_path = charge_metrics_path_default,
                    const std::string typec_partner_vid_path = typec_partner_vid_path_default,
-                   const std::string typec_partner_pid_path = typec_partner_pid_path_default);
+                   const std::string typec_partner_pid_path = typec_partner_pid_path_default,
+                   const std::vector<std::string> fg_learning_path = { "" },
+                   const std::string fw_update_path = "",
+                   const std::vector<std::string> fg_modelloading_path = { "" });
     UeventListener(const struct UeventPaths &paths);
 
     bool ProcessUevent();  // Process a single Uevent.
@@ -94,6 +99,8 @@ class UeventListener {
     void ReportThermalAbnormalEvent(const std::shared_ptr<IStats> &stats_client,
                                     const char *devpath, const char *thermal_abnormal_event_type,
                                     const char *thermal_abnormal_event_info);
+    void ReportFGMetricsEvent(const std::shared_ptr<IStats> &stats_client, const char *driver);
+
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
     const std::string kUsbPortOverheatPath;
@@ -101,7 +108,10 @@ class UeventListener {
     const std::string kTypeCPartnerUevent;
     const std::string kTypeCPartnerVidPath;
     const std::string kTypeCPartnerPidPath;
-    const std::string kBatteryGMSRPath;
+    const std::vector<std::string> kFGLearningPath;
+    const std::string kFwUpdatePath;
+    const std::vector<std::string> kFGModelLoadingPath;
+
 
     const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventType>
             kGpuEventTypeStrToEnum{
@@ -185,6 +195,7 @@ class UeventListener {
 
     BatteryCapacityReporter battery_capacity_reporter_;
     ChargeStatsReporter charge_stats_reporter_;
+    BatteryFGReporter battery_fg_reporter_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
