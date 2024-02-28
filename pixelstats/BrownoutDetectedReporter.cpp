@@ -61,6 +61,7 @@ const std::regex kAlreadyUpdatedPattern("^(LASTMEAL_UPDATED)$");
 
 const std::map<std::string, int> kBrownoutReason = {{"uvlo,pmic,if", BrownoutDetected::UVLO_IF},
                                                     {"ocp,pmic,if", BrownoutDetected::OCP_IF},
+                                                    {"ocp2,pmic,if", BrownoutDetected::OCP2_IF},
                                                     {"uvlo,pmic,main", BrownoutDetected::UVLO_MAIN},
                                                     {"uvlo,pmic,sub", BrownoutDetected::UVLO_SUB},
                                                     {"ocp,buck1m", BrownoutDetected::OCP_B1M},
