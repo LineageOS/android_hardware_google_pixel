@@ -1555,6 +1555,7 @@ message BrownoutDetected {
         OCP_BBS = 26;
         OCP_BCS = 27;
         OCP_BDS = 28;
+        OCP2_IF = 29;
     }
 
     // Reverse domain name. (e.g. Pixel)

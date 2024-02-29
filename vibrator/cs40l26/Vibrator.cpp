@@ -22,6 +22,7 @@
 #include <linux/version.h>
 #include <log/log.h>
 #include <utils/Trace.h>
+#include <vendor_vibrator_hal_flags.h>
 
 #include <chrono>
 #include <cinttypes>
@@ -40,6 +41,8 @@
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof((x)) / sizeof((x)[0]))
 #endif
+
+namespace vibrator_aconfig_flags = vendor::vibrator::hal::flags;
 
 namespace aidl {
 namespace android {
@@ -732,6 +735,12 @@ uint16_t Vibrator::amplitudeToScale(float amplitude, float maximum, bool scalabl
 }
 
 void Vibrator::updateContext() {
+    /* Don't enable capo from HAL if flag is set to remove it */
+    if (vibrator_aconfig_flags::remove_capo()) {
+        mContextEnable = false;
+        return;
+    }
+
     VFTRACE();
     mContextEnable = mHwApi->getContextEnable();
     if (mContextEnable && !mContextEnabledPreviously) {

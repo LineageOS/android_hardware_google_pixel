@@ -66,6 +66,9 @@ cc_library {
         "Vibrator.cpp",
         "DspMemChunk.cpp",
     ],
+    shared_libs: [
+        "PixelVibratorFlagsL26",
+    ],
     export_include_dirs: [
         ".",
     ],
@@ -104,6 +107,24 @@ cc_binary {
     ],
     cflags: ["-DVIBRATOR_NAME=\"dual\""],
     proprietary: true,
+}
+
+aconfig_declarations {
+    name: "VibratorFlagsL26",
+    package: "vendor.vibrator.hal.flags",
+    srcs: ["VibratorFlags.aconfig"],
+}
+
+cc_aconfig_library {
+    name: "PixelVibratorFlagsL26",
+    aconfig_declarations: "VibratorFlagsL26",
+    vendor_available: true,
+}
+
+java_aconfig_library {
+    name: "PixelVibratorFlagsL26_java",
+    aconfig_declarations: "VibratorFlagsL26",
+    visibility: ["//vendor:__subpackages__"],
 }
 
 filegroup {
