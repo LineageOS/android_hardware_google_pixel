@@ -31,5 +31,6 @@ cc_test {
     ],
     shared_libs: [
         "libbase",
+        "PixelVibratorFlagsL26",
     ],
 }
