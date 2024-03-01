@@ -45,7 +45,7 @@ class BatteryEEPROMReporter {
   public:
     BatteryEEPROMReporter();
     void checkAndReport(const std::shared_ptr<IStats> &stats_client, const std::string &path);
-    void checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client, const std::string &path);
+    void checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client, const std::vector<std::string> &paths);
     void checkAndReportMaxfgHistory(const std::shared_ptr<IStats> &stats_client,
                                     const std::string &path);
 

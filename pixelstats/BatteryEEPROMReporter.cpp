@@ -42,6 +42,12 @@ using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
 
 BatteryEEPROMReporter::BatteryEEPROMReporter() {}
 
+static bool fileExists(const std::string &path) {
+    struct stat sb;
+
+    return stat(path.c_str(), &sb) == 0;
+}
+
 void BatteryEEPROMReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
                                            const std::string &path) {
     std::string file_contents;
@@ -270,13 +276,21 @@ void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_cli
 }
 
 void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client,
-                                               const std::string &path) {
+                                               const std::vector<std::string> &paths) {
     struct BatteryHistory gmsr;
     std::string file_contents;
+    std::string path;
     int16_t num;
 
-    if (path.empty())
+    if (paths.empty())
         return;
+
+    for (int i = 0; i < paths.size(); i++) {
+        if (fileExists(paths[i])) {
+            path = paths[i];
+            break;
+        }
+    }
 
     if (!ReadFileToString(path, &file_contents)) {
         ALOGE("Unable to read gmsr path: %s - %s", path.c_str(), strerror(errno));
@@ -284,7 +298,8 @@ void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &st
     }
 
     gmsr.checksum = 0xFFFF;
-    if (path.find("max77779") == std::string::npos) {
+    if (path.find("max77779") == std::string::npos &&
+        paths[0].find("max77779") == std::string::npos) {
         num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
                      "\nfullcaprep\t:%4" SCNx16 "\ncycles\t:%4" SCNx16 "\nfullcapnom\t:%4" SCNx16
                      "\nqresidual00\t:%4" SCNx16 "\nqresidual10\t:%4" SCNx16
