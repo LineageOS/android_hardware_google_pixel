@@ -105,6 +105,16 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
         break;
     case MiscWriterActions::kSetSotaConfig:
         goto sota_config;
+    case MiscWriterActions::kWriteDstTransition:
+        offset = override_offset.value_or(kDstTransitionOffsetInVendorSpace);
+        content = std::string(kDstTransition) + stringdata_;
+        content.resize(32);
+        break;
+    case MiscWriterActions::kWriteDstOffset:
+        offset = override_offset.value_or(kDstOffsetOffsetInVendorSpace);
+        content = std::string(kDstOffset) + stringdata_;
+        content.resize(32);
+        break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
       return false;
