@@ -208,11 +208,7 @@ void SysfsCollector::logBatteryEEPROM(const std::shared_ptr<IStats> &stats_clien
         battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
     }
 
-    if (kGMSRPath == nullptr || strlen(kGMSRPath) == 0) {
-         ALOGV("Battery GMSR path not specified");
-    } else {
-        battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
-    }
+    battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
 
     battery_EEPROM_reporter_.checkAndReportMaxfgHistory(stats_client, kMaxfgHistoryPath);
 }
