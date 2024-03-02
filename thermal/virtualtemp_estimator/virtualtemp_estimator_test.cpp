@@ -106,7 +106,7 @@ static int run_random_input_inference(std::string_view model_path,
     int input_size = input_combination.size();
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
                                                              input_size);
-    ::thermal::vtestimator::VtEstimationInitData init_data;
+    ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
     init_data.ml_model_init_data.use_prev_samples = (prev_samples_order > 1) ? true : false;
@@ -125,15 +125,16 @@ static int run_random_input_inference(std::string_view model_path,
     float avg_inference_time = 0;
     std::vector<unsigned long> inference_times;
 
+    std::srand(time(NULL));
     gettimeofday(&start_loop_time, nullptr);
     do {
         struct timeval begin, end;
         std::vector<float> thermistors;
 
-        // preparing random inputs with starting temperature between 20C to 40C
-        int r = 20 + std::rand() % 20;
+        // preparing random inputs with starting temperature between 0C to 50C
+        int r = std::rand() % 50000;
         for (int i = 0; i < input_size; ++i) {
-            thermistors.push_back(r + i);
+            thermistors.push_back(r + i * 1000);
         }
 
         gettimeofday(&begin, nullptr);
@@ -141,6 +142,14 @@ static int run_random_input_inference(std::string_view model_path,
         gettimeofday(&end, nullptr);
         if (ret != thermal::vtestimator::kVtEstimatorOk) {
             std::cout << "Failed to run estimator (ret: " << ret << ")\n";
+            return -1;
+        }
+
+        std::cout << "inference_count: " << inference_count << " random_value (r): " << r
+                  << " output: " << output << "\n";
+
+        if (output > 55000) {
+            std::cout << "Temperature above 55C observed\n";
             return -1;
         }
 
@@ -212,7 +221,7 @@ static int run_single_inference(std::string_view model_path, char *input, int pr
     thermal::vtestimator::VtEstimatorStatus ret;
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
                                                              thermistors.size());
-    ::thermal::vtestimator::VtEstimationInitData init_data;
+    ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
     init_data.ml_model_init_data.use_prev_samples = (prev_samples_order > 1) ? true : false;
@@ -253,7 +262,7 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
     thermal::vtestimator::VtEstimatorStatus ret;
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
                                                              input_combination.size());
-    ::thermal::vtestimator::VtEstimationInitData init_data;
+    ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
     init_data.ml_model_init_data.use_prev_samples = (prev_samples_order > 1) ? true : false;
