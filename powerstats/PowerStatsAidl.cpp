@@ -51,6 +51,10 @@ void PowerStats::addStateResidencyDataProvider(std::unique_ptr<IStateResidencyDa
                 .name = entityName,
                 .states = states,
         };
+        if (states.empty()) {
+            mStateResidencyDataProviders.back()->registerStatesUpdateCallback(std::bind(
+                    &PowerStats::statesUpdate, this, std::placeholders::_1, std::placeholders::_2));
+        }
         mPowerEntityInfos.emplace_back(i);
         mStateResidencyDataProviderIndex.emplace_back(index);
     }
@@ -176,6 +180,19 @@ ndk::ScopedAStatus PowerStats::readEnergyMeter(const std::vector<int32_t> &in_ch
         return ndk::ScopedAStatus::ok();
     }
     return mEnergyMeterDataProvider->readEnergyMeter(in_channelIds, _aidl_return);
+}
+
+void PowerStats::statesUpdate(const std::string &entityName, const std::vector<State> &states) {
+    for (auto &powerEntityInfo : mPowerEntityInfos) {
+        if (powerEntityInfo.name == entityName) {
+            // Update only if states have not yet been set.
+            if (powerEntityInfo.states.empty()) {
+                powerEntityInfo.states = states;
+            }
+            return;
+        }
+    }
+    LOG(WARNING) << "Attempt to update a non-existent entry: " << entityName;
 }
 
 void PowerStats::getEntityStateNames(
