@@ -78,6 +78,10 @@ class PixelStateResidencyDataProvider : public PowerStats::IStateResidencyDataPr
         std::shared_ptr<IPixelStateResidencyCallback> mCallback;
     };
 
+    void registerStatesUpdateCallback(
+            std::function<void(const std::string &, const std::vector<State> &)>
+                    statesUpdateCallback) override;
+
     ::ndk::ScopedAStatus registerCallback(
             const std::string &in_entityName,
             const std::shared_ptr<IPixelStateResidencyCallback> &in_cb);
@@ -97,6 +101,7 @@ class PixelStateResidencyDataProvider : public PowerStats::IStateResidencyDataPr
     std::mutex mLock;
     std::shared_ptr<ProviderService> mProviderService;
     std::vector<Entry> mEntries;
+    std::function<void(const std::string &, const std::vector<State> &)> mStatesUpdateCallback;
 };
 
 }  // namespace stats
