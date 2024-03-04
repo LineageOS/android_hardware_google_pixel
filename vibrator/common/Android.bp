@@ -57,6 +57,11 @@ haptics_feature_cc_defaults {
                     "-DLUXSHARE_ICT_LT_XLRA1906D",
                 ],
             },
+            conditions_default: {
+                cflags: [
+                    "-DUNSPECIFIED_ACTUATOR",
+                ],
+            },
         },
         adaptive_haptics_feature: {
             adaptive_haptics_v1: {
@@ -69,7 +74,7 @@ haptics_feature_cc_defaults {
                     "-DDISABLE_ADAPTIVE_HAPTICS_FEATURE",
                 ],
             },
-        }
+        },
     },
 }
 
