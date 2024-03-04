@@ -543,19 +543,48 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 
 bool ParsePredictorInfo(const std::string_view name, const Json::Value &sensor,
                         std::unique_ptr<PredictorInfo> *predictor_info) {
+    Json::Value predictor = sensor["PredictorInfo"];
+    if (predictor.empty()) {
+        return true;
+    }
+
+    LOG(INFO) << "Start to parse Sensor[" << name << "]'s PredictorInfo";
+    if (predictor["Sensor"].empty()) {
+        LOG(ERROR) << "Failed to parse Sensor [" << name << "]'s PredictorInfo";
+        return false;
+    }
+
     std::string predict_sensor;
-    if (!sensor["PredictorInfo"].empty()) {
-        LOG(INFO) << "Start to parse Sensor[" << name << "]'s PredictorInfo";
-        if (sensor["PredictorInfo"]["Sensor"].empty()) {
-            LOG(ERROR) << "Failed to parse Sensor [" << name << "]'s PredictorInfo";
+    bool support_pid_compensation = false;
+    std::vector<float> prediction_weights;
+    ThrottlingArray k_p_compensate;
+    predict_sensor = predictor["Sensor"].asString();
+    LOG(INFO) << "Sensor [" << name << "]'s predictor name is " << predict_sensor;
+    // parse pid compensation configuration
+    if ((!predictor["PredictionWeight"].empty()) && (!predictor["KPCompensate"].empty())) {
+        support_pid_compensation = true;
+        if (!predictor["PredictionWeight"].size()) {
+            LOG(ERROR) << "Failed to parse PredictionWeight";
             return false;
         }
-        predict_sensor = sensor["PredictorInfo"]["Sensor"].asString();
-        LOG(INFO) << "Sensor [" << name << "]'s predictor name is " << predict_sensor;
-
-        LOG(INFO) << "Successfully created PredictorInfo for Sensor[" << name << "]";
-        predictor_info->reset(new PredictorInfo{predict_sensor});
+        prediction_weights.reserve(predictor["PredictionWeight"].size());
+        for (Json::Value::ArrayIndex i = 0; i < predictor["PredictionWeight"].size(); ++i) {
+            float weight = predictor["PredictionWeight"][i].asFloat();
+            if (std::isnan(weight)) {
+                LOG(ERROR) << "Unexpected NAN prediction weight for sensor [" << name << "]";
+            }
+            prediction_weights.emplace_back(weight);
+            LOG(INFO) << "Sensor[" << name << "]'s prediction weights [" << i << "]: " << weight;
+        }
+        if (!getFloatFromJsonValues(predictor["KPCompensate"], &k_p_compensate, false, false)) {
+            LOG(ERROR) << "Failed to parse KPCompensate";
+            return false;
+        }
     }
+
+    LOG(INFO) << "Successfully created PredictorInfo for Sensor[" << name << "]";
+    predictor_info->reset(new PredictorInfo{predict_sensor, support_pid_compensation,
+                                            prediction_weights, k_p_compensate});
 
     return true;
 }
@@ -836,9 +865,9 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
         LOG(ERROR) << "Sensor[" << name << "]: failed to parse BindedCdevInfo";
         return false;
     }
+
     Json::Value values;
     ProfileMap profile_map;
-
     values = sensor["Profile"];
     for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
         Json::Value sub_values;

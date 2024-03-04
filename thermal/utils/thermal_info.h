@@ -147,6 +147,9 @@ struct VirtualSensorInfo {
 
 struct PredictorInfo {
     std::string sensor;
+    bool support_pid_compensation;
+    std::vector<float> prediction_weights;
+    ThrottlingArray k_p_compensate;
 };
 
 struct VirtualPowerRailInfo {

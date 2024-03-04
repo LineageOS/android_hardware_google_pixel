@@ -102,6 +102,8 @@ class VirtualTempEstimator {
     VtEstimatorStatus GetMaxPredictWindowMs(size_t *predict_window_ms);
     // Predict temperature after desired milliseconds
     VtEstimatorStatus PredictAfterTimeMs(const size_t time_ms, float *output);
+    // Get entire output buffer of the estimator
+    VtEstimatorStatus GetAllPredictions(std::vector<float> *output);
 
   private:
     void LoadTFLiteWrapper();
@@ -119,6 +121,7 @@ class VirtualTempEstimator {
                                      std::vector<float> *output);
     VtEstimatorStatus TFliteGetMaxPredictWindowMs(size_t *predict_window_ms);
     VtEstimatorStatus TFlitePredictAfterTimeMs(const size_t time_ms, float *output);
+    VtEstimatorStatus TFliteGetAllPredictions(std::vector<float> *output);
 
     VtEstimatorStatus TFLiteDumpStatus(std::string_view sensor_name, std::ostringstream *dump_buf);
     bool GetInputConfig(Json::Value *config);

@@ -589,6 +589,44 @@ VtEstimatorStatus VirtualTempEstimator::PredictAfterTimeMs(const size_t time_ms,
     return kVtEstimatorUnSupported;
 }
 
+VtEstimatorStatus VirtualTempEstimator::TFliteGetAllPredictions(std::vector<float> *output) {
+    if (tflite_instance_ == nullptr || common_instance_ == nullptr) {
+        LOG(ERROR) << "tflite_instance_ or common_instance_ is nullptr for predict window\n";
+        return kVtEstimatorInitFailed;
+    }
+
+    std::unique_lock<std::mutex> lock(tflite_instance_->tflite_methods.mutex);
+
+    if (!common_instance_->is_initialized) {
+        LOG(ERROR) << "tflite_instance_ not initialized for " << tflite_instance_->model_path;
+        return kVtEstimatorInitFailed;
+    }
+
+    if (output == nullptr) {
+        LOG(ERROR) << "output is nullptr";
+        return kVtEstimatorInvalidArgs;
+    }
+
+    std::vector<float> tflite_output;
+    size_t output_buffer_size = tflite_instance_->output_buffer_size;
+    tflite_output.reserve(output_buffer_size);
+    for (size_t i = 0; i < output_buffer_size; ++i) {
+        tflite_output.emplace_back(tflite_instance_->output_buffer[i]);
+    }
+    *output = tflite_output;
+
+    return kVtEstimatorOk;
+}
+
+VtEstimatorStatus VirtualTempEstimator::GetAllPredictions(std::vector<float> *output) {
+    if (type == kUseMLModel) {
+        return TFliteGetAllPredictions(output);
+    }
+
+    LOG(INFO) << "GetAllPredicts not supported by estimationType [" << type << "]";
+    return kVtEstimatorUnSupported;
+}
+
 VtEstimatorStatus VirtualTempEstimator::TFLiteDumpStatus(std::string_view sensor_name,
                                                          std::ostringstream *dump_buf) {
     if (dump_buf == nullptr) {

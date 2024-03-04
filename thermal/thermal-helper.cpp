@@ -259,6 +259,33 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 ret = false;
                 break;
             }
+
+            if (name_status_pair.second.predictor_info->support_pid_compensation) {
+                std::vector<float> output_template;
+                size_t prediction_weight_count =
+                        name_status_pair.second.predictor_info->prediction_weights.size();
+                // read predictor out to get the size of output vector
+                ::thermal::vtestimator::VtEstimatorStatus predict_check =
+                        predictor_sensor_info.virtual_sensor_info->vt_estimator->GetAllPredictions(
+                                &output_template);
+
+                if (predict_check != ::thermal::vtestimator::kVtEstimatorOk) {
+                    LOG(ERROR) << "Failed to get output size of " << name_status_pair.first
+                               << "'s predictor " << predict_sensor_name
+                               << " GetAllPredictions ret: " << ret << ")";
+                    ret = false;
+                    break;
+                }
+
+                if (prediction_weight_count != output_template.size()) {
+                    LOG(ERROR) << "Sensor [" << name_status_pair.first << "]: "
+                               << "prediction weights size (" << prediction_weight_count
+                               << ") doesn't match predictor [" << predict_sensor_name
+                               << "]'s output size (" << output_template.size() << ")";
+                    ret = false;
+                    break;
+                }
+            }
         }
     }
 
@@ -1090,6 +1117,41 @@ float ThermalHelperImpl::readPredictionAfterTimeMs(std::string_view sensor_name,
     return NAN;
 }
 
+bool ThermalHelperImpl::readTemperaturePredictions(std::string_view sensor_name,
+                                                   std::vector<float> *predictions) {
+    ATRACE_NAME(StringPrintf("ThermalHelper::readTemperaturePredictions - %s", sensor_name.data())
+                        .c_str());
+
+    if (predictions == nullptr) {
+        LOG(ERROR) << " predictions is nullptr";
+        return false;
+    }
+
+    if (!sensor_info_map_.count(sensor_name.data())) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_";
+        return false;
+    }
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.predictor_info == nullptr) {
+        LOG(ERROR) << "No predictor info found for sensor: " << sensor_name;
+        return false;
+    }
+
+    std::string predict_sensor_name = sensor_info.predictor_info->sensor;
+    const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name);
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            predictor_sensor_info.virtual_sensor_info->vt_estimator->GetAllPredictions(predictions);
+
+    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+        LOG(ERROR) << "Failed to read predictions (ret: " << ret << ") from " << predict_sensor_name
+                   << " for sensor " << sensor_name;
+        return false;
+    }
+
+    return true;
+}
+
 constexpr int kTranTimeoutParam = 2;
 
 bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *temp,
@@ -1362,10 +1424,21 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         if (sensor_status.severity == ThrottlingSeverity::NONE) {
             thermal_throttling_.clearThrottlingData(name_status_pair.first, sensor_info);
         } else {
+            // prepare for predictions for throttling compensation
+            std::vector<float> sensor_predictions;
+            if (sensor_info.predictor_info != nullptr &&
+                sensor_info.predictor_info->support_pid_compensation) {
+                if (!readTemperaturePredictions(name_status_pair.first, &sensor_predictions)) {
+                    LOG(ERROR) << "Failed to read predictions of " << name_status_pair.first
+                               << " for throttling compensation";
+                }
+            }
+
             // update thermal throttling request
             thermal_throttling_.thermalThrottlingUpdate(
                     temp, sensor_info, sensor_status.severity, time_elapsed_ms,
-                    power_files_.GetPowerStatusMap(), cooling_device_info_map_, max_throttling);
+                    power_files_.GetPowerStatusMap(), cooling_device_info_map_, max_throttling,
+                    sensor_predictions);
         }
 
         thermal_throttling_.computeCoolingDevicesRequest(

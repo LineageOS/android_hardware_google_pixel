@@ -188,7 +188,8 @@ bool ThermalThrottling::registerThermalThrottling(
 float ThermalThrottling::updatePowerBudget(const Temperature &temp, const SensorInfo &sensor_info,
                                            std::chrono::milliseconds time_elapsed_ms,
                                            ThrottlingSeverity curr_severity,
-                                           const bool max_throttling) {
+                                           const bool max_throttling,
+                                           const std::vector<float> &sensor_predictions) {
     float p = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
     bool target_changed = false;
@@ -210,7 +211,8 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
     throttling_status.prev_target = target_state;
 
     // Compute PID
-    float err = sensor_info.hot_thresholds[target_state] - temp.value;
+    float target = sensor_info.hot_thresholds[target_state];
+    float err = target - temp.value;
 
     if (max_throttling && err <= 0) {
         return sensor_info.throttling_info->min_alloc_power[target_state];
@@ -234,10 +236,24 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
             time_elapsed_ms.count();
     }
 
+    // Compute Compensation
+    float compensation = 0;
+    if (sensor_info.predictor_info != nullptr &&
+        sensor_info.predictor_info->support_pid_compensation) {
+        const std::vector<float> &prediction_weights =
+                sensor_info.predictor_info->prediction_weights;
+        for (size_t i = 0; i < sensor_predictions.size(); ++i) {
+            float prediction_err = target - (sensor_predictions[i] * sensor_info.multiplier);
+            compensation += prediction_weights[i] * prediction_err;
+        }
+        // apply weight based on current severity level
+        compensation *= sensor_info.predictor_info->k_p_compensate[target_state];
+    }
+
     throttling_status.prev_err = err;
     // Calculate power budget
-    power_budget =
-            sensor_info.throttling_info->s_power[target_state] + p + throttling_status.i_budget + d;
+    power_budget = sensor_info.throttling_info->s_power[target_state] + p +
+                   throttling_status.i_budget + d + compensation;
     if (power_budget < sensor_info.throttling_info->min_alloc_power[target_state]) {
         power_budget = sensor_info.throttling_info->min_alloc_power[target_state];
     }
@@ -261,7 +277,8 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
               << " s_power=" << sensor_info.throttling_info->s_power[target_state]
               << " time_elapsed_ms=" << time_elapsed_ms.count() << " p=" << p
               << " i=" << throttling_status.i_budget << " d=" << d
-              << " budget transient=" << budget_transient << " control target=" << target_state;
+              << " compensation=" << compensation << " budget transient=" << budget_transient
+              << " control target=" << target_state;
 
     ATRACE_INT((sensor_name + std::string("-power_budget")).c_str(),
                static_cast<int>(power_budget));
@@ -280,6 +297,8 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
                static_cast<int>(err / sensor_info.multiplier));
     ATRACE_INT((sensor_name + std::string("-p")).c_str(), static_cast<int>(p));
     ATRACE_INT((sensor_name + std::string("-d")).c_str(), static_cast<int>(d));
+    ATRACE_INT((sensor_name + std::string("-predict_compensation")).c_str(),
+               static_cast<int>(compensation));
     ATRACE_INT((sensor_name + std::string("-temp")).c_str(),
                static_cast<int>(temp.value / sensor_info.multiplier));
 
@@ -324,7 +343,7 @@ bool ThermalThrottling::allocatePowerToCdev(
         const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
         const std::unordered_map<std::string, PowerStatus> &power_status_map,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map,
-        const bool max_throttling) {
+        const bool max_throttling, const std::vector<float> &sensor_predictions) {
     float total_weight = 0;
     float last_updated_avg_power = NAN;
     float allocated_power = 0;
@@ -336,8 +355,8 @@ bool ThermalThrottling::allocatePowerToCdev(
     std::string log_buf;
 
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
-    auto total_power_budget =
-            updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity, max_throttling);
+    auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity,
+                                                max_throttling, sensor_predictions);
     const auto &profile = thermal_throttling_status_map_[temp.name].profile;
 
     if (sensor_info.throttling_info->excluded_power_info_map.size()) {
@@ -701,7 +720,7 @@ void ThermalThrottling::thermalThrottlingUpdate(
         const ThrottlingSeverity curr_severity, const std::chrono::milliseconds time_elapsed_ms,
         const std::unordered_map<std::string, PowerStatus> &power_status_map,
         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map,
-        const bool max_throttling) {
+        const bool max_throttling, const std::vector<float> &sensor_predictions) {
     if (!thermal_throttling_status_map_.count(temp.name)) {
         return;
     }
@@ -712,7 +731,8 @@ void ThermalThrottling::thermalThrottlingUpdate(
 
     if (thermal_throttling_status_map_[temp.name].pid_power_budget_map.size()) {
         if (!allocatePowerToCdev(temp, sensor_info, curr_severity, time_elapsed_ms,
-                                 power_status_map, cooling_device_info_map, max_throttling)) {
+                                 power_status_map, cooling_device_info_map, max_throttling,
+                                 sensor_predictions)) {
             LOG(ERROR) << "Sensor " << temp.name << " PID request cdev failed";
             // Clear the CDEV request if the power budget is failed to be allocated
             for (auto &pid_cdev_request_pair :
