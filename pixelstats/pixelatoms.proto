@@ -120,6 +120,7 @@ message Atom {
       DisplayPortErrorStats display_port_error_stats = 105066;
       HDCPAuthTypeStats hdcp_auth_type_stats = 105067;
       DisplayPortUsage display_port_usage = 105068;
+      FuelGaugeAbnormality fuel_gauge_abnormality = 105069;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2248,4 +2249,25 @@ message DisplayPortUsage {
   optional int32 product_id = 6;
   /* indicated start/stop event of DP usage */
   optional bool connected = 7;
+}
+
+/*
+ * A message containing max77779 fuel gauge abnormal events
+ * Logged from:
+ *    hardware/google/pixel/pixelstats/BatteryFGReporter.cpp
+ */
+message FuelGaugeAbnormality {
+  enum Event {
+    NONE = 0;            // no abnormal event
+    FULLCAPNOM_LOW = 1;  // unexpected fullcapnom learning (too low)
+    FULLCAPNOM_HIGH = 2; // unexpected fullcapnom learning (too high)
+    REPSOC_EDET = 4;     // empty detect false alarm
+    REPSOC_FDET = 8;     // full detect false alarm
+    REPSOC = 16;         // repsoc not accurate
+    VFOCV = 32;          // vfocv estimation wrong
+  }
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+  /* Record events have been triggered in bit flags */
+  repeated Event event = 2;
 }
