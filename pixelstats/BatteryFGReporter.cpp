@@ -294,6 +294,45 @@ void BatteryFGReporter::checkAndReportFGModelLoading(const std::shared_ptr<IStat
     }
 }
 
+void BatteryFGReporter::checkAndReportFGAbnormality(const std::shared_ptr<IStats> &stats_client,
+                                                    const std::string &path) {
+    std::string file_contents;
+    unsigned int abnl;
+
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read FG abnormality path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    if (sscanf(file_contents.c_str(), "%x", &abnl) != 1) {
+        ALOGE("Unable to parse %s from file %s to int", file_contents.c_str(), path.c_str());
+        return;
+    }
+
+    if (abnl == last_abnl)
+        return;
+
+    ALOGD("reportEvent: FG abnormality %x", abnl);
+
+    VendorAtomValue value;
+    std::vector<VendorAtomValue> values(1);
+    value.set<VendorAtomValue::intValue>(abnl);
+    values[PixelAtoms::FuelGaugeAbnormality::kEventFieldNumber - kVendorAtomOffset] = value;
+
+    VendorAtom atom = {.reverseDomainName = "",
+                       .atomId = PixelAtoms::Atom::kFuelGaugeAbnormality,
+                       .values = {std::move(values)}};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(atom);
+
+    if (!ret.isOk())
+        ALOGE("Unable to report FG abnormality.");
+
+    last_abnl = abnl;
+}
+
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware

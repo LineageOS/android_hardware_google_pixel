@@ -50,6 +50,7 @@ class UeventListener {
         const std::vector<std::string> FGLearningPath;
         const char *const FwUpdatePath;
         const std::vector<std::string> FGModelLoadingPath;
+        const char *const FGAbnlPath;
     };
     constexpr static const char *const ssoc_details_path =
             "/sys/class/power_supply/battery/ssoc_details";
@@ -70,7 +71,8 @@ class UeventListener {
                    const std::string typec_partner_pid_path = typec_partner_pid_path_default,
                    const std::vector<std::string> fg_learning_path = { "" },
                    const std::string fw_update_path = "",
-                   const std::vector<std::string> fg_modelloading_path = { "" });
+                   const std::vector<std::string> fg_modelloading_path = { "" },
+                   const std::string fg_abnl_path = "");
     UeventListener(const struct UeventPaths &paths);
 
     bool ProcessUevent();  // Process a single Uevent.
@@ -111,6 +113,7 @@ class UeventListener {
     const std::vector<std::string> kFGLearningPath;
     const std::string kFwUpdatePath;
     const std::vector<std::string> kFGModelLoadingPath;
+    const std::string kFGAbnlPath;
 
 
     const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventType>
