@@ -803,10 +803,6 @@ TEST_F(HintManagerTest, ParseAdpfConfigsTest) {
     EXPECT_EQ(157U, adpfs[1]->mUclampMinLow);
     EXPECT_EQ(166666660LL, adpfs[0]->mReportingRateLimitNs);
     EXPECT_EQ(83333330LL, adpfs[1]->mReportingRateLimitNs);
-    EXPECT_EQ(false, adpfs[0]->mEarlyBoostOn);
-    EXPECT_EQ(true, adpfs[1]->mEarlyBoostOn);
-    EXPECT_EQ(0.8, adpfs[0]->mEarlyBoostTimeFactor);
-    EXPECT_EQ(1.2, adpfs[1]->mEarlyBoostTimeFactor);
     EXPECT_EQ(1.0, adpfs[0]->mTargetTimeFactor);
     EXPECT_EQ(1.4, adpfs[1]->mTargetTimeFactor);
     EXPECT_EQ(10.0, adpfs[0]->mStaleTimeFactor);
@@ -849,6 +845,18 @@ TEST_F(HintManagerTest, GetFromJSONAdpfConfigTest) {
     EXPECT_EQ("REFRESH_60FPS", hm->GetAdpfProfile()->mName);
     EXPECT_TRUE(hm->SetAdpfProfile("REFRESH_120FPS"));
     EXPECT_EQ("REFRESH_120FPS", hm->GetAdpfProfile()->mName);
+}
+
+TEST_F(HintManagerTest, IsAdpfProfileSupported) {
+    TemporaryFile json_file;
+    ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
+    std::unique_ptr<HintManager> hm = HintManager::GetFromJSON(json_file.path, false);
+    EXPECT_NE(nullptr, hm.get());
+
+    // Check if given AdpfProfile supported
+    EXPECT_FALSE(hm->IsAdpfProfileSupported("NoSuchProfile"));
+    EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_60FPS"));
+    EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_120FPS"));
 }
 
 }  // namespace perfmgr

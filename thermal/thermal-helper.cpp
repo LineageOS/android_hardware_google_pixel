@@ -157,9 +157,11 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
         ret = false;
     }
 
-    if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
-                                               cooling_device_info_map_)) {
-        LOG(FATAL) << "Failed to initialize thermal stats";
+    if (ret) {
+        if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
+                                                   cooling_device_info_map_)) {
+            LOG(FATAL) << "Failed to initialize thermal stats";
+        }
     }
 
     for (auto &name_status_pair : sensor_info_map_) {
@@ -169,7 +171,7 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 .prev_cold_severity = ThrottlingSeverity::NONE,
                 .last_update_time = boot_clock::time_point::min(),
                 .thermal_cached = {NAN, boot_clock::time_point::min()},
-                .emul_setting = nullptr,
+                .override_status = {nullptr, false, false},
         };
 
         if (name_status_pair.second.throttling_info != nullptr) {
@@ -286,42 +288,82 @@ bool getThermalZoneTypeById(int tz_id, std::string *type) {
     return true;
 }
 
-bool ThermalHelperImpl::emulTemp(std::string_view target_sensor, const float value) {
-    LOG(INFO) << "Set " << target_sensor.data() << " emul_temp "
-              << "to " << value;
+void ThermalHelperImpl::checkUpdateSensorForEmul(std::string_view target_sensor,
+                                                 const bool max_throttling) {
+    // Force update all the sensors which are related to the target emul sensor
+    for (auto &[sensor_name, sensor_info] : sensor_info_map_) {
+        if (sensor_info.virtual_sensor_info == nullptr || !sensor_info.is_watch) {
+            continue;
+        }
+
+        const auto &linked_sensors = sensor_info.virtual_sensor_info->linked_sensors;
+        if (std::find(linked_sensors.begin(), linked_sensors.end(), target_sensor) ==
+            linked_sensors.end()) {
+            continue;
+        }
+
+        auto &sensor_status = sensor_status_map_.at(sensor_name.data());
+        sensor_status.override_status.max_throttling = max_throttling;
+        sensor_status.override_status.pending_update = true;
+
+        checkUpdateSensorForEmul(sensor_name, max_throttling);
+    }
+}
+
+bool ThermalHelperImpl::emulTemp(std::string_view target_sensor, const float temp,
+                                 const bool max_throttling) {
+    LOG(INFO) << "Set " << target_sensor.data() << " emul_temp: " << temp
+              << " max_throttling: " << max_throttling;
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
+
     // Check the target sensor is valid
     if (!sensor_status_map_.count(target_sensor.data())) {
         LOG(ERROR) << "Cannot find target emul sensor: " << target_sensor.data();
         return false;
     }
 
-    sensor_status_map_.at(target_sensor.data())
-            .emul_setting.reset(new EmulSetting{value, -1, true});
+    auto &sensor_status = sensor_status_map_.at(target_sensor.data());
+
+    sensor_status.override_status.emul_temp.reset(new EmulTemp{temp, -1});
+    sensor_status.override_status.max_throttling = max_throttling;
+    sensor_status.override_status.pending_update = true;
+
+    checkUpdateSensorForEmul(target_sensor.data(), max_throttling);
 
     thermal_watcher_->wake();
     return true;
 }
 
-bool ThermalHelperImpl::emulSeverity(std::string_view target_sensor, const int severity) {
-    LOG(INFO) << "Set " << target_sensor.data() << " emul_severity "
-              << "to " << severity;
+bool ThermalHelperImpl::emulSeverity(std::string_view target_sensor, const int severity,
+                                     const bool max_throttling) {
+    LOG(INFO) << "Set " << target_sensor.data() << " emul_severity: " << severity
+              << " max_throttling: " << max_throttling;
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
     // Check the target sensor is valid
-    if (!sensor_status_map_.count(target_sensor.data())) {
+    if (!sensor_status_map_.count(target_sensor.data()) ||
+        !sensor_info_map_.count(target_sensor.data())) {
         LOG(ERROR) << "Cannot find target emul sensor: " << target_sensor.data();
         return false;
     }
+    const auto &sensor_info = sensor_info_map_.at(target_sensor.data());
+
     // Check the emul severity is valid
     if (severity > static_cast<int>(kThrottlingSeverityCount)) {
         LOG(ERROR) << "Invalid emul severity value " << severity;
         return false;
     }
 
-    sensor_status_map_.at(target_sensor.data())
-            .emul_setting.reset(new EmulSetting{NAN, severity, true});
+    const auto temp = sensor_info.hot_thresholds[severity] / sensor_info.multiplier;
+
+    auto &sensor_status = sensor_status_map_.at(target_sensor.data());
+
+    sensor_status.override_status.emul_temp.reset(new EmulTemp{temp, severity});
+    sensor_status.override_status.max_throttling = max_throttling;
+    sensor_status.override_status.pending_update = true;
+
+    checkUpdateSensorForEmul(target_sensor.data(), max_throttling);
 
     thermal_watcher_->wake();
     return true;
@@ -332,19 +374,22 @@ bool ThermalHelperImpl::emulClear(std::string_view target_sensor) {
 
     std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
     if (target_sensor == "all") {
-        for (auto &sensor_status : sensor_status_map_) {
-            if (sensor_status.second.emul_setting != nullptr) {
-                sensor_status.second.emul_setting.reset(new EmulSetting{NAN, -1, true});
-            }
+        for (auto &[sensor_name, sensor_status] : sensor_status_map_) {
+            sensor_status.override_status = {
+                    .emul_temp = nullptr, .max_throttling = false, .pending_update = true};
+            checkUpdateSensorForEmul(sensor_name, false);
         }
-    } else if (sensor_status_map_.count(target_sensor.data()) &&
-               sensor_status_map_.at(target_sensor.data()).emul_setting != nullptr) {
-        sensor_status_map_.at(target_sensor.data())
-                .emul_setting.reset(new EmulSetting{NAN, -1, true});
+    } else if (sensor_status_map_.count(target_sensor.data())) {
+        auto &sensor_status = sensor_status_map_.at(target_sensor.data());
+        sensor_status.override_status = {
+                .emul_temp = nullptr, .max_throttling = false, .pending_update = true};
+        checkUpdateSensorForEmul(target_sensor.data(), false);
     } else {
         LOG(ERROR) << "Cannot find target emul sensor: " << target_sensor.data();
         return false;
     }
+
+    thermal_watcher_->wake();
     return true;
 }
 
@@ -377,8 +422,15 @@ bool ThermalHelperImpl::readTemperature(
     std::map<std::string, float> sensor_log_map;
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map) ||
-        std::isnan(temp)) {
+    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
+        LOG(ERROR) << "Failed to read thermal sensor " << sensor_name.data();
+        thermal_stats_helper_.reportThermalAbnormality(
+                ThermalSensorAbnormalityDetected::TEMP_READ_FAIL, sensor_name, std::nullopt);
+        return false;
+    }
+
+    if (std::isnan(temp)) {
+        LOG(INFO) << "Sensor " << sensor_name.data() << " temperature is nan.";
         return false;
     }
 
@@ -407,10 +459,11 @@ bool ThermalHelperImpl::readTemperature(
         *throttling_status = status;
     }
 
-    if (sensor_status.emul_setting != nullptr && sensor_status.emul_setting->emul_severity >= 0) {
+    if (sensor_status.override_status.emul_temp != nullptr &&
+        sensor_status.override_status.emul_temp->severity >= 0) {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
         out->throttlingStatus =
-                static_cast<ThrottlingSeverity>(sensor_status.emul_setting->emul_severity);
+                static_cast<ThrottlingSeverity>(sensor_status.override_status.emul_temp->severity);
     } else {
         out->throttlingStatus =
                 static_cast<size_t>(status.first) > static_cast<size_t>(status.second)
@@ -853,12 +906,55 @@ bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *read
     return true;
 }
 
+float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
+                                                 std::map<std::string, float> *sensor_log_map) {
+    std::vector<float> model_inputs;
+    float estimated_vt = NAN;
+    constexpr int kCelsius2mC = 1000;
+
+    ATRACE_NAME(StringPrintf("ThermalHelper::runVirtualTempEstimator - %s", sensor_name.data())
+                        .c_str());
+    if (!(sensor_info_map_.count(sensor_name.data()) &&
+          sensor_status_map_.count(sensor_name.data()))) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
+        return NAN;
+    }
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (!sensor_info.virtual_sensor_info->vt_estimator) {
+        LOG(ERROR) << "vt_estimator not valid for " << sensor_name;
+        return NAN;
+    }
+
+    model_inputs.reserve(sensor_info.virtual_sensor_info->linked_sensors.size());
+
+    for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
+        std::string linked_sensor = sensor_info.virtual_sensor_info->linked_sensors[i];
+
+        if ((*sensor_log_map).count(linked_sensor.data())) {
+            float value = (*sensor_log_map)[linked_sensor.data()];
+            model_inputs.push_back(value / kCelsius2mC);
+        } else {
+            LOG(ERROR) << "failed to read sensor: " << linked_sensor;
+            return NAN;
+        }
+    }
+
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &estimated_vt);
+    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+        LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
+        return NAN;
+    }
+
+    return (estimated_vt * kCelsius2mC);
+}
+
 constexpr int kTranTimeoutParam = 2;
 
 bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *temp,
                                           const bool force_no_cache,
                                           std::map<std::string, float> *sensor_log_map) {
-    float temp_val = 0.0;
     std::string file_reading;
     boot_clock::time_point now = boot_clock::now();
 
@@ -873,9 +969,8 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
 
     {
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
-        if (sensor_status.emul_setting != nullptr &&
-            !isnan(sensor_status.emul_setting->emul_temp)) {
-            *temp = sensor_status.emul_setting->emul_temp;
+        if (sensor_status.override_status.emul_temp != nullptr) {
+            *temp = sensor_status.override_status.emul_temp->temp;
             return true;
         }
     }
@@ -903,57 +998,75 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         }
         *temp = std::stof(::android::base::Trim(file_reading));
     } else {
-        for (size_t i = 0; i < sensor_info.virtual_sensor_info->linked_sensors.size(); i++) {
-            float sensor_reading = 0.0;
-            // Get the sensor reading data
-            if (!readDataByType(sensor_info.virtual_sensor_info->linked_sensors[i], &sensor_reading,
+        const auto &linked_sensors_size = sensor_info.virtual_sensor_info->linked_sensors.size();
+        std::vector<float> sensor_readings(linked_sensors_size, 0.0);
+
+        // Calculate temperature of each of the linked sensor
+        for (size_t i = 0; i < linked_sensors_size; i++) {
+            if (!readDataByType(sensor_info.virtual_sensor_info->linked_sensors[i],
+                                &sensor_readings[i],
                                 sensor_info.virtual_sensor_info->linked_sensors_type[i],
                                 force_no_cache, sensor_log_map)) {
                 LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s linked sensor "
                            << sensor_info.virtual_sensor_info->linked_sensors[i];
                 return false;
             }
-
-            float coefficient = 0.0;
-            if (!readDataByType(sensor_info.virtual_sensor_info->coefficients[i], &coefficient,
-                                sensor_info.virtual_sensor_info->coefficients_type[i],
-                                force_no_cache, sensor_log_map)) {
-                LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s coefficient "
-                           << sensor_info.virtual_sensor_info->coefficients[i];
-                return false;
-            }
-
-            if (std::isnan(sensor_reading) || std::isnan(coefficient)) {
+            if (std::isnan(sensor_readings[i])) {
                 LOG(INFO) << sensor_name << " data is under collecting";
                 return true;
             }
-
-            switch (sensor_info.virtual_sensor_info->formula) {
-                case FormulaOption::COUNT_THRESHOLD:
-                    if ((coefficient < 0 && sensor_reading < -coefficient) ||
-                        (coefficient >= 0 && sensor_reading >= coefficient))
-                        temp_val += 1;
-                    break;
-                case FormulaOption::WEIGHTED_AVG:
-                    temp_val += sensor_reading * coefficient;
-                    break;
-                case FormulaOption::MAXIMUM:
-                    if (i == 0)
-                        temp_val = std::numeric_limits<float>::lowest();
-                    if (sensor_reading * coefficient > temp_val)
-                        temp_val = sensor_reading * coefficient;
-                    break;
-                case FormulaOption::MINIMUM:
-                    if (i == 0)
-                        temp_val = std::numeric_limits<float>::max();
-                    if (sensor_reading * coefficient < temp_val)
-                        temp_val = sensor_reading * coefficient;
-                    break;
-                default:
-                    break;
-            }
         }
-        *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
+
+        if (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) {
+            *temp = runVirtualTempEstimator(sensor_name, sensor_log_map);
+
+            if (std::isnan(*temp)) {
+                LOG(ERROR) << "VirtualEstimator returned NAN for " << sensor_name;
+                return false;
+            }
+        } else {
+            float temp_val = 0.0;
+            for (size_t i = 0; i < linked_sensors_size; i++) {
+                float coefficient = 0.0;
+                if (!readDataByType(sensor_info.virtual_sensor_info->coefficients[i], &coefficient,
+                                    sensor_info.virtual_sensor_info->coefficients_type[i],
+                                    force_no_cache, sensor_log_map)) {
+                    LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s coefficient "
+                               << sensor_info.virtual_sensor_info->coefficients[i];
+                    return false;
+                }
+                if (std::isnan(coefficient)) {
+                    LOG(INFO) << sensor_name << " data is under collecting";
+                    return true;
+                }
+                switch (sensor_info.virtual_sensor_info->formula) {
+                    case FormulaOption::COUNT_THRESHOLD:
+                        if ((coefficient < 0 && sensor_readings[i] < -coefficient) ||
+                            (coefficient >= 0 && sensor_readings[i] >= coefficient))
+                            temp_val += 1;
+                        break;
+                    case FormulaOption::WEIGHTED_AVG:
+                        temp_val += sensor_readings[i] * coefficient;
+                        break;
+                    case FormulaOption::MAXIMUM:
+                        if (i == 0)
+                            temp_val = std::numeric_limits<float>::lowest();
+                        if (sensor_readings[i] * coefficient > temp_val)
+                            temp_val = sensor_readings[i] * coefficient;
+                        break;
+                    case FormulaOption::MINIMUM:
+                        if (i == 0)
+                            temp_val = std::numeric_limits<float>::max();
+                        if (sensor_readings[i] * coefficient < temp_val)
+                            temp_val = sensor_readings[i] * coefficient;
+                        break;
+                    default:
+                        LOG(ERROR) << "Unknown formula type for sensor " << sensor_name.data();
+                        return false;
+                }
+            }
+            *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
+        }
     }
 
     if (!isnan(sensor_info.step_ratio) && !isnan(sensor_status.thermal_cached.temp) &&
@@ -993,6 +1106,7 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         TemperatureThreshold threshold;
         SensorStatus &sensor_status = name_status_pair.second;
         const SensorInfo &sensor_info = sensor_info_map_.at(name_status_pair.first);
+        bool max_throttling = false;
 
         // Only handle the sensors in allow list
         if (!sensor_info.is_watch) {
@@ -1046,12 +1160,10 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         }
         {
             std::lock_guard<std::shared_mutex> _lock(sensor_status_map_mutex_);
-            if (sensor_status.emul_setting != nullptr &&
-                sensor_status.emul_setting->pending_update) {
-                force_update = true;
-                sensor_status.emul_setting->pending_update = false;
-                LOG(INFO) << "Update " << name_status_pair.first.data()
-                          << " right away with emul setting";
+            max_throttling = sensor_status.override_status.max_throttling;
+            if (sensor_status.override_status.pending_update) {
+                force_update = sensor_status.override_status.pending_update;
+                sensor_status.override_status.pending_update = false;
             }
         }
         LOG(VERBOSE) << "sensor " << name_status_pair.first
@@ -1110,7 +1222,7 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
             // update thermal throttling request
             thermal_throttling_.thermalThrottlingUpdate(
                     temp, sensor_info, sensor_status.severity, time_elapsed_ms,
-                    power_files_.GetPowerStatusMap(), cooling_device_info_map_);
+                    power_files_.GetPowerStatusMap(), cooling_device_info_map_, max_throttling);
         }
 
         thermal_throttling_.computeCoolingDevicesRequest(

@@ -198,9 +198,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         return true;
     }
     bool isChirpEnabled() override {
-        bool value;
-        getProperty("chirp.enabled", &value, false);
-        return value;
+        return utils::getProperty("persist.vendor.vibrator.hal.chirp.enabled", false);
     }
     void debug(int fd) override { HwCalBase::debug(fd); }
 };

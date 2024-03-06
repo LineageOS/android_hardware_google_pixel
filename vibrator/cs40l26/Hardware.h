@@ -297,6 +297,9 @@ class HwApi : public Vibrator::HwApi, private HwApiBase {
         *haptic_pcm = NULL;
         return false;
     }
+    bool isPassthroughI2sHapticSupported() override {
+        return utils::getProperty("ro.vendor.vibrator.hal.passthrough_i2s_supported", false);
+    }
     bool uploadOwtEffect(const uint8_t *owtData, const uint32_t numBytes, struct ff_effect *effect,
                          uint32_t *outEffectIndex, int *status) override {
         ATRACE_NAME(__func__);
@@ -516,9 +519,7 @@ class HwCal : public Vibrator::HwCal, private HwCalBase {
         return true;
     }
     bool isChirpEnabled() override {
-        bool value;
-        getProperty("chirp.enabled", &value, false);
-        return value;
+        return utils::getProperty("persist.vendor.vibrator.hal.chirp.enabled", false);
     }
     bool getSupportedPrimitives(uint32_t *value) override {
         return getProperty("supported_primitives", value, (uint32_t)0);

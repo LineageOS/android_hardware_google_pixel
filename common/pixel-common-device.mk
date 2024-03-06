@@ -57,3 +57,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # Virtual fingerprint HAL
 PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.fingerprint.virtual
 
+# Virtual face HAL
+ifeq ($(RELEASE_AIDL_USE_UNFROZEN), true)
+PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.face.virtual
+endif
+

@@ -125,6 +125,9 @@ class HintManager {
     // get current ADPF.
     std::shared_ptr<AdpfConfig> GetAdpfProfile() const;
 
+    // Query if given AdpfProfile supported.
+    bool IsAdpfProfileSupported(const std::string &name) const;
+
     // Static method to construct HintManager from the JSON config file.
     static std::unique_ptr<HintManager> GetFromJSON(
         const std::string& config_path, bool start = true);

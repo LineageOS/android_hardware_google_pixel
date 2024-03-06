@@ -70,7 +70,7 @@ void ChargerDetect::populateTcpmPsyName(std::string* tcpmPsyName) {
         while ((entry = readdir(dir.get()))) {
             const char* name = entry->d_name;
 
-            KLOG_INFO(LOG_TAG, "Psy name:%s", name);
+            KLOG_DEBUG(LOG_TAG, "Psy name:%s", name);
             if (strstr(name, kTcpmPsyFilter)) {
                 *tcpmPsyName = name;
             }
@@ -119,7 +119,7 @@ void ChargerDetect::onlineUpdate(HealthInfo *health_info) {
 
     if (tcpmPsyName.empty()) {
         populateTcpmPsyName(&tcpmPsyName);
-        KLOG_INFO(LOG_TAG, "TcpmPsyName:%s\n", tcpmPsyName.c_str());
+        KLOG_DEBUG(LOG_TAG, "TcpmPsyName:%s\n", tcpmPsyName.c_str());
     }
 
     if (!getIntField(kUsbOnlinePath)) {
@@ -150,7 +150,7 @@ void ChargerDetect::onlineUpdate(HealthInfo *health_info) {
         return;
     }
 
-    KLOG_INFO(LOG_TAG, "TcpmPsy Usbtype:%s\n", usbPsyType.c_str());
+    KLOG_DEBUG(LOG_TAG, "TcpmPsy Usbtype:%s\n", usbPsyType.c_str());
 
     return;
 }
