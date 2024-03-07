@@ -955,9 +955,17 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
     ::thermal::vtestimator::VtEstimatorStatus ret =
             sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &estimated_vt);
 
-    std::string_view backup_sensor = sensor_info.virtual_sensor_info->backup_sensor;
-    if ((ret == ::thermal::vtestimator::kVtEstimatorLowConfidence) && (!backup_sensor.empty())) {
-        LOG(INFO) << "VT Estimator returned low confidence for " << sensor_name
+    if (ret == ::thermal::vtestimator::kVtEstimatorOk) {
+        return estimated_vt;
+    } else if (ret == ::thermal::vtestimator::kVtEstimatorLowConfidence ||
+               ret == ::thermal::vtestimator::kVtEstimatorUnderSampling) {
+        std::string_view backup_sensor = sensor_info.virtual_sensor_info->backup_sensor;
+        if (backup_sensor.empty()) {
+            LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name
+                       << " with no backup.";
+            return NAN;
+        }
+        LOG(INFO) << "VT Estimator returned (ret: " << ret << ") for " << sensor_name
                   << ". Reading backup sensor [" << backup_sensor << "] data to use";
         if (!readDataByType(backup_sensor, &estimated_vt, SensorFusionType::SENSOR, force_no_cache,
                             sensor_log_map)) {
@@ -965,12 +973,11 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
                        << backup_sensor;
             return NAN;
         }
-    } else if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
-        LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
-        return NAN;
+        return estimated_vt;
     }
 
-    return estimated_vt;
+    LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
+    return NAN;
 }
 
 constexpr int kTranTimeoutParam = 2;
