@@ -35,6 +35,8 @@ class PowerStats : public BnPowerStats {
         virtual bool getStateResidencies(
                 std::unordered_map<std::string, std::vector<StateResidency>> *residencies) = 0;
         virtual std::unordered_map<std::string, std::vector<State>> getInfo() = 0;
+        virtual void registerStatesUpdateCallback(
+                __unused std::function<void(const std::string &, const std::vector<State> &)>) {}
     };
 
     class IEnergyConsumer {
@@ -72,6 +74,8 @@ class PowerStats : public BnPowerStats {
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 
   private:
+    void statesUpdate(const std::string &entityName, const std::vector<State> &states);
+
     void getEntityStateNames(
             std::unordered_map<int32_t, std::string> *entityNames,
             std::unordered_map<int32_t, std::unordered_map<int32_t, std::string>> *stateNames);
