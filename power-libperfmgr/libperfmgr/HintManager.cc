@@ -309,6 +309,22 @@ std::shared_ptr<HintManager> HintManager::GetInstance() {
     return mInstance;
 }
 
+static std::optional<std::string> ParseGpuSysfsNode(const std::string &json_doc) {
+    Json::Value root;
+    Json::CharReaderBuilder builder;
+    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    std::string errorMessage;
+    if (!reader->parse(&*json_doc.begin(), &*json_doc.end(), &root, &errorMessage)) {
+        LOG(ERROR) << "Failed to parse JSON config: " << errorMessage;
+        return {};
+    }
+
+    if (root["GpuSysfsPath"].empty() || !root["GpuSysfsPath"].isString()) {
+        return {};
+    }
+    return {root["GpuSysfsPath"].asString()};
+}
+
 std::unique_ptr<HintManager> HintManager::GetFromJSON(
     const std::string& config_path, bool start) {
     std::string json_doc;
@@ -335,8 +351,10 @@ std::unique_ptr<HintManager> HintManager::GetFromJSON(
         return nullptr;
     }
 
+    auto const gpu_sysfs_node = ParseGpuSysfsNode(json_doc);
+
     sp<NodeLooperThread> nm = new NodeLooperThread(std::move(nodes));
-    std::unique_ptr<HintManager> hm = std::make_unique<HintManager>(std::move(nm), actions, adpfs);
+    auto hm = std::make_unique<HintManager>(std::move(nm), actions, adpfs, gpu_sysfs_node);
 
     if (!HintManager::InitHintStatus(hm)) {
         LOG(ERROR) << "Failed to initialize hint status";
@@ -688,6 +706,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
     }
     Json::Value adpfs = root["AdpfConfig"];
     for (Json::Value::ArrayIndex i = 0; i < adpfs.size(); ++i) {
+        std::optional<bool> gpuBoost;
+        std::optional<uint64_t> gpuBoostCapacityMax;
         std::string name = adpfs[i]["Name"].asString();
         LOG(VERBOSE) << "AdpfConfig[" << i << "]'s Name: " << name;
         if (name.empty()) {
@@ -723,11 +743,19 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         ADPF_PARSE(reportingRate, "ReportingRateLimitNs", UInt64);
         ADPF_PARSE(targetTimeFactor, "TargetTimeFactor", Double);
 
+        if (!adpfs[i]["GpuBoost"].empty() && adpfs[i]["GpuBoost"].isBool()) {
+            gpuBoost = adpfs[i]["GpuBoost"].asBool();
+        }
+        if (!adpfs[i]["GpuCapacityBoostMax"].empty() &&
+            adpfs[i]["GpuCapacityBoostMax"].isUInt64()) {
+            gpuBoostCapacityMax = adpfs[i]["GpuCapacityBoostMax"].asUInt64();
+        }
+
         adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
                 pidDOver, pidDUnder, adpfUclamp, uclampMinInit, uclampMinHighLimit,
                 uclampMinLowLimit, samplingWindowP, samplingWindowI, samplingWindowD, reportingRate,
-                targetTimeFactor, staleTimeFactor));
+                targetTimeFactor, staleTimeFactor, gpuBoost, gpuBoostCapacityMax));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;
@@ -756,6 +784,10 @@ bool HintManager::IsAdpfProfileSupported(const std::string &profile_name) const 
         }
     }
     return false;
+}
+
+std::optional<std::string> HintManager::gpu_sysfs_config_path() const {
+    return gpu_sysfs_config_path_;
 }
 
 }  // namespace perfmgr

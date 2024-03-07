@@ -36,6 +36,7 @@ class BatteryFGReporter {
     void checkAndReportFGLearning(const std::shared_ptr<IStats> &stats_client, const std::vector<std::string> &paths);
     void checkAndReportFwUpdate(const std::shared_ptr<IStats> &stats_client, const std::string &path);
     void checkAndReportFGModelLoading(const std::shared_ptr<IStats> &stats_client, const std::vector<std::string> &paths);
+    void checkAndReportFGAbnormality(const std::shared_ptr<IStats> &stats_client, const std::string &path);
 
   private:
     const int kVendorAtomOffset = 2;
@@ -66,6 +67,7 @@ class BatteryFGReporter {
     uint16_t old_learn_params[4] = {0};
     uint16_t old_fw_update[3] = {0};
     uint16_t old_model_loading[3] = {0};
+    unsigned int last_abnl;
 
     void reportEvent(const std::shared_ptr<IStats> &stats_client,
                      const struct BatteryFGLearningParam &params);

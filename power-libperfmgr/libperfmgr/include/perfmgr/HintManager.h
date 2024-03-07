@@ -89,8 +89,13 @@ struct Hint {
 class HintManager {
   public:
     HintManager(sp<NodeLooperThread> nm, const std::unordered_map<std::string, Hint> &actions,
-                const std::vector<std::shared_ptr<AdpfConfig>> &adpfs)
-        : nm_(std::move(nm)), actions_(actions), adpfs_(adpfs), adpf_index_(0) {}
+                const std::vector<std::shared_ptr<AdpfConfig>> &adpfs,
+                std::optional<std::string> gpu_sysfs_config_path)
+        : nm_(std::move(nm)),
+          actions_(actions),
+          adpfs_(adpfs),
+          adpf_index_(0),
+          gpu_sysfs_config_path_(gpu_sysfs_config_path) {}
     ~HintManager() {
         if (nm_.get() != nullptr) nm_->Stop();
     }
@@ -121,6 +126,8 @@ class HintManager {
 
     // set ADPF config by profile name.
     bool SetAdpfProfile(const std::string &profile_name);
+
+    std::optional<std::string> gpu_sysfs_config_path() const;
 
     // get current ADPF.
     std::shared_ptr<AdpfConfig> GetAdpfProfile() const;
@@ -174,6 +181,7 @@ class HintManager {
     std::unordered_map<std::string, Hint> actions_;
     std::vector<std::shared_ptr<AdpfConfig>> adpfs_;
     uint32_t adpf_index_;
+    std::optional<std::string> gpu_sysfs_config_path_;
 };
 
 }  // namespace perfmgr

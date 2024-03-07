@@ -18,6 +18,7 @@
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -145,6 +146,7 @@ constexpr char kJSON_RAW[] = R"(
             "Value": "LAUNCH"
         }
     ],
+    "GpuSysfsPath" : "/sys/devices/platform/123.abc",
     "AdpfConfig": [
         {
             "Name": "REFRESH_120FPS",
@@ -168,7 +170,9 @@ constexpr char kJSON_RAW[] = R"(
             "EarlyBoost_On": false,
             "EarlyBoost_TimeFactor": 0.8,
             "TargetTimeFactor": 1.0,
-            "StaleTimeFactor": 10.0
+            "StaleTimeFactor": 10.0,
+            "GpuBoost": true,
+            "GpuCapacityBoostMax": 300000
         },
         {
             "Name": "REFRESH_60FPS",
@@ -202,7 +206,7 @@ class HintManagerTest : public ::testing::Test, public HintManager {
   protected:
     HintManagerTest()
         : HintManager(nullptr, std::unordered_map<std::string, Hint>{},
-                      std::vector<std::shared_ptr<AdpfConfig>>()) {
+                      std::vector<std::shared_ptr<AdpfConfig>>(), {}) {
         android::base::SetMinimumLogSeverity(android::base::VERBOSE);
         prop_ = "vendor.pwhal.mode";
     }
@@ -289,7 +293,7 @@ static inline void _VerifyStats(const HintStats &stats, uint32_t count, uint64_t
 
 // Test GetHints
 TEST_F(HintManagerTest, GetHintsTest) {
-    HintManager hm(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>());
+    HintManager hm(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>(), {});
     EXPECT_TRUE(hm.Start());
     std::vector<std::string> hints = hm.GetHints();
     EXPECT_TRUE(hm.IsRunning());
@@ -300,8 +304,9 @@ TEST_F(HintManagerTest, GetHintsTest) {
 
 // Test GetHintStats
 TEST_F(HintManagerTest, GetHintStatsTest) {
-    auto hm = std::make_unique<HintManager>(nm_, actions_,
-                                            std::vector<std::shared_ptr<AdpfConfig>>());
+    auto hm =
+            std::make_unique<HintManager>(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>(),
+                                          std::optional<std::string>{});
     EXPECT_TRUE(InitHintStatus(hm));
     EXPECT_TRUE(hm->Start());
     HintStats launch_stats(hm->GetHintStats("LAUNCH"));
@@ -314,7 +319,7 @@ TEST_F(HintManagerTest, GetHintStatsTest) {
 
 // Test initialization of default values
 TEST_F(HintManagerTest, HintInitDefaultTest) {
-    HintManager hm(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>());
+    HintManager hm(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>(), {});
     EXPECT_TRUE(hm.Start());
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
     EXPECT_TRUE(hm.IsRunning());
@@ -325,7 +330,7 @@ TEST_F(HintManagerTest, HintInitDefaultTest) {
 
 // Test IsHintSupported
 TEST_F(HintManagerTest, HintSupportedTest) {
-    HintManager hm(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>());
+    HintManager hm(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>(), {});
     EXPECT_TRUE(hm.IsHintSupported("INTERACTION"));
     EXPECT_TRUE(hm.IsHintSupported("LAUNCH"));
     EXPECT_FALSE(hm.IsHintSupported("NO_SUCH_HINT"));
@@ -333,8 +338,9 @@ TEST_F(HintManagerTest, HintSupportedTest) {
 
 // Test hint/cancel/expire with dummy actions
 TEST_F(HintManagerTest, HintTest) {
-    auto hm = std::make_unique<HintManager>(nm_, actions_,
-                                            std::vector<std::shared_ptr<AdpfConfig>>());
+    auto hm =
+            std::make_unique<HintManager>(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>(),
+                                          std::optional<std::string>{});
     EXPECT_TRUE(InitHintStatus(hm));
     EXPECT_TRUE(hm->Start());
     EXPECT_TRUE(hm->IsRunning());
@@ -383,8 +389,9 @@ TEST_F(HintManagerTest, HintTest) {
 
 // Test collecting stats with simple actions
 TEST_F(HintManagerTest, HintStatsTest) {
-    auto hm = std::make_unique<HintManager>(nm_, actions_,
-                                            std::vector<std::shared_ptr<AdpfConfig>>());
+    auto hm =
+            std::make_unique<HintManager>(nm_, actions_, std::vector<std::shared_ptr<AdpfConfig>>(),
+                                          std::optional<std::string>{});
     EXPECT_TRUE(InitHintStatus(hm));
     EXPECT_TRUE(hm->Start());
     EXPECT_TRUE(hm->IsRunning());
@@ -857,6 +864,28 @@ TEST_F(HintManagerTest, IsAdpfProfileSupported) {
     EXPECT_FALSE(hm->IsAdpfProfileSupported("NoSuchProfile"));
     EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_60FPS"));
     EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_120FPS"));
+}
+
+MATCHER_P(IsSetAndEqualTo, param, "std::optional<> is set and equal to") {
+    return arg && *arg == param;
+}
+
+TEST_F(HintManagerTest, GpuConfigSupport) {
+    TemporaryFile json_file;
+    ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
+    auto hm = HintManager::GetFromJSON(json_file.path, false);
+    ASSERT_TRUE(hm);
+
+    EXPECT_THAT(hm->gpu_sysfs_config_path(), IsSetAndEqualTo("/sys/devices/platform/123.abc"));
+    ASSERT_TRUE(hm->SetAdpfProfile("REFRESH_120FPS"));
+    auto profile = hm->GetAdpfProfile();
+    EXPECT_THAT(profile->mGpuBoostOn, IsSetAndEqualTo(true));
+    EXPECT_THAT(profile->mGpuBoostCapacityMax, IsSetAndEqualTo(300000));
+
+    ASSERT_TRUE(hm->SetAdpfProfile("REFRESH_60FPS"));
+    profile = hm->GetAdpfProfile();
+    EXPECT_FALSE(profile->mGpuBoostOn);
+    EXPECT_FALSE(profile->mGpuBoostCapacityMax);
 }
 
 }  // namespace perfmgr
