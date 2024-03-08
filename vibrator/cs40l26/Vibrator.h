@@ -100,6 +100,9 @@ class Vibrator : public BnVibrator {
         // Set haptics PCM amplifier before triggering audio haptics feature
         virtual bool setHapticPcmAmp(struct pcm **haptic_pcm, bool enable, int card,
                                      int device) = 0;
+        // Checks to see if the passthrough i2s haptics feature is supported by
+        // the target device.
+        virtual bool isPassthroughI2sHapticSupported() = 0;
         // Set OWT waveform for compose or compose PWLE request
         virtual bool uploadOwtEffect(const uint8_t *owtData, const uint32_t numBytes,
                                      struct ff_effect *effect, uint32_t *outEffectIndex,
@@ -256,6 +259,7 @@ class Vibrator : public BnVibrator {
     int mCard;
     int mDevice;
     bool mHasHapticAlsaDevice{false};
+    bool mHasPassthroughHapticDevice;
     bool mIsUnderExternalControl;
     float mLongEffectScale = 1.0;
     bool mIsChirpEnabled;

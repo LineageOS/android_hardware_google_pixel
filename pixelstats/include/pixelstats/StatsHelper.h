@@ -44,15 +44,14 @@ void reportHardwareFailed(const std::shared_ptr<IStats> &stats_client,
 void reportSpeechDspStat(const std::shared_ptr<IStats> &stats_client,
                          const PixelAtoms::VendorSpeechDspStat &dsp_stats);
 
-void reportPhysicalDropDetected(const std::shared_ptr<IStats> &stats_client,
-                                const PixelAtoms::VendorPhysicalDropDetected &dropDetected);
-
 void reportUsbPortOverheat(const std::shared_ptr<IStats> &stats_client,
                            const PixelAtoms::VendorUsbPortOverheat &overheat_info);
 
 void reportSpeakerHealthStat(const std::shared_ptr<IStats> &stats_client,
                              const PixelAtoms::VendorSpeakerStatsReported &speakerHealthStat);
 
+void reportUsbDataSessionEvent(const std::shared_ptr<IStats> &stats_client,
+                               const PixelAtoms::VendorUsbDataSessionEvent &usb_session);
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware

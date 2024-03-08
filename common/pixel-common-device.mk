@@ -56,5 +56,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
 
 # Virtual fingerprint HAL
 ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
-PRODUCT_PACKAGES_DEBUG += android.hardware.biometrics.fingerprint-service.example
+PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.fingerprint.virtual
+
+# Virtual face HAL
+ifeq ($(RELEASE_AIDL_USE_UNFROZEN), true)
+PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.face.virtual
+endif
 endif

@@ -43,9 +43,6 @@ struct AdpfConfig {
     uint64_t mSamplingWindowI;
     uint64_t mSamplingWindowD;
     int64_t mReportingRateLimitNs;
-    int64_t mFreezeDurationNs;
-    bool mEarlyBoostOn;
-    double mEarlyBoostTimeFactor;
     double mTargetTimeFactor;
     // Stale control
     double mStaleTimeFactor;
@@ -59,8 +56,8 @@ struct AdpfConfig {
                int64_t pidIInit, int64_t pidIHigh, int64_t pidILow, double pidDo, double pidDu,
                bool uclampMinOn, uint32_t uclampMinInit, uint32_t uclampMinHigh,
                uint32_t uclampMinLow, uint64_t samplingWindowP, uint64_t samplingWindowI,
-               uint64_t samplingWindowD, int64_t reportingRateLimitNs, bool earlyBoostOn,
-               double earlyBoostTimeFactor, double targetTimeFactor, double staleTimeFactor)
+               uint64_t samplingWindowD, int64_t reportingRateLimitNs, double targetTimeFactor,
+               double staleTimeFactor)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -79,8 +76,6 @@ struct AdpfConfig {
           mSamplingWindowI(samplingWindowI),
           mSamplingWindowD(samplingWindowD),
           mReportingRateLimitNs(reportingRateLimitNs),
-          mEarlyBoostOn(earlyBoostOn),
-          mEarlyBoostTimeFactor(earlyBoostTimeFactor),
           mTargetTimeFactor(targetTimeFactor),
           mStaleTimeFactor(staleTimeFactor) {}
 };

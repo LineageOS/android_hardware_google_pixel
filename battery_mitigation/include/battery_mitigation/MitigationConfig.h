@@ -17,10 +17,21 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
 #define HARDWARE_GOOGLE_PIXEL_BATTERY_MITIGATION_CONFIG_H
 
+#include "uapi/brownout_stats.h"
+
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+
+enum TriggeredEvent {
+    UVLO1,
+    UVLO2,
+    OILO1,
+    OILO2,
+    SMPL,
+    MAX_EVENT,
+};
 
 class MitigationConfig {
   public:
@@ -30,6 +41,42 @@ class MitigationConfig {
         const std::vector<std::string> SystemName;
         const char *const LogFilePath;
         const char *const TimestampFormat;
+    };
+
+    struct numericSysfs {
+        std::string name;
+        std::string path;
+    };
+
+    struct numericSysfsList {
+        std::string name;
+        std::vector<std::string> paths;
+    };
+
+    struct platformSpecific {
+        const std::vector<numericSysfsList> NumericSysfsStatPaths;
+        const std::vector<numericSysfsList> NumericSysfsStatDirs;
+    };
+
+    struct pmicCommon {
+        const char *const OdpmDir;
+        const char *const OdpmEnabledRailsPath;
+        const char *const PmicNamePath;
+    };
+
+    struct EventThreadConfig {
+        const std::vector<numericSysfs> NumericSysfsStatPaths;
+        const std::vector<numericSysfs> NumericSysfsStatDirs;
+        const char *const TriggeredIdxPath;
+        const char *const triggeredStatePath[MAX_EVENT];
+        const char *const BrownoutStatsPath;
+        const char *const StoringPath;
+        const char *const ParsedThismealPath;
+        const char *const ParsedLastmealPath;
+        const char *const ParsedLastmealCSVPath;
+        const char *const FvpStatsPath;
+        const std::vector<pmicCommon> PmicCommon;
+        const platformSpecific PlatformSpecific;
     };
 
     MitigationConfig(const struct Config &cfg);

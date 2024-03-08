@@ -17,10 +17,3 @@ on property:ota.warm_reset=1
 
 on property:ota.warm_reset=0
     write /sys/module/msm_poweroff/parameters/warm_reset 0
-
-on init
-    copy_per_line /dev/cpuctl/tasks /dev/cpuctl/system/tasks
-
-# Migrate tasks again in case kernel threads are created during boot
-on property:sys.boot_completed=1
-    copy_per_line /dev/cpuctl/tasks /dev/cpuctl/system/tasks

@@ -18,12 +18,15 @@
 
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
 #include <aidl/android/hardware/power/SessionHint.h>
+#include <aidl/android/hardware/power/SessionMode.h>
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <utils/Looper.h>
 #include <utils/Thread.h>
 
-#include <mutex>
+#include <array>
 #include <unordered_map>
+
+#include "AppDescriptorTrace.h"
 
 namespace aidl {
 namespace google {
@@ -34,6 +37,7 @@ namespace pixel {
 
 using aidl::android::hardware::power::BnPowerHintSession;
 using aidl::android::hardware::power::SessionHint;
+using aidl::android::hardware::power::SessionMode;
 using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
@@ -43,23 +47,20 @@ using std::chrono::nanoseconds;
 using std::chrono::steady_clock;
 using std::chrono::time_point;
 
+class PowerSessionManager;
+
+// The App Hint Descriptor struct manages information necessary
+// to calculate the next uclamp min value from the PID function
+// and is separate so that it can be used as a pointer for
+// easily passing to the pid function
 struct AppHintDesc {
-    AppHintDesc(int32_t tgid, int32_t uid, std::vector<int32_t> threadIds)
-        : tgid(tgid),
-          uid(uid),
-          threadIds(std::move(threadIds)),
-          duration(0LL),
-          current_min(0),
-          is_active(true),
-          update_count(0),
-          integral_error(0),
-          previous_error(0) {}
+    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, std::chrono::nanoseconds pTargetNs);
     std::string toString() const;
+    int64_t sessionId{0};
     const int32_t tgid;
     const int32_t uid;
-    std::vector<int32_t> threadIds;
-    nanoseconds duration;
-    int current_min;
+    nanoseconds targetNs;
+    int pidSetPoint;
     // status
     std::atomic<bool> is_active;
     // pid
@@ -68,6 +69,10 @@ struct AppHintDesc {
     int64_t previous_error;
 };
 
+// The Power Hint Session is responsible for providing an
+// interface for creating, updating, and closing power hints
+// for a Session. Each sesion that is mapped to multiple
+// threads (or task ids).
 class PowerHintSession : public BnPowerHintSession {
   public:
     explicit PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
@@ -80,73 +85,33 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus reportActualWorkDuration(
             const std::vector<WorkDuration> &actualDurations) override;
     ndk::ScopedAStatus sendHint(SessionHint hint) override;
+    ndk::ScopedAStatus setMode(SessionMode mode, bool enabled) override;
     ndk::ScopedAStatus setThreads(const std::vector<int32_t> &threadIds) override;
     bool isActive();
     bool isTimeout();
-    void setStale();
-    // Is this hint session for a user application
+    // Is hint session for a user application
     bool isAppSession();
-    const std::vector<int> &getTidList() const;
-    int getUclampMin();
     void dumpToStream(std::ostream &stream);
 
-    // Disable any temporary boost and return to normal operation. It does not
-    // reset the actual uclamp value, and relies on the caller to do so, to
-    // prevent double-setting. Returns true if it actually disabled an active boost
-    bool disableTemporaryBoost();
-
   private:
-    class SessionTimerHandler : public MessageHandler {
-      public:
-        SessionTimerHandler(PowerHintSession *session, std::string name)
-            : mSession(session), mIsSessionDead(false), mName(name) {}
-        void updateTimer(nanoseconds delay);
-        void handleMessage(const Message &message) override;
-        void setSessionDead();
-        virtual void onTimeout() = 0;
-
-      protected:
-        PowerHintSession *mSession;
-        std::mutex mClosedLock;
-        std::mutex mMessageLock;
-        std::atomic<time_point<steady_clock>> mTimeout;
-        bool mIsSessionDead;
-        const std::string mName;
-    };
-
-    class StaleTimerHandler : public SessionTimerHandler {
-      public:
-        StaleTimerHandler(PowerHintSession *session) : SessionTimerHandler(session, "stale") {}
-        void updateTimer();
-        void onTimeout() override;
-    };
-
-    class BoostTimerHandler : public SessionTimerHandler {
-      public:
-        BoostTimerHandler(PowerHintSession *session) : SessionTimerHandler(session, "boost") {}
-        void onTimeout() override;
-    };
-
-  private:
-    void updateUniveralBoostMode();
-    int setSessionUclampMin(int32_t min, bool resetStale = true);
     void tryToSendPowerHint(std::string hint);
+    void updatePidSetPoint(int pidSetPoint, bool updateVote = true);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
-    void traceSessionVal(char const *identifier, int64_t val) const;
-    AppHintDesc *mDescriptor = nullptr;
-    sp<StaleTimerHandler> mStaleTimerHandler;
-    sp<BoostTimerHandler> mBoostTimerHandler;
-    std::atomic<time_point<steady_clock>> mLastUpdatedTime;
-    sp<MessageHandler> mPowerManagerHandler;
-    std::mutex mSessionLock;
-    std::atomic<bool> mSessionClosed = false;
+    // Data
+    sp<PowerSessionManager> mPSManager;
+    int64_t mSessionId = 0;
     std::string mIdString;
-    // Used when setting a temporary boost value to hold the true boost
-    std::atomic<std::optional<int>> mNextUclampMin;
-    // To cache the status of whether ADPF hints are supported.
+    std::shared_ptr<AppHintDesc> mDescriptor;
+    // Trace strings
+    AppDescriptorTrace mAppDescriptorTrace;
+    std::atomic<time_point<steady_clock>> mLastUpdatedTime;
+    std::atomic<bool> mSessionClosed = false;
+    // Are cpu load change related hints are supported
     std::unordered_map<std::string, std::optional<bool>> mSupportedHints;
     // Last session hint sent, used for logging
     int mLastHintSent = -1;
+    // Use the value of the last enum in enum_range +1 as array size
+    std::array<bool, enum_size<SessionMode>()> mModes{};
 };
 
 }  // namespace pixel

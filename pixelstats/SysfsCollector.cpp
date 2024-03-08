@@ -62,7 +62,9 @@ using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsResetCount;
 using android::hardware::google::pixel::PixelAtoms::ThermalDfsStats;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioAdaptedInfoStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioBtMediaStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioHardwareStatsReported;
+using android::hardware::google::pixel::PixelAtoms::VendorAudioOffloadedEffectStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPcmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioPdmStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorAudioThirdPartyEffectStatsReported;
@@ -97,6 +99,7 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kZramMmStatPath("/sys/block/zram0/mm_stat"),
       kZramBdStatPath("/sys/block/zram0/bd_stat"),
       kEEPROMPath(sysfs_paths.EEPROMPath),
+      kBrownoutCsvPath(sysfs_paths.BrownoutCsvPath),
       kBrownoutLogPath(sysfs_paths.BrownoutLogPath),
       kBrownoutReasonProp(sysfs_paths.BrownoutReasonProp),
       kPowerMitigationStatsPath(sysfs_paths.MitigationPath),
@@ -123,7 +126,12 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kAdaptedInfoDurationPath(sysfs_paths.AdaptedInfoDurationPath),
       kPcmLatencyPath(sysfs_paths.PcmLatencyPath),
       kPcmCountPath(sysfs_paths.PcmCountPath),
-      kTotalCallCountPath(sysfs_paths.TotalCallCountPath) {}
+      kTotalCallCountPath(sysfs_paths.TotalCallCountPath),
+      kOffloadEffectsIdPath(sysfs_paths.OffloadEffectsIdPath),
+      kOffloadEffectsDurationPath(sysfs_paths.OffloadEffectsDurationPath),
+      kBluetoothAudioUsagePath(sysfs_paths.BluetoothAudioUsagePath),
+      kGMSRPath(sysfs_paths.GMSRPath),
+      kMaxfgHistoryPath("/dev/maxfg_history") {}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -192,10 +200,17 @@ void SysfsCollector::logBatteryChargeCycles(const std::shared_ptr<IStats> &stats
 void SysfsCollector::logBatteryEEPROM(const std::shared_ptr<IStats> &stats_client) {
     if (kEEPROMPath == nullptr || strlen(kEEPROMPath) == 0) {
         ALOGV("Battery EEPROM path not specified");
-        return;
+    } else {
+        battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
     }
 
-    battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
+    if (kGMSRPath == nullptr || strlen(kGMSRPath) == 0) {
+         ALOGV("Battery GMSR path not specified");
+    } else {
+        battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
+    }
+
+    battery_EEPROM_reporter_.checkAndReportMaxfgHistory(stats_client, kMaxfgHistoryPath);
 }
 
 /**
@@ -958,22 +973,23 @@ void SysfsCollector::reportZramMmStat(const std::shared_ptr<IStats> &stats_clien
         // The size should be the same as the number of fields in ZramMmStat
         std::vector<VendorAtomValue> values(6);
         VendorAtomValue tmp;
-        tmp.set<VendorAtomValue::intValue>(orig_data_size);
+        tmp.set<VendorAtomValue::longValue>(orig_data_size);
         values[ZramMmStat::kOrigDataSizeFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(compr_data_size);
+        tmp.set<VendorAtomValue::longValue>(compr_data_size);
         values[ZramMmStat::kComprDataSizeFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(mem_used_total);
+        tmp.set<VendorAtomValue::longValue>(mem_used_total);
         values[ZramMmStat::kMemUsedTotalFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(same_pages);
+        tmp.set<VendorAtomValue::longValue>(same_pages);
         values[ZramMmStat::kSamePagesFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(huge_pages);
+        tmp.set<VendorAtomValue::longValue>(huge_pages);
         values[ZramMmStat::kHugePagesFieldNumber - kVendorAtomOffset] = tmp;
 
         // Skip the first data to avoid a big spike in this accumulated value.
         if (prev_huge_pages_since_boot_ == -1)
-            tmp.set<VendorAtomValue::intValue>(0);
+            tmp.set<VendorAtomValue::longValue>(0);
         else
-            tmp.set<VendorAtomValue::intValue>(huge_pages_since_boot - prev_huge_pages_since_boot_);
+            tmp.set<VendorAtomValue::longValue>(huge_pages_since_boot -
+                                                prev_huge_pages_since_boot_);
 
         values[ZramMmStat::kHugePagesSinceBootFieldNumber - kVendorAtomOffset] = tmp;
         prev_huge_pages_since_boot_ = huge_pages_since_boot;
@@ -1012,11 +1028,11 @@ void SysfsCollector::reportZramBdStat(const std::shared_ptr<IStats> &stats_clien
         // Load values array
         std::vector<VendorAtomValue> values(3);
         VendorAtomValue tmp;
-        tmp.set<VendorAtomValue::intValue>(bd_count);
+        tmp.set<VendorAtomValue::longValue>(bd_count);
         values[ZramBdStat::kBdCountFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(bd_reads);
+        tmp.set<VendorAtomValue::longValue>(bd_reads);
         values[ZramBdStat::kBdReadsFieldNumber - kVendorAtomOffset] = tmp;
-        tmp.set<VendorAtomValue::intValue>(bd_writes);
+        tmp.set<VendorAtomValue::longValue>(bd_writes);
         values[ZramBdStat::kBdWritesFieldNumber - kVendorAtomOffset] = tmp;
 
         // Send vendor atom to IStats HAL
@@ -1523,6 +1539,147 @@ void SysfsCollector::logPcmUsageStats(const std::shared_ptr<IStats> &stats_clien
 }
 
 /**
+ * Report audio Offload Effects usage stats duration per day.
+ */
+void SysfsCollector::logOffloadEffectsStats(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> uuids;
+    std::vector<int> durations;
+
+    if (kOffloadEffectsIdPath == nullptr) {
+        ALOGD("Offload Effects ID Path is not specified");
+        return;
+    }
+
+    if (kOffloadEffectsDurationPath == nullptr) {
+        ALOGD("Offload Effects Duration Path is not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kOffloadEffectsIdPath, &file_contents)) {
+        ALOGD("Unable to read Offload Effect ID path %s", kOffloadEffectsIdPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int uuid;
+        while (file_content_stream.good() && file_content_stream >> uuid) {
+            uuids.push_back(uuid);
+        }
+    }
+
+    if (!ReadFileToString(kOffloadEffectsDurationPath, &file_contents)) {
+        ALOGD("Unable to read Offload Effect duration path %s", kOffloadEffectsDurationPath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            durations.push_back(duration);
+        }
+    }
+
+    if (durations.size() * 4 != uuids.size()) {
+        ALOGD("ID and duration data does not match: %zu and %zu", durations.size(), uuids.size());
+        return;
+    }
+
+    for (int index = 0; index < durations.size(); index++) {
+        std::vector<VendorAtomValue> values(3);
+        VendorAtomValue tmp;
+        int64_t uuid_msb = ((int64_t)uuids[index * 4] << 32 | uuids[index * 4 + 1]);
+        int64_t uuid_lsb = ((int64_t)uuids[index * 4 + 2] << 32 | uuids[index * 4 + 3]);
+
+        if (uuid_msb == 0 && uuid_lsb == 0) {
+            continue;
+        }
+
+        tmp.set<VendorAtomValue::VendorAtomValue::longValue>(uuid_msb);
+        values[VendorAudioOffloadedEffectStatsReported::kEffectUuidMsbFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::VendorAtomValue::longValue>(uuid_lsb);
+        values[VendorAudioOffloadedEffectStatsReported::kEffectUuidLsbFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(durations[index]);
+        values[VendorAudioOffloadedEffectStatsReported::kEffectActiveSecondsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioOffloadedEffectStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk()) {
+            ALOGE("Unable to report VendorAudioOffloadedEffectStatsReported at index %d", index);
+        } else {
+            ALOGD("Reported VendorAudioOffloadedEffectStatsReported successfully at index %d",
+                  index);
+        }
+    }
+}
+
+/**
+ * Report bluetooth audio usage stats.
+ * This function will report at most 5 atoms showing different instance stats.
+ */
+void SysfsCollector::logBluetoothAudioUsage(const std::shared_ptr<IStats> &stats_client) {
+    std::string file_contents;
+    std::vector<int> duration_per_codec;
+
+    constexpr int num_codec = 5;
+
+    if (kBluetoothAudioUsagePath == nullptr) {
+        ALOGD("Bluetooth Audio stats path not specified");
+        return;
+    }
+
+    if (!ReadFileToString(kBluetoothAudioUsagePath, &file_contents)) {
+        ALOGD("Unable to read Bluetooth Audio stats path %s", kBluetoothAudioUsagePath);
+    } else {
+        std::stringstream file_content_stream(file_contents);
+        int duration;
+        while (file_content_stream.good() && file_content_stream >> duration) {
+            duration_per_codec.push_back(duration);
+        }
+    }
+
+    if (duration_per_codec.size() != num_codec) {
+        ALOGD("Bluetooth Audio num codec != number of codec. %zu / %d", duration_per_codec.size(),
+              num_codec);
+        return;
+    }
+
+    for (int index = 0; index < num_codec; index++) {
+        std::vector<VendorAtomValue> values(2);
+        VendorAtomValue tmp;
+
+        if (duration_per_codec[index] == 0) {
+            ALOGD("Skipped VendorAudioBtMediaStatsReported at codec:%d", index);
+            continue;
+        }
+
+        tmp.set<VendorAtomValue::intValue>(index);
+        values[VendorAudioBtMediaStatsReported::kBtCodecTypeFieldNumber - kVendorAtomOffset] = tmp;
+
+        tmp.set<VendorAtomValue::intValue>(duration_per_codec[index]);
+        values[VendorAudioBtMediaStatsReported::kActiveSecondsPerDayFieldNumber -
+               kVendorAtomOffset] = tmp;
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = "",
+                            .atomId = PixelAtoms::Atom::kVendorAudioBtMediaStatsReported,
+                            .values = std::move(values)};
+
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk())
+            ALOGE("Unable to report VendorAudioBtMediaStatsReported at index %d", index);
+        else
+            ALOGD("Reporting VendorAudioBtMediaStatsReported: codec:%d, duration:%d", index,
+                  duration_per_codec[index]);
+    }
+}
+
+/**
  * Logs the Resume Latency stats.
  */
 void SysfsCollector::logVendorResumeLatencyStats(const std::shared_ptr<IStats> &stats_client) {
@@ -1939,6 +2096,8 @@ void SysfsCollector::logPerDay() {
     logWavesStats(stats_client);
     logAdaptedInfoStats(stats_client);
     logPcmUsageStats(stats_client);
+    logOffloadEffectsStats(stats_client);
+    logBluetoothAudioUsage(stats_client);
 }
 
 void SysfsCollector::aggregatePer5Min() {
@@ -1951,7 +2110,10 @@ void SysfsCollector::logBrownout() {
         ALOGE("Unable to get AIDL Stats service");
         return;
     }
-    if (kBrownoutLogPath != nullptr && strlen(kBrownoutLogPath) > 0)
+    if (kBrownoutCsvPath != nullptr && strlen(kBrownoutCsvPath) > 0)
+        brownout_detected_reporter_.logBrownoutCsv(stats_client, kBrownoutCsvPath,
+                                                   kBrownoutReasonProp);
+    else if (kBrownoutLogPath != nullptr && strlen(kBrownoutLogPath) > 0)
         brownout_detected_reporter_.logBrownout(stats_client, kBrownoutLogPath,
                                                 kBrownoutReasonProp);
 }

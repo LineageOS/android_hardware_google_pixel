@@ -28,7 +28,6 @@ namespace google {
 namespace pixel {
 
 using aidl::android::frameworks::stats::IStats;
-
 /**
  * A class to listen for uevents and report reliability events to
  * the PixelStats HAL.
@@ -47,6 +46,7 @@ class UeventListener {
         const char *const TypeCPartnerPidPath;
         const char *const WirelessChargerPtmcUevent;  // Deprecated.
         const char *const WirelessChargerPtmcPath;    // Deprecated.
+        const char *const GMSRPath;
     };
     constexpr static const char *const ssoc_details_path =
             "/sys/class/power_supply/battery/ssoc_details";
@@ -59,6 +59,7 @@ class UeventListener {
     constexpr static const char *const typec_partner_pid_path_default =
             "/sys/class/typec/port0-partner/identity/product";
     constexpr static const char *const typec_partner_uevent_default = "DEVTYPE=typec_partner";
+    constexpr static const char *const gmsr_path = "";
 
     UeventListener(const std::string audio_uevent, const std::string ssoc_details_path = "",
                    const std::string overheat_path = overheat_path_default,
@@ -90,7 +91,9 @@ class UeventListener {
     void ReportTypeCPartnerId(const std::shared_ptr<IStats> &stats_client);
     void ReportGpuEvent(const std::shared_ptr<IStats> &stats_client, const char *driver,
                         const char *gpu_event_type, const char *gpu_event_info);
-
+    void ReportThermalAbnormalEvent(const std::shared_ptr<IStats> &stats_client,
+                                    const char *devpath, const char *thermal_abnormal_event_type,
+                                    const char *thermal_abnormal_event_info);
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
     const std::string kUsbPortOverheatPath;
@@ -98,6 +101,7 @@ class UeventListener {
     const std::string kTypeCPartnerUevent;
     const std::string kTypeCPartnerVidPath;
     const std::string kTypeCPartnerPidPath;
+    const std::string kBatteryGMSRPath;
 
     const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventType>
             kGpuEventTypeStrToEnum{
@@ -139,6 +143,28 @@ class UeventListener {
                      PixelAtoms::GpuEvent::GpuEventInfo::GpuEvent_GpuEventInfo_MALI_CSF_RESET_OK},
                     {"CSF_RESET_FAILED", PixelAtoms::GpuEvent::GpuEventInfo::
                                                  GpuEvent_GpuEventInfo_MALI_CSF_RESET_FAILED}};
+
+    const std::unordered_map<std::string,
+                             PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType>
+            kThermalAbnormalityTypeStrToEnum{
+                    {"UNKNOWN", PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                                        ThermalSensorAbnormalityDetected_AbnormalityType_UNKNOWN},
+                    {"SENSOR_STUCK",
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_SENSOR_STUCK},
+                    {"EXTREME_HIGH_TEMP",
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_EXTREME_HIGH_TEMP},
+                    {"EXTREME_LOW_TEMP",
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_EXTREME_LOW_TEMP},
+                    {"HIGH_RISING_SPEED",
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_HIGH_RISING_SPEED},
+                    {"TEMP_READ_FAIL",
+                     PixelAtoms::ThermalSensorAbnormalityDetected::AbnormalityType::
+                             ThermalSensorAbnormalityDetected_AbnormalityType_TEMP_READ_FAIL},
+            };
 
     BatteryCapacityReporter battery_capacity_reporter_;
     ChargeStatsReporter charge_stats_reporter_;

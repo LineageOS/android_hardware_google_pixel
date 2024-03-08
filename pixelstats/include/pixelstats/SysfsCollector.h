@@ -62,6 +62,7 @@ class SysfsCollector {
         const char *const EEPROMPath;
         const char *const MitigationPath;
         const char *const MitigationDurationPath;
+        const char *const BrownoutCsvPath;
         const char *const BrownoutLogPath;
         const char *const BrownoutReasonProp;
         const char *const SpeakerTemperaturePath;
@@ -87,6 +88,10 @@ class SysfsCollector {
         const char *const PcmLatencyPath;
         const char *const PcmCountPath;
         const char *const TotalCallCountPath;
+        const char *const OffloadEffectsIdPath;
+        const char *const OffloadEffectsDurationPath;
+        const char *const BluetoothAudioUsagePath;
+        const char *const GMSRPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -140,6 +145,9 @@ class SysfsCollector {
     void logWavesStats(const std::shared_ptr<IStats> &stats_client);
     void logAdaptedInfoStats(const std::shared_ptr<IStats> &stats_client);
     void logPcmUsageStats(const std::shared_ptr<IStats> &stats_client);
+    void logOffloadEffectsStats(const std::shared_ptr<IStats> &stats_client);
+    void logBluetoothAudioUsage(const std::shared_ptr<IStats> &stats_client);
+    void logBatteryGMSR(const std::shared_ptr<IStats> &stats_client);
 
     const char *const kSlowioReadCntPath;
     const char *const kSlowioWriteCntPath;
@@ -159,6 +167,7 @@ class SysfsCollector {
     const char *const kZramMmStatPath;
     const char *const kZramBdStatPath;
     const char *const kEEPROMPath;
+    const char *const kBrownoutCsvPath;
     const char *const kBrownoutLogPath;
     const char *const kBrownoutReasonProp;
     const char *const kPowerMitigationStatsPath;
@@ -186,6 +195,11 @@ class SysfsCollector {
     const char *const kPcmLatencyPath;
     const char *const kPcmCountPath;
     const char *const kTotalCallCountPath;
+    const char *const kOffloadEffectsIdPath;
+    const char *const kOffloadEffectsDurationPath;
+    const char *const kBluetoothAudioUsagePath;
+    const char *const kGMSRPath;
+    const char *const kMaxfgHistoryPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;

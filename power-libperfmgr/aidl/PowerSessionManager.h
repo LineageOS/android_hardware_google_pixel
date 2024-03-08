@@ -24,7 +24,9 @@
 #include <optional>
 #include <unordered_set>
 
+#include "BackgroundWorker.h"
 #include "PowerHintSession.h"
+#include "SessionTaskMap.h"
 
 namespace aidl {
 namespace google {
@@ -35,29 +37,40 @@ namespace pixel {
 
 using ::android::Looper;
 using ::android::Message;
-using ::android::MessageHandler;
 using ::android::Thread;
 using ::android::perfmgr::HintManager;
 
 constexpr char kPowerHalAdpfDisableTopAppBoost[] = "vendor.powerhal.adpf.disable.hint";
 
-class PowerSessionManager : public MessageHandler {
+class PowerSessionManager : public ::android::RefBase {
   public:
-    // current hint info
+    // Update the current hint info
     void updateHintMode(const std::string &mode, bool enabled);
     void updateHintBoost(const std::string &boost, int32_t durationMs);
     int getDisplayRefreshRate();
-    // monitoring session status
-    void addPowerSession(PowerHintSession *session);
-    void removePowerSession(PowerHintSession *session);
-    void addThreadsFromPowerSession(PowerHintSession *session);
-    void addThreadsFromPowerSessionLocked(PowerHintSession *session);
-    void removeThreadsFromPowerSession(PowerHintSession *session);
-    void removeThreadsFromPowerSessionLocked(PowerHintSession *session);
-    void setUclampMin(PowerHintSession *session, int min);
-    void setUclampMinLocked(PowerHintSession *session, int min);
-    void handleMessage(const Message &message) override;
+    // Add and remove power hint session
+    void addPowerSession(const std::string &idString,
+                         const std::shared_ptr<AppHintDesc> &sessionDescriptor,
+                         const std::vector<int32_t> &threadIds);
+    void removePowerSession(int64_t sessionId);
+    // Replace current threads in session with threadIds
+    void setThreadsFromPowerSession(int64_t sessionId, const std::vector<int32_t> &threadIds);
+    // Pause and resume power hint session
+    void pause(int64_t sessionId);
+    void resume(int64_t sessionId);
+
+    void updateUniversalBoostMode();
     void dumpToFd(int fd);
+
+    void updateTargetWorkDuration(int64_t sessionId, AdpfHintType voteId,
+                                  std::chrono::nanoseconds durationNs);
+
+    // Set vote for power hint session
+    void voteSet(int64_t sessionId, AdpfHintType voteId, int uclampMin, int uclampMax,
+                 std::chrono::steady_clock::time_point startTime,
+                 std::chrono::nanoseconds durationNs);
+
+    void disableBoosts(int64_t sessionId);
 
     // Singleton
     static sp<PowerSessionManager> getInstance() {
@@ -71,41 +84,36 @@ class PowerSessionManager : public MessageHandler {
     void enableSystemTopAppBoost();
     const std::string kDisableBoostHintName;
 
-    std::unordered_set<PowerHintSession *> mSessions;  // protected by mLock
-    std::unordered_map<int, std::unordered_set<PowerHintSession *>> mTidSessionListMap;
-    bool mActive;  // protected by mLock
-    /**
-     * mLock to pretect the above data objects opertions.
-     **/
-    std::mutex mLock;
     int mDisplayRefreshRate;
+
+    // Rewrite specific
+    mutable std::mutex mSessionTaskMapMutex;
+    SessionTaskMap mSessionTaskMap;
+    std::shared_ptr<PriorityQueueWorkerPool> mPriorityQueueWorkerPool;
+
+    // Session timeout
+    struct EventSessionTimeout {
+        std::chrono::steady_clock::time_point timeStamp;
+        int64_t sessionId{0};
+        int voteId{0};
+    };
+    void handleEvent(const EventSessionTimeout &e);
+    TemplatePriorityQueueWorker<EventSessionTimeout> mEventSessionTimeoutWorker;
+
+    // Calculate uclamp range
+    void applyUclamp(int64_t sessionId, std::chrono::steady_clock::time_point timePoint);
+    // Force a session active or in-active, helper for other methods
+    void forceSessionActive(int64_t sessionId, bool isActive);
+
     // Singleton
     PowerSessionManager()
         : kDisableBoostHintName(::android::base::GetProperty(kPowerHalAdpfDisableTopAppBoost,
                                                              "ADPF_DISABLE_TA_BOOST")),
-          mActive(false),
-          mDisplayRefreshRate(60) {}
+          mDisplayRefreshRate(60),
+          mPriorityQueueWorkerPool(new PriorityQueueWorkerPool(1, "adpf_handler")),
+          mEventSessionTimeoutWorker([&](auto e) { handleEvent(e); }, mPriorityQueueWorkerPool) {}
     PowerSessionManager(PowerSessionManager const &) = delete;
     void operator=(PowerSessionManager const &) = delete;
-};
-
-class PowerHintMonitor : public Thread {
-  public:
-    void start();
-    bool threadLoop() override;
-    sp<Looper> getLooper();
-    // Singleton
-    static sp<PowerHintMonitor> getInstance() {
-        static sp<PowerHintMonitor> instance = new PowerHintMonitor();
-        return instance;
-    }
-    PowerHintMonitor(PowerHintMonitor const &) = delete;
-    void operator=(PowerHintMonitor const &) = delete;
-
-  private:
-    sp<Looper> mLooper;
-    // Singleton
-    PowerHintMonitor() : Thread(false), mLooper(new Looper(true)) {}
 };
 
 }  // namespace pixel

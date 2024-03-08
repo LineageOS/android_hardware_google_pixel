@@ -16,6 +16,7 @@
 
 #pragma once
 
+
 #include <utils/RefBase.h>
 
 #include "MitigationThermalManager.h"

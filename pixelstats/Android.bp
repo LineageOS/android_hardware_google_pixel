@@ -71,7 +71,12 @@ java_library_host {
 genrule {
     name: "pixelatoms_defs.h",
     tools: ["stats-log-api-gen"],
-    cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto hardware/google/pixel/pixelstats/pixelatoms.proto",
+    cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto $(location pixelatoms.proto)",
+    srcs: [
+        "pixelatoms.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-protos",
+    ],
     out: [
         "pixelatoms_defs.h",
     ],
@@ -82,6 +87,52 @@ cc_library {
     vendor: true,
     generated_headers: ["pixelatoms_defs.h"],
     export_generated_headers: ["pixelatoms_defs.h"],
+}
+
+genrule {
+    name: "pixelstatsatoms.h",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --header $(out)" +
+        " --module pixelstats" +
+        " --namespace android,hardware,google,pixel,PixelAtoms" +
+        " --vendor-proto $(location pixelatoms.proto)",
+    out: [
+        "pixelstatsatoms.h",
+    ],
+    srcs: [
+        "pixelatoms.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-protos",
+    ]
+}
+
+genrule {
+    name: "pixelstatsatoms.cpp",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --cpp $(out)" +
+        " --module pixelstats" +
+        " --importHeader pixelstatsatoms.h" +
+        " --namespace android,hardware,google,pixel,PixelAtoms" +
+        " --vendor-proto $(location pixelatoms.proto)",
+    out: [
+        "pixelstatsatoms.cpp",
+    ],
+    srcs: [
+        "pixelatoms.proto",
+        ":libstats_atom_options_protos",
+        ":libprotobuf-internal-protos",
+    ]
+}
+
+cc_library_static {
+    name: "libpixelstatsatoms",
+    vendor: true,
+    generated_sources: ["pixelstatsatoms.cpp"],
+    generated_headers: ["pixelstatsatoms.h"],
+    export_generated_headers: ["pixelstatsatoms.h"],
+    shared_libs: [
+        "android.frameworks.stats-V2-ndk",
+    ]
 }
 
 cc_library {
@@ -116,7 +167,7 @@ cc_library {
     "-Werror",
   ],
   shared_libs: [
-    "android.frameworks.stats-V1-ndk",
+    "android.frameworks.stats-V2-ndk",
     "libbase",
     "libbinder_ndk",
     "libcutils",
@@ -128,11 +179,19 @@ cc_library {
     "pixelatoms-cpp",
   ],
   export_shared_lib_headers: [
-    "android.frameworks.stats-V1-ndk",
+    "android.frameworks.stats-V2-ndk",
     "pixelatoms-cpp",
   ],
   static_libs: [
     "chre_client",
+    "libpixelstatsatoms",
   ],
   header_libs: ["chre_api"],
+}
+
+filegroup {
+    name: "pixelatoms_proto",
+    srcs: [
+        "pixelatoms.proto",
+    ],
 }

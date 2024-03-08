@@ -125,8 +125,8 @@ bool PowerFiles::registerPowerRailsToWatch(const Json::Value &config) {
 
         if (power_history.size()) {
             power_status_map_[power_rail_info_pair.first] = {
-                    .power_history = power_history,
                     .last_update_time = boot_clock::time_point::min(),
+                    .power_history = power_history,
                     .last_updated_avg_power = NAN,
             };
         } else {

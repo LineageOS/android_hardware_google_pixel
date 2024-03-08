@@ -34,8 +34,8 @@ class MockThermalHelper : public ThermalHelper {
                 (bool, TemperatureType, std::vector<TemperatureThreshold> *), (const, override));
     MOCK_METHOD(bool, fillCurrentCoolingDevices, (bool, CoolingType, std::vector<CoolingDevice> *),
                 (const, override));
-    MOCK_METHOD(bool, emulTemp, (std::string_view, const float), (override));
-    MOCK_METHOD(bool, emulSeverity, (std::string_view, const int), (override));
+    MOCK_METHOD(bool, emulTemp, (std::string_view, const float, const bool), (override));
+    MOCK_METHOD(bool, emulSeverity, (std::string_view, const int, const bool), (override));
     MOCK_METHOD(bool, emulClear, (std::string_view), (override));
     MOCK_METHOD(bool, isInitializedOk, (), (const, override));
     MOCK_METHOD(bool, readTemperature,

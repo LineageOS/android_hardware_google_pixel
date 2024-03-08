@@ -176,27 +176,6 @@ void reportSpeechDspStat(const std::shared_ptr<IStats> &stats_client,
         ALOGE("Unable to report VendorSpeechDspStat to Stats service");
 }
 
-void reportPhysicalDropDetected(const std::shared_ptr<IStats> &stats_client,
-                                const PixelAtoms::VendorPhysicalDropDetected &dropDetected) {
-    // Load values array
-    std::vector<VendorAtomValue> values(3);
-    VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::intValue>(dropDetected.confidence_pctg());
-    values[0] = tmp;
-    tmp.set<VendorAtomValue::intValue>(dropDetected.accel_peak_thousandths_g());
-    values[1] = tmp;
-    tmp.set<VendorAtomValue::intValue>(dropDetected.freefall_time_millis());
-    values[2] = tmp;
-
-    // Send vendor atom to IStats HAL
-    VendorAtom event = {.reverseDomainName = "",
-                        .atomId = PixelAtoms::Atom::kVendorPhysicalDropDetected,
-                        .values = std::move(values)};
-    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
-    if (!ret.isOk())
-        ALOGE("Unable to report VendorPhysicalDropDetected to Stats service");
-}
-
 void reportUsbPortOverheat(const std::shared_ptr<IStats> &stats_client,
                            const PixelAtoms::VendorUsbPortOverheat &overheat_info) {
     // Load values array
@@ -220,6 +199,31 @@ void reportUsbPortOverheat(const std::shared_ptr<IStats> &stats_client,
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report VendorUsbPortOverheat to Stats service");
+}
+
+void reportUsbDataSessionEvent(const std::shared_ptr<IStats> &stats_client,
+                               const PixelAtoms::VendorUsbDataSessionEvent &usb_data_event) {
+    // Load values array
+    std::vector<VendorAtomValue> values(4);
+    VendorAtomValue tmp;
+    tmp.set<VendorAtomValue::intValue>(usb_data_event.usb_role());
+    values[0] = tmp;
+    tmp.set<VendorAtomValue::repeatedIntValue>(std::vector<int32_t>(
+            usb_data_event.usb_states().begin(), usb_data_event.usb_states().end()));
+    values[1] = tmp;
+    tmp.set<VendorAtomValue::repeatedLongValue>(std::vector<int64_t>(
+            usb_data_event.elapsed_time_ms().begin(), usb_data_event.elapsed_time_ms().end()));
+    values[2] = tmp;
+    tmp.set<VendorAtomValue::longValue>(usb_data_event.duration_ms());
+    values[3] = tmp;
+
+    // Send vendor atom to IStats HAL
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kVendorUsbDataSessionEvent,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report VendorUsbDataSessionEvent to Stats service");
 }
 
 }  // namespace pixel

@@ -17,7 +17,9 @@
 #ifndef HARDWARE_GOOGLE_PIXEL_USB_UTILSCOMMON_H_
 #define HARDWARE_GOOGLE_PIXEL_USB_UTILSCOMMON_H_
 
+#include <android-base/chrono_utils.h>
 #include <android-base/unique_fd.h>
+#include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 
 #include <string>
 
@@ -57,6 +59,9 @@ constexpr char kUvcEnabled[] = "ro.usb.uvc.enabled";
 #define FUNCTION_PATH CONFIG_PATH FUNCTION_NAME
 #define RNDIS_PATH FUNCTIONS_PATH "gsi.rndis"
 
+using ::android::base::boot_clock;
+using android::hardware::google::pixel::PixelAtoms::VendorUsbDataSessionEvent;
+
 // Adds the given fd to the epollfd(epfd).
 int addEpollFd(const ::android::base::unique_fd &epfd, const ::android::base::unique_fd &fd);
 // Extracts vendor functions from the vendor init properties.
@@ -69,6 +74,12 @@ int linkFunction(const char *function, int index);
 bool setVidPidCommon(const char *vid, const char *pid);
 // Pulls down USB gadget. Returns true on success, false on failure
 bool resetGadgetCommon();
+void BuildVendorUsbDataSessionEvent(bool is_host, boot_clock::time_point currentTime,
+                                    boot_clock::time_point startTime,
+                                    std::vector<std::string> *states,
+                                    std::vector<boot_clock::time_point> *timestamps,
+                                    VendorUsbDataSessionEvent *event);
+
 }  // namespace usb
 }  // namespace pixel
 }  // namespace google
