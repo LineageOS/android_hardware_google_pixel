@@ -107,6 +107,12 @@ std::unordered_map<std::string, std::vector<State>> PixelStateResidencyDataProvi
     return ret;
 }
 
+void PixelStateResidencyDataProvider::registerStatesUpdateCallback(
+        std::function<void(const std::string &, const std::vector<State> &in_states)>
+                statesUpdateCallback) {
+    mStatesUpdateCallback = statesUpdateCallback;
+}
+
 ::ndk::ScopedAStatus PixelStateResidencyDataProvider::registerCallbackByStates(
         const std::string &in_entityName,
         const std::shared_ptr<IPixelStateResidencyCallback> &in_cb,
@@ -130,6 +136,7 @@ std::unordered_map<std::string, std::vector<State>> PixelStateResidencyDataProvi
 
     if (!in_states.empty()) {
         toRegister->mStates = std::move(in_states);
+        mStatesUpdateCallback(in_entityName, in_states);
     }
 
     LOG(INFO) << __func__ << ": Registered " << in_entityName;
