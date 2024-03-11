@@ -298,8 +298,7 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uc
         auto sessValPtr = mSessionTaskMap.findSession(sessionId);
         if (nullptr == sessValPtr) {
             // Because of the async nature of some events an event for a session
-            // that has been removed is a possibility so this is a verbose log
-            // instead of a warning or error
+            // that has been removed is a possibility
             return;
         }
 
@@ -332,8 +331,7 @@ void PowerSessionManager::disableBoosts(int64_t sessionId) {
         auto sessValPtr = mSessionTaskMap.findSession(sessionId);
         if (nullptr == sessValPtr) {
             // Because of the async nature of some events an event for a session
-            // that has been removed is a possibility so this is a verbose log
-            // instead of a warning or error
+            // that has been removed is a possibility
             return;
         }
 
