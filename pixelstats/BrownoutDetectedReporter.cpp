@@ -124,7 +124,7 @@ void BrownoutDetectedReporter::uploadData(const std::shared_ptr<IStats> &stats_c
                                           const struct BrownoutDetectedInfo max_value) {
     // Load values array
     VendorAtomValue tmp;
-    std::vector<VendorAtomValue> values(37);
+    std::vector<VendorAtomValue> values(42);
     setAtomFieldValue(&values, BrownoutDetected::kTriggeredIrqFieldNumber,
                       max_value.triggered_irq_);
     setAtomFieldValue(&values, BrownoutDetected::kTriggeredTimestampFieldNumber,
@@ -199,6 +199,12 @@ void BrownoutDetectedReporter::uploadData(const std::shared_ptr<IStats> &stats_c
                       max_value.dvfs_value_[5]);
     setAtomFieldValue(&values, BrownoutDetected::kBrownoutReasonFieldNumber,
                       max_value.brownout_reason_);
+
+    setAtomFieldValue(&values, BrownoutDetected::kMaxCurrentFieldNumber, max_value.max_curr_);
+    setAtomFieldValue(&values, BrownoutDetected::kEvtCntUvlo1FieldNumber, max_value.evt_cnt_uvlo1_);
+    setAtomFieldValue(&values, BrownoutDetected::kEvtCntUvlo2FieldNumber, max_value.evt_cnt_uvlo2_);
+    setAtomFieldValue(&values, BrownoutDetected::kEvtCntOilo1FieldNumber, max_value.evt_cnt_oilo1_);
+    setAtomFieldValue(&values, BrownoutDetected::kEvtCntOilo2FieldNumber, max_value.evt_cnt_oilo2_);
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
