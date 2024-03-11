@@ -135,7 +135,7 @@ void PixelStateResidencyDataProvider::registerStatesUpdateCallback(
     toRegister->mCallback = in_cb;
 
     if (!in_states.empty()) {
-        toRegister->mStates = std::move(in_states);
+        toRegister->mStates = in_states;
         mStatesUpdateCallback(in_entityName, in_states);
     }
 
