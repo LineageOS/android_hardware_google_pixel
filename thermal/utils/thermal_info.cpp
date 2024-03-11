@@ -214,6 +214,46 @@ bool ParseThermalConfig(std::string_view config_path, Json::Value *config) {
     return true;
 }
 
+bool ParseOffsetThresholds(const std::string_view name, const Json::Value &sensor,
+                           std::vector<float> *offset_thresholds,
+                           std::vector<float> *offset_values) {
+    Json::Value config_offset_thresholds = sensor["OffsetThresholds"];
+    Json::Value config_offset_values = sensor["OffsetValues"];
+
+    if (config_offset_thresholds.empty()) {
+        return true;
+    }
+
+    if (config_offset_thresholds.size() != config_offset_values.size()) {
+        LOG(ERROR) << "Sensor[" << name
+                   << "]'s offset_thresholds size does not match with offset_values size";
+        return false;
+    }
+
+    for (Json::Value::ArrayIndex i = 0; i < config_offset_thresholds.size(); ++i) {
+        float offset_threshold = config_offset_thresholds[i].asFloat();
+        float offset_value = config_offset_values[i].asFloat();
+        if (std::isnan(offset_threshold) || std::isnan(offset_value)) {
+            LOG(ERROR) << "Nan offset_threshold or offset_value unexpected for sensor " << name;
+            return false;
+        }
+
+        if ((i != 0) && (offset_threshold < (*offset_thresholds).back())) {
+            LOG(ERROR) << "offset_thresholds are not in increasing order for sensor " << name;
+            return false;
+        }
+
+        (*offset_thresholds).emplace_back(offset_threshold);
+        (*offset_values).emplace_back(offset_value);
+
+        LOG(INFO) << "Sensor[" << name << "]'s offset_thresholds[" << i
+                  << "]: " << (*offset_thresholds)[i] << " offset_values[" << i
+                  << "]: " << (*offset_values)[i];
+    }
+
+    return true;
+}
+
 bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sensor,
                             std::unique_ptr<VirtualSensorInfo> *virtual_sensor_info) {
     if (sensor["VirtualSensor"].empty() || !sensor["VirtualSensor"].isBool()) {
@@ -394,7 +434,12 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 
         vt_estimator_model_file = "vendor/etc/" + sensor["ModelPath"].asString();
         init_data.ml_model_init_data.model_path = vt_estimator_model_file;
-        init_data.ml_model_init_data.offset = offset;
+
+        if (!ParseOffsetThresholds(name, sensor, &init_data.ml_model_init_data.offset_thresholds,
+                                   &init_data.ml_model_init_data.offset_values)) {
+            LOG(ERROR) << "Failed to parse offset thresholds and values for Sensor[" << name << "]";
+            return false;
+        }
 
         if (!sensor["PreviousSampleCount"].empty()) {
             init_data.ml_model_init_data.use_prev_samples = true;
@@ -453,7 +498,13 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 
         init_data.linear_model_init_data.prev_samples_order =
                 coefficients.size() / linked_sensors.size();
-        init_data.linear_model_init_data.offset = offset;
+
+        if (!ParseOffsetThresholds(name, sensor,
+                                   &init_data.linear_model_init_data.offset_thresholds,
+                                   &init_data.linear_model_init_data.offset_values)) {
+            LOG(ERROR) << "Failed to parse offset thresholds and values for Sensor[" << name << "]";
+            return false;
+        }
 
         for (size_t i = 0; i < coefficients.size(); ++i) {
             float coefficient = getFloatFromValue(coefficients[i]);

@@ -55,16 +55,17 @@ struct VtEstimatorCommonData {
     VtEstimatorCommonData(size_t num_input_sensors) {
         num_linked_sensors = num_input_sensors;
         prev_samples_order = 1;
-        offset = 0;
         is_initialized = false;
         use_prev_samples = false;
         cur_sample_count = 0;
     }
 
+    std::vector<float> offset_thresholds;
+    std::vector<float> offset_values;
+
     size_t num_linked_sensors;
     size_t prev_samples_order;
     size_t cur_sample_count;
-    float offset;
     bool use_prev_samples;
     bool is_initialized;
 };

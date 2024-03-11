@@ -40,17 +40,19 @@ struct MLModelInitData {
     std::string model_path;
     bool use_prev_samples;
     size_t prev_samples_order;
-    float offset;
     size_t output_label_count;
     size_t num_hot_spots;
     bool enable_input_validation;
+    std::vector<float> offset_thresholds;
+    std::vector<float> offset_values;
 };
 
 struct LinearModelInitData {
     bool use_prev_samples;
     size_t prev_samples_order;
     std::vector<float> coefficients;
-    float offset;
+    std::vector<float> offset_thresholds;
+    std::vector<float> offset_values;
 };
 
 union VtEstimationInitData {
@@ -59,14 +61,12 @@ union VtEstimationInitData {
             ml_model_init_data.model_path = "";
             ml_model_init_data.use_prev_samples = false;
             ml_model_init_data.prev_samples_order = 1;
-            ml_model_init_data.offset = 0;
             ml_model_init_data.output_label_count = 1;
             ml_model_init_data.num_hot_spots = 1;
             ml_model_init_data.enable_input_validation = false;
         } else if (type == kUseLinearModel) {
             linear_model_init_data.use_prev_samples = false;
             linear_model_init_data.prev_samples_order = 1;
-            linear_model_init_data.offset = 0;
         }
     }
     ~VtEstimationInitData() {}
