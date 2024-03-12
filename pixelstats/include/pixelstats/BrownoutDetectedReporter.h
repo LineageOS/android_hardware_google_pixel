@@ -91,6 +91,11 @@ class BrownoutDetectedReporter {
         int odpm_value_[ODPM_MAX_IDX];
         int dvfs_value_[DVFS_MAX_IDX];
         int brownout_reason_;
+        int max_curr_;
+        int evt_cnt_uvlo1_;
+        int evt_cnt_uvlo2_;
+        int evt_cnt_oilo1_;
+        int evt_cnt_oilo2_;
     };
 
     void setAtomFieldValue(std::vector<VendorAtomValue> *values, int offset, int content);

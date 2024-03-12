@@ -1644,6 +1644,16 @@ message BrownoutDetected {
     optional int32 dvfs_channel6 = 37;
     // brownout reason
     optional BrownoutReason brownout_reason = 38;
+    // max current
+    optional int32 max_current = 39;
+    // event counter uvlo1
+    optional int32 evt_cnt_uvlo1 = 40;
+    // event counter uvlo2
+    optional int32 evt_cnt_uvlo2 = 41;
+    // event counter oilo1
+    optional int32 evt_cnt_oilo1 = 42;
+    // event counter oilo2
+    optional int32 evt_cnt_oilo2 = 43;
 }
 
 /*
