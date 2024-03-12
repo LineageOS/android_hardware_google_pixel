@@ -277,7 +277,7 @@ void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_cli
 
 void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client,
                                                const std::vector<std::string> &paths) {
-    struct BatteryHistory gmsr = {.checksum = EvtGMSR,};
+    struct BatteryHistory gmsr = {.checksum = EvtGMSR};
     std::string file_contents;
     std::string path;
     int16_t num;
@@ -493,6 +493,36 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
     /* Clear after reporting data */
     if (!::android::base::WriteStringToFile("0", path.c_str()))
         ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
+}
+
+/* Log once */
+void BatteryEEPROMReporter::checkAndReportHistoryValidation(const std::shared_ptr<IStats> &stats_client,
+                                                            const std::string &path) {
+    struct BatteryHistory params = {.checksum = EvtHistoryValidation};
+    std::string file_contents, line;
+    std::istringstream ss;
+    int16_t num;
+
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read logbuffer path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    /* HV: History Validation */
+    ss.str(file_contents);
+    while (getline(ss, line)) {
+        num = sscanf(line.c_str(), "[%*5lu.%*06lu] 0x4856 %hu %hu %hu %hu\n",
+                     &params.full_cap, &params.esr, &params.rslow, &params.cycle_cnt);
+
+        if (num != kNumHistoryValidationFields)
+            continue;
+
+        if (params.esr != 0)
+            reportEvent(stats_client, params);
+    }
 }
 
 }  // namespace pixel
