@@ -39,12 +39,6 @@ using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
 
 BatteryFGReporter::BatteryFGReporter() {}
 
-static bool fileExists(const std::string &path) {
-    struct stat sb;
-
-    return stat(path.c_str(), &sb) == 0;
-}
-
 void BatteryFGReporter::reportEvent(const std::shared_ptr<IStats> &stats_client,
                                     const struct BatteryFGLearningParam &params) {
     // upload atom
@@ -63,18 +57,8 @@ void BatteryFGReporter::reportEvent(const std::shared_ptr<IStats> &stats_client,
             BatteryEEPROM::kFullRepFieldNumber};
 
     switch(params.type) {
-      case EvtFGLearningParams:
-        ALOGD("reportEvent: log learning fcnom: %04x, dpacc: %04x, dqacc: %04x, fcrep: %04x, "
-              "repsoc: %04x, msoc: %04x, vfsoc: %04x, fstat: %04x, rcomp0: %04x, tempco: %04x",
-              params.fcnom, params.dpacc, params.dqacc, params.fcrep, params.repsoc, params.msoc,
-              params.vfsoc, params.fstat, params.rcomp0, params.tempco);
-        break;
       case EvtFWUpdate:
         ALOGD("reportEvent: firmware update try: %u, success: %u, fail: %u",
-              params.fcnom, params.dpacc, params.dqacc);
-              break;
-      case EvtModelLoading:
-        ALOGD("reportEvent: model loading success: %u, fail: %u, next update %u",
               params.fcnom, params.dpacc, params.dqacc);
               break;
       default:
@@ -140,68 +124,6 @@ void BatteryFGReporter::reportEvent(const std::shared_ptr<IStats> &stats_client,
         ALOGE("Unable to report BatteryEEPROM to Stats service");
 }
 
-void BatteryFGReporter::checkAndReportFGLearning(const std::shared_ptr<IStats> &stats_client,
-                                                 const std::vector<std::string> &paths) {
-    struct BatteryFGLearningParam params;
-    std::string file_contents, line, path;
-    std::istringstream ss;
-    int16_t num;
-    const char* data;
-    int pos = 0;
-
-    if (paths.empty())
-        return;
-
-    for (int i = 0; i < paths.size(); i++) {
-        if (fileExists(paths[i])) {
-            path = paths[i];
-            break;
-        }
-    }
-
-    /* not found */
-    if (path.empty())
-        return;
-
-    if (!ReadFileToString(path, &file_contents)) {
-        ALOGE("Unable to read FG Learning History path: %s - %s", path.c_str(), strerror(errno));
-        return;
-    }
-
-    if (file_contents.length() == 0)
-        return;
-
-    /* LH: Learning History */
-    params.type = EvtFGLearningParams;
-    ss.str(file_contents);
-    while (std::getline(ss, line)) {
-        data = line.c_str();
-        num = sscanf(&data[pos], "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
-                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
-                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
-                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "\n",
-                    &params.fcnom, &params.dpacc, &params.dqacc, &params.fcrep, &params.repsoc,
-                    &params.msoc, &params.vfsoc, &params.fstat, &params.rcomp0, &params.tempco);
-
-        if (num != kNumFGLearningFields)
-            continue;
-
-        if (old_learn_params[0] != params.fcnom || old_learn_params[1] != params.dpacc ||
-            old_learn_params[2] != params.dqacc || old_learn_params[3] != params.fstat ) {
-            old_learn_params[0] = params.fcnom;
-            old_learn_params[1] = params.dpacc;
-            old_learn_params[2] = params.dqacc;
-            old_learn_params[3] = params.fstat;
-
-            reportEvent(stats_client, params);
-        }
-    }
-
-    /* Clear after reporting data */
-    if (!::android::base::WriteStringToFile("0", path.c_str()))
-        ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
-}
-
 void BatteryFGReporter::checkAndReportFwUpdate(const std::shared_ptr<IStats> &stats_client,
                                                const std::string &path) {
     struct BatteryFGLearningParam params;
@@ -240,57 +162,6 @@ void BatteryFGReporter::checkAndReportFwUpdate(const std::shared_ptr<IStats> &st
          /* Clear after reporting data */
         if (!::android::base::WriteStringToFile("0", path.c_str()))
             ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
-    }
-}
-
-void BatteryFGReporter::checkAndReportFGModelLoading(const std::shared_ptr<IStats> &stats_client,
-                                                     const std::vector<std::string> &paths) {
-    struct BatteryFGLearningParam params = {.type = EvtModelLoading, .fcnom = 0, .dpacc = 0,
-                                            .dqacc = 0};
-    std::string file_contents;
-    std::string path;
-    int16_t num;
-    int pos = 0;
-    const char *data;
-
-    if (paths.empty())
-        return;
-
-    for (int i = 0; i < paths.size(); i++) {
-        if (fileExists(paths[i])) {
-            path = paths[i];
-            break;
-        }
-    }
-
-    /* not found */
-    if (path.empty())
-        return;
-
-    if (!ReadFileToString(path, &file_contents)) {
-        ALOGE("Unable to read ModelLoading History path: %s - %s", path.c_str(), strerror(errno));
-        return;
-    }
-
-    data = file_contents.c_str();
-
-    num = sscanf(&data[pos],  "ModelNextUpdate: %" SCNu16 "\n"
-                 "%*x:%*x\n%*x:%*x\n%*x:%*x\n%*x:%*x\n%*x:%*x\n%n",
-                 &params.dqacc, &pos);
-    if (num != 1) {
-        ALOGE("Couldn't process ModelLoading History. num=%d\n", num);
-        return;
-    }
-
-    sscanf(&data[pos],  "ATT: %" SCNu16 " FAIL: %" SCNu16, &params.fcnom, &params.dpacc);
-
-    if (old_model_loading[0] != params.fcnom || old_model_loading[1] != params.dpacc ||
-        old_model_loading[2] != params.dqacc) {
-        old_model_loading[0] = params.fcnom;
-        old_model_loading[1] = params.dpacc;
-        old_model_loading[2] = params.dqacc;
-
-        reportEvent(stats_client, params);
     }
 }
 

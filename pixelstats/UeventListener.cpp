@@ -194,9 +194,7 @@ void UeventListener::ReportFGMetricsEvent(const std::shared_ptr<IStats> &stats_c
         strcmp(driver, "DRIVER=max1720x")))
         return;
 
-    battery_fg_reporter_.checkAndReportFGLearning(stats_client, kFGLearningPath);
     battery_fg_reporter_.checkAndReportFwUpdate(stats_client, kFwUpdatePath);
-    battery_fg_reporter_.checkAndReportFGModelLoading(stats_client, kFGModelLoadingPath);
     battery_fg_reporter_.checkAndReportFGAbnormality(stats_client, kFGAbnlPath);
 }
 
@@ -506,9 +504,7 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
                                const std::string charge_metrics_path,
                                const std::string typec_partner_vid_path,
                                const std::string typec_partner_pid_path,
-                               const std::vector<std::string> fg_learning_path,
                                const std::string fw_update_path,
-                               const std::vector<std::string> fg_modelloading_path,
                                const std::string fg_abnl_path)
     : kAudioUevent(audio_uevent),
       kBatterySSOCPath(ssoc_details_path),
@@ -517,9 +513,7 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
       kTypeCPartnerUevent(typec_partner_uevent_default),
       kTypeCPartnerVidPath(typec_partner_vid_path),
       kTypeCPartnerPidPath(typec_partner_pid_path),
-      kFGLearningPath(fg_learning_path),
       kFwUpdatePath(fw_update_path),
-      kFGModelLoadingPath(fg_modelloading_path),
       kFGAbnlPath(fg_abnl_path),
       uevent_fd_(-1),
       log_fd_(-1) {}
@@ -542,10 +536,8 @@ UeventListener::UeventListener(const struct UeventPaths &uevents_paths)
       kTypeCPartnerPidPath((uevents_paths.TypeCPartnerPidPath == nullptr)
                                    ? typec_partner_pid_path_default
                                    : uevents_paths.TypeCPartnerPidPath),
-      kFGLearningPath(uevents_paths.FGLearningPath),
       kFwUpdatePath((uevents_paths.FwUpdatePath == nullptr)
                                    ? "" : uevents_paths.FwUpdatePath),
-      kFGModelLoadingPath(uevents_paths.FGModelLoadingPath),
       kFGAbnlPath((uevents_paths.FGAbnlPath == nullptr)
                                    ? "" : uevents_paths.FGAbnlPath),
       uevent_fd_(-1),
