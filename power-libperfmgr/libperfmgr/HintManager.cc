@@ -708,6 +708,7 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
     for (Json::Value::ArrayIndex i = 0; i < adpfs.size(); ++i) {
         std::optional<bool> gpuBoost;
         std::optional<uint64_t> gpuBoostCapacityMax;
+        uint64_t gpuCapacityLoadUpHeadroom = 0;
         std::string name = adpfs[i]["Name"].asString();
         LOG(VERBOSE) << "AdpfConfig[" << i << "]'s Name: " << name;
         if (name.empty()) {
@@ -750,12 +751,17 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
             adpfs[i]["GpuCapacityBoostMax"].isUInt64()) {
             gpuBoostCapacityMax = adpfs[i]["GpuCapacityBoostMax"].asUInt64();
         }
+        if (!adpfs[i]["GpuCapacityLoadUpHeadroom"].empty() &&
+            adpfs[i]["GpuCapacityLoadUpHeadroom"].isUInt64()) {
+            gpuCapacityLoadUpHeadroom = adpfs[i]["GpuCapacityLoadUpHeadroom"].asUInt64();
+        }
 
         adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
                 pidDOver, pidDUnder, adpfUclamp, uclampMinInit, uclampMinHighLimit,
                 uclampMinLowLimit, samplingWindowP, samplingWindowI, samplingWindowD, reportingRate,
-                targetTimeFactor, staleTimeFactor, gpuBoost, gpuBoostCapacityMax));
+                targetTimeFactor, staleTimeFactor, gpuBoost, gpuBoostCapacityMax,
+                gpuCapacityLoadUpHeadroom));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;

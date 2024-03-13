@@ -50,6 +50,7 @@ struct AdpfConfig {
 
     std::optional<bool> mGpuBoostOn;
     std::optional<uint64_t> mGpuBoostCapacityMax;
+    uint64_t mGpuCapacityLoadUpHeadroom;
 
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
@@ -62,7 +63,7 @@ struct AdpfConfig {
                uint32_t uclampMinLow, uint64_t samplingWindowP, uint64_t samplingWindowI,
                uint64_t samplingWindowD, int64_t reportingRateLimitNs, double targetTimeFactor,
                double staleTimeFactor, std::optional<bool> gpuBoostOn,
-               std::optional<uint64_t> gpuBoostCapacityMax)
+               std::optional<uint64_t> gpuBoostCapacityMax, uint64_t gpuCapacityLoadUpHeadroom)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -84,7 +85,8 @@ struct AdpfConfig {
           mTargetTimeFactor(targetTimeFactor),
           mStaleTimeFactor(staleTimeFactor),
           mGpuBoostOn(gpuBoostOn),
-          mGpuBoostCapacityMax(gpuBoostCapacityMax) {}
+          mGpuBoostCapacityMax(gpuBoostCapacityMax),
+          mGpuCapacityLoadUpHeadroom(gpuCapacityLoadUpHeadroom) {}
 };
 
 }  // namespace perfmgr
