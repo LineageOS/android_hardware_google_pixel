@@ -58,7 +58,7 @@ class PixelWatchDevice : public ::Device {
     /** Hook to wipe user data not stored in /data */
     bool PostWipeData() override {
         // Try to do everything but report a failure if anything wasn't successful
-        bool totalSuccess = false;
+        bool totalSuccess = true;
 
         // Additional behavior along with wiping data
         auto reason = GetReason();
