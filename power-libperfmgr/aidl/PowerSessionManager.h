@@ -69,6 +69,9 @@ class PowerSessionManager : public ::android::RefBase {
     void voteSet(int64_t sessionId, AdpfHintType voteId, int uclampMin, int uclampMax,
                  std::chrono::steady_clock::time_point startTime,
                  std::chrono::nanoseconds durationNs);
+    void voteSet(int64_t sessionId, AdpfHintType voteId, Cycles capacity,
+                 std::chrono::steady_clock::time_point startTime,
+                 std::chrono::nanoseconds durationNs);
 
     void disableBoosts(int64_t sessionId);
 

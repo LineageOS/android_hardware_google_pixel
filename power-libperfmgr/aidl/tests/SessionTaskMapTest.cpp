@@ -328,6 +328,37 @@ TEST(SessionTaskMapTest, TwoSessionsOneInactive) {
     EXPECT_EQ(111, uclampRange.uclampMin);
 }
 
+TEST(SessionTaskMapTest, GpuVoteBasic) {
+    const auto now = std::chrono::steady_clock::now();
+    SessionTaskMap m;
+    auto const session_id1 = 1001;
+    auto const session_id2 = 1002;
+    static auto constexpr gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+
+    auto addSessionWithId = [&](int id) {
+        SessionValueEntry sv{.isActive = true,
+                             .isAppSession = true,
+                             .lastUpdatedTime = now,
+                             .votes = std::make_shared<Votes>()};
+        EXPECT_TRUE(m.add(id, sv, {10, 20, 30}));
+    };
+    addSessionWithId(session_id1);
+    addSessionWithId(session_id2);
+
+    m.addGpuVote(session_id1, Cycles(222), now, 400ms);
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(222));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 401ms), Cycles(0));
+
+    m.addGpuVote(session_id1, Cycles(111), now, 100ms);
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(111));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 101ms), Cycles(0));
+
+    m.addGpuVote(session_id2, Cycles(555), now, 50ms);
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(555));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 51ms), Cycles(111));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 101ms), Cycles(0));
+}
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
