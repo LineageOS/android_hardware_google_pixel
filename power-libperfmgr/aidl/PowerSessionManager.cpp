@@ -286,6 +286,12 @@ void PowerSessionManager::updateTargetWorkDuration(int64_t sessionId, AdpfHintTy
     // revisit that decision.
 }
 
+template <typename T>
+auto shouldScheduleTimeout(Votes const &votes, int vote_id, std::chrono::time_point<T> deadline)
+        -> bool {
+    return !votes.voteIsActive(vote_id) || deadline < votes.voteTimeout(vote_id);
+}
+
 void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uclampMin,
                                   int uclampMax, std::chrono::steady_clock::time_point startTime,
                                   std::chrono::nanoseconds durationNs) {
@@ -294,34 +300,51 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uc
     bool scheduleTimeout = false;
 
     {
-        std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
-        auto sessValPtr = mSessionTaskMap.findSession(sessionId);
-        if (nullptr == sessValPtr) {
+        std::lock_guard lock(mSessionTaskMapMutex);
+        auto session = mSessionTaskMap.findSession(sessionId);
+        if (!session) {
             // Because of the async nature of some events an event for a session
             // that has been removed is a possibility
             return;
         }
-
-        if (!sessValPtr->votes->voteIsActive(voteIdInt)) {
-            scheduleTimeout = true;
-        }
-        if (timeoutDeadline < sessValPtr->votes->voteTimeout(voteIdInt)) {
-            scheduleTimeout = true;
-        }
-        sessValPtr->votes->add(voteIdInt,
-                               CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
-        sessValPtr->lastUpdatedTime = startTime;
+        scheduleTimeout = shouldScheduleTimeout(*session->votes, voteIdInt, timeoutDeadline),
+        session->votes->add(voteIdInt, CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
+        session->lastUpdatedTime = startTime;
     }
 
     applyUclamp(sessionId, startTime);  // std::chrono::steady_clock::now());
 
     if (scheduleTimeout) {
-        // Sent event to handle stale-vote/timeout in the future
-        EventSessionTimeout eTimeout;
-        eTimeout.timeStamp = startTime;  // eSet.timeStamp;
-        eTimeout.sessionId = sessionId;
-        eTimeout.voteId = voteIdInt;
-        mEventSessionTimeoutWorker.schedule(eTimeout, timeoutDeadline);
+        mEventSessionTimeoutWorker.schedule(
+                {.timeStamp = startTime, .sessionId = sessionId, .voteId = voteIdInt},
+                timeoutDeadline);
+    }
+}
+
+void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, Cycles capacity,
+                                  std::chrono::steady_clock::time_point startTime,
+                                  std::chrono::nanoseconds durationNs) {
+    const int voteIdInt = static_cast<std::underlying_type_t<AdpfHintType>>(voteId);
+    const auto timeoutDeadline = startTime + durationNs;
+    bool scheduleTimeout = false;
+
+    {
+        std::lock_guard lock(mSessionTaskMapMutex);
+        auto session = mSessionTaskMap.findSession(sessionId);
+        if (!session) {
+            return;
+        }
+        scheduleTimeout = shouldScheduleTimeout(*session->votes, voteIdInt, timeoutDeadline),
+        session->votes->add(voteIdInt, GpuVote(true, startTime, durationNs, capacity));
+        session->lastUpdatedTime = startTime;
+    }
+
+    applyUclamp(sessionId, startTime);
+
+    if (scheduleTimeout) {
+        mEventSessionTimeoutWorker.schedule(
+                {.timeStamp = startTime, .sessionId = sessionId, .voteId = voteIdInt},
+                timeoutDeadline);
     }
 }
 

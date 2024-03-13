@@ -138,9 +138,9 @@ class Votes {
     // Return number of votes
     size_t size() const;
 
-    bool voteIsActive(int voteId);
+    bool voteIsActive(int voteId) const;
 
-    std::chrono::steady_clock::time_point voteTimeout(int voteId);
+    std::chrono::steady_clock::time_point voteTimeout(int voteId) const;
 
   private:
     std::unordered_map<int, CpuVote> mCpuVotes;
