@@ -46,6 +46,8 @@ using ::android::perfmgr::HintManager;
 using std::chrono::duration_cast;
 using std::chrono::nanoseconds;
 
+using std::operator""ms;
+
 namespace {
 
 static std::atomic<int64_t> sSessionIDCounter{0};
@@ -173,10 +175,11 @@ void PowerHintSession::updatePidControlVariable(int pidControlVariable, bool upd
     mDescriptor->pidControlVariable = pidControlVariable;
     if (updateVote) {
         auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
-        mPSManager->voteSet(
-                mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, pidControlVariable, kUclampMax,
-                std::chrono::steady_clock::now(),
-                duration_cast<nanoseconds>(mDescriptor->targetNs * adpfConfig->mStaleTimeFactor));
+        mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, pidControlVariable,
+                            kUclampMax, std::chrono::steady_clock::now(),
+                            std::max(duration_cast<nanoseconds>(mDescriptor->targetNs *
+                                                                adpfConfig->mStaleTimeFactor),
+                                     nanoseconds(adpfConfig->mReportingRateLimitNs) * 2));
     }
     ATRACE_INT(mAppDescriptorTrace.trace_min.c_str(), pidControlVariable);
 }
