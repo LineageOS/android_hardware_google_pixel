@@ -58,6 +58,8 @@ void AdpfConfig::dumpToFd(int fd) {
     dump_buf << "ReportingRateLimitNs: " << mReportingRateLimitNs << "\n";
     dump_buf << "TargetTimeFactor: " << mTargetTimeFactor << "\n";
     dump_buf << "StaleTimeFactor: " << mStaleTimeFactor << "\n";
+    dump_buf << "GpuBoostOn: " << mGpuBoostOn.value_or(false) << "\n";
+    dump_buf << "GpuBoostCapacityMax: " << mGpuBoostCapacityMax.value_or(0) << "\n";
     if (!android::base::WriteStringToFd(dump_buf.str(), fd)) {
         LOG(ERROR) << "Failed to dump ADPF profile to fd: " << fd;
     }
