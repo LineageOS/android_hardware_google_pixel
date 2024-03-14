@@ -57,12 +57,16 @@ class PowerSessionManager;
 // and is separate so that it can be used as a pointer for
 // easily passing to the pid function
 struct AppHintDesc {
-    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, std::chrono::nanoseconds pTargetNs);
+    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
+                SessionTag tag, std::chrono::nanoseconds pTargetNs);
+
     std::string toString() const;
     int64_t sessionId{0};
     const int32_t tgid;
     const int32_t uid;
     nanoseconds targetNs;
+    std::vector<int32_t> thread_ids;
+    SessionTag tag;
     int pidControlVariable;
     // status
     std::atomic<bool> is_active;
