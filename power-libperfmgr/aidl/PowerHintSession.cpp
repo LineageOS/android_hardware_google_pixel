@@ -31,6 +31,7 @@
 
 #include <atomic>
 
+#include "GpuCalculationHelpers.h"
 #include "PowerSessionManager.h"
 
 namespace aidl {
@@ -320,6 +321,27 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
     next_min = std::max(static_cast<int>(adpfConfig->mUclampMinLow), next_min);
 
     updatePidControlVariable(next_min);
+
+    if (!adpfConfig->mGpuBoostOn.value_or(false) || !adpfConfig->mGpuBoostCapacityMax ||
+        !actualDurations.back().gpuDurationNanos) {
+        return ndk::ScopedAStatus::ok();
+    }
+
+    auto const gpu_freq = mPSManager->gpuFrequency();
+    if (!gpu_freq) {
+        return ndk::ScopedAStatus::ok();
+    }
+    auto const additional_gpu_capacity =
+            calculate_capacity(actualDurations.back(), mDescriptor->targetNs, *gpu_freq);
+
+    auto const additional_gpu_capacity_clamped = std::clamp(
+            additional_gpu_capacity, Cycles(0), Cycles(*adpfConfig->mGpuBoostCapacityMax));
+
+    mPSManager->voteSet(
+            mSessionId, AdpfHintType::ADPF_GPU_CAPACITY, additional_gpu_capacity_clamped,
+            std::chrono::steady_clock::now(),
+            duration_cast<nanoseconds>(mDescriptor->targetNs * adpfConfig->mStaleTimeFactor));
+
     return ndk::ScopedAStatus::ok();
 }
 

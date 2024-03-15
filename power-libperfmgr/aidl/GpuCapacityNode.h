@@ -82,6 +82,10 @@ struct GpuCapacityNode final {
     std::mutex mutable capacity_mutex_;
 };
 
+// There's not a global object factory or context in PowerHal, maybe introducing one would simplify
+// resource management.
+std::optional<std::unique_ptr<GpuCapacityNode>> createGpuCapacityNode();
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
