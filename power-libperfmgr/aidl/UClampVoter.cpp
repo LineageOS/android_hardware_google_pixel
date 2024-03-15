@@ -54,11 +54,20 @@ void Votes::add(int id, CpuVote const &vote) {
 }
 
 std::optional<Cycles> Votes::getGpuCapacityRequest(std::chrono::steady_clock::time_point t) const {
-    auto it = mGpuVotes.find(static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY));
-    if (it != mGpuVotes.end() && it->second.isTimeInRange(t)) {
-        return {it->second.mCapacity};
+    std::optional<Cycles> res = std::nullopt;
+
+    constexpr AdpfHintType gpu_capacity_hints[] = {
+            AdpfHintType::ADPF_GPU_CAPACITY,
+            AdpfHintType::ADPF_GPU_LOAD_UP,
+    };
+    for (auto const hint : gpu_capacity_hints) {
+        auto it = mGpuVotes.find(static_cast<int>(hint));
+        if (it != mGpuVotes.end() && it->second.isTimeInRange(t)) {
+            res = res.value_or(Cycles(0)) + it->second.mCapacity;
+        }
     }
-    return {};
+
+    return res;
 }
 
 void Votes::add(int id, GpuVote const &vote) {
