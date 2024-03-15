@@ -484,9 +484,18 @@ bool ThermalThrottling::allocatePowerToCdev(
                                          << " vote: " << curr_cdev_vote
                                          << " is lower than max cdev vote: " << max_cdev_vote;
                         } else {
-                            const auto target_state = std::max(
-                                    curr_cdev_vote - binded_cdev_info_pair.second.max_release_step,
-                                    0);
+                            int target_release_step = binded_cdev_info_pair.second.max_release_step;
+                            while ((curr_cdev_vote - target_release_step) >
+                                           binded_cdev_info_pair.second
+                                                   .limit_info[static_cast<size_t>(
+                                                           curr_severity)] &&
+                                   cdev_info.state2power[curr_cdev_vote - target_release_step] ==
+                                           cdev_info.state2power[curr_cdev_vote]) {
+                                target_release_step += 1;
+                            }
+                            const auto target_state =
+                                    std::max(curr_cdev_vote - target_release_step, 0);
+
                             cdev_power_budget = std::min(cdev_power_budget,
                                                          cdev_info.state2power[target_state]);
                         }
@@ -495,10 +504,18 @@ bool ThermalThrottling::allocatePowerToCdev(
                     if (binded_cdev_info_pair.second.max_throttle_step !=
                                 std::numeric_limits<int>::max() &&
                         (power_data_invalid || cdev_power_adjustment < 0)) {
-                        const auto target_state = std::min(
-                                curr_cdev_vote + binded_cdev_info_pair.second.max_throttle_step,
-                                binded_cdev_info_pair.second
-                                        .cdev_ceiling[static_cast<size_t>(curr_severity)]);
+                        int target_throttle_step = binded_cdev_info_pair.second.max_throttle_step;
+                        while ((curr_cdev_vote + target_throttle_step) <
+                                       binded_cdev_info_pair.second
+                                               .cdev_ceiling[static_cast<size_t>(curr_severity)] &&
+                               cdev_info.state2power[curr_cdev_vote + target_throttle_step] ==
+                                       cdev_info.state2power[curr_cdev_vote]) {
+                            target_throttle_step += 1;
+                        }
+                        const auto target_state =
+                                std::min(curr_cdev_vote + target_throttle_step,
+                                         binded_cdev_info_pair.second
+                                                 .cdev_ceiling[static_cast<size_t>(curr_severity)]);
                         cdev_power_budget =
                                 std::max(cdev_power_budget, cdev_info.state2power[target_state]);
                     }
