@@ -345,18 +345,50 @@ TEST(SessionTaskMapTest, GpuVoteBasic) {
     addSessionWithId(session_id1);
     addSessionWithId(session_id2);
 
-    m.addGpuVote(session_id1, Cycles(222), now, 400ms);
+    m.addGpuVote(session_id1, gpu_vote_id, Cycles(222), now, 400ms);
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(222));
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 401ms), Cycles(0));
 
-    m.addGpuVote(session_id1, Cycles(111), now, 100ms);
+    m.addGpuVote(session_id1, gpu_vote_id, Cycles(111), now, 100ms);
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(111));
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 101ms), Cycles(0));
 
-    m.addGpuVote(session_id2, Cycles(555), now, 50ms);
+    m.addGpuVote(session_id2, gpu_vote_id, Cycles(555), now, 50ms);
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(555));
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 51ms), Cycles(111));
     EXPECT_EQ(m.getSessionsGpuCapacity(now + 101ms), Cycles(0));
+}
+
+TEST(SessionTaskMapTest, GpuVoteDifferentHints) {
+    const auto now = std::chrono::steady_clock::now();
+    SessionTaskMap m;
+    auto const session_id1 = 1001;
+    auto const session_id2 = 1002;
+
+    auto const capacity_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+    auto const load_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_LOAD_UP);
+
+    auto addSessionWithId = [&](int id) {
+        SessionValueEntry sv{.isActive = true,
+                             .isAppSession = true,
+                             .lastUpdatedTime = now,
+                             .votes = std::make_shared<Votes>()};
+        EXPECT_TRUE(m.add(id, sv, {10, 20, 30}));
+    };
+    addSessionWithId(session_id1);
+    addSessionWithId(session_id2);
+
+    m.addGpuVote(session_id1, capacity_vote_id, Cycles(222), now, 400ms);
+    m.addGpuVote(session_id1, load_vote_id, Cycles(111), now, 100ms);
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(333));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 101ms), Cycles(222));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 401ms), Cycles(0));
+
+    m.addGpuVote(session_id2, capacity_vote_id, Cycles(321), now, 150ms);
+    m.addGpuVote(session_id2, load_vote_id, Cycles(123), now, 50ms);
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 1ms), Cycles(444));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 51ms), Cycles(333));
+    EXPECT_EQ(m.getSessionsGpuCapacity(now + 151ms), Cycles(222));
 }
 
 }  // namespace pixel

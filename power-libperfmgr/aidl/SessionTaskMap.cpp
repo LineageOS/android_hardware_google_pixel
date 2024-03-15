@@ -58,7 +58,7 @@ void SessionTaskMap::addVote(int64_t sessionId, int voteId, int uclampMin, int u
                                     CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
 }
 
-void SessionTaskMap::addGpuVote(int64_t sessionId, Cycles capacity,
+void SessionTaskMap::addGpuVote(int64_t sessionId, int voteId, Cycles capacity,
                                 std::chrono::steady_clock::time_point startTime,
                                 std::chrono::nanoseconds durationNs) {
     auto sessItr = mSessions.find(sessionId);
@@ -66,8 +66,7 @@ void SessionTaskMap::addGpuVote(int64_t sessionId, Cycles capacity,
         return;
     }
 
-    sessItr->second.val->votes->add(static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY),
-                                    GpuVote(true, startTime, durationNs, capacity));
+    sessItr->second.val->votes->add(voteId, GpuVote(true, startTime, durationNs, capacity));
 }
 
 std::shared_ptr<SessionValueEntry> SessionTaskMap::findSession(int64_t sessionId) const {

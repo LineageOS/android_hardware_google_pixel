@@ -50,7 +50,7 @@ class SessionTaskMap {
     void addVote(int64_t sessionId, int voteId, int uclampMin, int uclampMax,
                  std::chrono::steady_clock::time_point startTime,
                  std::chrono::nanoseconds durationNs);
-    void addGpuVote(int64_t sessionId, Cycles capacity,
+    void addGpuVote(int64_t sessionId, int voteId, Cycles capacity,
                     std::chrono::steady_clock::time_point startTime,
                     std::chrono::nanoseconds durationNs);
 
