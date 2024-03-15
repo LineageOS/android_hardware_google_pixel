@@ -34,6 +34,9 @@ namespace perfmgr {
 
 using std::literals::chrono_literals::operator""ms;
 
+using testing::Eq;
+using testing::Optional;
+
 constexpr auto kSLEEP_TOLERANCE_MS = 50ms;
 
 constexpr char kJSON_RAW[] = R"(
@@ -909,21 +912,17 @@ TEST_F(HintManagerTest, IsAdpfProfileSupported) {
     EXPECT_TRUE(hm->IsAdpfProfileSupported("REFRESH_120FPS"));
 }
 
-MATCHER_P(IsSetAndEqualTo, param, "std::optional<> is set and equal to") {
-    return arg && *arg == param;
-}
-
 TEST_F(HintManagerTest, GpuConfigSupport) {
     TemporaryFile json_file;
     ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
     auto hm = HintManager::GetFromJSON(json_file.path, false);
     ASSERT_TRUE(hm);
 
-    EXPECT_THAT(hm->gpu_sysfs_config_path(), IsSetAndEqualTo("/sys/devices/platform/123.abc"));
+    EXPECT_THAT(hm->gpu_sysfs_config_path(), Optional(Eq("/sys/devices/platform/123.abc")));
     ASSERT_TRUE(hm->SetAdpfProfile("REFRESH_120FPS"));
     auto profile = hm->GetAdpfProfile();
-    EXPECT_THAT(profile->mGpuBoostOn, IsSetAndEqualTo(true));
-    EXPECT_THAT(profile->mGpuBoostCapacityMax, IsSetAndEqualTo(300000));
+    EXPECT_THAT(profile->mGpuBoostOn, Optional(true));
+    EXPECT_THAT(profile->mGpuBoostCapacityMax, Optional(300000));
     EXPECT_EQ(profile->mGpuCapacityLoadUpHeadroom, 1000);
 
     ASSERT_TRUE(hm->SetAdpfProfile("REFRESH_60FPS"));
