@@ -16,6 +16,8 @@
 
 #include "GpuCapacityNode.h"
 
+#include "perfmgr/HintManager.h"
+
 #define LOG_TAG "powerhal-libperfmgr"
 #include <android-base/logging.h>
 
@@ -118,6 +120,14 @@ std::optional<Frequency> GpuCapacityNode::gpu_frequency() const {
     }
 
     return Frequency(frequency_raw * 1000);
+}
+
+std::optional<std::unique_ptr<GpuCapacityNode>> createGpuCapacityNode() {
+    auto const path = ::android::perfmgr::HintManager::GetInstance()->gpu_sysfs_config_path();
+    if (!path) {
+        return {};
+    }
+    return {GpuCapacityNode::init_gpu_capacity_node(std::make_unique<FdWriter>(), *path)};
 }
 
 }  // namespace pixel

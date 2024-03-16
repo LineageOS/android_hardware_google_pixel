@@ -25,6 +25,7 @@
 #include <unordered_set>
 
 #include "BackgroundWorker.h"
+#include "GpuCapacityNode.h"
 #include "PowerHintSession.h"
 #include "SessionTaskMap.h"
 
@@ -81,6 +82,8 @@ class PowerSessionManager : public ::android::RefBase {
         return instance;
     }
 
+    std::optional<Frequency> gpuFrequency() const;
+
   private:
     std::optional<bool> isAnyAppSessionActive();
     void disableSystemTopAppBoost();
@@ -104,7 +107,13 @@ class PowerSessionManager : public ::android::RefBase {
     TemplatePriorityQueueWorker<EventSessionTimeout> mEventSessionTimeoutWorker;
 
     // Calculate uclamp range
-    void applyUclamp(int64_t sessionId, std::chrono::steady_clock::time_point timePoint);
+    void applyUclampLocked(int64_t sessionId, std::chrono::steady_clock::time_point timePoint)
+            REQUIRES(mSessionTaskMapMutex);
+
+    void applyGpuVotesLocked(int64_t sessionId, std::chrono::steady_clock::time_point timePoint)
+            REQUIRES(mSessionTaskMapMutex);
+
+    void applyCpuAndGpuVotes(int64_t sessionId, std::chrono::steady_clock::time_point timePoint);
     // Force a session active or in-active, helper for other methods
     void forceSessionActive(int64_t sessionId, bool isActive);
 
@@ -114,9 +123,12 @@ class PowerSessionManager : public ::android::RefBase {
                                                              "ADPF_DISABLE_TA_BOOST")),
           mDisplayRefreshRate(60),
           mPriorityQueueWorkerPool(new PriorityQueueWorkerPool(1, "adpf_handler")),
-          mEventSessionTimeoutWorker([&](auto e) { handleEvent(e); }, mPriorityQueueWorkerPool) {}
+          mEventSessionTimeoutWorker([&](auto e) { handleEvent(e); }, mPriorityQueueWorkerPool),
+          mGpuCapacityNode(createGpuCapacityNode()) {}
     PowerSessionManager(PowerSessionManager const &) = delete;
     void operator=(PowerSessionManager const &) = delete;
+
+    std::optional<std::unique_ptr<GpuCapacityNode>> const mGpuCapacityNode;
 };
 
 }  // namespace pixel
