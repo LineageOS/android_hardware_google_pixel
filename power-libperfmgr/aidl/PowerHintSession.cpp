@@ -117,11 +117,14 @@ int64_t PowerHintSession::convertWorkDurationToBoostByPid(
 }
 
 AppHintDesc::AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid,
+                         const std::vector<int32_t> &threadIds, SessionTag tag,
                          std::chrono::nanoseconds pTargetNs)
     : sessionId(sessionId),
       tgid(tgid),
       uid(uid),
       targetNs(pTargetNs),
+      thread_ids(threadIds),
+      tag(tag),
       pidControlVariable(0),
       is_active(true),
       update_count(0),
@@ -133,7 +136,7 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
     : mPSManager(PowerSessionManager::getInstance()),
       mSessionId(++sSessionIDCounter),
       mIdString(StringPrintf("%" PRId32 "-%" PRId32 "-%" PRId64, tgid, uid, mSessionId)),
-      mDescriptor(std::make_shared<AppHintDesc>(mSessionId, tgid, uid,
+      mDescriptor(std::make_shared<AppHintDesc>(mSessionId, tgid, uid, threadIds, tag,
                                                 std::chrono::nanoseconds(durationNs))),
       mAppDescriptorTrace(mIdString),
       mTag(tag) {
@@ -205,6 +208,7 @@ ndk::ScopedAStatus PowerHintSession::pause() {
     if (!mDescriptor->is_active.load())
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     // Reset to default uclamp value.
+    mPSManager->setThreadsFromPowerSession(mSessionId, {});
     mDescriptor->is_active.store(false);
     mPSManager->pause(mSessionId);
     ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), false);
@@ -219,6 +223,7 @@ ndk::ScopedAStatus PowerHintSession::resume() {
     }
     if (mDescriptor->is_active.load())
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
+    mPSManager->setThreadsFromPowerSession(mSessionId, mDescriptor->thread_ids);
     mDescriptor->is_active.store(true);
     // resume boost
     mPSManager->resume(mSessionId);
@@ -403,7 +408,7 @@ ndk::ScopedAStatus PowerHintSession::setThreads(const std::vector<int32_t> &thre
         ALOGE("Error: threadIds should not be empty");
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
-
+    mDescriptor->thread_ids = threadIds;
     mPSManager->setThreadsFromPowerSession(mSessionId, threadIds);
     // init boost
     updatePidControlVariable(HintManager::GetInstance()->GetAdpfProfile()->mUclampMinInit);
