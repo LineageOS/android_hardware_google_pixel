@@ -178,6 +178,25 @@ TEST_F(PowerHintSessionTest, setThreads) {
     sess2->close();
 }
 
+TEST_F(PowerHintSessionTest, pauseResumeSession) {
+    auto sessManager = sess1->mPSManager;
+    ASSERT_EQ(2, sessManager->mSessionTaskMap.mSessions.size());
+    ASSERT_EQ(2, sessManager->mSessionTaskMap.mSessions[sess1->mSessionId].linkedTasks.size());
+
+    sess1->pause();
+    ASSERT_EQ(2, sessManager->mSessionTaskMap.mSessions.size());
+    ASSERT_EQ(0, sessManager->mSessionTaskMap.mSessions[sess1->mSessionId].linkedTasks.size());
+
+    sess1->resume();
+    ASSERT_EQ(sessManager->mSessionTaskMap.mSessions[sess1->mSessionId].linkedTasks,
+              session1Threads);
+    ASSERT_EQ(session1Threads, sess1->mDescriptor->thread_ids);
+    ASSERT_EQ(SessionTag::OTHER, sess1->mDescriptor->tag);
+
+    sess1->close();
+    sess2->close();
+}
+
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
