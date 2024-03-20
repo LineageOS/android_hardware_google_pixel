@@ -15,6 +15,7 @@
  */
 
 #include <aidl/android/hardware/power/SessionTag.h>
+#include <android-base/file.h>
 #include <gtest/gtest.h>
 #include <sys/syscall.h>
 
@@ -34,6 +35,7 @@
 using std::literals::chrono_literals::operator""ms;
 using std::literals::chrono_literals::operator""ns;
 using std::literals::chrono_literals::operator""s;
+using android::base::ReadFileToString;
 
 namespace aidl {
 namespace google {
@@ -112,6 +114,52 @@ class PowerHintSessionTest : public ::testing::Test {
             threadIsAlive[i] = false;
             threadList[i].join();
         }
+    }
+
+    // Reads the session active flag from a sched dump for a pid. Returns error status and
+    // stores result in isActive.
+    bool ReadThreadADPFTag(pid_t pid, bool *isActive) {
+        std::string pidStr = std::to_string(pid);
+        std::string schedDump;
+        *isActive = false;
+
+        // Store the SchedDump into a string.
+        if (!ReadFileToString("/proc/vendor_sched/dump_task", &schedDump)) {
+            std::cerr << "Error: Could not read /proc/vendor_sched/dump_task." << std::endl;
+            return false;
+        }
+
+        // Find our pid entry start from the sched dump.
+        // We use rfind since the dump is ordered by PID and we made a new thread recently.
+        size_t pid_position = schedDump.rfind(pidStr);
+        if (pid_position == std::string::npos) {
+            std::cerr << "Error: pid not found in sched dump." << std::endl;
+            return false;
+        }
+
+        // Find the end boundary of our sched dump entry.
+        size_t entry_end_position = schedDump.find_first_of("\n", pid_position);
+        if (entry_end_position == std::string::npos) {
+            std::cerr << "Error: could not find end of sched dump entry." << std::endl;
+            return false;
+        }
+
+        // Extract our sched dump entry.
+        std::string threadEntry = schedDump.substr(pid_position, entry_end_position - pid_position);
+        if (threadEntry.size() < 3) {
+            std::cerr << "Error: sched dump entry invalid." << std::endl;
+            return false;
+        }
+
+        // We do reverse array access since the first entries have variable length.
+        char powerSessionActiveFlag = threadEntry[threadEntry.size() - 3];
+        if (powerSessionActiveFlag == '1') {
+            *isActive = true;
+        }
+
+        // At this point, we have found a valid entry with SessionAllowed == bool, so we return
+        // success status.
+        return true;
     }
 };
 
@@ -192,6 +240,43 @@ TEST_F(PowerHintSessionTest, pauseResumeSession) {
               session1Threads);
     ASSERT_EQ(session1Threads, sess1->mDescriptor->thread_ids);
     ASSERT_EQ(SessionTag::OTHER, sess1->mDescriptor->tag);
+
+    sess1->close();
+    sess2->close();
+}
+
+TEST_F(PowerHintSessionTest, checkPauseResumeTag) {
+    auto sessManager = sess1->mPSManager;
+    bool isActive;
+
+    // Check we actually start with two PIDs.
+    ASSERT_EQ(2, sessManager->mSessionTaskMap.mSessions[sess1->mSessionId].linkedTasks.size());
+    pid_t threadOnePid = sessManager->mSessionTaskMap.mSessions[sess1->mSessionId].linkedTasks[0];
+    pid_t threadTwoPid = sessManager->mSessionTaskMap.mSessions[sess1->mSessionId].linkedTasks[1];
+
+    // Start the powerhint session and check the powerhint tags are on.
+    std::this_thread::sleep_for(10ms);
+    ASSERT_TRUE(ReadThreadADPFTag(threadOnePid, &isActive));
+    ASSERT_TRUE(isActive);
+    ASSERT_TRUE(ReadThreadADPFTag(threadTwoPid, &isActive));
+    ASSERT_TRUE(isActive);
+
+    // Pause session 1, the powerhint session tag for thread 1 should be off.
+    // But, thread two should still have tag on since it is part of session 2.
+    sess1->pause();
+    std::this_thread::sleep_for(10ms);
+    ASSERT_TRUE(ReadThreadADPFTag(threadOnePid, &isActive));
+    ASSERT_TRUE(!isActive);
+    ASSERT_TRUE(ReadThreadADPFTag(threadTwoPid, &isActive));
+    ASSERT_TRUE(isActive);
+
+    // Resume the powerhint session and check the powerhint sessions are allowed.
+    sess1->resume();
+    std::this_thread::sleep_for(10ms);
+    ASSERT_TRUE(ReadThreadADPFTag(threadOnePid, &isActive));
+    ASSERT_TRUE(isActive);
+    ASSERT_TRUE(ReadThreadADPFTag(threadTwoPid, &isActive));
+    ASSERT_TRUE(isActive);
 
     sess1->close();
     sess2->close();
