@@ -1167,6 +1167,10 @@ bool ParseCoolingDevice(const Json::Value &config,
                 state2power.emplace_back(getFloatFromValue(values[j]));
                 LOG(INFO) << "Cooling device[" << name << "]'s Power2State[" << j
                           << "]: " << state2power[j];
+                if (j > 0 && state2power[j] < state2power[j - 1]) {
+                    LOG(ERROR) << "Higher power with higher state on cooling device " << name
+                               << "'s state" << j;
+                }
             }
         } else {
             LOG(INFO) << "CoolingDevice[" << i << "]'s Name: " << name
