@@ -59,6 +59,17 @@ bool getInputRangeInfoFromJsonValues(const Json::Value &values, InputRangeInfo *
               << " <= val <= " << input_range_info->max_threshold;
     return true;
 }
+
+float CalculateOffset(const std::vector<float> offset_thresholds,
+                      const std::vector<float> offset_values, const float value) {
+    for (int i = offset_thresholds.size(); i > 0; --i) {
+        if (offset_thresholds[i - 1] < value) {
+            return offset_values[i - 1];
+        }
+    }
+
+    return 0;
+}
 }  // namespace
 
 void VirtualTempEstimator::LoadTFLiteWrapper() {
@@ -173,7 +184,8 @@ VtEstimatorStatus VirtualTempEstimator::LinearModelInitialize(LinearModelInitDat
         linear_model_instance_->coefficients.emplace_back(single_order_coefficients);
     }
 
-    common_instance_->offset = data.offset;
+    common_instance_->offset_thresholds = data.offset_thresholds;
+    common_instance_->offset_values = data.offset_values;
     common_instance_->is_initialized = true;
 
     return kVtEstimatorOk;
@@ -279,10 +291,11 @@ VtEstimatorStatus VirtualTempEstimator::TFliteInitialize(MLModelInitData data) {
         }
     }
 
-    common_instance_->offset = data.offset;
-    common_instance_->is_initialized = true;
+    common_instance_->offset_thresholds = data.offset_thresholds;
+    common_instance_->offset_values = data.offset_values;
     tflite_instance_->model_path = model_path;
 
+    common_instance_->is_initialized = true;
     LOG(INFO) << "Successfully initialized VirtualTempEstimator for " << model_path;
     return kVtEstimatorOk;
 }
@@ -334,10 +347,12 @@ VtEstimatorStatus VirtualTempEstimator::LinearModelEstimate(const std::vector<fl
         input_level = (input_level >= 0) ? input_level : (prev_samples_order - 1);
     }
 
-    estimated_value += common_instance_->offset;
-
     // Update sample count
     common_instance_->cur_sample_count++;
+
+    // add offset to estimated value if applicable
+    estimated_value += CalculateOffset(common_instance_->offset_thresholds,
+                                       common_instance_->offset_values, estimated_value);
 
     *output = estimated_value;
     return kVtEstimatorOk;
@@ -413,8 +428,12 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
         return kVtEstimatorInvokeFailed;
     }
 
-    // virtual sensor currently only support scalar output
-    *output = tflite_instance_->output_buffer[0] + common_instance_->offset;
+    // add offset to predicted value
+    float predicted_value = tflite_instance_->output_buffer[0];
+    predicted_value += CalculateOffset(common_instance_->offset_thresholds,
+                                       common_instance_->offset_values, predicted_value);
+
+    *output = predicted_value;
     return kVtEstimatorOk;
 }
 
