@@ -234,6 +234,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
     std::string vt_estimator_model_file;
     std::unique_ptr<::thermal::vtestimator::VirtualTempEstimator> vt_estimator;
+    std::string backup_sensor;
 
     Json::Value values = sensor["Combination"];
     if (values.size()) {
@@ -343,6 +344,10 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 
     if (!sensor["Offset"].empty()) {
         offset = sensor["Offset"].asFloat();
+    }
+
+    if (!sensor["BackupSensor"].empty()) {
+        backup_sensor = sensor["BackupSensor"].asString();
     }
 
     values = sensor["TriggerSensor"];
@@ -468,9 +473,10 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
                   << "] with input samples: " << linked_sensors.size();
     }
 
-    virtual_sensor_info->reset(new VirtualSensorInfo{
-            linked_sensors, linked_sensors_type, coefficients, coefficients_type, offset,
-            trigger_sensors, formula, vt_estimator_model_file, std::move(vt_estimator)});
+    virtual_sensor_info->reset(
+            new VirtualSensorInfo{linked_sensors, linked_sensors_type, coefficients,
+                                  coefficients_type, offset, trigger_sensors, formula,
+                                  vt_estimator_model_file, std::move(vt_estimator), backup_sensor});
     return true;
 }
 

@@ -28,6 +28,7 @@ enum VtEstimatorStatus {
     kVtEstimatorInitFailed = 2,
     kVtEstimatorInvokeFailed = 3,
     kVtEstimatorUnSupported = 4,
+    kVtEstimatorLowConfidence = 5
 };
 
 enum VtEstimationType { kUseMLModel = 0, kUseLinearModel = 1, kInvalidEstimationType = 2 };

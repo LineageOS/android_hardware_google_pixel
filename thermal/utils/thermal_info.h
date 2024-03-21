@@ -142,6 +142,7 @@ struct VirtualSensorInfo {
     FormulaOption formula;
     std::string vt_estimator_model_file;
     std::unique_ptr<::thermal::vtestimator::VirtualTempEstimator> vt_estimator;
+    std::string backup_sensor;
 };
 
 struct VirtualPowerRailInfo {
