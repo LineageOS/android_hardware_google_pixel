@@ -17,11 +17,60 @@
 
 #include <android-base/logging.h>
 #include <dlfcn.h>
+#include <json/reader.h>
 
+#include <cmath>
 #include <vector>
 
 namespace thermal {
 namespace vtestimator {
+namespace {
+float getFloatFromValue(const Json::Value &value) {
+    if (value.isString()) {
+        return std::atof(value.asString().c_str());
+    } else {
+        return value.asFloat();
+    }
+}
+
+bool getInputRangeInfoFromJsonValues(const Json::Value &values, InputRangeInfo *input_range_info) {
+    if (values.size() != 2) {
+        LOG(ERROR) << "Data Range Values size: " << values.size() << "is invalid.";
+        return false;
+    }
+
+    float min_val = getFloatFromValue(values[0]);
+    float max_val = getFloatFromValue(values[1]);
+
+    if (std::isnan(min_val) || std::isnan(max_val)) {
+        LOG(ERROR) << "Illegal data range: thresholds not defined properly " << min_val << " : "
+                   << max_val;
+        return false;
+    }
+
+    if (min_val > max_val) {
+        LOG(ERROR) << "Illegal data range: data_min_threshold(" << min_val
+                   << ") > data_max_threshold(" << max_val << ")";
+        return false;
+    }
+    input_range_info->min_threshold = min_val;
+    input_range_info->max_threshold = max_val;
+    LOG(INFO) << "Data Range Info: " << input_range_info->min_threshold
+              << " <= val <= " << input_range_info->max_threshold;
+    return true;
+}
+
+float CalculateOffset(const std::vector<float> offset_thresholds,
+                      const std::vector<float> offset_values, const float value) {
+    for (int i = offset_thresholds.size(); i > 0; --i) {
+        if (offset_thresholds[i - 1] < value) {
+            return offset_values[i - 1];
+        }
+    }
+
+    return 0;
+}
+}  // namespace
 
 void VirtualTempEstimator::LoadTFLiteWrapper() {
     if (!tflite_instance_) {
@@ -59,6 +108,21 @@ void VirtualTempEstimator::LoadTFLiteWrapper() {
             reinterpret_cast<tflitewrapper_destroy>(dlsym(mLibHandle, "Destroy"));
     if (!tflite_instance_->tflite_methods.destroy) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_destroy with error: " << dlerror();
+    }
+
+    tflite_instance_->tflite_methods.get_input_config_size =
+            reinterpret_cast<tflitewrapper_get_input_config_size>(
+                    dlsym(mLibHandle, "GetInputConfigSize"));
+    if (!tflite_instance_->tflite_methods.get_input_config_size) {
+        LOG(ERROR) << "Could not link and cast tflitewrapper_get_input_config_size with error: "
+                   << dlerror();
+    }
+
+    tflite_instance_->tflite_methods.get_input_config =
+            reinterpret_cast<tflitewrapper_get_input_config>(dlsym(mLibHandle, "GetInputConfig"));
+    if (!tflite_instance_->tflite_methods.get_input_config) {
+        LOG(ERROR) << "Could not link and cast tflitewrapper_get_input_config with error: "
+                   << dlerror();
     }
 }
 
@@ -120,8 +184,8 @@ VtEstimatorStatus VirtualTempEstimator::LinearModelInitialize(LinearModelInitDat
         linear_model_instance_->coefficients.emplace_back(single_order_coefficients);
     }
 
-    common_instance_->cur_sample_index = 0;
-    common_instance_->offset = data.offset;
+    common_instance_->offset_thresholds = data.offset_thresholds;
+    common_instance_->offset_values = data.offset_values;
     common_instance_->is_initialized = true;
 
     return kVtEstimatorOk;
@@ -177,7 +241,9 @@ VtEstimatorStatus VirtualTempEstimator::TFliteInitialize(MLModelInitData data) {
     tflite_instance_->output_buffer = new float[tflite_instance_->output_buffer_size];
 
     if (!tflite_instance_->tflite_methods.create || !tflite_instance_->tflite_methods.init ||
-        !tflite_instance_->tflite_methods.invoke || !tflite_instance_->tflite_methods.destroy) {
+        !tflite_instance_->tflite_methods.invoke || !tflite_instance_->tflite_methods.destroy ||
+        !tflite_instance_->tflite_methods.get_input_config_size ||
+        !tflite_instance_->tflite_methods.get_input_config) {
         LOG(ERROR) << "Invalid tflite methods";
         return kVtEstimatorInitFailed;
     }
@@ -197,11 +263,39 @@ VtEstimatorStatus VirtualTempEstimator::TFliteInitialize(MLModelInitData data) {
         return kVtEstimatorInitFailed;
     }
 
-    common_instance_->cur_sample_index = 0;
-    common_instance_->offset = data.offset;
-    common_instance_->is_initialized = true;
+    if (data.enable_input_validation) {
+        Json::Value input_config;
+        if (!GetInputConfig(&input_config)) {
+            LOG(ERROR) << "Failed to parse tflite model input config.";
+            return kVtEstimatorInitFailed;
+        }
+
+        Json::Value input_data = input_config["InputData"];
+        if (input_data.size() != num_linked_sensors) {
+            LOG(ERROR) << "Tflite model input data size [" << input_data.size()
+                       << "] != linked sensors cnt: [" << num_linked_sensors << "]";
+            return kVtEstimatorInitFailed;
+        }
+
+        tflite_instance_->input_range.assign(input_data.size(), InputRangeInfo());
+        LOG(INFO) << "Start to parse tflite model input config.";
+        for (Json::Value::ArrayIndex i = 0; i < input_data.size(); ++i) {
+            const std::string &name = input_data[i]["Name"].asString();
+            LOG(INFO) << "Sensor[" << i << "] Name: " << name;
+            if (!getInputRangeInfoFromJsonValues(input_data[i]["Range"],
+                                                 &tflite_instance_->input_range[i])) {
+                LOG(ERROR) << "Failed to parse tflite model temp range for sensor: [" << name
+                           << "]";
+                return kVtEstimatorInitFailed;
+            }
+        }
+    }
+
+    common_instance_->offset_thresholds = data.offset_thresholds;
+    common_instance_->offset_values = data.offset_values;
     tflite_instance_->model_path = model_path;
 
+    common_instance_->is_initialized = true;
     LOG(INFO) << "Successfully initialized VirtualTempEstimator for " << model_path;
     return kVtEstimatorOk;
 }
@@ -232,14 +326,13 @@ VtEstimatorStatus VirtualTempEstimator::LinearModelEstimate(const std::vector<fl
     // For the first iteration copy current inputs to all previous inputs
     // This would allow the estimator to have previous samples from the first iteration itself
     // and provide a valid predicted value
-    if (common_instance_->first_iteration) {
+    if (common_instance_->cur_sample_count == 0) {
         for (size_t i = 0; i < prev_samples_order; ++i) {
             linear_model_instance_->input_samples[i] = thermistors;
         }
-        common_instance_->first_iteration = false;
     }
 
-    size_t cur_sample_index = common_instance_->cur_sample_index;
+    size_t cur_sample_index = common_instance_->cur_sample_count % prev_samples_order;
     linear_model_instance_->input_samples[cur_sample_index] = thermistors;
 
     // Calculate Weighted Average Value
@@ -254,12 +347,12 @@ VtEstimatorStatus VirtualTempEstimator::LinearModelEstimate(const std::vector<fl
         input_level = (input_level >= 0) ? input_level : (prev_samples_order - 1);
     }
 
-    estimated_value += common_instance_->offset;
+    // Update sample count
+    common_instance_->cur_sample_count++;
 
-    // Update sample index
-    cur_sample_index++;
-    cur_sample_index = (cur_sample_index % prev_samples_order);
-    common_instance_->cur_sample_index = cur_sample_index;
+    // add offset to estimated value if applicable
+    estimated_value += CalculateOffset(common_instance_->offset_thresholds,
+                                       common_instance_->offset_values, estimated_value);
 
     *output = estimated_value;
     return kVtEstimatorOk;
@@ -288,25 +381,27 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
     }
 
     // copy input data into input tensors
-    size_t cur_sample_index = common_instance_->cur_sample_index;
     size_t prev_samples_order = common_instance_->prev_samples_order;
-    size_t sample_start_index;
-    if (common_instance_->first_iteration) {
-        // For the first iteration copy current inputs to all previous inputs
-        // This would allow the estimator to have previous samples from the first iteration itself
-        // and provide a valid predicted value
-        for (size_t i = 0; i < prev_samples_order; ++i) {
-            sample_start_index = num_linked_sensors * i;
-            for (size_t j = 0; j < num_linked_sensors; ++j) {
-                tflite_instance_->input_buffer[sample_start_index + j] = thermistors[j];
+    size_t cur_sample_index = common_instance_->cur_sample_count % prev_samples_order;
+    size_t sample_start_index = cur_sample_index * num_linked_sensors;
+    for (size_t i = 0; i < num_linked_sensors; ++i) {
+        if (!tflite_instance_->input_range.empty()) {
+            if (thermistors[i] < tflite_instance_->input_range[i].min_threshold ||
+                thermistors[i] > tflite_instance_->input_range[i].max_threshold) {
+                LOG(INFO) << "thermistors[" << i << "] value: " << thermistors[i]
+                          << " not in range: " << tflite_instance_->input_range[i].min_threshold
+                          << " <= val <= " << tflite_instance_->input_range[i].max_threshold;
+                common_instance_->cur_sample_count = 0;
+                return kVtEstimatorLowConfidence;
             }
         }
-        common_instance_->first_iteration = false;
-    } else {
-        sample_start_index = cur_sample_index * num_linked_sensors;
-        for (size_t i = 0; i < num_linked_sensors; ++i) {
-            tflite_instance_->input_buffer[sample_start_index + i] = thermistors[i];
-        }
+        tflite_instance_->input_buffer[sample_start_index + i] = thermistors[i];
+    }
+
+    // Update sample count
+    common_instance_->cur_sample_count++;
+    if (common_instance_->cur_sample_count < prev_samples_order) {
+        return kVtEstimatorUnderSampling;
     }
 
     // prepare model input
@@ -333,12 +428,12 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
         return kVtEstimatorInvokeFailed;
     }
 
-    // Update sample index
-    common_instance_->cur_sample_index = (cur_sample_index + 1) % prev_samples_order;
+    // add offset to predicted value
+    float predicted_value = tflite_instance_->output_buffer[0];
+    predicted_value += CalculateOffset(common_instance_->offset_thresholds,
+                                       common_instance_->offset_values, predicted_value);
 
-    // virtual sensor currently only support scalar output
-    *output = tflite_instance_->output_buffer[0] + common_instance_->offset;
-
+    *output = predicted_value;
     return kVtEstimatorOk;
 }
 
@@ -365,6 +460,37 @@ VtEstimatorStatus VirtualTempEstimator::Initialize(const VtEstimationInitData &d
 
     LOG(ERROR) << "Unsupported estimationType [" << type << "]";
     return kVtEstimatorUnSupported;
+}
+
+bool VirtualTempEstimator::GetInputConfig(Json::Value *config) {
+    int config_size = 0;
+    int ret = tflite_instance_->tflite_methods.get_input_config_size(
+            tflite_instance_->tflite_wrapper, &config_size);
+    if (ret || config_size <= 0) {
+        LOG(ERROR) << "Failed to get tflite input config size (ret: " << ret
+                   << ") with size: " << config_size;
+        return kVtEstimatorInitFailed;
+    }
+    char *config_str = new char[config_size];
+    ret = tflite_instance_->tflite_methods.get_input_config(tflite_instance_->tflite_wrapper,
+                                                            config_str, config_size);
+    if (ret) {
+        LOG(ERROR) << "Failed to get tflite input config (ret: " << ret << ")";
+        delete[] config_str;
+        return kVtEstimatorInitFailed;
+    }
+
+    Json::CharReaderBuilder builder;
+    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    std::string errorMessage;
+
+    bool success = true;
+    if (!reader->parse(config_str, config_str + config_size, config, &errorMessage)) {
+        LOG(ERROR) << "Failed to parse tflite JSON input config: " << errorMessage;
+        success = false;
+    }
+    delete[] config_str;
+    return success;
 }
 
 }  // namespace vtestimator

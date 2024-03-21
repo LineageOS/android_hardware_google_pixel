@@ -214,6 +214,46 @@ bool ParseThermalConfig(std::string_view config_path, Json::Value *config) {
     return true;
 }
 
+bool ParseOffsetThresholds(const std::string_view name, const Json::Value &sensor,
+                           std::vector<float> *offset_thresholds,
+                           std::vector<float> *offset_values) {
+    Json::Value config_offset_thresholds = sensor["OffsetThresholds"];
+    Json::Value config_offset_values = sensor["OffsetValues"];
+
+    if (config_offset_thresholds.empty()) {
+        return true;
+    }
+
+    if (config_offset_thresholds.size() != config_offset_values.size()) {
+        LOG(ERROR) << "Sensor[" << name
+                   << "]'s offset_thresholds size does not match with offset_values size";
+        return false;
+    }
+
+    for (Json::Value::ArrayIndex i = 0; i < config_offset_thresholds.size(); ++i) {
+        float offset_threshold = config_offset_thresholds[i].asFloat();
+        float offset_value = config_offset_values[i].asFloat();
+        if (std::isnan(offset_threshold) || std::isnan(offset_value)) {
+            LOG(ERROR) << "Nan offset_threshold or offset_value unexpected for sensor " << name;
+            return false;
+        }
+
+        if ((i != 0) && (offset_threshold < (*offset_thresholds).back())) {
+            LOG(ERROR) << "offset_thresholds are not in increasing order for sensor " << name;
+            return false;
+        }
+
+        (*offset_thresholds).emplace_back(offset_threshold);
+        (*offset_values).emplace_back(offset_value);
+
+        LOG(INFO) << "Sensor[" << name << "]'s offset_thresholds[" << i
+                  << "]: " << (*offset_thresholds)[i] << " offset_values[" << i
+                  << "]: " << (*offset_values)[i];
+    }
+
+    return true;
+}
+
 bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sensor,
                             std::unique_ptr<VirtualSensorInfo> *virtual_sensor_info) {
     if (sensor["VirtualSensor"].empty() || !sensor["VirtualSensor"].isBool()) {
@@ -234,6 +274,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     FormulaOption formula = FormulaOption::COUNT_THRESHOLD;
     std::string vt_estimator_model_file;
     std::unique_ptr<::thermal::vtestimator::VirtualTempEstimator> vt_estimator;
+    std::string backup_sensor;
 
     Json::Value values = sensor["Combination"];
     if (values.size()) {
@@ -345,6 +386,10 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         offset = sensor["Offset"].asFloat();
     }
 
+    if (!sensor["BackupSensor"].empty()) {
+        backup_sensor = sensor["BackupSensor"].asString();
+    }
+
     values = sensor["TriggerSensor"];
     if (!values.empty()) {
         if (values.isString()) {
@@ -389,7 +434,12 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 
         vt_estimator_model_file = "vendor/etc/" + sensor["ModelPath"].asString();
         init_data.ml_model_init_data.model_path = vt_estimator_model_file;
-        init_data.ml_model_init_data.offset = offset;
+
+        if (!ParseOffsetThresholds(name, sensor, &init_data.ml_model_init_data.offset_thresholds,
+                                   &init_data.ml_model_init_data.offset_values)) {
+            LOG(ERROR) << "Failed to parse offset thresholds and values for Sensor[" << name << "]";
+            return false;
+        }
 
         if (!sensor["PreviousSampleCount"].empty()) {
             init_data.ml_model_init_data.use_prev_samples = true;
@@ -408,6 +458,11 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             init_data.ml_model_init_data.num_hot_spots = sensor["PredictHotSpotCount"].asInt();
             LOG(INFO) << "Sensor[" << name << "] predicts temperature at "
                       << init_data.ml_model_init_data.num_hot_spots << " hot spots";
+        }
+
+        if (sensor["ValidateInput"].asBool()) {
+            init_data.ml_model_init_data.enable_input_validation = true;
+            LOG(INFO) << "Sensor[" << name << "] enable input validation.";
         }
 
         ::thermal::vtestimator::VtEstimatorStatus ret = vt_estimator->Initialize(init_data);
@@ -443,7 +498,13 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 
         init_data.linear_model_init_data.prev_samples_order =
                 coefficients.size() / linked_sensors.size();
-        init_data.linear_model_init_data.offset = offset;
+
+        if (!ParseOffsetThresholds(name, sensor,
+                                   &init_data.linear_model_init_data.offset_thresholds,
+                                   &init_data.linear_model_init_data.offset_values)) {
+            LOG(ERROR) << "Failed to parse offset thresholds and values for Sensor[" << name << "]";
+            return false;
+        }
 
         for (size_t i = 0; i < coefficients.size(); ++i) {
             float coefficient = getFloatFromValue(coefficients[i]);
@@ -468,9 +529,10 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
                   << "] with input samples: " << linked_sensors.size();
     }
 
-    virtual_sensor_info->reset(new VirtualSensorInfo{
-            linked_sensors, linked_sensors_type, coefficients, coefficients_type, offset,
-            trigger_sensors, formula, vt_estimator_model_file, std::move(vt_estimator)});
+    virtual_sensor_info->reset(
+            new VirtualSensorInfo{linked_sensors, linked_sensors_type, coefficients,
+                                  coefficients_type, offset, trigger_sensors, formula,
+                                  vt_estimator_model_file, std::move(vt_estimator), backup_sensor});
     return true;
 }
 
@@ -1167,6 +1229,10 @@ bool ParseCoolingDevice(const Json::Value &config,
                 state2power.emplace_back(getFloatFromValue(values[j]));
                 LOG(INFO) << "Cooling device[" << name << "]'s Power2State[" << j
                           << "]: " << state2power[j];
+                if (j > 0 && state2power[j] < state2power[j - 1]) {
+                    LOG(ERROR) << "Higher power with higher state on cooling device " << name
+                               << "'s state" << j;
+                }
             }
         } else {
             LOG(INFO) << "CoolingDevice[" << i << "]'s Name: " << name
