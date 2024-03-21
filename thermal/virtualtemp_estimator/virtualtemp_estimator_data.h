@@ -32,33 +32,42 @@ typedef bool (*tflitewrapper_init)(void *handle, const char *model_path);
 typedef bool (*tflitewrapper_invoke)(void *handle, float *input_samples, int num_input_samples,
                                      float *output_samples, int num_output_samples);
 typedef void (*tflitewrapper_destroy)(void *handle);
+typedef bool (*tflitewrapper_get_input_config_size)(void *handle, int *config_size);
+typedef bool (*tflitewrapper_get_input_config)(void *handle, char *config_buffer,
+                                               int config_buffer_size);
 
 struct TFLiteWrapperMethods {
     tflitewrapper_create create;
     tflitewrapper_init init;
     tflitewrapper_invoke invoke;
     tflitewrapper_destroy destroy;
+    tflitewrapper_get_input_config_size get_input_config_size;
+    tflitewrapper_get_input_config get_input_config;
     mutable std::mutex mutex;
+};
+
+struct InputRangeInfo {
+    float max_threshold = std::numeric_limits<float>::max();
+    float min_threshold = std::numeric_limits<float>::min();
 };
 
 struct VtEstimatorCommonData {
     VtEstimatorCommonData(size_t num_input_sensors) {
         num_linked_sensors = num_input_sensors;
         prev_samples_order = 1;
-        cur_sample_index = 0;
-        first_iteration = true;
-        offset = 0;
         is_initialized = false;
         use_prev_samples = false;
+        cur_sample_count = 0;
     }
+
+    std::vector<float> offset_thresholds;
+    std::vector<float> offset_values;
 
     size_t num_linked_sensors;
     size_t prev_samples_order;
-    size_t cur_sample_index;
-    float offset;
+    size_t cur_sample_count;
     bool use_prev_samples;
     bool is_initialized;
-    bool first_iteration;
 };
 
 struct VtEstimatorTFLiteData {
@@ -70,10 +79,12 @@ struct VtEstimatorTFLiteData {
         num_hot_spots = 1;
         output_buffer = nullptr;
         output_buffer_size = 1;
-        tflite_wrapper = nullptr;
 
+        tflite_wrapper = nullptr;
         tflite_methods.create = nullptr;
         tflite_methods.init = nullptr;
+        tflite_methods.get_input_config_size = nullptr;
+        tflite_methods.get_input_config = nullptr;
         tflite_methods.invoke = nullptr;
         tflite_methods.destroy = nullptr;
     }
@@ -88,6 +99,7 @@ struct VtEstimatorTFLiteData {
     size_t output_buffer_size;
     std::string model_path;
     TFLiteWrapperMethods tflite_methods;
+    std::vector<InputRangeInfo> input_range;
 
     ~VtEstimatorTFLiteData() {
         if (tflite_wrapper && tflite_methods.destroy) {
