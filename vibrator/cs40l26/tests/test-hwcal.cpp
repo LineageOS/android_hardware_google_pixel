@@ -30,9 +30,9 @@ using ::testing::Test;
 
 class HwCalTest : public Test {
   protected:
-    static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {1, 100};
-    static constexpr std::array<uint32_t, 2> V_CLICK_DEFAULT = {1, 100};
-    static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {1, 100};
+    static constexpr std::array<uint32_t, 2> V_TICK_DEFAULT = {5, 95};
+    static constexpr std::array<uint32_t, 2> V_CLICK_DEFAULT = {5, 95};
+    static constexpr std::array<uint32_t, 2> V_LONG_DEFAULT = {5, 95};
 
   public:
     void SetUp() override { setenv("CALIBRATION_FILEPATH", mCalFile.path, true); }
