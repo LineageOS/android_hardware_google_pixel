@@ -60,8 +60,8 @@ bool getInputRangeInfoFromJsonValues(const Json::Value &values, InputRangeInfo *
     return true;
 }
 
-float CalculateOffset(const std::vector<float> offset_thresholds,
-                      const std::vector<float> offset_values, const float value) {
+float CalculateOffset(const std::vector<float> &offset_thresholds,
+                      const std::vector<float> &offset_values, const float value) {
     for (int i = offset_thresholds.size(); i > 0; --i) {
         if (offset_thresholds[i - 1] < value) {
             return offset_values[i - 1];
@@ -469,7 +469,7 @@ bool VirtualTempEstimator::GetInputConfig(Json::Value *config) {
     if (ret || config_size <= 0) {
         LOG(ERROR) << "Failed to get tflite input config size (ret: " << ret
                    << ") with size: " << config_size;
-        return kVtEstimatorInitFailed;
+        return false;
     }
     char *config_str = new char[config_size];
     ret = tflite_instance_->tflite_methods.get_input_config(tflite_instance_->tflite_wrapper,
@@ -477,7 +477,7 @@ bool VirtualTempEstimator::GetInputConfig(Json::Value *config) {
     if (ret) {
         LOG(ERROR) << "Failed to get tflite input config (ret: " << ret << ")";
         delete[] config_str;
-        return kVtEstimatorInitFailed;
+        return false;
     }
 
     Json::CharReaderBuilder builder;
