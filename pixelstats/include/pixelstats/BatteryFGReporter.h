@@ -67,6 +67,7 @@ class BatteryFGReporter {
                      const struct BatteryFGLearningParam &params);
 
     const int kNumFwUpdateFields = 3;
+    const int kNumHistoryValidationFields = 4;
 };
 
 }  // namespace pixel
