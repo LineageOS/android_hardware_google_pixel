@@ -49,7 +49,7 @@ class NodeVerifier : public HintManager {
   private:
     NodeVerifier() = delete;
     NodeVerifier(NodeVerifier const &) = delete;
-    void operator=(NodeVerifier const &) = delete;
+    NodeVerifier &operator=(NodeVerifier const &) = delete;
 };
 
 }  // namespace perfmgr

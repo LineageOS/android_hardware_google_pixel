@@ -83,7 +83,7 @@ class NodeLooperThread : public ::android::Thread {
 
   private:
     NodeLooperThread(NodeLooperThread const&) = delete;
-    void operator=(NodeLooperThread const&) = delete;
+    NodeLooperThread &operator=(NodeLooperThread const &) = delete;
     bool threadLoop() override;
 
     static constexpr auto kMaxUpdatePeriod = std::chrono::milliseconds::max();
