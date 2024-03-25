@@ -165,7 +165,7 @@ class HintManager {
 
   private:
     HintManager(HintManager const&) = delete;
-    void operator=(HintManager const&) = delete;
+    HintManager &operator=(HintManager const &) = delete;
     static std::shared_ptr<HintManager> mInstance;
 
     bool ValidateHint(const std::string& hint_type) const;
