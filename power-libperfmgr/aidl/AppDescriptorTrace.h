@@ -62,6 +62,9 @@ struct AppDescriptorTrace {
                     "adpf.%s-%s_mode", idString.c_str(),
                     toString(static_cast<aidl::android::hardware::power::SessionMode>(i)).c_str());
         }
+        trace_cpu_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "cpu_duration");
+        trace_gpu_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "gpu_duration");
+        trace_gpu_capacity = StringPrintf("adpf.%s-%s", idString.c_str(), "gpu_capacity");
     }
 
     // Trace values
@@ -83,6 +86,9 @@ struct AppDescriptorTrace {
     std::string trace_is_first_frame;
     std::string trace_session_hint;
     std::array<std::string, enum_size<aidl::android::hardware::power::SessionMode>()> trace_modes;
+    std::string trace_cpu_duration;
+    std::string trace_gpu_duration;
+    std::string trace_gpu_capacity;
 };
 
 }  // namespace pixel
