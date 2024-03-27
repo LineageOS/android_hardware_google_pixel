@@ -74,7 +74,10 @@ static std::vector<std::string> get_input_combination(std::string_view thermal_c
     }
 
     Json::Value sensors = root["Sensors"];
-    std::cout << "Sensors size: " << sensors.size() << std::endl;
+    if (sensors.size() == 0) {
+        std::cout << "Error: sensors size is zero in thermal config\n";
+        return result;
+    }
 
     for (Json::Value::ArrayIndex i = 0; i < sensors.size(); ++i) {
         const std::string &name = sensors[i]["Name"].asString();
@@ -84,12 +87,12 @@ static std::vector<std::string> get_input_combination(std::string_view thermal_c
                 return result;
             }
 
-            std::cout << "Combination : [";
+            std::cout << "Combination for VIRTUAL-SKIN-MODEL : [";
             for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
                 result.push_back(values[j].asString());
                 std::cout << result.back() << ", ";
             }
-            std::cout << "]" << std::endl;
+            std::cout << "]\n\n";
         }
     }
 
@@ -104,6 +107,8 @@ static int run_random_input_inference(std::string_view model_path,
     thermal::vtestimator::VtEstimatorStatus ret;
     std::vector<std::string> input_combination = get_input_combination(thermal_config_path.data());
     int input_size = input_combination.size();
+
+    // Create and Initialize vtestimator
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
                                                              input_size);
     ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
@@ -190,17 +195,20 @@ static int run_random_input_inference(std::string_view model_path,
     return 0;
 }
 
-static int run_single_inference(std::string_view model_path, char *input, int prev_samples_order) {
+static int run_single_inference(std::string_view model_path, std::string_view thermal_config_path,
+                                char *input, int prev_samples_order) {
     if (!input) {
         std::cout << "input is nullptr" << std::endl;
         return -1;
     }
 
+    std::vector<std::string> input_combination = get_input_combination(thermal_config_path.data());
+    int num_linked_sensors = input_combination.size();
+
+    std::cout << "Parsing thermistors from input string: ";
     std::vector<float> thermistors;
     char *ip = input;
     char *saveptr;
-
-    std::cout << "Parsing thermistors from input string: ";
     ip = strtok_r(ip, " ", &saveptr);
     while (ip) {
         float thermistor_value;
@@ -215,12 +223,24 @@ static int run_single_inference(std::string_view model_path, char *input, int pr
         ip = strtok_r(NULL, " ", &saveptr);
     }
     std::cout << std::endl;
-    std::cout << "thermistors.size(): " << thermistors.size() << std::endl;
+    std::cout << "thermistors.size(): " << thermistors.size() << "\n\n";
+
+    size_t total_num_samples = num_linked_sensors * prev_samples_order;
+    size_t cur_size = thermistors.size();
+    int count = 0;
+
+    // If there are not enough samples, repeat input data
+    while (cur_size < total_num_samples) {
+        thermistors.push_back(thermistors[count++ % num_linked_sensors]);
+        cur_size++;
+    }
 
     float output;
     thermal::vtestimator::VtEstimatorStatus ret;
+
+    // Create and Initialize vtestimator
     thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
-                                                             thermistors.size());
+                                                             num_linked_sensors);
     ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
@@ -233,12 +253,35 @@ static int run_single_inference(std::string_view model_path, char *input, int pr
         return -1;
     }
 
+    // Run vtestimator in a loop to feed in all previous and current samples
     std::cout << "run estimator\n";
-    ret = vt_estimator_.Estimate(thermistors, &output);
-    if (ret != thermal::vtestimator::kVtEstimatorOk) {
-        std::cout << "Failed to run estimator (ret: " << ret << ")\n";
-        return -1;
-    }
+    int loop_count = 0;
+    do {
+        int start_index = loop_count * num_linked_sensors;
+        std::vector<float>::const_iterator first = thermistors.begin() + start_index;
+        std::vector<float>::const_iterator last = first + num_linked_sensors;
+        std::vector<float> input_data(first, last);
+
+        std::cout << "input_data.size(): " << input_data.size() << "\n";
+        std::cout << "input_data: [";
+        for (size_t i = 0; i < input_data.size(); ++i) {
+            std::cout << input_data[i] << " ";
+        }
+        std::cout << "]\n";
+
+        ret = vt_estimator_.Estimate(input_data, &output);
+        if ((ret != thermal::vtestimator::kVtEstimatorOk) &&
+            (ret != thermal::vtestimator::kVtEstimatorUnderSampling)) {
+            std::cout << "Failed to run estimator (ret: " << ret << ")\n";
+            return -1;
+        }
+        if ((ret == thermal::vtestimator::kVtEstimatorUnderSampling) &&
+            (loop_count > prev_samples_order)) {
+            std::cout << "Undersampling for more than prev sample order (ret: " << ret << ")\n";
+            return -1;
+        }
+        loop_count++;
+    } while (loop_count < prev_samples_order);
 
     std::cout << "output: " << output << std::endl;
     return 0;
@@ -428,7 +471,7 @@ int main(int argc, char *argv[]) {
     int ret = -1;
     switch (mode) {
         case 0:
-            ret = run_single_inference(model_path, input, prev_samples_order);
+            ret = run_single_inference(model_path, thermal_config_path, input, prev_samples_order);
             break;
         case 1:
             ret = run_batch_process(model_path, thermal_config_path, input, output,
