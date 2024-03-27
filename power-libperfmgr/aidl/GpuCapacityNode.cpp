@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "powerhal-libperfmgr"
+#define ATRACE_TAG (ATRACE_TAG_POWER | ATRACE_TAG_HAL)
+
 #include "GpuCapacityNode.h"
 
-#include "perfmgr/HintManager.h"
-
-#define LOG_TAG "powerhal-libperfmgr"
 #include <android-base/logging.h>
+#include <utils/Trace.h>
 
 #include <charconv>
+
+#include "perfmgr/HintManager.h"
 
 namespace aidl {
 namespace google {
@@ -76,6 +79,7 @@ std::unique_ptr<GpuCapacityNode> GpuCapacityNode::init_gpu_capacity_node(
 bool GpuCapacityNode::set_gpu_capacity(Cycles capacity) const {
     std::lock_guard lk(capacity_mutex_);
     auto const capacity_str = std::to_string(static_cast<int>(capacity));
+    ATRACE_INT("gpuCapacitySet", static_cast<int>(static_cast<int>(capacity)));
     auto const rc =
             fd_interface_->write(capacity_headroom_fd_, capacity_str.c_str(), capacity_str.size());
     if (!rc) {
@@ -119,7 +123,9 @@ std::optional<Frequency> GpuCapacityNode::gpu_frequency() const {
         return {};
     }
 
-    return Frequency(frequency_raw * 1000);
+    auto const frequency = Frequency(frequency_raw * 1000);
+    ATRACE_INT("gpuRecordedFreq", static_cast<int>(frequency));
+    return frequency;
 }
 
 std::optional<std::unique_ptr<GpuCapacityNode>> createGpuCapacityNode() {

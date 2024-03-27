@@ -296,6 +296,10 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
     ATRACE_INT(mAppDescriptorTrace.trace_hint_overtime.c_str(),
                actualDurations.back().durationNanos - mDescriptor->targetNs.count() > 0);
     ATRACE_INT(mAppDescriptorTrace.trace_is_first_frame.c_str(), (isFirstFrame) ? (1) : (0));
+    ATRACE_INT(mAppDescriptorTrace.trace_cpu_duration.c_str(),
+               actualDurations.back().cpuDurationNanos);
+    ATRACE_INT(mAppDescriptorTrace.trace_gpu_duration.c_str(),
+               actualDurations.back().gpuDurationNanos);
 
     mLastUpdatedTime.store(std::chrono::steady_clock::now());
     if (isFirstFrame) {
@@ -333,6 +337,8 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
     }
     auto const additional_gpu_capacity =
             calculate_capacity(actualDurations.back(), mDescriptor->targetNs, *gpu_freq);
+    ATRACE_INT(mAppDescriptorTrace.trace_gpu_capacity.c_str(),
+               static_cast<int>(additional_gpu_capacity));
 
     auto const additional_gpu_capacity_clamped = std::clamp(
             additional_gpu_capacity, Cycles(0), Cycles(*adpfConfig->mGpuBoostCapacityMax));
