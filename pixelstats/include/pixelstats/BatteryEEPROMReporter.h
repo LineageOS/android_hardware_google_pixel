@@ -129,6 +129,7 @@ class BatteryEEPROMReporter {
     const int kNumBatteryHistoryFields = 19;
     /* The number of elements for relaxation event */
     const int kNumFGLearningFields = 10;
+    const int kNumFGLearningFieldsV2 = 15;
     /* The number of elements for history validation event */
     const int kNumHistoryValidationFields = 4;
 
