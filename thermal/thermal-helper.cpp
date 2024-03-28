@@ -918,24 +918,30 @@ bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *read
     return true;
 }
 
-float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
-                                                 std::map<std::string, float> *sensor_log_map,
-                                                 const bool force_no_cache) {
+bool ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
+                                                std::map<std::string, float> *sensor_log_map,
+                                                const bool force_no_cache,
+                                                std::vector<float> *outputs) {
     std::vector<float> model_inputs;
-    float estimated_vt = NAN;
+    std::vector<float> model_outputs;
 
     ATRACE_NAME(StringPrintf("ThermalHelper::runVirtualTempEstimator - %s", sensor_name.data())
                         .c_str());
     if (!(sensor_info_map_.count(sensor_name.data()) &&
           sensor_status_map_.count(sensor_name.data()))) {
         LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
-        return NAN;
+        return false;
     }
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
     if (!sensor_info.virtual_sensor_info->vt_estimator) {
         LOG(ERROR) << "vt_estimator not valid for " << sensor_name;
-        return NAN;
+        return false;
+    }
+
+    if (outputs == nullptr) {
+        LOG(ERROR) << "vt_estimator output is nullptr";
+        return false;
     }
 
     model_inputs.reserve(sensor_info.virtual_sensor_info->linked_sensors.size());
@@ -948,36 +954,41 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
             model_inputs.push_back(value);
         } else {
             LOG(ERROR) << "failed to read sensor: " << linked_sensor;
-            return NAN;
+            return false;
         }
     }
 
     ::thermal::vtestimator::VtEstimatorStatus ret =
-            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &estimated_vt);
+            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &model_outputs);
 
     if (ret == ::thermal::vtestimator::kVtEstimatorOk) {
-        return estimated_vt;
+        *outputs = model_outputs;
+        return true;
     } else if (ret == ::thermal::vtestimator::kVtEstimatorLowConfidence ||
                ret == ::thermal::vtestimator::kVtEstimatorUnderSampling) {
         std::string_view backup_sensor = sensor_info.virtual_sensor_info->backup_sensor;
+        float backup_sensor_vt;
         if (backup_sensor.empty()) {
             LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name
                        << " with no backup.";
-            return NAN;
+            return false;
         }
         LOG(INFO) << "VT Estimator returned (ret: " << ret << ") for " << sensor_name
                   << ". Reading backup sensor [" << backup_sensor << "] data to use";
-        if (!readDataByType(backup_sensor, &estimated_vt, SensorFusionType::SENSOR, force_no_cache,
-                            sensor_log_map)) {
+        if (!readDataByType(backup_sensor, &backup_sensor_vt, SensorFusionType::SENSOR,
+                            force_no_cache, sensor_log_map)) {
             LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s backup sensor "
                        << backup_sensor;
-            return NAN;
+            return false;
         }
-        return estimated_vt;
+        model_outputs.clear();
+        model_outputs.push_back(backup_sensor_vt);
+        *outputs = model_outputs;
+        return true;
     }
 
     LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
-    return NAN;
+    return false;
 }
 
 constexpr int kTranTimeoutParam = 2;
@@ -1050,12 +1061,13 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
 
         if ((sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) ||
             (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_LINEAR_MODEL)) {
-            *temp = runVirtualTempEstimator(sensor_name, sensor_log_map, force_no_cache);
-
-            if (std::isnan(*temp)) {
-                LOG(ERROR) << "VirtualEstimator returned NAN for " << sensor_name;
+            std::vector<float> vt_estimator_out;
+            if (!runVirtualTempEstimator(sensor_name, sensor_log_map, force_no_cache,
+                                         &vt_estimator_out)) {
+                LOG(ERROR) << "Failed running VirtualEstimator for " << sensor_name;
                 return false;
             }
+            *temp = vt_estimator_out[0];
         } else {
             float temp_val = 0.0;
             for (size_t i = 0; i < linked_sensors_size; i++) {
