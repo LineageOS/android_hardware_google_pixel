@@ -541,6 +541,25 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     return true;
 }
 
+bool ParsePredictorInfo(const std::string_view name, const Json::Value &sensor,
+                        std::unique_ptr<PredictorInfo> *predictor_info) {
+    std::string predict_sensor;
+    if (!sensor["PredictorInfo"].empty()) {
+        LOG(INFO) << "Start to parse Sensor[" << name << "]'s PredictorInfo";
+        if (sensor["PredictorInfo"]["Sensor"].empty()) {
+            LOG(ERROR) << "Failed to parse Sensor [" << name << "]'s PredictorInfo";
+            return false;
+        }
+        predict_sensor = sensor["PredictorInfo"]["Sensor"].asString();
+        LOG(INFO) << "Sensor [" << name << "]'s predictor name is " << predict_sensor;
+
+        LOG(INFO) << "Successfully created PredictorInfo for Sensor[" << name << "]";
+        predictor_info->reset(new PredictorInfo{predict_sensor});
+    }
+
+    return true;
+}
+
 bool ParseBindedCdevInfo(const Json::Value &values,
                          std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map,
                          const bool support_pid, bool *support_hard_limit) {
@@ -1149,6 +1168,13 @@ bool ParseSensorInfo(const Json::Value &config,
             return false;
         }
 
+        std::unique_ptr<PredictorInfo> predictor_info;
+        if (!ParsePredictorInfo(name, sensors[i], &predictor_info)) {
+            LOG(ERROR) << "Sensor[" << name << "]: failed to parse virtual sensor info";
+            sensors_parsed->clear();
+            return false;
+        }
+
         bool support_throttling = false;  // support pid or hard limit
         std::shared_ptr<ThrottlingInfo> throttling_info;
         if (!ParseSensorThrottlingInfo(name, sensors[i], &support_throttling, &throttling_info)) {
@@ -1179,6 +1205,7 @@ bool ParseSensorInfo(const Json::Value &config,
                 .is_hidden = is_hidden,
                 .virtual_sensor_info = std::move(virtual_sensor_info),
                 .throttling_info = std::move(throttling_info),
+                .predictor_info = std::move(predictor_info),
         };
 
         ++total_parsed;

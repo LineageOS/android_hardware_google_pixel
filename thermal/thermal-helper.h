@@ -220,6 +220,8 @@ class ThermalHelperImpl : public ThermalHelper {
     bool runVirtualTempEstimator(std::string_view sensor_name,
                                  std::map<std::string, float> *sensor_log_map,
                                  const bool force_no_cache, std::vector<float> *outputs);
+    size_t getPredictionMaxWindowMs(std::string_view sensor_name);
+    float readPredictionAfterTimeMs(std::string_view sensor_name, const size_t time_ms);
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
     // Check the max CDEV state for cdev_ceiling
     void maxCoolingRequestCheck(

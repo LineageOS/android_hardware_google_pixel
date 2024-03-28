@@ -130,6 +130,7 @@ cc_binary {
         "virtualtemp_estimator/virtualtemp_estimator_test.cpp"
         ],
     shared_libs: [
+        "libbase",
         "libc",
         "liblog",
         "libcutils",

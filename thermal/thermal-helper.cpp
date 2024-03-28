@@ -241,6 +241,25 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 }
             }
         }
+        // Check predictor info config
+        if (name_status_pair.second.predictor_info != nullptr) {
+            std::string predict_sensor_name = name_status_pair.second.predictor_info->sensor;
+            if (!(sensor_info_map_.count(predict_sensor_name))) {
+                LOG(ERROR) << name_status_pair.first << "'s predictor " << predict_sensor_name
+                           << " is not part of sensor_info_map_";
+                ret = false;
+                break;
+            }
+
+            const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name);
+            if (predictor_sensor_info.virtual_sensor_info == nullptr ||
+                predictor_sensor_info.virtual_sensor_info->vt_estimator == nullptr) {
+                LOG(ERROR) << name_status_pair.first << "'s predictor " << predict_sensor_name
+                           << " does not support prediction";
+                ret = false;
+                break;
+            }
+        }
     }
 
     if (!power_hal_service_.connect()) {
@@ -1007,6 +1026,68 @@ void ThermalHelperImpl::dumpVtEstimatorStatus(std::string_view sensor_name,
     }
 
     sensor_info.virtual_sensor_info->vt_estimator->DumpStatus(sensor_name, dump_buf);
+}
+
+size_t ThermalHelperImpl::getPredictionMaxWindowMs(std::string_view sensor_name) {
+    size_t predict_window = 0;
+
+    ATRACE_NAME(StringPrintf("ThermalHelper::getPredictionMaxWindowMs - %s", sensor_name.data())
+                        .c_str());
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.predictor_info == nullptr) {
+        LOG(ERROR) << "No predictor info found for sensor: " << sensor_name;
+        return 0;
+    }
+
+    std::string_view predict_sensor_name = sensor_info.predictor_info->sensor;
+    const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name.data());
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            predictor_sensor_info.virtual_sensor_info->vt_estimator->GetMaxPredictWindowMs(
+                    &predict_window);
+
+    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+        LOG(ERROR) << "Failed to read prediction (ret: " << ret << ") from " << predict_sensor_name
+                   << " for sensor " << sensor_name;
+        return 0;
+    }
+
+    return predict_window;
+}
+
+float ThermalHelperImpl::readPredictionAfterTimeMs(std::string_view sensor_name,
+                                                   const size_t time_ms) {
+    float predicted_vt = NAN;
+
+    ATRACE_NAME(
+            StringPrintf("ThermalHelper::readPredictAfterTimeMs - %s", sensor_name.data()).c_str());
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.predictor_info == nullptr) {
+        LOG(ERROR) << "No predictor info found for sensor: " << sensor_name;
+        return NAN;
+    }
+
+    std::string_view predict_sensor_name = sensor_info.predictor_info->sensor;
+    const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name.data());
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            predictor_sensor_info.virtual_sensor_info->vt_estimator->PredictAfterTimeMs(
+                    time_ms, &predicted_vt);
+
+    if (ret == ::thermal::vtestimator::kVtEstimatorOk) {
+        return predicted_vt;
+    } else if (ret == ::thermal::vtestimator::kVtEstimatorUnderSampling) {
+        LOG(INFO) << predict_sensor_name << " cannot provide prediction for sensor " << sensor_name
+                  << "while under sampling";
+    } else if (ret == ::thermal::vtestimator::kVtEstimatorUnSupported) {
+        LOG(INFO) << "PredictAfterTimeMs not supported with " << predict_sensor_name
+                  << " for sensor " << sensor_name;
+    } else {
+        LOG(ERROR) << "Failed to read prediction (ret: " << ret << ") from " << predict_sensor_name
+                   << " for sensor " << sensor_name;
+    }
+
+    return NAN;
 }
 
 constexpr int kTranTimeoutParam = 2;
