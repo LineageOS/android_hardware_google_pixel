@@ -99,10 +99,9 @@ void SessionTaskMap::getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::t
 Cycles SessionTaskMap::getSessionsGpuCapacity(
         std::chrono::steady_clock::time_point time_point) const {
     Cycles max(0);
-    for (auto const &session : mTasks) {
-        for (auto const &vote : session.second) {
-            max = std::max(max, vote->votes->getGpuCapacityRequest(time_point).value_or(Cycles(0)));
-        }
+    for (auto const &[_, session] : mSessions) {
+        max = std::max(max,
+                       session.val->votes->getGpuCapacityRequest(time_point).value_or(Cycles(0)));
     }
     return max;
 }
