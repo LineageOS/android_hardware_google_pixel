@@ -172,7 +172,8 @@ constexpr char kJSON_RAW[] = R"(
             "TargetTimeFactor": 1.0,
             "StaleTimeFactor": 10.0,
             "GpuBoost": true,
-            "GpuCapacityBoostMax": 300000
+            "GpuCapacityBoostMax": 300000,
+            "GpuCapacityLoadUpHeadroom": 1000
         },
         {
             "Name": "REFRESH_60FPS",
@@ -881,11 +882,13 @@ TEST_F(HintManagerTest, GpuConfigSupport) {
     auto profile = hm->GetAdpfProfile();
     EXPECT_THAT(profile->mGpuBoostOn, IsSetAndEqualTo(true));
     EXPECT_THAT(profile->mGpuBoostCapacityMax, IsSetAndEqualTo(300000));
+    EXPECT_EQ(profile->mGpuCapacityLoadUpHeadroom, 1000);
 
     ASSERT_TRUE(hm->SetAdpfProfile("REFRESH_60FPS"));
     profile = hm->GetAdpfProfile();
     EXPECT_FALSE(profile->mGpuBoostOn);
     EXPECT_FALSE(profile->mGpuBoostCapacityMax);
+    EXPECT_EQ(profile->mGpuCapacityLoadUpHeadroom, 0);
 }
 
 }  // namespace perfmgr
