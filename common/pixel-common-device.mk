@@ -60,3 +60,7 @@ PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.fingerprint.virtual
 # Virtual face HAL
 PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.face.virtual
 
+# AI Labs artifacts
+ifeq ($(RELEASE_INSTALL_AI_LABS_ARTIFACTS), true)
+  include vendor/google/AILabs/ai_labs.mk
+endif
