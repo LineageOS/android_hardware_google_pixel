@@ -55,6 +55,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --set-minrtc                  Write the minimum expected rtc value for tilb\n";
   std::cerr << "  --set-dsttransition           Write the next dst transition in the current timezone\n";
   std::cerr << "  --set-dstoffset               Write the time offset during the next dst transition\n";
+  std::cerr << "  --set-display-mode <mode>     Write the display mode at boot\n";
+  std::cerr << "  --clear-display-mode          Clear the display mode at boot\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -81,6 +83,8 @@ int main(int argc, char** argv) {
     { "set-sota-config", no_argument, nullptr, 0 },
     { "set-dsttransition", required_argument, nullptr, 0},
     { "set-dstoffset", required_argument, nullptr, 0 },
+    { "set-display-mode", required_argument, nullptr, 0 },
+    { "clear-display-mode", no_argument, nullptr, 0 },
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -93,6 +97,7 @@ int main(int argc, char** argv) {
     { "set-disable-pkvm", MiscWriterActions::kSetDisablePkvmFlag },
     { "clear-wrist-orientation", MiscWriterActions::kClearWristOrientationFlag },
     { "set-sota-config", MiscWriterActions::kSetSotaConfig },
+    { "clear-display-mode", MiscWriterActions::kClearDisplayMode },
   };
 
   std::unique_ptr<MiscWriter> misc_writer;
@@ -208,6 +213,17 @@ int main(int argc, char** argv) {
       }
       misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteTimeMinRtc,
                                                      std::to_string(minrtc));
+    } else if (option_name == "set-display-mode"s) {
+      std::string mode(optarg);
+      if (mode.size() > MiscWriter::kDisplayModeMaxSize) {
+        LOG(ERROR) << "Display mode too long:" << optarg;
+        return Usage(argv[0]);
+      }
+      if (misc_writer) {
+        LOG(ERROR) << "Misc writer action has already been set";
+        return Usage(argv[0]);
+      }
+      misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kSetDisplayMode, mode);
     } else if (auto iter = action_map.find(option_name); iter != action_map.end()) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";

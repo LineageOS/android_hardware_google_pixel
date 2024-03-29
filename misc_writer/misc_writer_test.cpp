@@ -124,6 +124,20 @@ TEST_F(MiscWriterTest, SetMaxRamSize) {
   CheckMiscPartitionVendorSpaceContent(offset, zeros);
 }
 
+TEST_F(MiscWriterTest, SetClearDisplayMode) {
+  std::string displayMode = "1440x3120@60:120";
+  misc_writer_ = std::make_unique<MiscWriter>(MiscWriterActions::kSetDisplayMode, displayMode);
+  ASSERT_TRUE(misc_writer_);
+  ASSERT_TRUE(misc_writer_->PerformAction());
+  std::string expected = "mode=1440x3120@60:120";
+  CheckMiscPartitionVendorSpaceContent(MiscWriter::kDisplayModeOffsetInVendorSpace, expected);
+
+  misc_writer_ = std::make_unique<MiscWriter>(MiscWriterActions::kClearDisplayMode);
+  ASSERT_TRUE(misc_writer_->PerformAction());
+  std::string zeros(32, 0);
+  CheckMiscPartitionVendorSpaceContent(MiscWriter::kDisplayModeOffsetInVendorSpace, zeros);
+}
+
 TEST_F(MiscWriterTest, WriteMiscPartitionVendorSpace) {
   std::string kTestMessage = "kTestMessage";
   std::string err;

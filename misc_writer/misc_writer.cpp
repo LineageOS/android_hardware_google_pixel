@@ -115,6 +115,14 @@ bool MiscWriter::PerformAction(std::optional<size_t> override_offset) {
         content = std::string(kDstOffset) + stringdata_;
         content.resize(32);
         break;
+    case MiscWriterActions::kSetDisplayMode:
+    case MiscWriterActions::kClearDisplayMode:
+        offset = override_offset.value_or(kDisplayModeOffsetInVendorSpace);
+        content = (action_ == MiscWriterActions::kSetDisplayMode)
+                          ? std::string(kDisplayModePrefix) + stringdata_
+                          : std::string(32, 0);
+        content.resize(32, 0);
+        break;
     case MiscWriterActions::kUnset:
       LOG(ERROR) << "The misc writer action must be set";
       return false;

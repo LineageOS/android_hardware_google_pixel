@@ -94,7 +94,7 @@ cc_binary {
 
     static_libs: [
         "libmisc_writer_vendor",
-    ]
+    ],
 }
 
 cc_test {
@@ -102,6 +102,7 @@ cc_test {
     defaults: [
         "misc_writer_defaults",
     ],
+    require_root: true,
 
     srcs: [
         "misc_writer_test.cpp",
@@ -110,5 +111,5 @@ cc_test {
 
     static_libs: [
         "libmisc_writer_vendor",
-    ]
+    ],
 }
