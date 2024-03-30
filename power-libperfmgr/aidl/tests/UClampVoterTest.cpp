@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "aidl/UClampVoter.h"
@@ -28,6 +29,8 @@ namespace pixel {
 using std::literals::chrono_literals::operator""s;
 using std::literals::chrono_literals::operator""ms;
 using std::literals::chrono_literals::operator""ns;
+
+using testing::Optional;
 
 TEST(VoteRange, active) {
     auto tNow = std::chrono::steady_clock::now();
@@ -262,9 +265,7 @@ TEST(GpuCapacityVoter, testBasicVoteTimeouts) {
     Votes votes;
     votes.add(gpu_vote_id, GpuVote(true, now, timeout, cycles));
 
-    auto capacity = votes.getGpuCapacityRequest(now + 1ns);
-    ASSERT_TRUE(capacity);
-    EXPECT_EQ(*capacity, cycles);
+    EXPECT_THAT(votes.getGpuCapacityRequest(now + 1ns), Optional(Cycles(100)));
 
     auto capacity2 = votes.getGpuCapacityRequest(now + 2 * timeout);
     EXPECT_FALSE(capacity2);
@@ -303,9 +304,7 @@ TEST(GpuCapacityVoter, testGpuVoteActive) {
     votes.add(gpu_vote_id, GpuVote(true, now, timeout, cycles));
 
     EXPECT_TRUE(votes.voteIsActive(gpu_vote_id));
-    auto const gpu_capacity_request = votes.getGpuCapacityRequest(now);
-    ASSERT_TRUE(gpu_capacity_request);
-    EXPECT_EQ(*gpu_capacity_request, cycles);
+    EXPECT_THAT(votes.getGpuCapacityRequest(now), Optional(cycles));
     EXPECT_TRUE(votes.setUseVote(gpu_vote_id, false));
     ASSERT_FALSE(votes.getGpuCapacityRequest(now));
 

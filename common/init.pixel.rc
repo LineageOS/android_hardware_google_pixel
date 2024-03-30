@@ -7,6 +7,15 @@ service vendor.theme_set /vendor/bin/misc_writer --set-dark-theme
 on property:persist.sys.device_provisioned=1
     start vendor.theme_set
 
+# Write preferred mode magic to /misc partition.
+service vendor.display_mode_set /vendor/bin/misc_writer --set-display-mode ${vendor.display.primary.boot_config}
+    disabled
+    oneshot
+
+# Set preferred mode when resolution property changes
+on property:vendor.display.primary.boot_config=*
+    start vendor.display_mode_set
+
 # Set or clear the warm reset flag upon the change of system property. The flag itself is set
 on init && property:ro.boot.slot_successful=no
     write /sys/module/msm_poweroff/parameters/warm_reset 1

@@ -447,7 +447,8 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
     struct BatteryHistory params = {.checksum = EvtFGLearningParams};
     std::string file_contents, line, path;
     std::istringstream ss;
-    int16_t num;
+    int16_t num, avgtemp, temp, qh;
+    uint16_t vcell, avgvcell;
     const char* data;
     int pos = 0;
 
@@ -477,15 +478,34 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
     ss.str(file_contents);
     while (std::getline(ss, line)) {
         data = line.c_str();
+
         num = sscanf(&data[pos], "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
                     "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
                     "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
-                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "\n",
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "\n",
                     &params.full_cap, &params.esr, &params.rslow, &params.max_vbatt, &params.full_rep,
-                    &params.min_vbatt, &params.max_ibatt, &params.min_ibatt, &params.rcomp0, &params.tempco);
+                    &params.min_vbatt, &params.max_ibatt, &params.min_ibatt, &avgtemp, &temp, &qh,
+                    &vcell, &avgvcell, &params.rcomp0, &params.tempco);
 
-        if (num != kNumFGLearningFields)
+        /* format additinal data */
+        if (num == kNumFGLearningFieldsV2) {
+            params.msoc = (uint8_t)(params.full_rep >> 8); /* repsoc */
+            params.full_rep = params.max_vbatt; /* fullcaprep */
+            params.sys_soc = (uint8_t)(params.min_vbatt >> 8); /* mixsoc */
+            params.batt_soc = (uint8_t)(params.max_ibatt >> 8); /* vfsoc */
+            params.max_temp = (int8_t)(avgtemp >> 8); /* avgtemp */
+            params.min_temp = (int8_t)(temp >> 8); /* temp */
+            params.max_ibatt = qh;
+            params.max_vbatt = vcell;
+            params.min_vbatt = avgvcell;
+        } else if (num == kNumFGLearningFields) {
+            params.rcomp0 = avgtemp;
+            params.tempco = temp;
+        } else {
             continue;
+        }
 
         reportEvent(stats_client, params);
     }
