@@ -151,19 +151,11 @@ void BatteryFGReporter::checkAndReportFwUpdate(const std::shared_ptr<IStats> &st
     if (params.fcnom == 0 )
         return;
 
-    if (old_fw_update_[0] != params.fcnom ||
-        old_fw_update_[1] != params.dpacc ||
-        old_fw_update_[2] != params.dqacc) {
-        old_fw_update_[0] = params.fcnom;
-        old_fw_update_[1] = params.dpacc;
-        old_fw_update_[2] = params.dqacc;
-
+    /* Reporting data only when can clear */
+    if (::android::base::WriteStringToFile("0", path.c_str()))
         reportEvent(stats_client, params);
-
-         /* Clear after reporting data */
-        if (!::android::base::WriteStringToFile("0", path.c_str()))
-            ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
-    }
+    else
+        ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
 }
 
 void BatteryFGReporter::checkAndReportFGAbnormality(const std::shared_ptr<IStats> &stats_client,

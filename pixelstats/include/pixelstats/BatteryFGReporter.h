@@ -60,7 +60,6 @@ class BatteryFGReporter {
     int64_t report_time_ = 0;
     int64_t getTimeSecs();
 
-    uint16_t old_fw_update_[3] = {0};
     unsigned int last_abnl_;
 
     void reportEvent(const std::shared_ptr<IStats> &stats_client,
