@@ -448,7 +448,7 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
     std::string file_contents, line, path;
     std::istringstream ss;
     int16_t num, avgtemp, temp, qh;
-    uint16_t vcell, avgvcell;
+    uint16_t vcell, avgvcell, vfocv;
     const char* data;
     int pos = 0;
 
@@ -484,10 +484,10 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
                     "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
                     "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
                     "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
-                    "%*2" SCNx16 ":%4" SCNx16 "\n",
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "\n",
                     &params.full_cap, &params.esr, &params.rslow, &params.max_vbatt, &params.full_rep,
                     &params.min_vbatt, &params.max_ibatt, &params.min_ibatt, &avgtemp, &temp, &qh,
-                    &vcell, &avgvcell, &params.rcomp0, &params.tempco);
+                    &vcell, &avgvcell, &vfocv, &params.rcomp0, &params.tempco);
 
         /* format additinal data */
         if (num == kNumFGLearningFieldsV2) {
@@ -500,6 +500,7 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
             params.max_ibatt = qh;
             params.max_vbatt = vcell;
             params.min_vbatt = avgvcell;
+            params.cycle_cnt = vfocv;
         } else if (num == kNumFGLearningFields) {
             params.rcomp0 = avgtemp;
             params.tempco = temp;
