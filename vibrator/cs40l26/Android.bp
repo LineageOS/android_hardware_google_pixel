@@ -112,6 +112,8 @@ cc_binary {
 aconfig_declarations {
     name: "VibratorFlagsL26",
     package: "vendor.vibrator.hal.flags",
+    container: "vendor",
+    exportable: true,
     srcs: ["VibratorFlags.aconfig"],
 }
 
@@ -124,6 +126,7 @@ cc_aconfig_library {
 java_aconfig_library {
     name: "PixelVibratorFlagsL26_java",
     aconfig_declarations: "VibratorFlagsL26",
+    mode: "exported",
     visibility: ["//vendor:__subpackages__"],
 }
 
