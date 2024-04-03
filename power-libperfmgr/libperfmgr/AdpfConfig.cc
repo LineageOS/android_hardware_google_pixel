@@ -61,6 +61,16 @@ void AdpfConfig::dumpToFd(int fd) {
     dump_buf << "GpuBoostOn: " << mGpuBoostOn.value_or(false) << "\n";
     dump_buf << "GpuBoostCapacityMax: " << mGpuBoostCapacityMax.value_or(0) << "\n";
     dump_buf << "mGpuCapacityLoadUpHeadroom: " << mGpuCapacityLoadUpHeadroom << "\n";
+    if (mHeuristicBoostOn.has_value()) {
+        dump_buf << "HeuristicBoost_On: " << mHeuristicBoostOn.value() << "\n";
+        dump_buf << "HBoostOnMissedCycles: " << mHBoostOnMissedCycles.value() << "\n";
+        dump_buf << "HBoostOffMaxAvgRatio: " << mHBoostOffMaxAvgRatio.value() << "\n";
+        dump_buf << "HBoostOffMissedCycles: " << mHBoostOffMissedCycles.value() << "\n";
+        dump_buf << "HBoostPidPuFactor: " << mHBoostPidPuFactor.value() << "\n";
+        dump_buf << "HBoostUclampMin: " << mHBoostUclampMin.value() << "\n";
+        dump_buf << "LowFrameRateThreshold: " << mLowFrameRateThreshold.value() << "\n";
+        dump_buf << "MaxRecordsNum: " << mMaxRecordsNum.value() << "\n";
+    }
     if (!android::base::WriteStringToFd(dump_buf.str(), fd)) {
         LOG(ERROR) << "Failed to dump ADPF profile to fd: " << fd;
     }
