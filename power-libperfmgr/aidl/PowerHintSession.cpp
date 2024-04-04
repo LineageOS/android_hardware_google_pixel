@@ -100,7 +100,14 @@ int64_t PowerHintSession::convertWorkDurationToBoostByPid(
         }
         previous_error = error;
     }
-    int64_t pOut = static_cast<int64_t>((err_sum > 0 ? adpfConfig->mPidPo : adpfConfig->mPidPu) *
+
+    auto pid_pu_active = adpfConfig->mPidPu;
+    if (adpfConfig->mHeuristicBoostOn.has_value() && adpfConfig->mHeuristicBoostOn.value()) {
+        pid_pu_active = mHeuristicBoostActive
+                                ? adpfConfig->mPidPu * adpfConfig->mHBoostPidPuFactor.value()
+                                : adpfConfig->mPidPu;
+    }
+    int64_t pOut = static_cast<int64_t>((err_sum > 0 ? adpfConfig->mPidPo : pid_pu_active) *
                                         err_sum / (length - p_start));
     int64_t iOut = static_cast<int64_t>(adpfConfig->mPidI * integral_error);
     int64_t dOut =
@@ -142,7 +149,15 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
       mDescriptor(std::make_shared<AppHintDesc>(mSessionId, tgid, uid, threadIds, tag,
                                                 std::chrono::nanoseconds(durationNs))),
       mAppDescriptorTrace(mIdString),
-      mTag(tag) {
+      mTag(tag),
+      mSessionRecords(HintManager::GetInstance()->GetAdpfProfile()->mHeuristicBoostOn.has_value() &&
+                                      HintManager::GetInstance()
+                                              ->GetAdpfProfile()
+                                              ->mHeuristicBoostOn.value()
+                              ? std::make_unique<SessionRecords>(HintManager::GetInstance()
+                                                                         ->GetAdpfProfile()
+                                                                         ->mMaxRecordsNum.value())
+                              : nullptr) {
     ATRACE_CALL();
     ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
     ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), mDescriptor->is_active.load());
@@ -268,6 +283,45 @@ ndk::ScopedAStatus PowerHintSession::updateTargetWorkDuration(int64_t targetDura
     return ndk::ScopedAStatus::ok();
 }
 
+bool PowerHintSession::updateHeuristicBoost() {
+    auto maxDurationUs = mSessionRecords->getMaxDuration();  // micro seconds
+    auto avgDurationUs = mSessionRecords->getAvgDuration();  // micro seconds
+    auto numOfReportedDurations = mSessionRecords->getNumOfRecords();
+    auto numOfMissedCycles = mSessionRecords->getNumOfMissedCycles();
+
+    if (!maxDurationUs.has_value() || !avgDurationUs.has_value()) {
+        return false;
+    }
+
+    double maxToAvgRatio;
+    if (numOfReportedDurations <= 0) {
+        maxToAvgRatio = maxDurationUs.value() * 1.0 / (mDescriptor->targetNs.count() / 1000);
+    } else {
+        maxToAvgRatio = maxDurationUs.value() / avgDurationUs.value();
+    }
+
+    auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
+
+    if (mSessionRecords->isLowFrameRate(adpfConfig->mLowFrameRateThreshold.value())) {
+        // Turn off the boost when the FPS drops to a low value,
+        // since usually this is because of ui changing to low rate scenarios.
+        // Extra boost is not needed in these scenarios.
+        mHeuristicBoostActive = false;
+    } else if (numOfMissedCycles >= adpfConfig->mHBoostOnMissedCycles.value()) {
+        mHeuristicBoostActive = true;
+    } else if (numOfMissedCycles <= adpfConfig->mHBoostOffMissedCycles.value() &&
+               maxToAvgRatio < adpfConfig->mHBoostOffMaxAvgRatio.value()) {
+        mHeuristicBoostActive = false;
+    }
+    ATRACE_INT(mAppDescriptorTrace.trace_heuristic_boost_active.c_str(), mHeuristicBoostActive);
+    ATRACE_INT(mAppDescriptorTrace.trace_missed_cycles.c_str(), numOfMissedCycles);
+    ATRACE_INT(mAppDescriptorTrace.trace_avg_duration.c_str(), avgDurationUs.value());
+    ATRACE_INT(mAppDescriptorTrace.trace_max_duration.c_str(), maxDurationUs.value());
+    ATRACE_INT(mAppDescriptorTrace.trace_low_frame_rate.c_str(),
+               mSessionRecords->isLowFrameRate(adpfConfig->mLowFrameRateThreshold.value()));
+    return mHeuristicBoostActive;
+}
+
 ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
         const std::vector<WorkDuration> &actualDurations) {
     if (mSessionClosed) {
@@ -317,10 +371,21 @@ ndk::ScopedAStatus PowerHintSession::reportActualWorkDuration(
         return ndk::ScopedAStatus::ok();
     }
 
+    if (adpfConfig->mHeuristicBoostOn.has_value() && adpfConfig->mHeuristicBoostOn.value()) {
+        mSessionRecords->addReportedDurations(actualDurations, mDescriptor->targetNs.count());
+        updateHeuristicBoost();
+    }
+
     int64_t output = convertWorkDurationToBoostByPid(actualDurations);
 
     // Apply to all the threads in the group
-    int next_min = std::min(static_cast<int>(adpfConfig->mUclampMinHigh),
+    auto uclampMinCeiling = adpfConfig->mUclampMinHigh;
+    if (adpfConfig->mHeuristicBoostOn.has_value() && adpfConfig->mHeuristicBoostOn.value()) {
+        uclampMinCeiling = mHeuristicBoostActive ? adpfConfig->mHBoostUclampMin.value()
+                                                 : adpfConfig->mUclampMinHigh;
+    }
+
+    int next_min = std::min(static_cast<int>(uclampMinCeiling),
                             mDescriptor->pidControlVariable + static_cast<int>(output));
     next_min = std::max(static_cast<int>(adpfConfig->mUclampMinLow), next_min);
 

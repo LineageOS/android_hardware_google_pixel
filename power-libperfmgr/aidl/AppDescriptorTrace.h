@@ -57,6 +57,15 @@ struct AppDescriptorTrace {
         trace_hint_overtime = StringPrintf("adpf.%s-%s", idString.c_str(), "hint_overtime");
         trace_is_first_frame = StringPrintf("adpf.%s-%s", idString.c_str(), "is_first_frame");
         trace_session_hint = StringPrintf("adpf.%s-%s", idString.c_str(), "session_hint");
+        // traces for heuristic boost
+        trace_avg_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "hboost.avgDuration");
+        trace_heuristic_boost_active =
+                StringPrintf("adpf.%s-%s", idString.c_str(), "hboost.isActive");
+        trace_low_frame_rate =
+                StringPrintf("adpf.%s-%s", idString.c_str(), "hboost.isLowFrameRate");
+        trace_max_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "hboost.maxDuration");
+        trace_missed_cycles =
+                StringPrintf("adpf.%s-%s", idString.c_str(), "hboost.numOfMissedCycles");
         for (size_t i = 0; i < trace_modes.size(); ++i) {
             trace_modes[i] = StringPrintf(
                     "adpf.%s-%s_mode", idString.c_str(),
@@ -85,6 +94,12 @@ struct AppDescriptorTrace {
     std::string trace_hint_overtime;
     std::string trace_is_first_frame;
     std::string trace_session_hint;
+    // traces for heuristic boost
+    std::string trace_avg_duration;
+    std::string trace_heuristic_boost_active;
+    std::string trace_low_frame_rate;
+    std::string trace_max_duration;
+    std::string trace_missed_cycles;
     std::array<std::string, enum_size<aidl::android::hardware::power::SessionMode>()> trace_modes;
     std::string trace_cpu_duration;
     std::string trace_gpu_duration;

@@ -52,6 +52,16 @@ struct AdpfConfig {
     std::optional<uint64_t> mGpuBoostCapacityMax;
     uint64_t mGpuCapacityLoadUpHeadroom;
 
+    // Heuristic boost control
+    std::optional<bool> mHeuristicBoostOn;
+    std::optional<uint32_t> mHBoostOnMissedCycles;
+    std::optional<double> mHBoostOffMaxAvgRatio;
+    std::optional<uint32_t> mHBoostOffMissedCycles;
+    std::optional<double> mHBoostPidPuFactor;
+    std::optional<uint32_t> mHBoostUclampMin;
+    std::optional<uint32_t> mLowFrameRateThreshold;
+    std::optional<uint32_t> mMaxRecordsNum;
+
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
     int64_t getPidILowDivI();
@@ -63,7 +73,12 @@ struct AdpfConfig {
                uint32_t uclampMinLow, uint64_t samplingWindowP, uint64_t samplingWindowI,
                uint64_t samplingWindowD, int64_t reportingRateLimitNs, double targetTimeFactor,
                double staleTimeFactor, std::optional<bool> gpuBoostOn,
-               std::optional<uint64_t> gpuBoostCapacityMax, uint64_t gpuCapacityLoadUpHeadroom)
+               std::optional<uint64_t> gpuBoostCapacityMax, uint64_t gpuCapacityLoadUpHeadroom,
+               std::optional<bool> heuristicBoostOn, std::optional<uint32_t> hBoostOnMissedCycles,
+               std::optional<double> hBoostOffMaxAvgRatio,
+               std::optional<uint32_t> hBoostOffMissedCycles,
+               std::optional<double> hBoostPidPuFactor, std::optional<uint32_t> hBoostUclampMin,
+               std::optional<uint32_t> lowFrameRateThreshold, std::optional<uint32_t> maxRecordsNum)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -86,7 +101,15 @@ struct AdpfConfig {
           mStaleTimeFactor(staleTimeFactor),
           mGpuBoostOn(gpuBoostOn),
           mGpuBoostCapacityMax(gpuBoostCapacityMax),
-          mGpuCapacityLoadUpHeadroom(gpuCapacityLoadUpHeadroom) {}
+          mGpuCapacityLoadUpHeadroom(gpuCapacityLoadUpHeadroom),
+          mHeuristicBoostOn(heuristicBoostOn),
+          mHBoostOnMissedCycles(hBoostOnMissedCycles),
+          mHBoostOffMaxAvgRatio(hBoostOffMaxAvgRatio),
+          mHBoostOffMissedCycles(hBoostOffMissedCycles),
+          mHBoostPidPuFactor(hBoostPidPuFactor),
+          mHBoostUclampMin(hBoostUclampMin),
+          mLowFrameRateThreshold(lowFrameRateThreshold),
+          mMaxRecordsNum(maxRecordsNum) {}
 };
 
 }  // namespace perfmgr
