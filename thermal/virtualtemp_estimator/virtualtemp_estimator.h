@@ -17,6 +17,7 @@
 
 #include <json/value.h>
 
+#include <sstream>
 #include <vector>
 
 #include "virtualtemp_estimator_data.h"
@@ -95,6 +96,9 @@ class VirtualTempEstimator {
     // Performs the prediction and returns estimated value in output
     VtEstimatorStatus Estimate(const std::vector<float> &thermistors, std::vector<float> *output);
 
+    // Dump estimator status
+    VtEstimatorStatus DumpStatus(std::string_view sensor_name, std::ostringstream *dump_buf);
+
   private:
     void LoadTFLiteWrapper();
     VtEstimationType type;
@@ -110,6 +114,7 @@ class VirtualTempEstimator {
     VtEstimatorStatus TFliteEstimate(const std::vector<float> &thermistors,
                                      std::vector<float> *output);
 
+    VtEstimatorStatus TFLiteDumpStatus(std::string_view sensor_name, std::ostringstream *dump_buf);
     bool GetInputConfig(Json::Value *config);
 };
 

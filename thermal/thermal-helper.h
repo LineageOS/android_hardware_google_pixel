@@ -97,6 +97,8 @@ class ThermalHelper {
     virtual bool readTemperatureThreshold(std::string_view sensor_name,
                                           TemperatureThreshold *out) const = 0;
     virtual bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const = 0;
+    virtual void dumpVtEstimatorStatus(std::string_view senor_name,
+                                       std::ostringstream *dump_buf) const = 0;
     virtual const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const = 0;
     virtual const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const = 0;
     virtual const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const = 0;
@@ -146,6 +148,9 @@ class ThermalHelperImpl : public ThermalHelper {
                                   TemperatureThreshold *out) const override;
     // Read the value of a single cooling device.
     bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const override;
+    // Dump VtEstimator status
+    void dumpVtEstimatorStatus(std::string_view sensor_name,
+                               std::ostringstream *dump_buf) const override;
     // Get SensorInfo Map
     const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const override {
         return sensor_info_map_;
