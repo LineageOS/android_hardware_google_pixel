@@ -151,11 +151,12 @@ void BatteryFGReporter::checkAndReportFwUpdate(const std::shared_ptr<IStats> &st
     if (params.fcnom == 0 )
         return;
 
-    if (old_fw_update[0] != params.fcnom || old_fw_update[1] != params.dpacc ||
-        old_fw_update[2] != params.dqacc) {
-        old_fw_update[0] = params.fcnom;
-        old_fw_update[1] = params.dpacc;
-        old_fw_update[2] = params.dqacc;
+    if (old_fw_update_[0] != params.fcnom ||
+        old_fw_update_[1] != params.dpacc ||
+        old_fw_update_[2] != params.dqacc) {
+        old_fw_update_[0] = params.fcnom;
+        old_fw_update_[1] = params.dpacc;
+        old_fw_update_[2] = params.dqacc;
 
         reportEvent(stats_client, params);
 
@@ -183,7 +184,7 @@ void BatteryFGReporter::checkAndReportFGAbnormality(const std::shared_ptr<IStats
         return;
     }
 
-    if (abnl == last_abnl)
+    if (abnl == last_abnl_)
         return;
 
     ALOGD("reportEvent: FG abnormality %x", abnl);
@@ -201,7 +202,7 @@ void BatteryFGReporter::checkAndReportFGAbnormality(const std::shared_ptr<IStats
     if (!ret.isOk())
         ALOGE("Unable to report FG abnormality.");
 
-    last_abnl = abnl;
+    last_abnl_ = abnl;
 }
 
 }  // namespace pixel
