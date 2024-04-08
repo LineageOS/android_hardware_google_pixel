@@ -312,6 +312,31 @@ TEST(GpuCapacityVoter, testGpuVoteActive) {
 
     EXPECT_EQ(votes.size(), 1);
 }
+
+TEST(GpuCapacityVoter, testGpuVoteSum) {
+    auto const now = std::chrono::steady_clock::now();
+
+    auto const capacity_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+    auto const load_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_LOAD_UP);
+
+    Votes votes;
+    votes.add(capacity_vote_id, GpuVote(true, now, 100ms, Cycles(321)));
+    votes.add(load_vote_id, GpuVote(true, now, 50ms, Cycles(123)));
+
+    EXPECT_TRUE(votes.voteIsActive(capacity_vote_id));
+    EXPECT_TRUE(votes.voteIsActive(load_vote_id));
+
+    EXPECT_THAT(votes.getGpuCapacityRequest(now + 1ms), Optional(Cycles(444)));
+    EXPECT_THAT(votes.getGpuCapacityRequest(now + 51ms), Optional(Cycles(321)));
+    EXPECT_FALSE(votes.getGpuCapacityRequest(now + 101ms));
+
+    EXPECT_TRUE(votes.setUseVote(load_vote_id, false));
+    EXPECT_TRUE(votes.voteIsActive(capacity_vote_id));
+    EXPECT_FALSE(votes.voteIsActive(load_vote_id));
+    EXPECT_THAT(votes.getGpuCapacityRequest(now + 1ms), Optional(Cycles(321)));
+
+    EXPECT_EQ(votes.size(), 2);
+}
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power
