@@ -456,7 +456,9 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
                                                            adpfConfig->mStaleTimeFactor / 2.0));
             break;
         case SessionHint::GPU_LOAD_UP:
-            // TODO(kevindubois): add impl
+            mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_GPU_LOAD_UP,
+                                Cycles(adpfConfig->mGpuCapacityLoadUpHeadroom),
+                                std::chrono::steady_clock::now(), mDescriptor->targetNs);
             break;
         case SessionHint::GPU_LOAD_DOWN:
             // TODO(kevindubois): add impl
