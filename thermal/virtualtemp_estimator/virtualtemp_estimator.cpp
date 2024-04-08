@@ -16,6 +16,7 @@
 #include "virtualtemp_estimator.h"
 
 #include <android-base/logging.h>
+#include <android-base/stringprintf.h>
 #include <dlfcn.h>
 #include <json/reader.h>
 
@@ -380,6 +381,14 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
         return kVtEstimatorInvalidArgs;
     }
 
+    // log input data
+    std::string input_data_str = "model_input: [";
+    for (size_t i = 0; i < num_linked_sensors; ++i) {
+        input_data_str += ::android::base::StringPrintf("%0.2f ", thermistors[i]);
+    }
+    input_data_str += "]";
+    LOG(INFO) << input_data_str;
+
     // copy input data into input tensors
     size_t prev_samples_order = common_instance_->prev_samples_order;
     size_t cur_sample_index = common_instance_->cur_sample_count % prev_samples_order;
@@ -433,6 +442,8 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
     predicted_value += CalculateOffset(common_instance_->offset_thresholds,
                                        common_instance_->offset_values, predicted_value);
 
+    LOG(INFO) << "model_output: " << tflite_instance_->output_buffer[0]
+              << " predicted_value: " << predicted_value;
     *output = predicted_value;
     return kVtEstimatorOk;
 }
