@@ -88,39 +88,40 @@ void VirtualTempEstimator::LoadTFLiteWrapper() {
     }
 
     tflite_instance_->tflite_methods.create =
-            reinterpret_cast<tflitewrapper_create>(dlsym(mLibHandle, "Create"));
+            reinterpret_cast<tflitewrapper_create>(dlsym(mLibHandle, "ThermalTfliteCreate"));
     if (!tflite_instance_->tflite_methods.create) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_create with error: " << dlerror();
     }
 
     tflite_instance_->tflite_methods.init =
-            reinterpret_cast<tflitewrapper_init>(dlsym(mLibHandle, "Init"));
+            reinterpret_cast<tflitewrapper_init>(dlsym(mLibHandle, "ThermalTfliteInit"));
     if (!tflite_instance_->tflite_methods.init) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_init with error: " << dlerror();
     }
 
     tflite_instance_->tflite_methods.invoke =
-            reinterpret_cast<tflitewrapper_invoke>(dlsym(mLibHandle, "Invoke"));
+            reinterpret_cast<tflitewrapper_invoke>(dlsym(mLibHandle, "ThermalTfliteInvoke"));
     if (!tflite_instance_->tflite_methods.invoke) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_invoke with error: " << dlerror();
     }
 
     tflite_instance_->tflite_methods.destroy =
-            reinterpret_cast<tflitewrapper_destroy>(dlsym(mLibHandle, "Destroy"));
+            reinterpret_cast<tflitewrapper_destroy>(dlsym(mLibHandle, "ThermalTfliteDestroy"));
     if (!tflite_instance_->tflite_methods.destroy) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_destroy with error: " << dlerror();
     }
 
     tflite_instance_->tflite_methods.get_input_config_size =
             reinterpret_cast<tflitewrapper_get_input_config_size>(
-                    dlsym(mLibHandle, "GetInputConfigSize"));
+                    dlsym(mLibHandle, "ThermalTfliteGetInputConfigSize"));
     if (!tflite_instance_->tflite_methods.get_input_config_size) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_get_input_config_size with error: "
                    << dlerror();
     }
 
     tflite_instance_->tflite_methods.get_input_config =
-            reinterpret_cast<tflitewrapper_get_input_config>(dlsym(mLibHandle, "GetInputConfig"));
+            reinterpret_cast<tflitewrapper_get_input_config>(
+                    dlsym(mLibHandle, "ThermalTfliteGetInputConfig"));
     if (!tflite_instance_->tflite_methods.get_input_config) {
         LOG(ERROR) << "Could not link and cast tflitewrapper_get_input_config with error: "
                    << dlerror();
