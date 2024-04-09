@@ -277,7 +277,7 @@ void BatteryEEPROMReporter::reportEvent(const std::shared_ptr<IStats> &stats_cli
 
 void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &stats_client,
                                                const std::vector<std::string> &paths) {
-    struct BatteryHistory gmsr;
+    struct BatteryHistory gmsr = {.checksum = EvtGMSR};
     std::string file_contents;
     std::string path;
     int16_t num;
@@ -297,7 +297,6 @@ void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &st
         return;
     }
 
-    gmsr.checksum = 0xFFFF;
     if (path.find("max77779") == std::string::npos &&
         paths[0].find("max77779") == std::string::npos) {
         num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
@@ -392,6 +391,158 @@ void BatteryEEPROMReporter::checkAndReportMaxfgHistory(const std::shared_ptr<ISt
         maxfg_hist.rslow = nVoltTemp;
 
         reportEvent(stats_client, maxfg_hist);
+    }
+}
+
+void BatteryEEPROMReporter::checkAndReportFGModelLoading(const std::shared_ptr<IStats> &client,
+                                                         const std::vector<std::string> &paths) {
+    struct BatteryHistory params = {.full_cap = 0, .esr = 0, .rslow = 0,
+                                    .checksum = EvtModelLoading, };
+    std::string file_contents;
+    std::string path;
+    int16_t num;
+    int pos = 0;
+    const char *data;
+
+    if (paths.empty())
+        return;
+
+    for (int i = 0; i < paths.size(); i++) {
+        if (fileExists(paths[i])) {
+            path = paths[i];
+            break;
+        }
+    }
+
+    /* not found */
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read ModelLoading History path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    data = file_contents.c_str();
+
+    num = sscanf(&data[pos],  "ModelNextUpdate: %" SCNu16 "\n"
+                 "%*x:%*x\n%*x:%*x\n%*x:%*x\n%*x:%*x\n%*x:%*x\n%n",
+                 &params.rslow, &pos);
+    if (num != 1) {
+        ALOGE("Couldn't process ModelLoading History. num=%d\n", num);
+        return;
+    }
+
+    sscanf(&data[pos],  "ATT: %" SCNu16 " FAIL: %" SCNu16, &params.full_cap, &params.esr);
+
+    /* don't need to report when attempts counter is zero */
+    if (params.full_cap == 0)
+        return;
+
+    reportEvent(client, params);
+}
+
+void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStats> &stats_client,
+                                                     const std::vector<std::string> &paths) {
+    struct BatteryHistory params = {.checksum = EvtFGLearningParams};
+    std::string file_contents, line, path;
+    std::istringstream ss;
+    int16_t num, avgtemp, temp, qh;
+    uint16_t vcell, avgvcell, vfocv;
+    const char* data;
+    int pos = 0;
+
+    if (paths.empty())
+        return;
+
+    for (int i = 0; i < paths.size(); i++) {
+        if (fileExists(paths[i])) {
+            path = paths[i];
+            break;
+        }
+    }
+
+    /* not found */
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read FG Learning History path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    if (file_contents.length() == 0)
+        return;
+
+    /* LH: Learning History */
+    ss.str(file_contents);
+    while (std::getline(ss, line)) {
+        data = line.c_str();
+
+        num = sscanf(&data[pos], "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16
+                    "%*2" SCNx16 ":%4" SCNx16 "%*2" SCNx16 ":%4" SCNx16 "\n",
+                    &params.full_cap, &params.esr, &params.rslow, &params.max_vbatt, &params.full_rep,
+                    &params.min_vbatt, &params.max_ibatt, &params.min_ibatt, &avgtemp, &temp, &qh,
+                    &vcell, &avgvcell, &vfocv, &params.rcomp0, &params.tempco);
+
+        /* format additinal data */
+        if (num == kNumFGLearningFieldsV2) {
+            params.msoc = (uint8_t)(params.full_rep >> 8); /* repsoc */
+            params.full_rep = params.max_vbatt; /* fullcaprep */
+            params.sys_soc = (uint8_t)(params.min_vbatt >> 8); /* mixsoc */
+            params.batt_soc = (uint8_t)(params.max_ibatt >> 8); /* vfsoc */
+            params.max_temp = (int8_t)(avgtemp >> 8); /* avgtemp */
+            params.min_temp = (int8_t)(temp >> 8); /* temp */
+            params.max_ibatt = qh;
+            params.max_vbatt = vcell;
+            params.min_vbatt = avgvcell;
+            params.cycle_cnt = vfocv;
+        } else if (num == kNumFGLearningFields) {
+            params.rcomp0 = avgtemp;
+            params.tempco = temp;
+        } else {
+            continue;
+        }
+
+        reportEvent(stats_client, params);
+    }
+
+    /* Clear after reporting data */
+    if (!::android::base::WriteStringToFile("0", path.c_str()))
+        ALOGE("Couldn't clear %s - %s", path.c_str(), strerror(errno));
+}
+
+/* Log once */
+void BatteryEEPROMReporter::checkAndReportHistoryValidation(const std::shared_ptr<IStats> &stats_client,
+                                                            const std::string &path) {
+    struct BatteryHistory params = {.checksum = EvtHistoryValidation};
+    std::string file_contents, line;
+    std::istringstream ss;
+    int16_t num;
+
+    if (path.empty())
+        return;
+
+    if (!ReadFileToString(path, &file_contents)) {
+        ALOGE("Unable to read logbuffer path: %s - %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    /* HV: History Validation */
+    ss.str(file_contents);
+    while (getline(ss, line)) {
+        num = sscanf(line.c_str(), "[%*5lu.%*06lu] 0x4856 %hu %hu %hu %hu\n",
+                     &params.full_cap, &params.esr, &params.rslow, &params.cycle_cnt);
+
+        if (num != kNumHistoryValidationFields)
+            continue;
+
+        if (params.esr != 0)
+            reportEvent(stats_client, params);
     }
 }
 
