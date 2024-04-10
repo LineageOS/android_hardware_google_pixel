@@ -739,6 +739,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         std::optional<uint32_t> hBoostUclampMin;
         std::optional<uint32_t> lowFrameRateThreshold;
         std::optional<uint32_t> maxRecordsNum;
+        std::optional<uint32_t> uclampMinLoadUp;
+        std::optional<uint32_t> uclampMinLoadReset;
 
         ADPF_PARSE(pidOn, "PID_On", Bool);
         ADPF_PARSE(pidPOver, "PID_Po", Double);
@@ -751,6 +753,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         ADPF_PARSE(pidDUnder, "PID_Du", Double);
         ADPF_PARSE(adpfUclamp, "UclampMin_On", Bool);
         ADPF_PARSE(uclampMinInit, "UclampMin_Init", UInt);
+        ADPF_PARSE_OPTIONAL(uclampMinLoadUp, "UclampMin_LoadUp", UInt);
+        ADPF_PARSE_OPTIONAL(uclampMinLoadReset, "UclampMin_LoadReset", UInt);
         ADPF_PARSE(uclampMinHighLimit, "UclampMin_High", UInt);
         ADPF_PARSE(uclampMinLowLimit, "UclampMin_Low", UInt);
         ADPF_PARSE(samplingWindowP, "SamplingWindow_P", UInt64);
@@ -793,6 +797,13 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
             }
         }
 
+        if (!uclampMinLoadUp.has_value()) {
+            uclampMinLoadUp = uclampMinHighLimit;
+        }
+        if (!uclampMinLoadReset.has_value()) {
+            uclampMinLoadReset = uclampMinHighLimit;
+        }
+
         adpfs_parsed.emplace_back(std::make_shared<AdpfConfig>(
                 name, pidOn, pidPOver, pidPUnder, pidI, pidIInit, pidIHighLimit, pidILowLimit,
                 pidDOver, pidDUnder, adpfUclamp, uclampMinInit, uclampMinHighLimit,
@@ -800,7 +811,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
                 targetTimeFactor, staleTimeFactor, gpuBoost, gpuBoostCapacityMax,
                 gpuCapacityLoadUpHeadroom, heuristicBoostOn, hBoostOnMissedCycles,
                 hBoostOffMaxAvgRatio, hBoostOffMissedCycles, hBoostPidPuFactor, hBoostUclampMin,
-                lowFrameRateThreshold, maxRecordsNum));
+                lowFrameRateThreshold, maxRecordsNum, uclampMinLoadUp.value(),
+                uclampMinLoadReset.value()));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;
