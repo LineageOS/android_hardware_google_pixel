@@ -623,8 +623,8 @@ message PixelMmMetricsPerHour {
     optional int32 psi_mem_some_avg300_avg = 60;
     optional int32 version = 61 [deprecated = true];
     optional int64 shmem_pages = 62;
-    optional int64 page_tables_pages = 63;
-    optional int64 dmabuf_pages = 64;
+    optional int64 page_table_pages = 63;
+    optional int64 dmabuf_kb = 64;
 }
 
 /* A message containing Pixel memory metrics collected daily. */
