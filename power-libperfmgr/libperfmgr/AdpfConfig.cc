@@ -53,6 +53,9 @@ void AdpfConfig::dumpToFd(int fd) {
     dump_buf << "SamplingWindow_I: " << mSamplingWindowI << "\n";
     dump_buf << "SamplingWindow_D: " << mSamplingWindowD << "\n";
     dump_buf << "UclampMin_On: " << mUclampMinOn << "\n";
+    dump_buf << "UclampMin_Init: " << mUclampMinInit << "\n";
+    dump_buf << "UclampMin_LoadUp: " << mUclampMinLoadUp << "\n";
+    dump_buf << "UclampMin_LoadReset: " << mUclampMinLoadReset << "\n";
     dump_buf << "UclampMin_High: " << mUclampMinHigh << "\n";
     dump_buf << "UclampMin_Low: " << mUclampMinLow << "\n";
     dump_buf << "ReportingRateLimitNs: " << mReportingRateLimitNs << "\n";

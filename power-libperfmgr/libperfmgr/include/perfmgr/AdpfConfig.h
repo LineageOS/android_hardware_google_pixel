@@ -57,6 +57,8 @@ struct AdpfConfig {
     std::optional<uint32_t> mHBoostUclampMin;
     std::optional<uint32_t> mLowFrameRateThreshold;
     std::optional<uint32_t> mMaxRecordsNum;
+    uint32_t mUclampMinLoadUp;
+    uint32_t mUclampMinLoadReset;
 
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
@@ -73,7 +75,8 @@ struct AdpfConfig {
                std::optional<double> hBoostOffMaxAvgRatio,
                std::optional<uint32_t> hBoostOffMissedCycles,
                std::optional<double> hBoostPidPuFactor, std::optional<uint32_t> hBoostUclampMin,
-               std::optional<uint32_t> lowFrameRateThreshold, std::optional<uint32_t> maxRecordsNum)
+               std::optional<uint32_t> lowFrameRateThreshold, std::optional<uint32_t> maxRecordsNum,
+               uint32_t uclampMinLoadUp, uint32_t uclampMinLoadReset)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -101,7 +104,9 @@ struct AdpfConfig {
           mHBoostPidPuFactor(hBoostPidPuFactor),
           mHBoostUclampMin(hBoostUclampMin),
           mLowFrameRateThreshold(lowFrameRateThreshold),
-          mMaxRecordsNum(maxRecordsNum) {}
+          mMaxRecordsNum(maxRecordsNum),
+          mUclampMinLoadUp(uclampMinLoadUp),
+          mUclampMinLoadReset(uclampMinLoadReset) {}
 };
 
 }  // namespace perfmgr
