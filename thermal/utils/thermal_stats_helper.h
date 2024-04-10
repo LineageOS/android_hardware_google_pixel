@@ -35,6 +35,8 @@ namespace hardware {
 namespace thermal {
 namespace implementation {
 
+class ThermalHelper;
+
 using aidl::android::frameworks::stats::IStats;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using ::android::base::boot_clock;
@@ -134,7 +136,8 @@ class ThermalStatsHelper {
 
     bool initializeStats(const Json::Value &config,
                          const std::unordered_map<std::string, SensorInfo> &sensor_info_map_,
-                         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_);
+                         const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map_,
+                         ThermalHelper *const thermal_helper_handle);
     void updateSensorCdevRequestStats(std::string_view trigger_sensor, std::string_view cdev,
                                       int new_state);
     void updateSensorTempStatsBySeverity(std::string_view sensor,
@@ -164,6 +167,7 @@ class ThermalStatsHelper {
     mutable std::shared_mutex sensor_stats_mutex_;
     SensorStats sensor_stats;
     mutable std::shared_mutex sensor_cdev_request_stats_map_mutex_;
+    ThermalHelper *thermal_helper_handle_;
     // userVote request stat for the sensor to the corresponding cdev (sensor -> cdev ->
     // StatsRecord)
     std::unordered_map<std::string, std::unordered_map<std::string, ThermalStats<int>>>
