@@ -2161,6 +2161,12 @@ message PixelImpulseUsageReported {
       /* Client side */
       API_SERVER_START = 1001;
       API_PIXEL_STATE_CHANGE = 1002;
+      /* Internal */
+      INTERNAL_PLATFORM_CONNECTION_CONNECT = 10001;
+      INTERNAL_PLATFORM_CONNECTION_DISCONNECT = 10002;
+      INTERNAL_PLATFORM_CONNECTION_CHANGE = 10003;
+      INTERNAL_CLIENT_LISTENER_ADD = 10004;
+      INTERNAL_CLIENT_LISTENER_REMOVE = 10005;
   }
   /* Invoked API name */
   optional ApiName api_name = 4;
@@ -2196,6 +2202,31 @@ message PixelImpulseUsageReported {
 
   /* Size of the arguments */
   optional int32 request_size = 11;
+
+  /* Platform connection usage */
+  /* Used when api_name == INTERNAL_PLATFORM_CONNECTION_CHANGE */
+  optional int32 internal_platform_connection_count = 12;
+
+  /* Client state source usage */
+  /* Used when api_name == INTERNAL_CLIENT_LISTENER_* */
+  optional int32 internal_client_listener_count = 13;
+
+  enum StateSource {
+      STATE_SOURCE_UNKNOWN = 0;
+      STATE_SOURCE_UID_IMPORTANCE = 1;
+      STATE_SOURCE_CAMERA_AVAILABILITY = 2;
+      STATE_SOURCE_DROPBOX_BROADCAST = 3;
+      STATE_SOURCE_TEMPERATURE = 4;
+      STATE_SOURCE_THERMAL_STATUS = 5;
+  }
+  /* State source involved */
+  /* Used when api_name == INTERNAL_PLATFORM_CONNECTION_* or
+   * api_name == INTERNAL_CLIENT_LISTENER_* */
+  optional StateSource state_source = 14;
+
+  /* UID importance cut point */
+  /* Used when state_source == STATE_SOURCE_UID_IMPORTANCE */
+  optional int32 uid_importance_cut_point = 15;
 }
 
 /**
