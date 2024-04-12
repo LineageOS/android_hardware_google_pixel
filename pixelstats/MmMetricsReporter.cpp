@@ -713,7 +713,7 @@ void MmMetricsReporter::fillCompactionDurationStatAtom(const std::vector<long> &
  */
 void MmMetricsReporter::readDirectReclaimStat(std::vector<long> *store) {
     static const std::string base_path(kDirectReclaimBasePath);
-    static const std::vector<std::string> dr_levels{"native", "top", "visible", "other"};
+    static const std::vector<std::string> dr_levels{"native", "visible", "top", "other"};
     static const std::string sysfs_name = "latency_stat";
     constexpr int num_metrics_per_file = 5;
     int num_file = dr_levels.size();
