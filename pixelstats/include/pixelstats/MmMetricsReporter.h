@@ -143,9 +143,10 @@ class MmMetricsReporter {
                         const std::map<std::string, uint64_t> &mm_metrics,
                         std::map<std::string, uint64_t> *prev_mm_metrics,
                         std::vector<VendorAtomValue> *atom_values);
-    bool isValidPid(int pid, const std::string &name);
+    virtual std::string getProcessStatPath(const std::string &name, int *prev_pid);
+    bool isValidProcessInfoPath(const std::string &path, const char *name);
     int findPidByProcessName(const std::string &name);
-    uint64_t getStimeByPid(int pid);
+    int64_t getStimeByPathAndVerifyName(const std::string &path, const std::string &name);
     void fillProcessStime(int atom_key, const std::string &name, int *pid, uint64_t *prev_stime,
                           std::vector<VendorAtomValue> *atom_values);
     std::map<std::string, uint64_t> readCmaStat(const std::string &cma_type,
@@ -183,8 +184,8 @@ class MmMetricsReporter {
     std::map<std::string, uint64_t> prev_day_pixel_vmstat_;
     std::map<std::string, std::map<std::string, uint64_t>> prev_cma_stat_;
     std::map<std::string, std::map<std::string, uint64_t>> prev_cma_stat_ext_;
-    int kswapd_pid_ = -1;
-    int kcompactd_pid_ = -1;
+    int prev_kswapd_pid_ = -1;
+    int prev_kcompactd_pid_ = -1;
     uint64_t prev_kswapd_stime_ = 0;
     uint64_t prev_kcompactd_stime_ = 0;
     bool is_user_build_;
