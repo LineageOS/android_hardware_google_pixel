@@ -477,10 +477,10 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
     std::map<std::string, uint64_t> pixel_vmstat = readVmStat(
             getSysfsPath(android::base::StringPrintf("%s/vmstat", kPixelStatMm).c_str()));
     fillAtomValues(kMmMetricsPerDayInfo, pixel_vmstat, &prev_day_pixel_vmstat_, &values);
-    fillProcessStime(PixelMmMetricsPerDay::kKswapdStimeClksFieldNumber, "kswapd0", &kswapd_pid_,
-                     &prev_kswapd_stime_, &values);
+    fillProcessStime(PixelMmMetricsPerDay::kKswapdStimeClksFieldNumber, "kswapd0",
+                     &prev_kswapd_pid_, &prev_kswapd_stime_, &values);
     fillProcessStime(PixelMmMetricsPerDay::kKcompactdStimeClksFieldNumber, "kcompactd0",
-                     &kcompactd_pid_, &prev_kcompactd_stime_, &values);
+                     &prev_kcompactd_pid_, &prev_kcompactd_stime_, &values);
     fillDirectReclaimStatAtom(direct_reclaim, &values);
     fillCompactionDurationStatAtom(direct_reclaim, &values);
 
@@ -490,24 +490,6 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
     }
 
     return values;
-}
-
-/**
- * Check if /proc/<pid>/comm is equal to name.
- */
-bool MmMetricsReporter::isValidPid(int pid, const std::string &name) {
-    if (pid <= 0)
-        return false;
-
-    std::string file_contents;
-    std::string path = android::base::StringPrintf("/proc/%d/comm", pid);
-    if (!ReadFileToString(path, &file_contents)) {
-        ALOGI("Unable to read %s, err: %s", path.c_str(), strerror(errno));
-        return false;
-    }
-
-    file_contents = android::base::Trim(file_contents);
-    return !file_contents.compare(name);
 }
 
 /**
@@ -545,63 +527,103 @@ int MmMetricsReporter::findPidByProcessName(const std::string &name) {
 }
 
 /**
- * Get stime of a process from /proc/<pid>/stat
- * stime is the 15th field.
+ * Get stime of a process from <path>:: 15th field.
+ * Custom path (base path) could be used to inject data for test codes.
  */
-uint64_t MmMetricsReporter::getStimeByPid(int pid) {
+int64_t MmMetricsReporter::getStimeByPathAndVerifyName(const std::string &path,
+                                                       const std::string &name) {
     const int stime_idx = 15;
+    const int name_idx = 2;
     uint64_t stime;
+    int64_t ret;
     std::string file_contents;
-    std::string path = android::base::StringPrintf("/proc/%d/stat", pid);
     if (!ReadFileToString(path, &file_contents)) {
-        ALOGI("Unable to read %s, err: %s", path.c_str(), strerror(errno));
-        return false;
+        ALOGE("Unable to read %s, err: %s", path.c_str(), strerror(errno));
+        return -1;
     }
 
     std::vector<std::string> data = android::base::Split(file_contents, " ");
     if (data.size() < stime_idx) {
-        ALOGI("Unable to find stime from %s. size: %zu", path.c_str(), data.size());
-        return false;
+        ALOGE("Unable to find stime from %s. size: %zu", path.c_str(), data.size());
+        return -1;
     }
 
-    if (android::base::ParseUint(data[stime_idx - 1], &stime))
-        return stime;
-    else
-        return 0;
+    std::string parenthesis_name = std::string("(") + name + ")";
+    if (parenthesis_name.compare(data[name_idx - 1]) != 0) {
+        ALOGE("Mismatched name for process stat: queried %s vs. found %s", parenthesis_name.c_str(),
+              data[name_idx - 1].c_str());
+        return -1;
+    }
+
+    if (android::base::ParseUint(data[stime_idx - 1], &stime)) {
+        ret = static_cast<int64_t>(stime);
+        return ret < 0 ? -1 : ret;
+    } else {
+        ALOGE("Stime Uint parse fail for process info path %s", path.c_str());
+        return -1;
+    }
+}
+
+// returns /proc/<pid> on success, empty string on failure.
+// For test: use derived class to return custom path for test data injection.
+std::string MmMetricsReporter::getProcessStatPath(const std::string &name, int *prev_pid) {
+    if (prev_pid == nullptr) {
+        ALOGE("Should not reach here: prev_pid == nullptr");
+        return "";
+    }
+
+    int pid = findPidByProcessName(name);
+    if (pid <= 0) {
+        ALOGE("Unable to find pid for %s, err: %s", name.c_str(), strerror(errno));
+        return "";
+    }
+
+    if (*prev_pid != -1 && pid != *prev_pid)
+        ALOGW("%s pid changed from %d to %d.", name.c_str(), *prev_pid, pid);
+    *prev_pid = pid;
+
+    return android::base::StringPrintf("/proc/%d/stat", pid);
 }
 
 /**
  * Find stime of the process and copy it into atom_values
  * atom_key: Currently, it can only be kKswapdTimeFieldNumber or kKcompactdTimeFieldNumber
  * name: process name
- * pid: The pid of the process. It would be the pid we found last time,
+ * prev_pid: The pid of the process. It would be the pid we found last time,
  *      or -1 if not found.
  * prev_stime: The stime of the process collected last time.
  * atom_values: The atom we will report later.
  */
-void MmMetricsReporter::fillProcessStime(int atom_key, const std::string &name, int *pid,
+void MmMetricsReporter::fillProcessStime(int atom_key, const std::string &name, int *prev_pid,
                                          uint64_t *prev_stime,
                                          std::vector<VendorAtomValue> *atom_values) {
-    // resize atom_values if there is no space for this stime field.
+    std::string path;
+    int64_t stime;
+    int64_t stimeDiff;
+
+    // Find <pid> for executable <name>, and return "/proc/<pid>/stat" path.
+    // Give warning if prev_pid != current pid when prev_pid != -1, which means
+    // <name> at least once died and respawn.
+    path = getProcessStatPath(name, prev_pid);
+
+    if ((stime = getStimeByPathAndVerifyName(path, name)) < 0) {
+        return;
+    }
+
+    stimeDiff = stime - *prev_stime;
+    if (stimeDiff < 0) {
+        ALOGE("stime diff for %s < 0: not possible", name.c_str());
+        return;
+    }
+    *prev_stime = stime;
+
     int atom_idx = atom_key - kVendorAtomOffset;
     int size = atom_idx + 1;
     VendorAtomValue tmp;
-    tmp.set<VendorAtomValue::longValue>(0);
+    tmp.set<VendorAtomValue::longValue>(stimeDiff);
     if (atom_values->size() < size)
         atom_values->resize(size, tmp);
-
-    if (!isValidPid(*pid, name)) {
-        (*pid) = findPidByProcessName(name);
-        if ((*pid) <= 0) {
-            ALOGI("Unable to find pid of %s, err: %s", name.c_str(), strerror(errno));
-            return;
-        }
-    }
-
-    uint64_t stime = getStimeByPid(*pid);
-    tmp.set<VendorAtomValue::longValue>(stime - *prev_stime);
     (*atom_values)[atom_idx] = tmp;
-    (*prev_stime) = stime;
 }
 
 /**
