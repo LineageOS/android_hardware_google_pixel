@@ -25,6 +25,7 @@ option java_package = "android.hardware.google.pixel";
 option java_outer_classname = "PixelAtoms";
 
 import "frameworks/proto_logging/stats/atom_field_options.proto";
+import "frameworks/proto_logging/stats/enums/app/enums.proto";
 
 /*
  * Please note that the following features are not currently supported by
@@ -2225,8 +2226,11 @@ message PixelImpulseUsageReported {
   optional StateSource state_source = 14;
 
   /* UID importance cut point */
+  /* This is the UID importance cutpoint associated with the
+   * OnUidImportanceListener
+   */
   /* Used when state_source == STATE_SOURCE_UID_IMPORTANCE */
-  optional int32 uid_importance_cut_point = 15;
+  optional android.app.Importance uid_importance_cut_point = 15;
 }
 
 /**
