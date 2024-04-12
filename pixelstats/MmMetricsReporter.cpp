@@ -318,8 +318,8 @@ std::map<std::string, uint64_t> MmMetricsReporter::readVmStat(const std::string 
 uint64_t MmMetricsReporter::getIonTotalPools() {
     uint64_t res;
 
-    if (!ReadFileToUint(kIonTotalPoolsPathForLegacy, &res) || (res == 0)) {
-        if (!ReadFileToUint(kIonTotalPoolsPath, &res)) {
+    if (!ReadFileToUint(getSysfsPath(kIonTotalPoolsPathForLegacy), &res) || (res == 0)) {
+        if (!ReadFileToUint(getSysfsPath(kIonTotalPoolsPath), &res)) {
             return 0;
         }
     }
@@ -333,7 +333,7 @@ uint64_t MmMetricsReporter::getIonTotalPools() {
 uint64_t MmMetricsReporter::getGpuMemory() {
     uint64_t gpu_size = 0;
 
-    if (!ReadFileToUint(kGpuTotalPages, &gpu_size)) {
+    if (!ReadFileToUint(getSysfsPath(kGpuTotalPages), &gpu_size)) {
         return 0;
     }
     return gpu_size;
@@ -402,12 +402,22 @@ void MmMetricsReporter::aggregatePixelMmMetricsPer5Min() {
 }
 
 void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &stats_client) {
-    if (!MmMetricsSupported())
-        return;
+    std::vector<VendorAtomValue> values = genPixelMmMetricsPerHour();
 
-    std::map<std::string, uint64_t> vmstat = readVmStat(kVmstatPath);
+    if (values.size() != 0) {
+        // Send vendor atom to IStats HAL
+        reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerHour, values,
+                         "PixelMmMetricsPerHour");
+    }
+}
+
+std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerHour() {
+    if (!MmMetricsSupported())
+        return std::vector<VendorAtomValue>();
+
+    std::map<std::string, uint64_t> vmstat = readVmStat(getSysfsPath(kVmstatPath));
     if (vmstat.size() == 0)
-        return;
+        return std::vector<VendorAtomValue>();
 
     uint64_t ion_total_pools = getIonTotalPools();
     uint64_t gpu_memory = getGpuMemory();
@@ -426,18 +436,26 @@ void MmMetricsReporter::logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &
     values[PixelMmMetricsPerHour::kGpuMemoryFieldNumber - kVendorAtomOffset] = tmp;
     fillPressureStallAtom(&values);
 
-    // Send vendor atom to IStats HAL
-    reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerHour, values,
-                     "PixelMmMetricsPerHour");
+    return values;
 }
 
 void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stats_client) {
-    if (!MmMetricsSupported())
-        return;
+    std::vector<VendorAtomValue> values = genPixelMmMetricsPerDay();
 
-    std::map<std::string, uint64_t> vmstat = readVmStat(kVmstatPath);
+    if (values.size() != 0) {
+        // Send vendor atom to IStats HAL
+        reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerDay, values,
+                         "PixelMmMetricsPerDay");
+    }
+}
+
+std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
+    if (!MmMetricsSupported())
+        return std::vector<VendorAtomValue>();
+
+    std::map<std::string, uint64_t> vmstat = readVmStat(getSysfsPath(kVmstatPath));
     if (vmstat.size() == 0)
-        return;
+        return std::vector<VendorAtomValue>();
 
     std::vector<long> direct_reclaim;
     readDirectReclaimStat(&direct_reclaim);
@@ -456,8 +474,8 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
 
     fillAtomValues(kMmMetricsPerDayInfo, vmstat, &prev_day_vmstat_, &values);
 
-    std::map<std::string, uint64_t> pixel_vmstat =
-            readVmStat(android::base::StringPrintf("%s/vmstat", kPixelStatMm).c_str());
+    std::map<std::string, uint64_t> pixel_vmstat = readVmStat(
+            getSysfsPath(android::base::StringPrintf("%s/vmstat", kPixelStatMm).c_str()));
     fillAtomValues(kMmMetricsPerDayInfo, pixel_vmstat, &prev_day_pixel_vmstat_, &values);
     fillProcessStime(PixelMmMetricsPerDay::kKswapdStimeClksFieldNumber, "kswapd0", &kswapd_pid_,
                      &prev_kswapd_stime_, &values);
@@ -467,11 +485,11 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
     fillCompactionDurationStatAtom(direct_reclaim, &values);
 
     // Don't report the first atom to avoid big spike in accumulated values.
-    if (!is_first_atom) {
-        // Send vendor atom to IStats HAL
-        reportVendorAtom(stats_client, PixelAtoms::Atom::kPixelMmMetricsPerDay, values,
-                         "PixelMmMetricsPerDay");
+    if (is_first_atom) {
+        values.clear();
     }
+
+    return values;
 }
 
 /**
@@ -600,7 +618,7 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
     for (auto &entry : metrics_info) {
         std::string path = android::base::StringPrintf("%s/cma/%s/%s", kPixelStatMm,
                                                        cma_type.c_str(), entry.name.c_str());
-        if (!ReadFileToUint(path.c_str(), &file_contents))
+        if (!ReadFileToUint(getSysfsPath(path.c_str()), &file_contents))
             continue;
         cma_stat[entry.name] = file_contents;
     }
@@ -614,7 +632,7 @@ std::map<std::string, uint64_t> MmMetricsReporter::readCmaStat(
  * store: vector to save compaction duration info
  */
 void MmMetricsReporter::readCompactionDurationStat(std::vector<long> *store) {
-    static const std::string path(kCompactDuration);
+    std::string path(getSysfsPath(kCompactDuration));
     constexpr int num_metrics = 6;
 
     store->resize(num_metrics);
@@ -682,7 +700,7 @@ void MmMetricsReporter::readDirectReclaimStat(std::vector<long> *store) {
     int pass = -1;
     for (auto level : dr_levels) {
         ++pass;
-        std::string path = base_path + '/' + level + '/' + sysfs_name;
+        std::string path = getSysfsPath((base_path + '/' + level + '/' + sysfs_name).c_str());
         int start_idx = pass * num_metrics_per_file;
         int expected_num = num_metrics_per_file;
         if (!ReadFileToLongsCheck(path, store, start_idx, " ", 1, expected_num, true)) {
@@ -793,7 +811,7 @@ void MmMetricsReporter::readPressureStall(const std::string &basePath, std::vect
     for (int type_idx = 0; type_idx < kPsiNumFiles;
          ++type_idx, file_save_idx += kPsiMetricsPerFile) {
         std::string file_contents;
-        std::string path = basePath + '/' + kPsiTypes[type_idx];
+        std::string path = getSysfsPath(basePath + '/' + kPsiTypes[type_idx]);
 
         if (!ReadFileToString(path, &file_contents)) {
             // Don't print this log if the file doesn't exist, since logs will be printed
