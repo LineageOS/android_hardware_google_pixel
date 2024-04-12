@@ -41,6 +41,9 @@ class MmMetricsReporter {
     void logPixelMmMetricsPerHour(const std::shared_ptr<IStats> &stats_client);
     void logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &stats_client);
     void logCmaStatus(const std::shared_ptr<IStats> &stats_client);
+    std::vector<VendorAtomValue> genPixelMmMetricsPerHour();
+    std::vector<VendorAtomValue> genPixelMmMetricsPerDay();
+    virtual ~MmMetricsReporter() {}
 
   private:
     struct MmMetricsInfo {
@@ -151,6 +154,9 @@ class MmMetricsReporter {
             const std::shared_ptr<IStats> &stats_client, int atom_id, const std::string &cma_type,
             int cma_name_offset, const std::vector<MmMetricsInfo> &metrics_info,
             std::map<std::string, std::map<std::string, uint64_t>> *all_prev_cma_stat);
+
+    // test code could override this to inject test data
+    virtual std::string getSysfsPath(const std::string &path) { return path; }
 
     const char *const kVmstatPath;
     const char *const kIonTotalPoolsPath;
