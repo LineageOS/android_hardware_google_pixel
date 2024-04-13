@@ -168,19 +168,19 @@ MmMetricsReporter::MmMetricsReporter()
     ker_mm_metrics_support_ = checkKernelMMMetricSupport();
 }
 
-bool MmMetricsReporter::ReadFileToUint(const char *const path, uint64_t *val) {
+bool MmMetricsReporter::ReadFileToUint(const std::string &path, uint64_t *val) {
     std::string file_contents;
 
     if (!ReadFileToString(path, &file_contents)) {
         // Don't print this log if the file doesn't exist, since logs will be printed repeatedly.
         if (errno != ENOENT) {
-            ALOGI("Unable to read %s - %s", path, strerror(errno));
+            ALOGI("Unable to read %s - %s", path.c_str(), strerror(errno));
         }
         return false;
     } else {
         file_contents = android::base::Trim(file_contents);
         if (!android::base::ParseUint(file_contents, val)) {
-            ALOGI("Unable to convert %s to uint - %s", path, strerror(errno));
+            ALOGI("Unable to convert %s to uint - %s", path.c_str(), strerror(errno));
             return false;
         }
     }
@@ -290,17 +290,12 @@ bool MmMetricsReporter::reportVendorAtom(const std::shared_ptr<IStats> &stats_cl
  * Parse the output of /proc/vmstat or the sysfs having the same output format.
  * The map containing pairs of {field_string, data} will be returned.
  */
-std::map<std::string, uint64_t> MmMetricsReporter::readVmStat(const char *path) {
+std::map<std::string, uint64_t> MmMetricsReporter::readVmStat(const std::string &path) {
     std::string file_contents;
     std::map<std::string, uint64_t> vmstat_data;
 
-    if (path == nullptr) {
-        ALOGI("vmstat path is not specified");
-        return vmstat_data;
-    }
-
     if (!ReadFileToString(path, &file_contents)) {
-        ALOGE("Unable to read vmstat from %s, err: %s", path, strerror(errno));
+        ALOGE("Unable to read vmstat from %s, err: %s", path.c_str(), strerror(errno));
         return vmstat_data;
     }
 
@@ -482,7 +477,7 @@ void MmMetricsReporter::logPixelMmMetricsPerDay(const std::shared_ptr<IStats> &s
 /**
  * Check if /proc/<pid>/comm is equal to name.
  */
-bool MmMetricsReporter::isValidPid(int pid, const char *name) {
+bool MmMetricsReporter::isValidPid(int pid, const std::string &name) {
     if (pid <= 0)
         return false;
 
@@ -500,7 +495,7 @@ bool MmMetricsReporter::isValidPid(int pid, const char *name) {
 /**
  * Return pid if /proc/<pid>/comm is equal to name, or -1 if not found.
  */
-int MmMetricsReporter::findPidByProcessName(const char *name) {
+int MmMetricsReporter::findPidByProcessName(const std::string &name) {
     std::unique_ptr<DIR, int (*)(DIR *)> dir(opendir("/proc"), closedir);
     if (!dir)
         return -1;
@@ -566,7 +561,7 @@ uint64_t MmMetricsReporter::getStimeByPid(int pid) {
  * prev_stime: The stime of the process collected last time.
  * atom_values: The atom we will report later.
  */
-void MmMetricsReporter::fillProcessStime(int atom_key, const char *name, int *pid,
+void MmMetricsReporter::fillProcessStime(int atom_key, const std::string &name, int *pid,
                                          uint64_t *prev_stime,
                                          std::vector<VendorAtomValue> *atom_values) {
     // resize atom_values if there is no space for this stime field.
@@ -580,7 +575,7 @@ void MmMetricsReporter::fillProcessStime(int atom_key, const char *name, int *pi
     if (!isValidPid(*pid, name)) {
         (*pid) = findPidByProcessName(name);
         if ((*pid) <= 0) {
-            ALOGI("Unable to find pid of %s, err: %s", name, strerror(errno));
+            ALOGI("Unable to find pid of %s, err: %s", name.c_str(), strerror(errno));
             return;
         }
     }
@@ -778,7 +773,7 @@ void MmMetricsReporter::fillDirectReclaimStatAtom(const std::vector<long> &store
  * store: pointer to the vector to store the 20 metrics in the mentioned
  *        order
  */
-void MmMetricsReporter::readPressureStall(const char *basePath, std::vector<long> *store) {
+void MmMetricsReporter::readPressureStall(const std::string &basePath, std::vector<long> *store) {
     constexpr int kTypeIdxCpu = 0;
 
     // Callers should have already prepared this, but we resize it here for safety
@@ -798,7 +793,7 @@ void MmMetricsReporter::readPressureStall(const char *basePath, std::vector<long
     for (int type_idx = 0; type_idx < kPsiNumFiles;
          ++type_idx, file_save_idx += kPsiMetricsPerFile) {
         std::string file_contents;
-        std::string path = std::string("") + basePath + '/' + kPsiTypes[type_idx];
+        std::string path = basePath + '/' + kPsiTypes[type_idx];
 
         if (!ReadFileToString(path, &file_contents)) {
             // Don't print this log if the file doesn't exist, since logs will be printed
@@ -833,7 +828,7 @@ err_out:
  *
  * Return value: true on success, false otherwise.
  */
-bool MmMetricsReporter::parsePressureStallFileContent(bool is_cpu, std::string lines,
+bool MmMetricsReporter::parsePressureStallFileContent(bool is_cpu, const std::string &lines,
                                                       std::vector<long> *store, int file_save_idx) {
     constexpr int kNumOfWords = 5;  // expected number of words separated by spaces.
     constexpr int kCategoryFull = 0;
@@ -888,7 +883,7 @@ bool MmMetricsReporter::parsePressureStallFileContent(bool is_cpu, std::string l
 // line_save_idx: the base start index to save in vector for this line (category)
 //
 // Return value: true on success, false otherwise.
-bool MmMetricsReporter::parsePressureStallWords(std::vector<std::string> words,
+bool MmMetricsReporter::parsePressureStallWords(const std::vector<std::string> &words,
                                                 std::vector<long> *store, int line_save_idx) {
     // Skip the first word, which is already parsed by the caller.
     // All others are value pairs in "name=value" form.
@@ -920,7 +915,7 @@ bool MmMetricsReporter::parsePressureStallWords(std::vector<std::string> words,
 //
 // Return value: true on success, false otherwise.
 //
-bool MmMetricsReporter::savePressureMetrics(std::string name, std::string value,
+bool MmMetricsReporter::savePressureMetrics(const std::string &name, const std::string &value,
                                             std::vector<long> *store, int base_save_idx) {
     int name_idx = 0;
     constexpr int kNameIdxTotal = 3;

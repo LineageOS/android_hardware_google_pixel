@@ -115,7 +115,7 @@ class MmMetricsReporter {
         return ker_mm_metrics_support_;
     }
 
-    bool ReadFileToUint(const char *const path, uint64_t *val);
+    bool ReadFileToUint(const std::string &path, uint64_t *val);
     bool reportVendorAtom(const std::shared_ptr<IStats> &stats_client, int atom_id,
                           const std::vector<VendorAtomValue> &values, const std::string &atom_name);
     void readCompactionDurationStat(std::vector<long> *store);
@@ -124,26 +124,26 @@ class MmMetricsReporter {
     void readDirectReclaimStat(std::vector<long> *store);
     void fillDirectReclaimStatAtom(const std::vector<long> &store,
                                    std::vector<VendorAtomValue> *values);
-    void readPressureStall(const char *basePath, std::vector<long> *store);
-    bool parsePressureStallFileContent(bool is_cpu, std::string lines, std::vector<long> *store,
-                                       int file_save_idx);
-    bool parsePressureStallWords(std::vector<std::string> words, std::vector<long> *store,
+    void readPressureStall(const std::string &basePath, std::vector<long> *store);
+    bool parsePressureStallFileContent(bool is_cpu, const std::string &lines,
+                                       std::vector<long> *store, int file_save_idx);
+    bool parsePressureStallWords(const std::vector<std::string> &words, std::vector<long> *store,
                                  int line_save_idx);
-    bool savePressureMetrics(std::string name, std::string value, std::vector<long> *store,
-                             int base_save_idx);
+    bool savePressureMetrics(const std::string &name, const std::string &value,
+                             std::vector<long> *store, int base_save_idx);
     void fillPressureStallAtom(std::vector<VendorAtomValue> *values);
     void aggregatePressureStall();
-    std::map<std::string, uint64_t> readVmStat(const char *path);
+    std::map<std::string, uint64_t> readVmStat(const std::string &path);
     uint64_t getIonTotalPools();
     uint64_t getGpuMemory();
     void fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
                         const std::map<std::string, uint64_t> &mm_metrics,
                         std::map<std::string, uint64_t> *prev_mm_metrics,
                         std::vector<VendorAtomValue> *atom_values);
-    bool isValidPid(int pid, const char *name);
-    int findPidByProcessName(const char *name);
+    bool isValidPid(int pid, const std::string &name);
+    int findPidByProcessName(const std::string &name);
     uint64_t getStimeByPid(int pid);
-    void fillProcessStime(int atom_key, const char *name, int *pid, uint64_t *prev_stime,
+    void fillProcessStime(int atom_key, const std::string &name, int *pid, uint64_t *prev_stime,
                           std::vector<VendorAtomValue> *atom_values);
     std::map<std::string, uint64_t> readCmaStat(const std::string &cma_type,
                                                 const std::vector<MmMetricsInfo> &metrics_info);
