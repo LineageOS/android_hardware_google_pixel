@@ -139,7 +139,7 @@ class MmMetricsReporter {
     std::map<std::string, uint64_t> readVmStat(const std::string &path);
     uint64_t getIonTotalPools();
     uint64_t getGpuMemory();
-    void fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
+    bool fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
                         const std::map<std::string, uint64_t> &mm_metrics,
                         std::map<std::string, uint64_t> *prev_mm_metrics,
                         std::vector<VendorAtomValue> *atom_values);
