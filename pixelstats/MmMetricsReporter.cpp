@@ -119,35 +119,34 @@ bool MmMetricsReporter::checkKernelMMMetricSupport() {
             kGpuTotalPages,
             kPixelStatMm,
     };
-    const char *const require_one[] = {
+    const char *const require_one_ion_total_pools_path[] = {
             kIonTotalPoolsPath,
             kIonTotalPoolsPathForLegacy,
     };
 
+    bool err_require_all = false;
     for (auto &path : require_all) {
         if (!file_exists(path)) {
-            ALOGI("MM Metrics not supported - no %s.", path);
-            return false;
+            ALOGE("MM Metrics not supported - %s not found.", path);
+            err_require_all = true;
         }
     }
+    if (err_require_all) {
+        ALOGE("MM Metrics not supported: Some required sysfs nodes not found.");
+    }
 
-    std::string err_msg;
-    for (auto &path : require_one) {
+    bool err_require_one_ion_total_pools_path = true;
+    for (auto &path : require_one_ion_total_pools_path) {
         if (file_exists(path)) {
-            err_msg.clear();
+            err_require_one_ion_total_pools_path = false;
             break;
         }
-        err_msg += path;
-        err_msg += ", ";
+    }
+    if (err_require_one_ion_total_pools_path) {
+        ALOGI("MM Metrics not supported - No IonTotalPools paths were found.");
     }
 
-    if (!err_msg.empty()) {
-        err_msg.pop_back();  // remove last space
-        err_msg.pop_back();  // remove last comma
-        ALOGI("MM Metrics not supported - no IonTotalPools path.");
-        return false;
-    }
-    return true;
+    return !err_require_all && !err_require_one_ion_total_pools_path;
 }
 
 static bool checkUserBuild() {
@@ -354,12 +353,16 @@ uint64_t MmMetricsReporter::getGpuMemory() {
  *             We upload the difference instead of the accumulated value
  *             when update_diff of the field is true.
  * prev_mm_metrics: The pointer to the metrics we collected last time.
+ *                  nullptr if all fields are snapshot values (i.e. won't need
+ *                  to upload diff, i.e. entry.update_diff == false for all fields.)
  * atom_values: The atom values that will be reported later.
+ * return value: true on success, false on error.
  */
-void MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
+bool MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
                                        const std::map<std::string, uint64_t> &mm_metrics,
                                        std::map<std::string, uint64_t> *prev_mm_metrics,
                                        std::vector<VendorAtomValue> *atom_values) {
+    bool err = false;
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::longValue>(0);
     // resize atom_values to add all fields defined in metrics_info
@@ -381,20 +384,28 @@ void MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics
 
         uint64_t cur_value = data->second;
         uint64_t prev_value = 0;
-        if (prev_mm_metrics->size() != 0) {
+        if (prev_mm_metrics == nullptr && entry.update_diff) {
+            // Bug: We need previous saved metrics to calculate the difference.
+            ALOGE("FIX ME: shouldn't reach here: "
+                  "Diff upload required by prev_mm_metrics not provided.");
+            err = true;
+            continue;
+        } else if (entry.update_diff) {
+            // reaching here implies: prev_mm_metrics != nullptr
             auto prev_data = prev_mm_metrics->find(entry.name);
-            if (prev_data != prev_mm_metrics->end())
+            if (prev_data != prev_mm_metrics->end()) {
                 prev_value = prev_data->second;
+            }
+            // else: implies it's the 1st data: nothing to do, since prev_value already = 0
         }
 
-        if (entry.update_diff) {
-            tmp.set<VendorAtomValue::longValue>(cur_value - prev_value);
-        } else {
-            tmp.set<VendorAtomValue::longValue>(cur_value);
-        }
+        tmp.set<VendorAtomValue::longValue>(cur_value - prev_value);
         (*atom_values)[atom_idx] = tmp;
     }
-    (*prev_mm_metrics) = mm_metrics;
+    if (prev_mm_metrics && !err) {
+        (*prev_mm_metrics) = mm_metrics;
+    }
+    return !err;
 }
 
 void MmMetricsReporter::aggregatePixelMmMetricsPer5Min() {
@@ -472,11 +483,21 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
             PixelMmMetricsPerDay::kThpDeferredSplitPageFieldNumber - kVendorAtomOffset;
     std::vector<VendorAtomValue> values(last_value_index + 1, tmp);
 
-    fillAtomValues(kMmMetricsPerDayInfo, vmstat, &prev_day_vmstat_, &values);
+    if (!fillAtomValues(kMmMetricsPerDayInfo, vmstat, &prev_day_vmstat_, &values)) {
+        // resets previous read since we reject the current one: so that we will
+        // need two more reads to get a new diff.
+        prev_day_vmstat_.clear();
+        return std::vector<VendorAtomValue>();
+    }
 
     std::map<std::string, uint64_t> pixel_vmstat = readVmStat(
             getSysfsPath(android::base::StringPrintf("%s/vmstat", kPixelStatMm).c_str()));
-    fillAtomValues(kMmMetricsPerDayInfo, pixel_vmstat, &prev_day_pixel_vmstat_, &values);
+    if (!fillAtomValues(kMmMetricsPerDayInfo, pixel_vmstat, &prev_day_pixel_vmstat_, &values)) {
+        // resets previous read since we reject the current one: so that we will
+        // need two more reads to get a new diff.
+        prev_day_vmstat_.clear();
+        return std::vector<VendorAtomValue>();
+    }
     fillProcessStime(PixelMmMetricsPerDay::kKswapdStimeClksFieldNumber, "kswapd0",
                      &prev_kswapd_pid_, &prev_kswapd_stime_, &values);
     fillProcessStime(PixelMmMetricsPerDay::kKcompactdStimeClksFieldNumber, "kcompactd0",
@@ -527,7 +548,7 @@ int MmMetricsReporter::findPidByProcessName(const std::string &name) {
 }
 
 /**
- * Get stime of a process from <path>:: 15th field.
+ * Get stime of a process from <path>, i.e. 15th field of <path> = /proc/<pid>/stat
  * Custom path (base path) could be used to inject data for test codes.
  */
 int64_t MmMetricsReporter::getStimeByPathAndVerifyName(const std::string &path,
@@ -588,7 +609,7 @@ std::string MmMetricsReporter::getProcessStatPath(const std::string &name, int *
 /**
  * Find stime of the process and copy it into atom_values
  * atom_key: Currently, it can only be kKswapdTimeFieldNumber or kKcompactdTimeFieldNumber
- * name: process name
+ * name: process name, "kswapd0" or "kcompactd0"
  * prev_pid: The pid of the process. It would be the pid we found last time,
  *      or -1 if not found.
  * prev_stime: The stime of the process collected last time.
