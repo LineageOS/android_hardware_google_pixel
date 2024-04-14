@@ -45,6 +45,11 @@ enum CsvIdx {
     CURRENT_IDX,
     DVFS_CHANNEL_0 = 7,
     ODPM_CHANNEL_0 = 12,
+    EVT_CNT_IDX_OILO1 = 36,
+    EVT_CNT_IDX_OILO2,
+    EVT_CNT_IDX_UVLO1,
+    EVT_CNT_IDX_UVLO2,
+    MAX_CURR,
 };
 
 enum Irq {
