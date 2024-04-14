@@ -149,10 +149,6 @@ bool MmMetricsReporter::checkKernelMMMetricSupport() {
     return !err_require_all && !err_require_one_ion_total_pools_path;
 }
 
-static bool checkUserBuild() {
-    return android::base::GetProperty("ro.build.type", "") == "user";
-}
-
 MmMetricsReporter::MmMetricsReporter()
     : kVmstatPath("/proc/vmstat"),
       kIonTotalPoolsPath("/sys/kernel/dma_heap/total_pools_kb"),
@@ -163,7 +159,6 @@ MmMetricsReporter::MmMetricsReporter()
       kPixelStatMm("/sys/kernel/pixel_stat/mm"),
       prev_compaction_duration_(kNumCompactionDurationPrevMetrics, 0),
       prev_direct_reclaim_(kNumDirectReclaimPrevMetrics, 0) {
-    is_user_build_ = checkUserBuild();
     ker_mm_metrics_support_ = checkKernelMMMetricSupport();
 }
 
@@ -1271,7 +1266,7 @@ void MmMetricsReporter::reportCmaStatusAtom(
  * to collect the CMA metrics from kPixelStatMm/cma/<cma_type> and upload them.
  */
 void MmMetricsReporter::logCmaStatus(const std::shared_ptr<IStats> &stats_client) {
-    if (!CmaMetricsSupported())
+    if (!MmMetricsSupported())
         return;
 
     std::string cma_root = android::base::StringPrintf("%s/cma", kPixelStatMm);
