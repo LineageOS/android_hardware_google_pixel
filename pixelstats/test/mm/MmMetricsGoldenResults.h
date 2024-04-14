@@ -94,6 +94,10 @@ const int64_t PixelMmMetricsPerHour_golden[]{
     580,
     1080,
     830,
+    -1,
+    2785,
+    2677,
+    177,
         // clang-format on
 };
 
@@ -166,6 +170,11 @@ const int64_t PixelMmMetricsPerDay_golden[]{
     1240413,
     1153781,
     1246721,
+    -1,
+    55250,
+    5201,
+    5405,
+    1126601,
         // clang-format on
 };
 }  // namespace mm_metrics_reporter_test_golden_result
