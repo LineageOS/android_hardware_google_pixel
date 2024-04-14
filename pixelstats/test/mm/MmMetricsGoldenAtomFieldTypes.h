@@ -85,6 +85,10 @@ const int PixelMmMetricsPerHour_field_types[]{
         intValue,   // optional int32 psi_mem_some_avg300_min = 58;
         intValue,   // optional int32 psi_mem_some_avg300_max = 59;
         intValue,   // optional int32 psi_mem_some_avg300_avg = 60;
+        intValue,   // optional int32 version = 61 [deprecated = true];
+        longValue,  // optional int64 shmem_pages = 62;
+        longValue,  // optional int64 page_table_pages = 63;
+        longValue,  // optional int64 dmabuf_kb = 64;
 };
 
 const int PixelMmMetricsPerDay_field_types[]{
@@ -146,6 +150,11 @@ const int PixelMmMetricsPerDay_field_types[]{
         longValue,  // optional int64 thp_split_page = 57;
         longValue,  // optional int64 thp_migration_split = 58;
         longValue,  // optional int64 thp_deferred_split_page = 59;
+        longValue,  // optional int64 version = 60 [deprecated = true];
+        longValue,  // optional int64 cpu_total_time_cs = 61;
+        longValue,  // optional int64 cpu_idle_time_cs = 62;
+        longValue,  // optional int64 cpu_io_wait_time_cs = 63;
+        longValue,  // optional int64 kswapd_pageout_run = 64;
 };
 }  // namespace mm_metrics_atom_field_test_golden_results
 

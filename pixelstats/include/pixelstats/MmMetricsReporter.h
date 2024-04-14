@@ -52,6 +52,19 @@ class MmMetricsReporter {
         bool update_diff;
     };
 
+    /*
+     * Similar to MmMetricsInfo, but /proc/stat output is an array rather
+     * than one single value.  So we need an offset to get the specific value
+     * in the array.
+     * special: offset = -1 means to get the sum of the elements in the array.
+     */
+    struct ProcStatMetricsInfo {
+        std::string name;
+        int offset;
+        int atom_key;
+        bool update_diff;
+    };
+
     enum CmaType {
         FARAWIMG = 0,
         FAIMG = 1,
@@ -62,7 +75,9 @@ class MmMetricsReporter {
     };
 
     static const std::vector<MmMetricsInfo> kMmMetricsPerHourInfo;
+    static const std::vector<MmMetricsInfo> kMeminfoInfo;
     static const std::vector<MmMetricsInfo> kMmMetricsPerDayInfo;
+    static const std::vector<ProcStatMetricsInfo> kProcStatInfo;
     static const std::vector<MmMetricsInfo> kCmaStatusInfo;
     static const std::vector<MmMetricsInfo> kCmaStatusExtInfo;
 
@@ -125,13 +140,20 @@ class MmMetricsReporter {
                              std::vector<long> *store, int base_save_idx);
     void fillPressureStallAtom(std::vector<VendorAtomValue> *values);
     void aggregatePressureStall();
-    std::map<std::string, uint64_t> readVmStat(const std::string &path);
+    std::map<std::string, uint64_t> readSysfsNameValue(const std::string &path);
+    std::map<std::string, std::vector<uint64_t>> readProcStat(const std::string &path);
     uint64_t getIonTotalPools();
     uint64_t getGpuMemory();
     bool fillAtomValues(const std::vector<MmMetricsInfo> &metrics_info,
                         const std::map<std::string, uint64_t> &mm_metrics,
                         std::map<std::string, uint64_t> *prev_mm_metrics,
                         std::vector<VendorAtomValue> *atom_values);
+    bool getValueFromParsedProcStat(const std::map<std::string, std::vector<uint64_t>> pstat,
+                                    const std::string &name, int offset, uint64_t *output);
+    bool fillProcStat(const std::vector<ProcStatMetricsInfo> &metrics_info,
+                      const std::map<std::string, std::vector<uint64_t>> &cur_pstat,
+                      std::map<std::string, std::vector<uint64_t>> *prev_pstat,
+                      std::vector<VendorAtomValue> *atom_values);
     virtual std::string getProcessStatPath(const std::string &name, int *prev_pid);
     bool isValidProcessInfoPath(const std::string &path, const char *name);
     int findPidByProcessName(const std::string &name);
@@ -155,6 +177,8 @@ class MmMetricsReporter {
     const char *const kCompactDuration;
     const char *const kDirectReclaimBasePath;
     const char *const kPixelStatMm;
+    const char *const kMeminfoPath;
+    const char *const kProcStatPath;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number
     // -2.
@@ -171,6 +195,7 @@ class MmMetricsReporter {
     std::map<std::string, uint64_t> prev_hour_vmstat_;
     std::map<std::string, uint64_t> prev_day_vmstat_;
     std::map<std::string, uint64_t> prev_day_pixel_vmstat_;
+    std::map<std::string, std::vector<uint64_t>> prev_procstat_;
     std::map<std::string, std::map<std::string, uint64_t>> prev_cma_stat_;
     std::map<std::string, std::map<std::string, uint64_t>> prev_cma_stat_ext_;
     int prev_kswapd_pid_ = -1;
