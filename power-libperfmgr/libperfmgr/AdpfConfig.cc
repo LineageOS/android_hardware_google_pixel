@@ -68,6 +68,7 @@ void AdpfConfig::dumpToFd(int fd) {
         dump_buf << "HBoostOffMissedCycles: " << mHBoostOffMissedCycles.value() << "\n";
         dump_buf << "HBoostPidPuFactor: " << mHBoostPidPuFactor.value() << "\n";
         dump_buf << "HBoostUclampMin: " << mHBoostUclampMin.value() << "\n";
+        dump_buf << "JunkCheckTimeFactor: " << mJunkCheckTimeFactor.value() << "\n";
         dump_buf << "LowFrameRateThreshold: " << mLowFrameRateThreshold.value() << "\n";
         dump_buf << "MaxRecordsNum: " << mMaxRecordsNum.value() << "\n";
     }
