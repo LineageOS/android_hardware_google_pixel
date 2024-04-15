@@ -50,6 +50,8 @@ enum CsvIdx {
     EVT_CNT_IDX_UVLO1,
     EVT_CNT_IDX_UVLO2,
     MAX_CURR,
+    IDX_VIMON_V,
+    IDX_VIMON_I,
 };
 
 enum Irq {
@@ -101,6 +103,8 @@ class BrownoutDetectedReporter {
         int evt_cnt_uvlo2_;
         int evt_cnt_oilo1_;
         int evt_cnt_oilo2_;
+        int vimon_vbatt_;
+        int vimon_ibatt_;
     };
 
     void setAtomFieldValue(std::vector<VendorAtomValue> *values, int offset, int content);
