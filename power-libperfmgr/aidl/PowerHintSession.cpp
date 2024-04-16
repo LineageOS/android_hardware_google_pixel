@@ -150,14 +150,18 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
                                                 std::chrono::nanoseconds(durationNs))),
       mAppDescriptorTrace(mIdString),
       mTag(tag),
-      mSessionRecords(HintManager::GetInstance()->GetAdpfProfile()->mHeuristicBoostOn.has_value() &&
-                                      HintManager::GetInstance()
-                                              ->GetAdpfProfile()
-                                              ->mHeuristicBoostOn.value()
-                              ? std::make_unique<SessionRecords>(HintManager::GetInstance()
-                                                                         ->GetAdpfProfile()
-                                                                         ->mMaxRecordsNum.value())
-                              : nullptr) {
+      mSessionRecords(
+              HintManager::GetInstance()->GetAdpfProfile()->mHeuristicBoostOn.has_value() &&
+                              HintManager::GetInstance()
+                                      ->GetAdpfProfile()
+                                      ->mHeuristicBoostOn.value()
+                      ? std::make_unique<SessionRecords>(HintManager::GetInstance()
+                                                                 ->GetAdpfProfile()
+                                                                 ->mMaxRecordsNum.value(),
+                                                         HintManager::GetInstance()
+                                                                 ->GetAdpfProfile()
+                                                                 ->mJunkCheckTimeFactor.value())
+                      : nullptr) {
     ATRACE_CALL();
     ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
     ATRACE_INT(mAppDescriptorTrace.trace_active.c_str(), mDescriptor->is_active.load());
@@ -167,8 +171,8 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
     // init boost
     auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
     mPSManager->voteSet(
-            mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESET, adpfConfig->mUclampMinLoadReset, kUclampMax,
-            std::chrono::steady_clock::now(),
+            mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESET, adpfConfig->mUclampMinLoadReset,
+            kUclampMax, std::chrono::steady_clock::now(),
             duration_cast<nanoseconds>(mDescriptor->targetNs * adpfConfig->mStaleTimeFactor / 2.0));
 
     mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, adpfConfig->mUclampMinInit,

@@ -32,7 +32,9 @@ namespace pixel {
 
 class SessionRecordsTest : public ::testing::Test {
   public:
-    void SetUp() { mRecords = std::make_shared<SessionRecords>(kMaxNumOfRecords); }
+    void SetUp() {
+        mRecords = std::make_shared<SessionRecords>(kMaxNumOfRecords, kJunkCheckTimeFactor);
+    }
 
   protected:
     std::vector<WorkDuration> fakeWorkDurations(const std::vector<int32_t> fakedTotalDurationsMs) {
@@ -52,7 +54,8 @@ class SessionRecordsTest : public ::testing::Test {
         return fakedWorkDurationsNs;
     }
 
-    static const int32_t kMaxNumOfRecords = 5;
+    static constexpr int32_t kMaxNumOfRecords = 5;
+    static constexpr double kJunkCheckTimeFactor = 1.5;
     std::shared_ptr<SessionRecords> mRecords;
 };
 
@@ -68,7 +71,7 @@ TEST_F(SessionRecordsTest, addReportedDurations) {
     ASSERT_EQ(4, mRecords->getNumOfRecords());
     ASSERT_EQ(MS_TO_US(4), mRecords->getMaxDuration().value());
     ASSERT_EQ(MS_TO_US(3), mRecords->getAvgDuration().value());
-    ASSERT_EQ(1, mRecords->getNumOfMissedCycles());
+    ASSERT_EQ(0, mRecords->getNumOfMissedCycles());
 
     // Push more records to override part of the old ones in the ring buffer
     mRecords->addReportedDurations(fakeWorkDurations({2, 1, 2}), MS_TO_NS(3));
@@ -82,7 +85,7 @@ TEST_F(SessionRecordsTest, addReportedDurations) {
     ASSERT_EQ(5, mRecords->getNumOfRecords());
     ASSERT_EQ(MS_TO_US(8), mRecords->getMaxDuration().value());
     ASSERT_EQ(MS_TO_US(6), mRecords->getAvgDuration().value());
-    ASSERT_EQ(5, mRecords->getNumOfMissedCycles());
+    ASSERT_EQ(4, mRecords->getNumOfMissedCycles());
 }
 
 TEST_F(SessionRecordsTest, checkLowFrameRate) {

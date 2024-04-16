@@ -737,8 +737,10 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         std::optional<uint32_t> hBoostOffMissedCycles;
         std::optional<double> hBoostPidPuFactor;
         std::optional<uint32_t> hBoostUclampMin;
+        std::optional<double> junkCheckTimeFactor;
         std::optional<uint32_t> lowFrameRateThreshold;
         std::optional<uint32_t> maxRecordsNum;
+
         std::optional<uint32_t> uclampMinLoadUp;
         std::optional<uint32_t> uclampMinLoadReset;
 
@@ -769,6 +771,7 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         ADPF_PARSE_OPTIONAL(hBoostOffMissedCycles, "HBoostOffMissedCycles", UInt);
         ADPF_PARSE_OPTIONAL(hBoostPidPuFactor, "HBoostPidPuFactor", Double);
         ADPF_PARSE_OPTIONAL(hBoostUclampMin, "HBoostUclampMin", UInt);
+        ADPF_PARSE_OPTIONAL(junkCheckTimeFactor, "JunkCheckTimeFactor", Double);
         ADPF_PARSE_OPTIONAL(lowFrameRateThreshold, "LowFrameRateThreshold", UInt);
         ADPF_PARSE_OPTIONAL(maxRecordsNum, "MaxRecordsNum", UInt);
 
@@ -789,8 +792,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         if (heuristicBoostOn.has_value()) {
             if (!hBoostOnMissedCycles.has_value() || !hBoostOffMaxAvgRatio.has_value() ||
                 !hBoostOffMissedCycles.has_value() || !hBoostPidPuFactor.has_value() ||
-                !hBoostUclampMin.has_value() || !lowFrameRateThreshold.has_value() ||
-                !maxRecordsNum.has_value()) {
+                !hBoostUclampMin.has_value() || !junkCheckTimeFactor.has_value() ||
+                !lowFrameRateThreshold.has_value() || !maxRecordsNum.has_value()) {
                 LOG(ERROR) << "Part of the heuristic boost configurations are missing!";
                 adpfs_parsed.clear();
                 return adpfs_parsed;
@@ -811,7 +814,7 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
                 targetTimeFactor, staleTimeFactor, gpuBoost, gpuBoostCapacityMax,
                 gpuCapacityLoadUpHeadroom, heuristicBoostOn, hBoostOnMissedCycles,
                 hBoostOffMaxAvgRatio, hBoostOffMissedCycles, hBoostPidPuFactor, hBoostUclampMin,
-                lowFrameRateThreshold, maxRecordsNum, uclampMinLoadUp.value(),
+                junkCheckTimeFactor, lowFrameRateThreshold, maxRecordsNum, uclampMinLoadUp.value(),
                 uclampMinLoadReset.value()));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
