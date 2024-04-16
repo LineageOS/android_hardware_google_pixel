@@ -953,6 +953,10 @@ message PowerMitigationStats {
  optional int32 soft_ocp_gpu_cap = 24;
  // The last triggered capacity: soft_ocp_tpu.
  optional int32 soft_ocp_tpu_cap = 25;
+ // The last triggered count: batoilo2.
+ optional int32 batoilo2_count = 26;
+ // The last triggered capacity: batoilo2.
+ optional int32 batoilo2_cap = 27;
 }
 
 /**
@@ -1658,6 +1662,12 @@ message BrownoutDetected {
     optional int32 vimon_vbatt = 44;
     // VIMON ibatt
     optional int32 vimon_ibatt = 45;
+    // Mitigation Method 0
+    optional int32 mitigation_method_0 = 46;
+    // Mitigation Method 0 Entry Count
+    optional int32 mitigation_method_0_count = 47;
+    // Mitigation Method 0 Entry Time
+    optional int64 mitigation_method_0_time_us = 48;
 }
 
 /*

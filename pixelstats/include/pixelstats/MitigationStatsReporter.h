@@ -43,6 +43,7 @@ class MitigationStatsReporter {
   private:
     struct MitigationCount {
         int batoilo_count;
+        int batoilo2_count;
         int vdroop1_count;
         int vdroop2_count;
         int smpl_warn_count;
@@ -58,6 +59,7 @@ class MitigationStatsReporter {
 
     struct MitigationCap {
         int batoilo_cap;
+        int batoilo2_cap;
         int vdroop1_cap;
         int vdroop2_cap;
         int smpl_warn_cap;
