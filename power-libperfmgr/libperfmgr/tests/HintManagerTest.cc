@@ -182,6 +182,7 @@ constexpr char kJSON_RAW[] = R"(
             "HBoostOffMissedCycles": 2,
             "HBoostPidPuFactor": 0.5,
             "HBoostUclampMin": 800,
+            "JunkCheckTimeFactor": 1.2,
             "LowFrameRateThreshold": 25,
             "MaxRecordsNum": 50
         },
@@ -841,6 +842,8 @@ TEST_F(HintManagerTest, ParseAdpfConfigsTest) {
     EXPECT_FALSE(adpfs[1]->mHBoostPidPuFactor.has_value());
     EXPECT_EQ(800U, adpfs[0]->mHBoostUclampMin.value());
     EXPECT_FALSE(adpfs[1]->mHBoostUclampMin.has_value());
+    EXPECT_EQ(1.2, adpfs[0]->mJunkCheckTimeFactor.value());
+    EXPECT_FALSE(adpfs[1]->mJunkCheckTimeFactor.has_value());
     EXPECT_EQ(25U, adpfs[0]->mLowFrameRateThreshold.value());
     EXPECT_FALSE(adpfs[1]->mLowFrameRateThreshold.has_value());
     EXPECT_EQ(50U, adpfs[0]->mMaxRecordsNum.value());

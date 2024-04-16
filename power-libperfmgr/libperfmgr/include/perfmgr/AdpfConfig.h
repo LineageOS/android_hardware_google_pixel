@@ -59,8 +59,10 @@ struct AdpfConfig {
     std::optional<uint32_t> mHBoostOffMissedCycles;
     std::optional<double> mHBoostPidPuFactor;
     std::optional<uint32_t> mHBoostUclampMin;
+    std::optional<double> mJunkCheckTimeFactor;
     std::optional<uint32_t> mLowFrameRateThreshold;
     std::optional<uint32_t> mMaxRecordsNum;
+
     uint32_t mUclampMinLoadUp;
     uint32_t mUclampMinLoadReset;
 
@@ -80,6 +82,7 @@ struct AdpfConfig {
                std::optional<double> hBoostOffMaxAvgRatio,
                std::optional<uint32_t> hBoostOffMissedCycles,
                std::optional<double> hBoostPidPuFactor, std::optional<uint32_t> hBoostUclampMin,
+               std::optional<double> junkCheckTimeFactor,
                std::optional<uint32_t> lowFrameRateThreshold, std::optional<uint32_t> maxRecordsNum,
                uint32_t uclampMinLoadUp, uint32_t uclampMinLoadReset)
         : mName(std::move(name)),
@@ -111,6 +114,7 @@ struct AdpfConfig {
           mHBoostOffMissedCycles(hBoostOffMissedCycles),
           mHBoostPidPuFactor(hBoostPidPuFactor),
           mHBoostUclampMin(hBoostUclampMin),
+          mJunkCheckTimeFactor(junkCheckTimeFactor),
           mLowFrameRateThreshold(lowFrameRateThreshold),
           mMaxRecordsNum(maxRecordsNum),
           mUclampMinLoadUp(uclampMinLoadUp),

@@ -76,6 +76,7 @@ cc_library_static {
         "CommonUtils.cpp",
         "MonitorFfs.cpp",
         "I2cHelper.cpp",
+        "UsbBusHelper.cpp",
     ],
 
     cflags: [
