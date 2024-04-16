@@ -30,6 +30,7 @@ cc_library {
     },
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_enum_protos",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-descriptor-proto",
     ],
@@ -47,6 +48,7 @@ java_library {
     },
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_enum_protos",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-descriptor-proto",
     ],
@@ -64,6 +66,7 @@ java_library_host {
     },
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_enum_protos",
         ":libstats_atom_options_protos",
     ],
 }
@@ -74,6 +77,7 @@ genrule {
     cmd: "$(location stats-log-api-gen) --header $(genDir)/pixelatoms_defs.h --namespace hardware,google,pixel,PixelAtoms --vendor-proto $(location pixelatoms.proto)",
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_enum_protos",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-protos",
     ],
@@ -101,6 +105,7 @@ genrule {
     ],
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_enum_protos",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-protos",
     ],
@@ -119,6 +124,7 @@ genrule {
     ],
     srcs: [
         "pixelatoms.proto",
+        ":libstats_atom_enum_protos",
         ":libstats_atom_options_protos",
         ":libprotobuf-internal-protos",
     ],
