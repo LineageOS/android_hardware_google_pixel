@@ -425,7 +425,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         }
 
         vt_estimator = std::make_unique<::thermal::vtestimator::VirtualTempEstimator>(
-                ::thermal::vtestimator::kUseMLModel, linked_sensors.size());
+                name, ::thermal::vtestimator::kUseMLModel, linked_sensors.size());
         if (!vt_estimator) {
             LOG(ERROR) << "Failed to create vt estimator for Sensor[" << name
                        << "] with linked sensor size : " << linked_sensors.size();
@@ -489,7 +489,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         }
 
         vt_estimator = std::make_unique<::thermal::vtestimator::VirtualTempEstimator>(
-                ::thermal::vtestimator::kUseLinearModel, linked_sensors.size());
+                name, ::thermal::vtestimator::kUseLinearModel, linked_sensors.size());
         if (!vt_estimator) {
             LOG(ERROR) << "Failed to create vt estimator for Sensor[" << name
                        << "] with linked sensor size : " << linked_sensors.size();

@@ -84,7 +84,8 @@ class VirtualTempEstimator {
     VirtualTempEstimator &operator=(const VirtualTempEstimator &) = delete;
     VirtualTempEstimator &operator=(VirtualTempEstimator &&) = default;
 
-    VirtualTempEstimator(VtEstimationType type, size_t num_linked_sensors);
+    VirtualTempEstimator(std::string_view sensor_name, VtEstimationType type,
+                         size_t num_linked_sensors);
     ~VirtualTempEstimator();
 
     // Initializes the estimator based on init_data
@@ -92,6 +93,9 @@ class VirtualTempEstimator {
 
     // Performs the prediction and returns estimated value in output
     VtEstimatorStatus Estimate(const std::vector<float> &thermistors, float *output);
+
+    // Adds traces to help debug
+    VtEstimatorStatus DumpTraces();
 
   private:
     void LoadTFLiteWrapper();

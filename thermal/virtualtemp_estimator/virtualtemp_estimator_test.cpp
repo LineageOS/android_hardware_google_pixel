@@ -45,6 +45,7 @@
 constexpr std::string_view kDefaultModel("/vendor/etc/vt_estimation_model.tflite");
 constexpr std::string_view kConfigProperty("vendor.thermal.config");
 constexpr std::string_view kConfigDefaultFileName("thermal_info_config.json");
+constexpr std::string_view kTestSensorName("virtual-skin-model-test");
 constexpr int kmillion = 1000000;
 constexpr int klog_interval_usec = 10 * kmillion;
 
@@ -109,8 +110,8 @@ static int run_random_input_inference(std::string_view model_path,
     int input_size = input_combination.size();
 
     // Create and Initialize vtestimator
-    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
-                                                             input_size);
+    thermal::vtestimator::VirtualTempEstimator vt_estimator_(
+            kTestSensorName, thermal::vtestimator::kUseMLModel, input_size);
     ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
@@ -239,8 +240,8 @@ static int run_single_inference(std::string_view model_path, std::string_view th
     thermal::vtestimator::VtEstimatorStatus ret;
 
     // Create and Initialize vtestimator
-    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
-                                                             num_linked_sensors);
+    thermal::vtestimator::VirtualTempEstimator vt_estimator_(
+            kTestSensorName, thermal::vtestimator::kUseMLModel, num_linked_sensors);
     ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;
@@ -303,8 +304,8 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
     }
 
     thermal::vtestimator::VtEstimatorStatus ret;
-    thermal::vtestimator::VirtualTempEstimator vt_estimator_(thermal::vtestimator::kUseMLModel,
-                                                             input_combination.size());
+    thermal::vtestimator::VirtualTempEstimator vt_estimator_(
+            kTestSensorName, thermal::vtestimator::kUseMLModel, input_combination.size());
     ::thermal::vtestimator::VtEstimationInitData init_data(thermal::vtestimator::kUseMLModel);
     init_data.ml_model_init_data.model_path = model_path;
     init_data.ml_model_init_data.prev_samples_order = prev_samples_order;

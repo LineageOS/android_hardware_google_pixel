@@ -111,6 +111,7 @@ class ThermalHelper {
     virtual bool isAidlPowerHalExist() = 0;
     virtual bool isPowerHalConnected() = 0;
     virtual bool isPowerHalExtConnected() = 0;
+    virtual void dumpTraces(std::string_view target_sensor) = 0;
 };
 
 class ThermalHelperImpl : public ThermalHelper {
@@ -129,6 +130,7 @@ class ThermalHelperImpl : public ThermalHelper {
     bool emulSeverity(std::string_view target_sensor, const int severity,
                       const bool max_throttling) override;
     bool emulClear(std::string_view target_sensor) override;
+    void dumpTraces(std::string_view target_sensor) override;
 
     // Disallow copy and assign.
     ThermalHelperImpl(const ThermalHelperImpl &) = delete;
