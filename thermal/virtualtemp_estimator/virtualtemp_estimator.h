@@ -45,6 +45,7 @@ struct MLModelInitData {
     bool enable_input_validation;
     std::vector<float> offset_thresholds;
     std::vector<float> offset_values;
+    bool support_under_sampling;
 };
 
 struct LinearModelInitData {
@@ -64,6 +65,7 @@ union VtEstimationInitData {
             ml_model_init_data.output_label_count = 1;
             ml_model_init_data.num_hot_spots = 1;
             ml_model_init_data.enable_input_validation = false;
+            ml_model_init_data.support_under_sampling = false;
         } else if (type == kUseLinearModel) {
             linear_model_init_data.use_prev_samples = false;
             linear_model_init_data.prev_samples_order = 1;
@@ -92,7 +94,7 @@ class VirtualTempEstimator {
     VtEstimatorStatus Initialize(const VtEstimationInitData &init_data);
 
     // Performs the prediction and returns estimated value in output
-    VtEstimatorStatus Estimate(const std::vector<float> &thermistors, float *output);
+    VtEstimatorStatus Estimate(const std::vector<float> &thermistors, std::vector<float> *output);
 
     // Adds traces to help debug
     VtEstimatorStatus DumpTraces();
@@ -107,8 +109,10 @@ class VirtualTempEstimator {
     VtEstimatorStatus LinearModelInitialize(LinearModelInitData data);
     VtEstimatorStatus TFliteInitialize(MLModelInitData data);
 
-    VtEstimatorStatus LinearModelEstimate(const std::vector<float> &thermistors, float *output);
-    VtEstimatorStatus TFliteEstimate(const std::vector<float> &thermistors, float *output);
+    VtEstimatorStatus LinearModelEstimate(const std::vector<float> &thermistors,
+                                          std::vector<float> *output);
+    VtEstimatorStatus TFliteEstimate(const std::vector<float> &thermistors,
+                                     std::vector<float> *output);
 
     bool GetInputConfig(Json::Value *config);
 };

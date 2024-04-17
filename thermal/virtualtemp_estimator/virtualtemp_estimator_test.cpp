@@ -41,6 +41,7 @@
 #include <climits>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 constexpr std::string_view kDefaultModel("/vendor/etc/vt_estimation_model.tflite");
 constexpr std::string_view kConfigProperty("vendor.thermal.config");
@@ -103,7 +104,7 @@ static std::vector<std::string> get_input_combination(std::string_view thermal_c
 static int run_random_input_inference(std::string_view model_path,
                                       std::string_view thermal_config_path, int min_inference_count,
                                       int inference_delay_sec, int prev_samples_order) {
-    float output;
+    std::vector<float> output;
     unsigned long prev_log_time = 0;
     thermal::vtestimator::VtEstimatorStatus ret;
     std::vector<std::string> input_combination = get_input_combination(thermal_config_path.data());
@@ -152,11 +153,17 @@ static int run_random_input_inference(std::string_view model_path,
         }
 
         std::cout << "inference_count: " << inference_count << " random_value (r): " << r
-                  << " output: " << output << "\n";
+                  << " output: ";
+        for (size_t i = 0; i < output.size(); ++i) {
+            std::cout << output[i] << " ";
+        }
+        std::cout << "\n";
 
-        if (output > 55000) {
-            std::cout << "Temperature above 55C observed\n";
-            return -1;
+        for (size_t i = 0; output.size(); ++i) {
+            if (output[i] > 55000) {
+                std::cout << "Temperature at index [i] above 55C observed\n";
+                return -1;
+            }
         }
 
         unsigned long inference_time_usec = get_elapsed_time_usec(begin, end);
@@ -236,7 +243,7 @@ static int run_single_inference(std::string_view model_path, std::string_view th
         cur_size++;
     }
 
-    float output;
+    std::vector<float> output;
     thermal::vtestimator::VtEstimatorStatus ret;
 
     // Create and Initialize vtestimator
@@ -284,7 +291,11 @@ static int run_single_inference(std::string_view model_path, std::string_view th
         loop_count++;
     } while (loop_count < prev_samples_order);
 
-    std::cout << "output: " << output << std::endl;
+    std::cout << "output: ";
+    for (size_t i = 0; i < output.size(); ++i) {
+        std::cout << output[i] << " ";
+    }
+    std::cout << std::endl;
     return 0;
 }
 
@@ -347,7 +358,7 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
         std::cout << "tc: " << testcase_name << " count: " << loop_count << std::endl;
         for (int i = 0; i < loop_count; ++i) {
             std::vector<float> model_inputs;
-            float model_output;
+            std::vector<float> model_outputs;
             int num_inputs = input_combination.size();
             constexpr int kCelsius2mC = 1000;
 
@@ -366,15 +377,18 @@ static int run_batch_process(std::string_view model_path, std::string_view therm
                 model_inputs.push_back(value * kCelsius2mC);
             }
 
-            ret = vt_estimator_.Estimate(model_inputs, &model_output);
+            ret = vt_estimator_.Estimate(model_inputs, &model_outputs);
             if (ret != thermal::vtestimator::kVtEstimatorOk) {
                 std::cout << "Failed to run estimator (ret: " << ret << ")\n";
                 return -1;
             }
 
-            model_output /= kCelsius2mC;
-
-            model_vt_outputs[std::to_string(i)] = std::to_string(model_output);
+            std::ostringstream model_out_string;
+            for (size_t i = 0; i < model_outputs.size(); ++i) {
+                model_outputs[i] /= kCelsius2mC;
+                model_out_string << model_outputs[i] << " ";
+            }
+            model_vt_outputs[std::to_string(i)] = model_out_string.str();
         }
 
         testcase["model_vt"] = model_vt_outputs;

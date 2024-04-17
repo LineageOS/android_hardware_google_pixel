@@ -465,6 +465,11 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             LOG(INFO) << "Sensor[" << name << "] enable input validation.";
         }
 
+        if (sensor["SupportUnderSampling"].asBool()) {
+            init_data.ml_model_init_data.support_under_sampling = true;
+            LOG(INFO) << "Sensor[" << name << "] supports under sampling estimation.";
+        }
+
         ::thermal::vtestimator::VtEstimatorStatus ret = vt_estimator->Initialize(init_data);
         if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
             LOG(ERROR) << "Failed to initialize vt estimator for Sensor[" << name

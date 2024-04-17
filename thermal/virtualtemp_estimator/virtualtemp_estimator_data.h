@@ -81,6 +81,7 @@ struct VtEstimatorTFLiteData {
         num_hot_spots = 1;
         output_buffer = nullptr;
         output_buffer_size = 1;
+        support_under_sampling = false;
 
         tflite_wrapper = nullptr;
         tflite_methods.create = nullptr;
@@ -102,6 +103,7 @@ struct VtEstimatorTFLiteData {
     std::string model_path;
     TFLiteWrapperMethods tflite_methods;
     std::vector<InputRangeInfo> input_range;
+    bool support_under_sampling;
 
     ~VtEstimatorTFLiteData() {
         if (tflite_wrapper && tflite_methods.destroy) {
