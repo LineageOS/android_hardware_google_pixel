@@ -269,6 +269,52 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 }
             }
         }
+        // Check predictor info config
+        if (name_status_pair.second.predictor_info != nullptr) {
+            std::string predict_sensor_name = name_status_pair.second.predictor_info->sensor;
+            if (!(sensor_info_map_.count(predict_sensor_name))) {
+                LOG(ERROR) << name_status_pair.first << "'s predictor " << predict_sensor_name
+                           << " is not part of sensor_info_map_";
+                ret = false;
+                break;
+            }
+
+            const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name);
+            if (predictor_sensor_info.virtual_sensor_info == nullptr ||
+                predictor_sensor_info.virtual_sensor_info->vt_estimator == nullptr) {
+                LOG(ERROR) << name_status_pair.first << "'s predictor " << predict_sensor_name
+                           << " does not support prediction";
+                ret = false;
+                break;
+            }
+
+            if (name_status_pair.second.predictor_info->support_pid_compensation) {
+                std::vector<float> output_template;
+                size_t prediction_weight_count =
+                        name_status_pair.second.predictor_info->prediction_weights.size();
+                // read predictor out to get the size of output vector
+                ::thermal::vtestimator::VtEstimatorStatus predict_check =
+                        predictor_sensor_info.virtual_sensor_info->vt_estimator->GetAllPredictions(
+                                &output_template);
+
+                if (predict_check != ::thermal::vtestimator::kVtEstimatorOk) {
+                    LOG(ERROR) << "Failed to get output size of " << name_status_pair.first
+                               << "'s predictor " << predict_sensor_name
+                               << " GetAllPredictions ret: " << ret << ")";
+                    ret = false;
+                    break;
+                }
+
+                if (prediction_weight_count != output_template.size()) {
+                    LOG(ERROR) << "Sensor [" << name_status_pair.first << "]: "
+                               << "prediction weights size (" << prediction_weight_count
+                               << ") doesn't match predictor [" << predict_sensor_name
+                               << "]'s output size (" << output_template.size() << ")";
+                    ret = false;
+                    break;
+                }
+            }
+        }
     }
 
     if (!power_hal_service_.connect()) {
@@ -946,24 +992,31 @@ bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *read
     return true;
 }
 
-float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
-                                                 std::map<std::string, float> *sensor_log_map,
-                                                 const bool force_no_cache) {
+bool ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
+                                                std::map<std::string, float> *sensor_log_map,
+                                                const bool force_no_cache,
+                                                std::vector<float> *outputs) {
     std::vector<float> model_inputs;
-    float estimated_vt = NAN;
+    std::vector<float> model_outputs;
 
     ATRACE_NAME(StringPrintf("ThermalHelper::runVirtualTempEstimator - %s", sensor_name.data())
                         .c_str());
     if (!(sensor_info_map_.count(sensor_name.data()) &&
           sensor_status_map_.count(sensor_name.data()))) {
         LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
-        return NAN;
+        return false;
     }
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
-    if (!sensor_info.virtual_sensor_info->vt_estimator) {
+    if (sensor_info.virtual_sensor_info == nullptr ||
+        sensor_info.virtual_sensor_info->vt_estimator == nullptr) {
         LOG(ERROR) << "vt_estimator not valid for " << sensor_name;
-        return NAN;
+        return false;
+    }
+
+    if (outputs == nullptr) {
+        LOG(ERROR) << "vt_estimator output is nullptr";
+        return false;
     }
 
     model_inputs.reserve(sensor_info.virtual_sensor_info->linked_sensors.size());
@@ -976,36 +1029,155 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
             model_inputs.push_back(value);
         } else {
             LOG(ERROR) << "failed to read sensor: " << linked_sensor;
-            return NAN;
+            return false;
         }
     }
 
     ::thermal::vtestimator::VtEstimatorStatus ret =
-            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &estimated_vt);
+            sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &model_outputs);
 
     if (ret == ::thermal::vtestimator::kVtEstimatorOk) {
-        return estimated_vt;
+        *outputs = model_outputs;
+        return true;
     } else if (ret == ::thermal::vtestimator::kVtEstimatorLowConfidence ||
                ret == ::thermal::vtestimator::kVtEstimatorUnderSampling) {
         std::string_view backup_sensor = sensor_info.virtual_sensor_info->backup_sensor;
+        float backup_sensor_vt;
         if (backup_sensor.empty()) {
             LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name
                        << " with no backup.";
-            return NAN;
+            return false;
         }
         LOG(INFO) << "VT Estimator returned (ret: " << ret << ") for " << sensor_name
                   << ". Reading backup sensor [" << backup_sensor << "] data to use";
-        if (!readDataByType(backup_sensor, &estimated_vt, SensorFusionType::SENSOR, force_no_cache,
-                            sensor_log_map)) {
+        if (!readDataByType(backup_sensor, &backup_sensor_vt, SensorFusionType::SENSOR,
+                            force_no_cache, sensor_log_map)) {
             LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s backup sensor "
                        << backup_sensor;
-            return NAN;
+            return false;
         }
-        return estimated_vt;
+        model_outputs.clear();
+        model_outputs.push_back(backup_sensor_vt);
+        *outputs = model_outputs;
+        return true;
     }
 
     LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
+    return false;
+}
+
+void ThermalHelperImpl::dumpVtEstimatorStatus(std::string_view sensor_name,
+                                              std::ostringstream *dump_buf) const {
+    if (!(sensor_info_map_.count(sensor_name.data()) &&
+          sensor_status_map_.count(sensor_name.data()))) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
+        return;
+    }
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.virtual_sensor_info == nullptr ||
+        sensor_info.virtual_sensor_info->vt_estimator == nullptr) {
+        return;
+    }
+
+    sensor_info.virtual_sensor_info->vt_estimator->DumpStatus(sensor_name, dump_buf);
+}
+
+size_t ThermalHelperImpl::getPredictionMaxWindowMs(std::string_view sensor_name) {
+    size_t predict_window = 0;
+
+    ATRACE_NAME(StringPrintf("ThermalHelper::getPredictionMaxWindowMs - %s", sensor_name.data())
+                        .c_str());
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.predictor_info == nullptr) {
+        LOG(ERROR) << "No predictor info found for sensor: " << sensor_name;
+        return 0;
+    }
+
+    std::string_view predict_sensor_name = sensor_info.predictor_info->sensor;
+    const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name.data());
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            predictor_sensor_info.virtual_sensor_info->vt_estimator->GetMaxPredictWindowMs(
+                    &predict_window);
+
+    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+        LOG(ERROR) << "Failed to read prediction (ret: " << ret << ") from " << predict_sensor_name
+                   << " for sensor " << sensor_name;
+        return 0;
+    }
+
+    return predict_window;
+}
+
+float ThermalHelperImpl::readPredictionAfterTimeMs(std::string_view sensor_name,
+                                                   const size_t time_ms) {
+    float predicted_vt = NAN;
+
+    ATRACE_NAME(
+            StringPrintf("ThermalHelper::readPredictAfterTimeMs - %s", sensor_name.data()).c_str());
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.predictor_info == nullptr) {
+        LOG(ERROR) << "No predictor info found for sensor: " << sensor_name;
+        return NAN;
+    }
+
+    std::string_view predict_sensor_name = sensor_info.predictor_info->sensor;
+    const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name.data());
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            predictor_sensor_info.virtual_sensor_info->vt_estimator->PredictAfterTimeMs(
+                    time_ms, &predicted_vt);
+
+    if (ret == ::thermal::vtestimator::kVtEstimatorOk) {
+        return predicted_vt;
+    } else if (ret == ::thermal::vtestimator::kVtEstimatorUnderSampling) {
+        LOG(INFO) << predict_sensor_name << " cannot provide prediction for sensor " << sensor_name
+                  << "while under sampling";
+    } else if (ret == ::thermal::vtestimator::kVtEstimatorUnSupported) {
+        LOG(INFO) << "PredictAfterTimeMs not supported with " << predict_sensor_name
+                  << " for sensor " << sensor_name;
+    } else {
+        LOG(ERROR) << "Failed to read prediction (ret: " << ret << ") from " << predict_sensor_name
+                   << " for sensor " << sensor_name;
+    }
+
     return NAN;
+}
+
+bool ThermalHelperImpl::readTemperaturePredictions(std::string_view sensor_name,
+                                                   std::vector<float> *predictions) {
+    ATRACE_NAME(StringPrintf("ThermalHelper::readTemperaturePredictions - %s", sensor_name.data())
+                        .c_str());
+
+    if (predictions == nullptr) {
+        LOG(ERROR) << " predictions is nullptr";
+        return false;
+    }
+
+    if (!sensor_info_map_.count(sensor_name.data())) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_";
+        return false;
+    }
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.predictor_info == nullptr) {
+        LOG(ERROR) << "No predictor info found for sensor: " << sensor_name;
+        return false;
+    }
+
+    std::string predict_sensor_name = sensor_info.predictor_info->sensor;
+    const auto &predictor_sensor_info = sensor_info_map_.at(predict_sensor_name);
+    ::thermal::vtestimator::VtEstimatorStatus ret =
+            predictor_sensor_info.virtual_sensor_info->vt_estimator->GetAllPredictions(predictions);
+
+    if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+        LOG(ERROR) << "Failed to read predictions (ret: " << ret << ") from " << predict_sensor_name
+                   << " for sensor " << sensor_name;
+        return false;
+    }
+
+    return true;
 }
 
 constexpr int kTranTimeoutParam = 2;
@@ -1078,12 +1250,13 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
 
         if ((sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) ||
             (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_LINEAR_MODEL)) {
-            *temp = runVirtualTempEstimator(sensor_name, sensor_log_map, force_no_cache);
-
-            if (std::isnan(*temp)) {
-                LOG(ERROR) << "VirtualEstimator returned NAN for " << sensor_name;
+            std::vector<float> vt_estimator_out;
+            if (!runVirtualTempEstimator(sensor_name, sensor_log_map, force_no_cache,
+                                         &vt_estimator_out)) {
+                LOG(ERROR) << "Failed running VirtualEstimator for " << sensor_name;
                 return false;
             }
+            *temp = vt_estimator_out[0];
         } else {
             float temp_val = 0.0;
             for (size_t i = 0; i < linked_sensors_size; i++) {
@@ -1279,10 +1452,21 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         if (sensor_status.severity == ThrottlingSeverity::NONE) {
             thermal_throttling_.clearThrottlingData(name_status_pair.first, sensor_info);
         } else {
+            // prepare for predictions for throttling compensation
+            std::vector<float> sensor_predictions;
+            if (sensor_info.predictor_info != nullptr &&
+                sensor_info.predictor_info->support_pid_compensation) {
+                if (!readTemperaturePredictions(name_status_pair.first, &sensor_predictions)) {
+                    LOG(ERROR) << "Failed to read predictions of " << name_status_pair.first
+                               << " for throttling compensation";
+                }
+            }
+
             // update thermal throttling request
             thermal_throttling_.thermalThrottlingUpdate(
                     temp, sensor_info, sensor_status.severity, time_elapsed_ms,
-                    power_files_.GetPowerStatusMap(), cooling_device_info_map_, max_throttling);
+                    power_files_.GetPowerStatusMap(), cooling_device_info_map_, max_throttling,
+                    sensor_predictions);
         }
 
         thermal_throttling_.computeCoolingDevicesRequest(

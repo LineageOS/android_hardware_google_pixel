@@ -465,6 +465,11 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             LOG(INFO) << "Sensor[" << name << "] enable input validation.";
         }
 
+        if (sensor["SupportUnderSampling"].asBool()) {
+            init_data.ml_model_init_data.support_under_sampling = true;
+            LOG(INFO) << "Sensor[" << name << "] supports under sampling estimation.";
+        }
+
         ::thermal::vtestimator::VtEstimatorStatus ret = vt_estimator->Initialize(init_data);
         if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
             LOG(ERROR) << "Failed to initialize vt estimator for Sensor[" << name
@@ -533,6 +538,54 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             new VirtualSensorInfo{linked_sensors, linked_sensors_type, coefficients,
                                   coefficients_type, offset, trigger_sensors, formula,
                                   vt_estimator_model_file, std::move(vt_estimator), backup_sensor});
+    return true;
+}
+
+bool ParsePredictorInfo(const std::string_view name, const Json::Value &sensor,
+                        std::unique_ptr<PredictorInfo> *predictor_info) {
+    Json::Value predictor = sensor["PredictorInfo"];
+    if (predictor.empty()) {
+        return true;
+    }
+
+    LOG(INFO) << "Start to parse Sensor[" << name << "]'s PredictorInfo";
+    if (predictor["Sensor"].empty()) {
+        LOG(ERROR) << "Failed to parse Sensor [" << name << "]'s PredictorInfo";
+        return false;
+    }
+
+    std::string predict_sensor;
+    bool support_pid_compensation = false;
+    std::vector<float> prediction_weights;
+    ThrottlingArray k_p_compensate;
+    predict_sensor = predictor["Sensor"].asString();
+    LOG(INFO) << "Sensor [" << name << "]'s predictor name is " << predict_sensor;
+    // parse pid compensation configuration
+    if ((!predictor["PredictionWeight"].empty()) && (!predictor["KPCompensate"].empty())) {
+        support_pid_compensation = true;
+        if (!predictor["PredictionWeight"].size()) {
+            LOG(ERROR) << "Failed to parse PredictionWeight";
+            return false;
+        }
+        prediction_weights.reserve(predictor["PredictionWeight"].size());
+        for (Json::Value::ArrayIndex i = 0; i < predictor["PredictionWeight"].size(); ++i) {
+            float weight = predictor["PredictionWeight"][i].asFloat();
+            if (std::isnan(weight)) {
+                LOG(ERROR) << "Unexpected NAN prediction weight for sensor [" << name << "]";
+            }
+            prediction_weights.emplace_back(weight);
+            LOG(INFO) << "Sensor[" << name << "]'s prediction weights [" << i << "]: " << weight;
+        }
+        if (!getFloatFromJsonValues(predictor["KPCompensate"], &k_p_compensate, false, false)) {
+            LOG(ERROR) << "Failed to parse KPCompensate";
+            return false;
+        }
+    }
+
+    LOG(INFO) << "Successfully created PredictorInfo for Sensor[" << name << "]";
+    predictor_info->reset(new PredictorInfo{predict_sensor, support_pid_compensation,
+                                            prediction_weights, k_p_compensate});
+
     return true;
 }
 
@@ -812,9 +865,9 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
         LOG(ERROR) << "Sensor[" << name << "]: failed to parse BindedCdevInfo";
         return false;
     }
+
     Json::Value values;
     ProfileMap profile_map;
-
     values = sensor["Profile"];
     for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
         Json::Value sub_values;
@@ -1144,6 +1197,13 @@ bool ParseSensorInfo(const Json::Value &config,
             return false;
         }
 
+        std::unique_ptr<PredictorInfo> predictor_info;
+        if (!ParsePredictorInfo(name, sensors[i], &predictor_info)) {
+            LOG(ERROR) << "Sensor[" << name << "]: failed to parse virtual sensor info";
+            sensors_parsed->clear();
+            return false;
+        }
+
         bool support_throttling = false;  // support pid or hard limit
         std::shared_ptr<ThrottlingInfo> throttling_info;
         if (!ParseSensorThrottlingInfo(name, sensors[i], &support_throttling, &throttling_info)) {
@@ -1174,6 +1234,7 @@ bool ParseSensorInfo(const Json::Value &config,
                 .is_hidden = is_hidden,
                 .virtual_sensor_info = std::move(virtual_sensor_info),
                 .throttling_info = std::move(throttling_info),
+                .predictor_info = std::move(predictor_info),
         };
 
         ++total_parsed;

@@ -127,6 +127,7 @@ class Thermal : public BnThermal {
             TemperatureType type);
 
     void dumpVirtualSensorInfo(std::ostringstream *dump_buf);
+    void dumpVtEstimatorInfo(std::ostringstream *dump_buf);
     void dumpThrottlingInfo(std::ostringstream *dump_buf);
     void dumpThrottlingRequestStatus(std::ostringstream *dump_buf);
     void dumpPowerRailInfo(std::ostringstream *dump_buf);

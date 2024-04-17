@@ -17,6 +17,7 @@
 
 #include <json/value.h>
 
+#include <sstream>
 #include <vector>
 
 #include "virtualtemp_estimator_data.h"
@@ -45,6 +46,7 @@ struct MLModelInitData {
     bool enable_input_validation;
     std::vector<float> offset_thresholds;
     std::vector<float> offset_values;
+    bool support_under_sampling;
 };
 
 struct LinearModelInitData {
@@ -64,6 +66,7 @@ union VtEstimationInitData {
             ml_model_init_data.output_label_count = 1;
             ml_model_init_data.num_hot_spots = 1;
             ml_model_init_data.enable_input_validation = false;
+            ml_model_init_data.support_under_sampling = false;
         } else if (type == kUseLinearModel) {
             linear_model_init_data.use_prev_samples = false;
             linear_model_init_data.prev_samples_order = 1;
@@ -92,7 +95,16 @@ class VirtualTempEstimator {
     VtEstimatorStatus Initialize(const VtEstimationInitData &init_data);
 
     // Performs the prediction and returns estimated value in output
-    VtEstimatorStatus Estimate(const std::vector<float> &thermistors, float *output);
+    VtEstimatorStatus Estimate(const std::vector<float> &thermistors, std::vector<float> *output);
+
+    // Dump estimator status
+    VtEstimatorStatus DumpStatus(std::string_view sensor_name, std::ostringstream *dump_buf);
+    // Get predict window width in milliseconds
+    VtEstimatorStatus GetMaxPredictWindowMs(size_t *predict_window_ms);
+    // Predict temperature after desired milliseconds
+    VtEstimatorStatus PredictAfterTimeMs(const size_t time_ms, float *output);
+    // Get entire output buffer of the estimator
+    VtEstimatorStatus GetAllPredictions(std::vector<float> *output);
 
     // Adds traces to help debug
     VtEstimatorStatus DumpTraces();
@@ -107,9 +119,15 @@ class VirtualTempEstimator {
     VtEstimatorStatus LinearModelInitialize(LinearModelInitData data);
     VtEstimatorStatus TFliteInitialize(MLModelInitData data);
 
-    VtEstimatorStatus LinearModelEstimate(const std::vector<float> &thermistors, float *output);
-    VtEstimatorStatus TFliteEstimate(const std::vector<float> &thermistors, float *output);
+    VtEstimatorStatus LinearModelEstimate(const std::vector<float> &thermistors,
+                                          std::vector<float> *output);
+    VtEstimatorStatus TFliteEstimate(const std::vector<float> &thermistors,
+                                     std::vector<float> *output);
+    VtEstimatorStatus TFliteGetMaxPredictWindowMs(size_t *predict_window_ms);
+    VtEstimatorStatus TFlitePredictAfterTimeMs(const size_t time_ms, float *output);
+    VtEstimatorStatus TFliteGetAllPredictions(std::vector<float> *output);
 
+    VtEstimatorStatus TFLiteDumpStatus(std::string_view sensor_name, std::ostringstream *dump_buf);
     bool GetInputConfig(Json::Value *config);
 };
 
