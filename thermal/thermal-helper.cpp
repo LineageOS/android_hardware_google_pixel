@@ -962,7 +962,8 @@ bool ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
     }
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
-    if (!sensor_info.virtual_sensor_info->vt_estimator) {
+    if (sensor_info.virtual_sensor_info == nullptr ||
+        sensor_info.virtual_sensor_info->vt_estimator == nullptr) {
         LOG(ERROR) << "vt_estimator not valid for " << sensor_name;
         return false;
     }
@@ -1017,6 +1018,23 @@ bool ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
 
     LOG(ERROR) << "Failed to run estimator (ret: " << ret << ") for " << sensor_name;
     return false;
+}
+
+void ThermalHelperImpl::dumpVtEstimatorStatus(std::string_view sensor_name,
+                                              std::ostringstream *dump_buf) const {
+    if (!(sensor_info_map_.count(sensor_name.data()) &&
+          sensor_status_map_.count(sensor_name.data()))) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
+        return;
+    }
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (sensor_info.virtual_sensor_info == nullptr ||
+        sensor_info.virtual_sensor_info->vt_estimator == nullptr) {
+        return;
+    }
+
+    sensor_info.virtual_sensor_info->vt_estimator->DumpStatus(sensor_name, dump_buf);
 }
 
 constexpr int kTranTimeoutParam = 2;
