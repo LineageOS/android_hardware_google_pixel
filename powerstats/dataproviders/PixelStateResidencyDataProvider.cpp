@@ -158,6 +158,9 @@ void PixelStateResidencyDataProvider::registerStatesUpdateCallback(
     }
 
     auto toRemove = std::find_if(mEntries.begin(), mEntries.end(), [&in_cb](const auto &it) {
+        if (!it.mCallback) {
+            return false;
+        }
         return it.mCallback->asBinder().get() == in_cb->asBinder().get();
     });
 
