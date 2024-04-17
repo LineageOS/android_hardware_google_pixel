@@ -52,13 +52,15 @@ struct InputRangeInfo {
 };
 
 struct VtEstimatorCommonData {
-    VtEstimatorCommonData(size_t num_input_sensors) {
+    VtEstimatorCommonData(std::string_view name, size_t num_input_sensors) {
+        sensor_name = name;
         num_linked_sensors = num_input_sensors;
         prev_samples_order = 1;
         is_initialized = false;
         use_prev_samples = false;
         cur_sample_count = 0;
     }
+    std::string sensor_name;
 
     std::vector<float> offset_thresholds;
     std::vector<float> offset_values;
