@@ -65,6 +65,7 @@ class MockThermalHelper : public ThermalHelper {
     MOCK_METHOD(bool, isAidlPowerHalExist, (), (override));
     MOCK_METHOD(bool, isPowerHalConnected, (), (override));
     MOCK_METHOD(bool, isPowerHalExtConnected, (), (override));
+    MOCK_METHOD(void, dumpTraces, (std::string_view), (override));
 };
 
 }  // namespace aidl::android::hardware::thermal::implementation

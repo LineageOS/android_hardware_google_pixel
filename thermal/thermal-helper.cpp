@@ -92,6 +92,34 @@ std::unordered_map<std::string, std::string> parseThermalPathMap(std::string_vie
 
 }  // namespace
 
+// dump additional traces for a given sensor
+void ThermalHelperImpl::dumpTraces(std::string_view sensor_name) {
+    if (!(sensor_info_map_.count(sensor_name.data()) &&
+          sensor_status_map_.count(sensor_name.data()))) {
+        LOG(ERROR) << sensor_name << " not part of sensor_info_map_ or sensor_status_map_";
+        return;
+    }
+
+    // add trace for current sensor
+    const auto &sensor_status = sensor_status_map_.at(sensor_name.data());
+    ATRACE_INT((sensor_name.data() + std::string("-cached")).c_str(),
+               static_cast<int>(sensor_status.thermal_cached.temp));
+
+    const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
+    if (!sensor_info.virtual_sensor_info) {
+        return;
+    }
+
+    if (sensor_info.virtual_sensor_info->vt_estimator) {
+        sensor_info.virtual_sensor_info->vt_estimator->DumpTraces();
+    }
+
+    // dump traces for all dependent/linked sensors
+    for (const auto &linked_sensor : sensor_info.virtual_sensor_info->linked_sensors) {
+        dumpTraces(linked_sensor);
+    }
+}
+
 // If the cdev_ceiling is higher than CDEV max_state, cap the cdev_ceiling to max_state.
 void ThermalHelperImpl::maxCoolingRequestCheck(
         std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map) {
@@ -159,7 +187,7 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
 
     if (ret) {
         if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
-                                                   cooling_device_info_map_)) {
+                                                   cooling_device_info_map_, this)) {
             LOG(FATAL) << "Failed to initialize thermal stats";
         }
     }

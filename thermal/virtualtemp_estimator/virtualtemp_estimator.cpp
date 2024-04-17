@@ -13,12 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#define ATRACE_TAG (ATRACE_TAG_THERMAL | ATRACE_TAG_HAL)
+
 #include "virtualtemp_estimator.h"
 
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <dlfcn.h>
 #include <json/reader.h>
+#include <utils/Trace.h>
 
 #include <cmath>
 #include <vector>
@@ -72,6 +75,49 @@ float CalculateOffset(const std::vector<float> &offset_thresholds,
     return 0;
 }
 }  // namespace
+
+VtEstimatorStatus VirtualTempEstimator::DumpTraces() {
+    if (type != kUseMLModel) {
+        return kVtEstimatorUnSupported;
+    }
+
+    if (tflite_instance_ == nullptr || common_instance_ == nullptr) {
+        LOG(ERROR) << "tflite_instance_ or common_instance_ is nullptr during DumpTraces\n";
+        return kVtEstimatorInitFailed;
+    }
+
+    std::unique_lock<std::mutex> lock(tflite_instance_->tflite_methods.mutex);
+
+    if (!common_instance_->is_initialized) {
+        LOG(ERROR) << "tflite_instance_ not initialized for " << tflite_instance_->model_path;
+        return kVtEstimatorInitFailed;
+    }
+
+    // get model input/output buffers
+    float *model_input = tflite_instance_->input_buffer;
+    float *model_output = tflite_instance_->output_buffer;
+    auto input_buffer_size = tflite_instance_->input_buffer_size;
+    auto output_buffer_size = tflite_instance_->output_buffer_size;
+
+    // In Case of use_prev_samples, inputs are available in order in scratch buffer
+    if (common_instance_->use_prev_samples) {
+        model_input = tflite_instance_->scratch_buffer;
+    }
+
+    // Add traces for model input/output buffers
+    std::string sensor_name = common_instance_->sensor_name;
+    for (size_t i = 0; i < input_buffer_size; ++i) {
+        ATRACE_INT((sensor_name + "_input_" + std::to_string(i)).c_str(),
+                   static_cast<int>(model_input[i]));
+    }
+
+    for (size_t i = 0; i < output_buffer_size; ++i) {
+        ATRACE_INT((sensor_name + "_output_" + std::to_string(i)).c_str(),
+                   static_cast<int>(model_output[i]));
+    }
+
+    return kVtEstimatorOk;
+}
 
 void VirtualTempEstimator::LoadTFLiteWrapper() {
     if (!tflite_instance_) {
@@ -128,11 +174,12 @@ void VirtualTempEstimator::LoadTFLiteWrapper() {
     }
 }
 
-VirtualTempEstimator::VirtualTempEstimator(VtEstimationType estimationType,
+VirtualTempEstimator::VirtualTempEstimator(std::string_view sensor_name,
+                                           VtEstimationType estimationType,
                                            size_t num_linked_sensors) {
     type = estimationType;
 
-    common_instance_ = std::make_unique<VtEstimatorCommonData>(num_linked_sensors);
+    common_instance_ = std::make_unique<VtEstimatorCommonData>(sensor_name, num_linked_sensors);
     if (estimationType == kUseMLModel) {
         tflite_instance_ = std::make_unique<VtEstimatorTFLiteData>();
         LoadTFLiteWrapper();
