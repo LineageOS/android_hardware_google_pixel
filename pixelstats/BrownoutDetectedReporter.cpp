@@ -303,6 +303,13 @@ void BrownoutDetectedReporter::logBrownoutCsv(const std::shared_ptr<IStats> &sta
         for (int i = 0; i < ODPM_MAX_IDX; i++) {
             max_value.odpm_value_[i] = atoi(row[i + ODPM_CHANNEL_0].c_str());
         }
+        if (row.size() > MAX_CURR) {
+            max_value.evt_cnt_oilo1_ = atoi(row[EVT_CNT_IDX_OILO1].c_str());
+            max_value.evt_cnt_oilo2_ = atoi(row[EVT_CNT_IDX_OILO2].c_str());
+            max_value.evt_cnt_uvlo1_ = atoi(row[EVT_CNT_IDX_UVLO1].c_str());
+            max_value.evt_cnt_uvlo2_ = atoi(row[EVT_CNT_IDX_UVLO2].c_str());
+            max_value.max_curr_ = atoi(row[MAX_CURR].c_str());
+        }
     }
     if (!isAlreadyUpdated && max_value.battery_temp_ != DEFAULT_BATTERY_TEMP) {
         std::string file_content = "LASTMEAL_UPDATED\n" + csvFile;
