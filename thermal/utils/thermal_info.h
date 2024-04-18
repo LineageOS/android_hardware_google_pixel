@@ -145,6 +145,13 @@ struct VirtualSensorInfo {
     std::string backup_sensor;
 };
 
+struct PredictorInfo {
+    std::string sensor;
+    bool support_pid_compensation;
+    std::vector<float> prediction_weights;
+    ThrottlingArray k_p_compensate;
+};
+
 struct VirtualPowerRailInfo {
     std::vector<std::string> linked_power_rails;
     std::vector<float> coefficients;
@@ -219,6 +226,7 @@ struct SensorInfo {
     bool is_hidden;
     std::unique_ptr<VirtualSensorInfo> virtual_sensor_info;
     std::shared_ptr<ThrottlingInfo> throttling_info;
+    std::unique_ptr<PredictorInfo> predictor_info;
 };
 
 struct CdevInfo {
