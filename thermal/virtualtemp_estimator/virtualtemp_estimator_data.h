@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <android-base/chrono_utils.h>
 
 #include <cstddef>
 #include <mutex>
@@ -22,6 +23,8 @@
 
 namespace thermal {
 namespace vtestimator {
+
+using android::base::boot_clock;
 
 // Current version only supports single input/output tensors
 constexpr int kNumInputTensors = 1;
@@ -82,6 +85,9 @@ struct VtEstimatorTFLiteData {
         output_buffer = nullptr;
         output_buffer_size = 1;
         support_under_sampling = false;
+        sample_interval = std::chrono::milliseconds{0};
+        predict_window_ms = 0;
+        last_update_time = boot_clock::time_point::min();
 
         tflite_wrapper = nullptr;
         tflite_methods.create = nullptr;
@@ -104,6 +110,9 @@ struct VtEstimatorTFLiteData {
     TFLiteWrapperMethods tflite_methods;
     std::vector<InputRangeInfo> input_range;
     bool support_under_sampling;
+    std::chrono::milliseconds sample_interval{};
+    size_t predict_window_ms;
+    boot_clock::time_point last_update_time;
 
     ~VtEstimatorTFLiteData() {
         if (tflite_wrapper && tflite_methods.destroy) {
