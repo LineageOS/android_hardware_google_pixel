@@ -1655,6 +1655,10 @@ message BrownoutDetected {
     optional int32 evt_cnt_oilo1 = 42;
     // event counter oilo2
     optional int32 evt_cnt_oilo2 = 43;
+    // VIMON vbatt
+    optional int32 vimon_vbatt = 44;
+    // VIMON ibatt
+    optional int32 vimon_ibatt = 45;
 }
 
 /*
