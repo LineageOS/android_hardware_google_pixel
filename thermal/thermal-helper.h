@@ -97,6 +97,8 @@ class ThermalHelper {
     virtual bool readTemperatureThreshold(std::string_view sensor_name,
                                           TemperatureThreshold *out) const = 0;
     virtual bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const = 0;
+    virtual void dumpVtEstimatorStatus(std::string_view senor_name,
+                                       std::ostringstream *dump_buf) const = 0;
     virtual const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const = 0;
     virtual const std::unordered_map<std::string, CdevInfo> &GetCdevInfoMap() const = 0;
     virtual const std::unordered_map<std::string, SensorStatus> &GetSensorStatusMap() const = 0;
@@ -148,6 +150,9 @@ class ThermalHelperImpl : public ThermalHelper {
                                   TemperatureThreshold *out) const override;
     // Read the value of a single cooling device.
     bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const override;
+    // Dump VtEstimator status
+    void dumpVtEstimatorStatus(std::string_view sensor_name,
+                               std::ostringstream *dump_buf) const override;
     // Get SensorInfo Map
     const std::unordered_map<std::string, SensorInfo> &GetSensorInfoMap() const override {
         return sensor_info_map_;
@@ -214,9 +219,9 @@ class ThermalHelperImpl : public ThermalHelper {
     // Read temperature data according to thermal sensor's info
     bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
                            std::map<std::string, float> *sensor_log_map);
-    float runVirtualTempEstimator(std::string_view sensor_name,
-                                  std::map<std::string, float> *sensor_log_map,
-                                  const bool force_no_cache);
+    bool runVirtualTempEstimator(std::string_view sensor_name,
+                                 std::map<std::string, float> *sensor_log_map,
+                                 const bool force_no_cache, std::vector<float> *outputs);
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
     // Check the max CDEV state for cdev_ceiling
     void maxCoolingRequestCheck(
