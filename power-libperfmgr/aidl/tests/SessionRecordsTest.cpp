@@ -33,7 +33,7 @@ namespace pixel {
 class SessionRecordsTest : public ::testing::Test {
   public:
     void SetUp() {
-        mRecords = std::make_shared<SessionRecords>(kMaxNumOfRecords, kJunkCheckTimeFactor);
+        mRecords = std::make_shared<SessionRecords>(kMaxNumOfRecords, kJankCheckTimeFactor);
     }
 
   protected:
@@ -55,7 +55,7 @@ class SessionRecordsTest : public ::testing::Test {
     }
 
     static constexpr int32_t kMaxNumOfRecords = 5;
-    static constexpr double kJunkCheckTimeFactor = 1.5;
+    static constexpr double kJankCheckTimeFactor = 1.5;
     std::shared_ptr<SessionRecords> mRecords;
 };
 
