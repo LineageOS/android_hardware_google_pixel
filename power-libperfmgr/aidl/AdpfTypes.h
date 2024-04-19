@@ -27,16 +27,16 @@ namespace pixel {
 
 enum class AdpfErrorCode : int32_t { ERR_OK = 0, ERR_BAD_STATE = -1, ERR_BAD_ARG = -2 };
 
-enum class AdpfHintType : int32_t {
-    ADPF_VOTE_DEFAULT = 1,
-    ADPF_CPU_LOAD_UP = 2,
-    ADPF_CPU_LOAD_RESET = 3,
-    ADPF_CPU_LOAD_RESUME = 4,
-    ADPF_VOTE_POWER_EFFICIENCY = 5,
-    ADPF_GPU_LOAD_UP = 6,
-    ADPF_GPU_LOAD_DOWN = 7,
-    ADPF_GPU_LOAD_RESET = 8,
-    ADPF_GPU_CAPACITY = 9,
+enum class AdpfVoteType : int32_t {
+    CPU_VOTE_DEFAULT = 1,
+    CPU_LOAD_UP = 2,
+    CPU_LOAD_RESET = 3,
+    CPU_LOAD_RESUME = 4,
+    VOTE_POWER_EFFICIENCY = 5,
+    GPU_LOAD_UP = 6,
+    GPU_LOAD_DOWN = 7,
+    GPU_LOAD_RESET = 8,
+    GPU_CAPACITY = 9,
 };
 
 constexpr int kUclampMin{0};

@@ -120,7 +120,7 @@ void PowerSessionManager::addPowerSession(const std::string &idString,
     sve.lastUpdatedTime = timeNow;
     sve.votes = std::make_shared<Votes>();
     sve.votes->add(
-            static_cast<std::underlying_type_t<AdpfHintType>>(AdpfHintType::ADPF_VOTE_DEFAULT),
+            static_cast<std::underlying_type_t<AdpfVoteType>>(AdpfVoteType::CPU_VOTE_DEFAULT),
             CpuVote(false, timeNow, sessionDescriptor->targetNs, kUclampMin, kUclampMax));
 
     bool addedRes = false;
@@ -270,9 +270,9 @@ void PowerSessionManager::resume(int64_t sessionId) {
     updateUniversalBoostMode();
 }
 
-void PowerSessionManager::updateTargetWorkDuration(int64_t sessionId, AdpfHintType voteId,
+void PowerSessionManager::updateTargetWorkDuration(int64_t sessionId, AdpfVoteType voteId,
                                                    std::chrono::nanoseconds durationNs) {
-    int voteIdInt = static_cast<std::underlying_type_t<AdpfHintType>>(voteId);
+    int voteIdInt = static_cast<std::underlying_type_t<AdpfVoteType>>(voteId);
     std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
     auto sessValPtr = mSessionTaskMap.findSession(sessionId);
     if (nullptr == sessValPtr) {
@@ -292,10 +292,10 @@ auto shouldScheduleTimeout(Votes const &votes, int vote_id, std::chrono::time_po
     return !votes.voteIsActive(vote_id) || deadline < votes.voteTimeout(vote_id);
 }
 
-void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uclampMin,
+void PowerSessionManager::voteSet(int64_t sessionId, AdpfVoteType voteId, int uclampMin,
                                   int uclampMax, std::chrono::steady_clock::time_point startTime,
                                   std::chrono::nanoseconds durationNs) {
-    const int voteIdInt = static_cast<std::underlying_type_t<AdpfHintType>>(voteId);
+    const int voteIdInt = static_cast<std::underlying_type_t<AdpfVoteType>>(voteId);
     const auto timeoutDeadline = startTime + durationNs;
     bool scheduleTimeout = false;
 
@@ -320,10 +320,10 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, int uc
     }
 }
 
-void PowerSessionManager::voteSet(int64_t sessionId, AdpfHintType voteId, Cycles capacity,
+void PowerSessionManager::voteSet(int64_t sessionId, AdpfVoteType voteId, Cycles capacity,
                                   std::chrono::steady_clock::time_point startTime,
                                   std::chrono::nanoseconds durationNs) {
-    const int voteIdInt = static_cast<std::underlying_type_t<AdpfHintType>>(voteId);
+    const int voteIdInt = static_cast<std::underlying_type_t<AdpfVoteType>>(voteId);
     const auto timeoutDeadline = startTime + durationNs;
     bool scheduleTimeout = false;
 
@@ -357,11 +357,10 @@ void PowerSessionManager::disableBoosts(int64_t sessionId) {
         }
 
         // sessValPtr->disableBoosts();
-        for (auto vid :
-             {AdpfHintType::ADPF_CPU_LOAD_UP, AdpfHintType::ADPF_CPU_LOAD_RESET,
-              AdpfHintType::ADPF_CPU_LOAD_RESUME, AdpfHintType::ADPF_VOTE_POWER_EFFICIENCY,
-              AdpfHintType::ADPF_GPU_LOAD_UP, AdpfHintType::ADPF_GPU_LOAD_RESET}) {
-            auto vint = static_cast<std::underlying_type_t<AdpfHintType>>(vid);
+        for (auto vid : {AdpfVoteType::CPU_LOAD_UP, AdpfVoteType::CPU_LOAD_RESET,
+                         AdpfVoteType::CPU_LOAD_RESUME, AdpfVoteType::VOTE_POWER_EFFICIENCY,
+                         AdpfVoteType::GPU_LOAD_UP, AdpfVoteType::GPU_LOAD_RESET}) {
+            auto vint = static_cast<std::underlying_type_t<AdpfVoteType>>(vid);
             sessValPtr->votes->setUseVote(vint, false);
         }
     }
