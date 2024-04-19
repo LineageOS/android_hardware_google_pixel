@@ -1450,7 +1450,7 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         }
 
         if (sensor_status.severity == ThrottlingSeverity::NONE) {
-            thermal_throttling_.clearThrottlingData(name_status_pair.first, sensor_info);
+            thermal_throttling_.clearThrottlingData(name_status_pair.first);
         } else {
             // prepare for predictions for throttling compensation
             std::vector<float> sensor_predictions;

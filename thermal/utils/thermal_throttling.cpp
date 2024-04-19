@@ -80,8 +80,7 @@ void ThermalThrottling::parseProfileProperty(std::string_view sensor_name,
     }
 }
 
-void ThermalThrottling::clearThrottlingData(std::string_view sensor_name,
-                                            const SensorInfo &sensor_info) {
+void ThermalThrottling::clearThrottlingData(std::string_view sensor_name) {
     if (!thermal_throttling_status_map_.count(sensor_name.data())) {
         return;
     }
@@ -108,8 +107,7 @@ void ThermalThrottling::clearThrottlingData(std::string_view sensor_name,
     }
 
     thermal_throttling_status_map_[sensor_name.data()].prev_err = NAN;
-    thermal_throttling_status_map_[sensor_name.data()].i_budget =
-            sensor_info.throttling_info->i_default;
+    thermal_throttling_status_map_[sensor_name.data()].i_budget = NAN;
     thermal_throttling_status_map_[sensor_name.data()].prev_target =
             static_cast<size_t>(ThrottlingSeverity::NONE);
     thermal_throttling_status_map_[sensor_name.data()].prev_power_budget = NAN;
@@ -132,7 +130,7 @@ bool ThermalThrottling::registerThermalThrottling(
     }
 
     thermal_throttling_status_map_[sensor_name.data()].prev_err = NAN;
-    thermal_throttling_status_map_[sensor_name.data()].i_budget = throttling_info->i_default;
+    thermal_throttling_status_map_[sensor_name.data()].i_budget = NAN;
     thermal_throttling_status_map_[sensor_name.data()].prev_target =
             static_cast<size_t>(ThrottlingSeverity::NONE);
     thermal_throttling_status_map_[sensor_name.data()].prev_power_budget = NAN;
@@ -185,11 +183,11 @@ bool ThermalThrottling::registerThermalThrottling(
 }
 
 // return power budget based on PID algo
-float ThermalThrottling::updatePowerBudget(const Temperature &temp, const SensorInfo &sensor_info,
-                                           std::chrono::milliseconds time_elapsed_ms,
-                                           ThrottlingSeverity curr_severity,
-                                           const bool max_throttling,
-                                           const std::vector<float> &sensor_predictions) {
+float ThermalThrottling::updatePowerBudget(
+        const Temperature &temp, const SensorInfo &sensor_info,
+        const std::unordered_map<std::string, CdevInfo> &cooling_device_info_map,
+        std::chrono::milliseconds time_elapsed_ms, ThrottlingSeverity curr_severity,
+        const bool max_throttling, const std::vector<float> &sensor_predictions) {
     float p = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
     bool target_changed = false;
@@ -220,6 +218,23 @@ float ThermalThrottling::updatePowerBudget(const Temperature &temp, const Sensor
 
     p = err * (err < 0 ? sensor_info.throttling_info->k_po[target_state]
                        : sensor_info.throttling_info->k_pu[target_state]);
+
+    if (std::isnan(throttling_status.i_budget)) {
+        if (std::isnan(sensor_info.throttling_info->i_default_pct)) {
+            throttling_status.i_budget = sensor_info.throttling_info->i_default;
+        } else {
+            float default_i_budget = 0.0;
+            for (const auto &binded_cdev_info_pair :
+                 sensor_info.throttling_info->binded_cdev_info_map) {
+                int max_cdev_vote;
+                const CdevInfo &cdev_info = cooling_device_info_map.at(binded_cdev_info_pair.first);
+                max_cdev_vote = getCdevMaxRequest(binded_cdev_info_pair.first, &max_cdev_vote);
+                default_i_budget += cdev_info.state2power[max_cdev_vote];
+            }
+            throttling_status.i_budget =
+                    default_i_budget * sensor_info.throttling_info->i_default_pct / 100;
+        }
+    }
 
     if (err < sensor_info.throttling_info->i_cutoff[target_state]) {
         throttling_status.i_budget += err * sensor_info.throttling_info->k_i[target_state];
@@ -355,8 +370,9 @@ bool ThermalThrottling::allocatePowerToCdev(
     std::string log_buf;
 
     std::unique_lock<std::shared_mutex> _lock(thermal_throttling_status_map_mutex_);
-    auto total_power_budget = updatePowerBudget(temp, sensor_info, time_elapsed_ms, curr_severity,
-                                                max_throttling, sensor_predictions);
+    auto total_power_budget =
+            updatePowerBudget(temp, sensor_info, cooling_device_info_map, time_elapsed_ms,
+                              curr_severity, max_throttling, sensor_predictions);
     const auto &profile = thermal_throttling_status_map_[temp.name].profile;
 
     if (sensor_info.throttling_info->excluded_power_info_map.size()) {
