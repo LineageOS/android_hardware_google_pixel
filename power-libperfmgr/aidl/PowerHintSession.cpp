@@ -170,11 +170,11 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
     // init boost
     auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
     mPSManager->voteSet(
-            mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESET, adpfConfig->mUclampMinLoadReset,
-            kUclampMax, std::chrono::steady_clock::now(),
+            mSessionId, AdpfVoteType::CPU_LOAD_RESET, adpfConfig->mUclampMinLoadReset, kUclampMax,
+            std::chrono::steady_clock::now(),
             duration_cast<nanoseconds>(mDescriptor->targetNs * adpfConfig->mStaleTimeFactor / 2.0));
 
-    mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, adpfConfig->mUclampMinInit,
+    mPSManager->voteSet(mSessionId, AdpfVoteType::CPU_VOTE_DEFAULT, adpfConfig->mUclampMinInit,
                         kUclampMax, std::chrono::steady_clock::now(), mDescriptor->targetNs);
     ALOGV("PowerHintSession created: %s", mDescriptor->toString().c_str());
 }
@@ -197,7 +197,7 @@ void PowerHintSession::updatePidControlVariable(int pidControlVariable, bool upd
     mDescriptor->pidControlVariable = pidControlVariable;
     if (updateVote) {
         auto adpfConfig = HintManager::GetInstance()->GetAdpfProfile();
-        mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT, pidControlVariable,
+        mPSManager->voteSet(mSessionId, AdpfVoteType::CPU_VOTE_DEFAULT, pidControlVariable,
                             kUclampMax, std::chrono::steady_clock::now(),
                             std::max(duration_cast<nanoseconds>(mDescriptor->targetNs *
                                                                 adpfConfig->mStaleTimeFactor),
@@ -279,7 +279,7 @@ ndk::ScopedAStatus PowerHintSession::updateTargetWorkDuration(int64_t targetDura
             targetDurationNanos * HintManager::GetInstance()->GetAdpfProfile()->mTargetTimeFactor;
 
     mDescriptor->targetNs = std::chrono::nanoseconds(targetDurationNanos);
-    mPSManager->updateTargetWorkDuration(mSessionId, AdpfHintType::ADPF_VOTE_DEFAULT,
+    mPSManager->updateTargetWorkDuration(mSessionId, AdpfVoteType::CPU_VOTE_DEFAULT,
                                          mDescriptor->targetNs);
     ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), targetDurationNanos);
 
@@ -406,9 +406,9 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
     switch (hint) {
         case SessionHint::CPU_LOAD_UP:
             updatePidControlVariable(mDescriptor->pidControlVariable);
-            mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_CPU_LOAD_UP,
-                                adpfConfig->mUclampMinLoadUp, kUclampMax,
-                                std::chrono::steady_clock::now(), mDescriptor->targetNs * 2);
+            mPSManager->voteSet(mSessionId, AdpfVoteType::CPU_LOAD_UP, adpfConfig->mUclampMinLoadUp,
+                                kUclampMax, std::chrono::steady_clock::now(),
+                                mDescriptor->targetNs * 2);
             break;
         case SessionHint::CPU_LOAD_DOWN:
             updatePidControlVariable(adpfConfig->mUclampMinLow);
@@ -418,14 +418,14 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
                     std::max(adpfConfig->mUclampMinInit,
                              static_cast<uint32_t>(mDescriptor->pidControlVariable)),
                     false);
-            mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESET,
+            mPSManager->voteSet(mSessionId, AdpfVoteType::CPU_LOAD_RESET,
                                 adpfConfig->mUclampMinLoadReset, kUclampMax,
                                 std::chrono::steady_clock::now(),
                                 duration_cast<nanoseconds>(mDescriptor->targetNs *
                                                            adpfConfig->mStaleTimeFactor / 2.0));
             break;
         case SessionHint::CPU_LOAD_RESUME:
-            mPSManager->voteSet(mSessionId, AdpfHintType::ADPF_CPU_LOAD_RESUME,
+            mPSManager->voteSet(mSessionId, AdpfVoteType::CPU_LOAD_RESUME,
                                 mDescriptor->pidControlVariable, kUclampMax,
                                 std::chrono::steady_clock::now(),
                                 duration_cast<nanoseconds>(mDescriptor->targetNs *

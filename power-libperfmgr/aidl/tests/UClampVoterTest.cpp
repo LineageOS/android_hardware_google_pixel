@@ -201,8 +201,8 @@ TEST(UclampVoter, loadVoteTest) {
 TEST(GpuCapacityVoter, testIncorrectTyping) {
     const auto now = std::chrono::steady_clock::now();
     Votes votes;
-    static constexpr int gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
-    static constexpr int cpu_vote_id = static_cast<int>(AdpfHintType::ADPF_CPU_LOAD_UP);
+    static constexpr int gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
+    static constexpr int cpu_vote_id = static_cast<int>(AdpfVoteType::CPU_LOAD_UP);
 
     votes.add(cpu_vote_id, GpuVote(true, now, 250ns, Cycles(1024)));
     EXPECT_FALSE(votes.voteIsActive(cpu_vote_id));
@@ -225,8 +225,8 @@ TEST(GpuCapacityVoter, testIncorrectTyping) {
 TEST(GpuCapacityVoter, testGpuUseVote) {
     const auto now = std::chrono::steady_clock::now();
     Votes votes;
-    static constexpr int gpu_vote_id1 = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
-    static constexpr int gpu_vote_id2 = static_cast<int>(AdpfHintType::ADPF_GPU_LOAD_UP);
+    static constexpr int gpu_vote_id1 = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
+    static constexpr int gpu_vote_id2 = static_cast<int>(AdpfVoteType::GPU_LOAD_UP);
 
     votes.add(gpu_vote_id1, GpuVote(true, now, 250ns, Cycles(1024)));
     EXPECT_TRUE(votes.setUseVote(gpu_vote_id1, true));
@@ -236,7 +236,7 @@ TEST(GpuCapacityVoter, testGpuUseVote) {
 TEST(GpuCapacityVoter, testBasicVoteActivation) {
     auto const now = std::chrono::steady_clock::now();
     auto const timeout = 1s;
-    auto const gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+    auto const gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
     Votes votes;
 
     votes.add(gpu_vote_id, GpuVote(true, now, 250ns, Cycles(100)));
@@ -256,7 +256,7 @@ TEST(GpuCapacityVoter, testBasicVoteActivation) {
 TEST(GpuCapacityVoter, testBasicVoteTimeouts) {
     auto const now = std::chrono::steady_clock::now();
     auto const timeout = 1s;
-    auto const gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+    auto const gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
     Cycles const cycles(100);
 
     Votes votes;
@@ -274,8 +274,8 @@ TEST(GpuCapacityVoter, testVoteTimeouts) {
     auto const now = std::chrono::steady_clock::now();
     auto const timeout = 1s;
     auto const timeout2 = 10s;
-    auto const gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
-    auto const cpu_vote_id = static_cast<int>(AdpfHintType::ADPF_CPU_LOAD_UP);
+    auto const gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
+    auto const cpu_vote_id = static_cast<int>(AdpfVoteType::CPU_LOAD_UP);
     Cycles const cycles(100);
 
     Votes votes;
@@ -296,7 +296,7 @@ TEST(GpuCapacityVoter, testVoteTimeouts) {
 TEST(GpuCapacityVoter, testGpuVoteActive) {
     auto const now = std::chrono::steady_clock::now();
     auto const timeout = 1s;
-    auto const gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+    auto const gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
     Cycles const cycles(100);
 
     Votes votes;

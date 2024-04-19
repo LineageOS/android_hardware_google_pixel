@@ -39,12 +39,12 @@ std::ostream &operator<<(std::ostream &o, const UclampRange &uc) {
 
 Votes::Votes() {}
 
-constexpr static auto gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+constexpr static auto gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
 
 static inline bool isGpuVote(int type_raw) {
-    AdpfHintType const type = static_cast<AdpfHintType>(type_raw);
-    return type == AdpfHintType::ADPF_GPU_CAPACITY || type == AdpfHintType::ADPF_GPU_LOAD_UP ||
-           type == AdpfHintType::ADPF_GPU_LOAD_DOWN || type == AdpfHintType::ADPF_GPU_LOAD_RESET;
+    AdpfVoteType const type = static_cast<AdpfVoteType>(type_raw);
+    return type == AdpfVoteType::GPU_CAPACITY || type == AdpfVoteType::GPU_LOAD_UP ||
+           type == AdpfVoteType::GPU_LOAD_DOWN || type == AdpfVoteType::GPU_LOAD_RESET;
 }
 
 void Votes::add(int id, CpuVote const &vote) {
@@ -54,7 +54,7 @@ void Votes::add(int id, CpuVote const &vote) {
 }
 
 std::optional<Cycles> Votes::getGpuCapacityRequest(std::chrono::steady_clock::time_point t) const {
-    auto it = mGpuVotes.find(static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY));
+    auto it = mGpuVotes.find(static_cast<int>(AdpfVoteType::GPU_CAPACITY));
     if (it != mGpuVotes.end() && it->second.isTimeInRange(t)) {
         return {it->second.mCapacity};
     }
