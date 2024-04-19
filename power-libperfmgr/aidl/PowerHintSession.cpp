@@ -160,7 +160,7 @@ PowerHintSession::PowerHintSession(int32_t tgid, int32_t uid, const std::vector<
                                                                  ->mMaxRecordsNum.value(),
                                                          HintManager::GetInstance()
                                                                  ->GetAdpfProfile()
-                                                                 ->mJunkCheckTimeFactor.value())
+                                                                 ->mJankCheckTimeFactor.value())
                       : nullptr) {
     ATRACE_CALL();
     ATRACE_INT(mAppDescriptorTrace.trace_target.c_str(), mDescriptor->targetNs.count());
