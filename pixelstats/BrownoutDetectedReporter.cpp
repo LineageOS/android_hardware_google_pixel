@@ -124,7 +124,7 @@ void BrownoutDetectedReporter::uploadData(const std::shared_ptr<IStats> &stats_c
                                           const struct BrownoutDetectedInfo max_value) {
     // Load values array
     VendorAtomValue tmp;
-    std::vector<VendorAtomValue> values(42);
+    std::vector<VendorAtomValue> values(47);
     setAtomFieldValue(&values, BrownoutDetected::kTriggeredIrqFieldNumber,
                       max_value.triggered_irq_);
     setAtomFieldValue(&values, BrownoutDetected::kTriggeredTimestampFieldNumber,
@@ -205,6 +205,15 @@ void BrownoutDetectedReporter::uploadData(const std::shared_ptr<IStats> &stats_c
     setAtomFieldValue(&values, BrownoutDetected::kEvtCntUvlo2FieldNumber, max_value.evt_cnt_uvlo2_);
     setAtomFieldValue(&values, BrownoutDetected::kEvtCntOilo1FieldNumber, max_value.evt_cnt_oilo1_);
     setAtomFieldValue(&values, BrownoutDetected::kEvtCntOilo2FieldNumber, max_value.evt_cnt_oilo2_);
+    setAtomFieldValue(&values, BrownoutDetected::kVimonVbattFieldNumber, max_value.vimon_vbatt_);
+    setAtomFieldValue(&values, BrownoutDetected::kVimonIbattFieldNumber, max_value.vimon_ibatt_);
+
+    setAtomFieldValue(&values, BrownoutDetected::kMitigationMethod0FieldNumber,
+                      max_value.mitigation_method_0_);
+    setAtomFieldValue(&values, BrownoutDetected::kMitigationMethod0CountFieldNumber,
+                      max_value.mitigation_method_0_count_);
+    setAtomFieldValue(&values, BrownoutDetected::kMitigationMethod0TimeUsFieldNumber,
+                      max_value.mitigation_method_0_time_us_);
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
@@ -302,6 +311,17 @@ void BrownoutDetectedReporter::logBrownoutCsv(const std::shared_ptr<IStats> &sta
         }
         for (int i = 0; i < ODPM_MAX_IDX; i++) {
             max_value.odpm_value_[i] = atoi(row[i + ODPM_CHANNEL_0].c_str());
+        }
+        if (row.size() > MAX_CURR) {
+            max_value.evt_cnt_oilo1_ = atoi(row[EVT_CNT_IDX_OILO1].c_str());
+            max_value.evt_cnt_oilo2_ = atoi(row[EVT_CNT_IDX_OILO2].c_str());
+            max_value.evt_cnt_uvlo1_ = atoi(row[EVT_CNT_IDX_UVLO1].c_str());
+            max_value.evt_cnt_uvlo2_ = atoi(row[EVT_CNT_IDX_UVLO2].c_str());
+            max_value.max_curr_ = atoi(row[MAX_CURR].c_str());
+        }
+        if (row.size() > IDX_VIMON_I) {
+            max_value.vimon_vbatt_ = atoi(row[IDX_VIMON_V].c_str());
+            max_value.vimon_ibatt_ = atoi(row[IDX_VIMON_I].c_str());
         }
     }
     if (!isAlreadyUpdated && max_value.battery_temp_ != DEFAULT_BATTERY_TEMP) {

@@ -27,8 +27,8 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-SessionRecords::SessionRecords(const int32_t maxNumOfRecords, const double junkCheckTimeFactor)
-    : kMaxNumOfRecords(maxNumOfRecords), kJunkCheckTimeFactor(junkCheckTimeFactor) {
+SessionRecords::SessionRecords(const int32_t maxNumOfRecords, const double jankCheckTimeFactor)
+    : kMaxNumOfRecords(maxNumOfRecords), kJankCheckTimeFactor(jankCheckTimeFactor) {
     mRecords.resize(maxNumOfRecords);
 }
 
@@ -67,7 +67,7 @@ void SessionRecords::addReportedDurations(const std::vector<WorkDuration> &actua
         }
         mLastStartTimeNs = startTimeNs;
 
-        bool cycleMissed = totalDurationUs > (targetDurationNs / 1000) * kJunkCheckTimeFactor;
+        bool cycleMissed = totalDurationUs > (targetDurationNs / 1000) * kJankCheckTimeFactor;
         mRecords[mLatestRecordIndex] = CycleRecord{startIntervalUs, totalDurationUs, cycleMissed};
         mNumOfFrames++;
         if (cycleMissed) {

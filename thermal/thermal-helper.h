@@ -216,12 +216,14 @@ class ThermalHelperImpl : public ThermalHelper {
     bool readDataByType(std::string_view sensor_data, float *reading_value,
                         const SensorFusionType type, const bool force_no_cache,
                         std::map<std::string, float> *sensor_log_map);
-    // Read temperature data according to thermal sensor's info
     bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
                            std::map<std::string, float> *sensor_log_map);
     bool runVirtualTempEstimator(std::string_view sensor_name,
                                  std::map<std::string, float> *sensor_log_map,
                                  const bool force_no_cache, std::vector<float> *outputs);
+    size_t getPredictionMaxWindowMs(std::string_view sensor_name);
+    float readPredictionAfterTimeMs(std::string_view sensor_name, const size_t time_ms);
+    bool readTemperaturePredictions(std::string_view sensor_name, std::vector<float> *predictions);
     void updateCoolingDevices(const std::vector<std::string> &cooling_devices_to_update);
     // Check the max CDEV state for cdev_ceiling
     void maxCoolingRequestCheck(

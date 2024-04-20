@@ -52,10 +52,10 @@ PRODUCT_PROPERTY_OVERRIDES += \
     dalvik.vm.systemuicompilerfilter=speed
 
 # Virtual fingerprint HAL
-PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.fingerprint.virtual
+PRODUCT_PACKAGES += com.android.hardware.biometrics.fingerprint.virtual
 
 # Virtual face HAL
-PRODUCT_PACKAGES_DEBUG += com.android.hardware.biometrics.face.virtual
+PRODUCT_PACKAGES += com.android.hardware.biometrics.face.virtual
 
 # AI Labs artifacts
 ifeq ($(RELEASE_INSTALL_AI_LABS_ARTIFACTS), true)

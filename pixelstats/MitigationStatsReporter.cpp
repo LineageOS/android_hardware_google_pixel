@@ -66,9 +66,11 @@ void MitigationStatsReporter::logMitigationStatsPerHour(const std::shared_ptr<IS
     logMitigationCap(path, &last_cap);
 
     VendorAtomValue tmp;
-    std::vector<VendorAtomValue> values(24);
+    std::vector<VendorAtomValue> values(26);
     tmp.set<VendorAtomValue::intValue>(last_count.batoilo_count - prev_count.batoilo_count);
     values[PowerMitigationStats::kBatoiloCountFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(last_count.batoilo2_count - prev_count.batoilo2_count);
+    values[PowerMitigationStats::kBatoilo2CountFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(last_count.vdroop1_count - prev_count.vdroop1_count);
     values[PowerMitigationStats::kVdroop1CountFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(last_count.vdroop2_count - prev_count.vdroop2_count);
@@ -97,6 +99,8 @@ void MitigationStatsReporter::logMitigationStatsPerHour(const std::shared_ptr<IS
     values[PowerMitigationStats::kSoftOcpTpuCountFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(last_cap.batoilo_cap);
     values[PowerMitigationStats::kBatoiloCapFieldNumber - kVendorAtomOffset] = tmp;
+    tmp.set<VendorAtomValue::intValue>(last_cap.batoilo2_cap);
+    values[PowerMitigationStats::kBatoilo2CapFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(last_cap.vdroop1_cap);
     values[PowerMitigationStats::kVdroop1CapFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::intValue>(last_cap.vdroop2_cap);
@@ -134,6 +138,8 @@ void MitigationStatsReporter::logMitigationCap(const std::string kMitigationDir,
                                                struct MitigationCap *last_cap) {
     ReadFileToInt(kMitigationDir + "/last_triggered_capacity/batoilo_cap",
                   &(last_cap->batoilo_cap));
+    ReadFileToInt(kMitigationDir + "/last_triggered_capacity/batoilo2_cap",
+                  &(last_cap->batoilo2_cap));
     ReadFileToInt(kMitigationDir + "/last_triggered_capacity/ocp_cpu1_cap",
                   &(last_cap->ocp_cpu1_cap));
     ReadFileToInt(kMitigationDir + "/last_triggered_capacity/ocp_cpu2_cap",
@@ -165,6 +171,10 @@ bool MitigationStatsReporter::logMitigationCount(const std::string kMitigationDi
                        &(last_count->batoilo_count)))
         return false;
     send_stats |= (last_count->batoilo_count - prev_count.batoilo_count) > 0;
+    if (!ReadFileToInt(kMitigationDir + "/last_triggered_count/batoilo2_count",
+                       &(last_count->batoilo2_count)))
+        return false;
+    send_stats |= (last_count->batoilo2_count - prev_count.batoilo2_count) > 0;
     if (!ReadFileToInt(kMitigationDir + "/last_triggered_count/ocp_cpu1_count",
                        &(last_count->ocp_cpu1_count)))
         return false;

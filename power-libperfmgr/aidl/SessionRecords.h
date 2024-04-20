@@ -40,7 +40,7 @@ class SessionRecords {
     };
 
   public:
-    SessionRecords(const int32_t maxNumOfRecords, const double junkCheckTimeFactor);
+    SessionRecords(const int32_t maxNumOfRecords, const double jankCheckTimeFactor);
     ~SessionRecords() = default;
 
     void addReportedDurations(const std::vector<WorkDuration> &actualDurationsNs,
@@ -53,7 +53,7 @@ class SessionRecords {
 
   private:
     const int32_t kMaxNumOfRecords;
-    const double kJunkCheckTimeFactor;
+    const double kJankCheckTimeFactor;
     std::vector<CycleRecord> mRecords;
     // A descending order queue to store the records' indexes.
     // It is for detecting the maximum duration.
