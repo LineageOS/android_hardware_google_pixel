@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <cinttypes>
 #include <android/binder_manager.h>
+#include <android-base/file.h>
 #include <pixelstats/StatsHelper.h>
 
 #define LOG_TAG "pixelstats-vendor"
@@ -28,6 +30,7 @@ namespace pixel {
 
 using aidl::android::frameworks::stats::VendorAtom;
 using aidl::android::frameworks::stats::VendorAtomValue;
+using android::base::ReadFileToString;
 
 // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
 // store everything in the values array at the index of the field number
@@ -224,6 +227,58 @@ void reportUsbDataSessionEvent(const std::shared_ptr<IStats> &stats_client,
     const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
     if (!ret.isOk())
         ALOGE("Unable to report VendorUsbDataSessionEvent to Stats service");
+}
+
+void readLogbuffer(const std::string &buf_path, int num_fields, uint16_t code,
+                   unsigned int last_check_time, std::vector<std::vector<uint16_t>> &events) {
+    char hex_str[16];
+
+    snprintf(hex_str, sizeof(hex_str), "0x%X", code);
+
+    return readLogbuffer(buf_path, num_fields, hex_str, last_check_time, events);;
+}
+
+void readLogbuffer(const std::string &buf_path, int num_fields, const char *code,
+                   unsigned int last_check_time, std::vector<std::vector<uint16_t>> &events) {
+    std::istringstream ss;
+    std::string file_contents, line;
+    int num, field_idx, pos, read;
+    unsigned int ts, reported = 0;
+    unsigned short val;
+    char type[16];
+
+    if (!ReadFileToString(buf_path, &file_contents)) {
+        ALOGE("Unable to read logbuffer path: %s - %s", buf_path.c_str(), strerror(errno));
+        return;
+    }
+
+    ss.str(file_contents);
+    while (getline(ss, line)) {
+        std::vector<uint16_t> vect(num_fields);
+
+        num = sscanf(line.c_str(), "[%u.%*u] %15s%n", &ts, type, &pos);
+        if (num != 2 || strncmp(type, code, strlen(code)))
+            continue;
+
+        if (ts <= last_check_time) {
+            reported++;
+            continue;
+        }
+
+        for (field_idx = 0; field_idx < num_fields; field_idx++, pos += read) {
+            num = sscanf(&line.c_str()[pos], " %*2" SCNx16 ":%4" SCNx16 "%n", &val, &read);
+            if (num != 1)
+                break;
+            vect[field_idx] = val;
+        }
+
+        if (field_idx == num_fields)
+            events.push_back(vect);
+    }
+    if (events.size() > 0 || reported > 0)
+        ALOGD("%s: new:%zu, reported:%d", code, events.size(), reported);
+
+    return;
 }
 
 }  // namespace pixel
