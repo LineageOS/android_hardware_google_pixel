@@ -52,6 +52,7 @@ class PowerSessionManager : public ::android::RefBase {
     // Add and remove power hint session
     void addPowerSession(const std::string &idString,
                          const std::shared_ptr<AppHintDesc> &sessionDescriptor,
+                         const std::shared_ptr<AppDescriptorTrace> &sessionTrace,
                          const std::vector<int32_t> &threadIds);
     void removePowerSession(int64_t sessionId);
     // Replace current threads in session with threadIds
@@ -63,14 +64,14 @@ class PowerSessionManager : public ::android::RefBase {
     void updateUniversalBoostMode();
     void dumpToFd(int fd);
 
-    void updateTargetWorkDuration(int64_t sessionId, AdpfHintType voteId,
+    void updateTargetWorkDuration(int64_t sessionId, AdpfVoteType voteId,
                                   std::chrono::nanoseconds durationNs);
 
     // Set vote for power hint session
-    void voteSet(int64_t sessionId, AdpfHintType voteId, int uclampMin, int uclampMax,
+    void voteSet(int64_t sessionId, AdpfVoteType voteId, int uclampMin, int uclampMax,
                  std::chrono::steady_clock::time_point startTime,
                  std::chrono::nanoseconds durationNs);
-    void voteSet(int64_t sessionId, AdpfHintType voteId, Cycles capacity,
+    void voteSet(int64_t sessionId, AdpfVoteType voteId, Cycles capacity,
                  std::chrono::steady_clock::time_point startTime,
                  std::chrono::nanoseconds durationNs);
 
