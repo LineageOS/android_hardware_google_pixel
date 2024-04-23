@@ -333,7 +333,7 @@ TEST(SessionTaskMapTest, GpuVoteBasic) {
     SessionTaskMap m;
     auto const session_id1 = 1001;
     auto const session_id2 = 1002;
-    static auto constexpr gpu_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
+    static auto constexpr gpu_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
 
     auto addSessionWithId = [&](int id) {
         SessionValueEntry sv{.isActive = true,
@@ -365,8 +365,8 @@ TEST(SessionTaskMapTest, GpuVoteDifferentHints) {
     auto const session_id1 = 1001;
     auto const session_id2 = 1002;
 
-    auto const capacity_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_CAPACITY);
-    auto const load_vote_id = static_cast<int>(AdpfHintType::ADPF_GPU_LOAD_UP);
+    auto const capacity_vote_id = static_cast<int>(AdpfVoteType::GPU_CAPACITY);
+    auto const load_vote_id = static_cast<int>(AdpfVoteType::GPU_LOAD_UP);
 
     auto addSessionWithId = [&](int id) {
         SessionValueEntry sv{.isActive = true,

@@ -21,6 +21,8 @@
 
 #include <string>
 
+#include "AdpfTypes.h"
+
 namespace aidl {
 namespace google {
 namespace hardware {
@@ -56,7 +58,6 @@ struct AppDescriptorTrace {
         trace_hint_count = StringPrintf("adpf.%s-%s", idString.c_str(), "hint_count");
         trace_hint_overtime = StringPrintf("adpf.%s-%s", idString.c_str(), "hint_overtime");
         trace_is_first_frame = StringPrintf("adpf.%s-%s", idString.c_str(), "is_first_frame");
-        trace_session_hint = StringPrintf("adpf.%s-%s", idString.c_str(), "session_hint");
         // traces for heuristic boost
         trace_avg_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "hboost.avgDuration");
         trace_heuristic_boost_active =
@@ -70,6 +71,10 @@ struct AppDescriptorTrace {
             trace_modes[i] = StringPrintf(
                     "adpf.%s-%s_mode", idString.c_str(),
                     toString(static_cast<aidl::android::hardware::power::SessionMode>(i)).c_str());
+        }
+        for (size_t i = 0; i < trace_votes.size(); ++i) {
+            trace_votes[i] = StringPrintf("adpf.%s-vote.%s", idString.c_str(),
+                                          AdpfVoteTypeToStr(static_cast<AdpfVoteType>(i)));
         }
         trace_cpu_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "cpu_duration");
         trace_gpu_duration = StringPrintf("adpf.%s-%s", idString.c_str(), "gpu_duration");
@@ -93,7 +98,6 @@ struct AppDescriptorTrace {
     std::string trace_hint_count;
     std::string trace_hint_overtime;
     std::string trace_is_first_frame;
-    std::string trace_session_hint;
     // traces for heuristic boost
     std::string trace_avg_duration;
     std::string trace_heuristic_boost_active;
@@ -101,6 +105,7 @@ struct AppDescriptorTrace {
     std::string trace_max_duration;
     std::string trace_missed_cycles;
     std::array<std::string, enum_size<aidl::android::hardware::power::SessionMode>()> trace_modes;
+    std::array<std::string, static_cast<int32_t>(AdpfVoteType::VOTE_TYPE_SIZE)> trace_votes;
     std::string trace_cpu_duration;
     std::string trace_gpu_duration;
     std::string trace_gpu_capacity;
