@@ -117,6 +117,21 @@ VtEstimatorStatus VirtualTempEstimator::DumpTraces() {
                    static_cast<int>(model_output[i]));
     }
 
+    // log input data and output data buffers
+    std::string input_data_str = "model_input_buffer: [";
+    for (size_t i = 0; i < input_buffer_size; ++i) {
+        input_data_str += ::android::base::StringPrintf("%0.2f ", model_input[i]);
+    }
+    input_data_str += "]";
+    LOG(INFO) << input_data_str;
+
+    std::string output_data_str = "model_output_buffer: [";
+    for (size_t i = 0; i < output_buffer_size; ++i) {
+        output_data_str += ::android::base::StringPrintf("%0.2f ", model_output[i]);
+    }
+    output_data_str += "]";
+    LOG(INFO) << output_data_str;
+
     return kVtEstimatorOk;
 }
 
