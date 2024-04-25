@@ -689,9 +689,9 @@ message PixelMmMetricsPerDay {
     optional int64 thp_migration_split = 58;
     optional int64 thp_deferred_split_page = 59;
     optional int64 version = 60 [deprecated = true];
-    optional int64 cpu_total_time = 61;
-    optional int64 cpu_idle_time = 62;
-    optional int64 cpu_io_wait_time = 63;
+    optional int64 cpu_total_time_cs = 61;
+    optional int64 cpu_idle_time_cs = 62;
+    optional int64 cpu_io_wait_time_cs = 63;
     optional int64 kswapd_pageout_run = 64;
 }
 
