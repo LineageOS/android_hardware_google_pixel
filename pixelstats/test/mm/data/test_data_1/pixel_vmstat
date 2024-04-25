@@ -1,0 +1,3 @@
+pgalloc_costly_order 1416338
+pgcache_miss 1419706
+pgcache_hit 1423078
