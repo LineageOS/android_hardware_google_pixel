@@ -31,8 +31,6 @@
 #include <unistd.h>
 #include <utils/Log.h>
 
-#include <numeric>
-
 #define SZ_4K 0x00001000
 #define SZ_2M 0x00200000
 
@@ -59,9 +57,6 @@ const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetric
         {"nr_slab_unreclaimable", PixelMmMetricsPerHour::kSlabUnreclaimableFieldNumber, false},
         {"nr_zspages", PixelMmMetricsPerHour::kZspagesFieldNumber, false},
         {"nr_unevictable", PixelMmMetricsPerHour::kUnevictableFieldNumber, false},
-        {"nr_shmem", PixelMmMetricsPerHour::kShmemPagesFieldNumber, false},
-        {"nr_page_table_pages", PixelMmMetricsPerHour::kPageTablePagesFieldNumber, false},
-        {"ION_heap", PixelMmMetricsPerHour::kDmabufKbFieldNumber, false},
 };
 
 const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetricsPerDayInfo = {
@@ -96,18 +91,6 @@ const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kMmMetric
         {"thp_split_page", PixelMmMetricsPerDay::kThpSplitPageFieldNumber, true},
         {"thp_migration_split", PixelMmMetricsPerDay::kThpMigrationSplitFieldNumber, true},
         {"thp_deferred_split_page", PixelMmMetricsPerDay::kThpDeferredSplitPageFieldNumber, true},
-        {"pageoutrun", PixelMmMetricsPerDay::kKswapdPageoutRunFieldNumber, true},
-};
-
-const std::vector<MmMetricsReporter::ProcStatMetricsInfo> MmMetricsReporter::kProcStatInfo = {
-        // sum of the cpu line: the cpu total time  (-1 means to sum up all)
-        {"cpu", -1, PixelMmMetricsPerDay::kCpuTotalTimeCsFieldNumber, true},
-
-        // array[3] of the cpu line: the Idle time
-        {"cpu", 3, PixelMmMetricsPerDay::kCpuIdleTimeCsFieldNumber, true},
-
-        // array[4] of the cpu line: the I/O wait time.
-        {"cpu", 4, PixelMmMetricsPerDay::kCpuIoWaitTimeCsFieldNumber, true},
 };
 
 const std::vector<MmMetricsReporter::MmMetricsInfo> MmMetricsReporter::kCmaStatusInfo = {
@@ -174,8 +157,6 @@ MmMetricsReporter::MmMetricsReporter()
       kCompactDuration("/sys/kernel/pixel_stat/mm/compaction/mm_compaction_duration"),
       kDirectReclaimBasePath("/sys/kernel/pixel_stat/mm/vmscan/direct_reclaim"),
       kPixelStatMm("/sys/kernel/pixel_stat/mm"),
-      kMeminfoPath("/proc/meminfo"),
-      kProcStatPath("/proc/stat"),
       prev_compaction_duration_(kNumCompactionDurationPrevMetrics, 0),
       prev_direct_reclaim_(kNumDirectReclaimPrevMetrics, 0) {
     ker_mm_metrics_support_ = checkKernelMMMetricSupport();
@@ -300,96 +281,32 @@ bool MmMetricsReporter::reportVendorAtom(const std::shared_ptr<IStats> &stats_cl
 }
 
 /**
- * Parse sysfs node in Name/Value pair form, including /proc/vmstat and /proc/meminfo
- * Name could optionally with a colon (:) suffix (will be removed to produce the output map),
- * extra columns (e.g. 3rd column 'kb' for /proc/meminfo) will be discarded.
- * Return value: a map containing the pairs of {field_string, data}.
+ * Parse the output of /proc/vmstat or the sysfs having the same output format.
+ * The map containing pairs of {field_string, data} will be returned.
  */
-std::map<std::string, uint64_t> MmMetricsReporter::readSysfsNameValue(const std::string &path) {
+std::map<std::string, uint64_t> MmMetricsReporter::readVmStat(const std::string &path) {
     std::string file_contents;
-    std::map<std::string, uint64_t> metrics;
+    std::map<std::string, uint64_t> vmstat_data;
 
     if (!ReadFileToString(path, &file_contents)) {
         ALOGE("Unable to read vmstat from %s, err: %s", path.c_str(), strerror(errno));
-        return metrics;
+        return vmstat_data;
     }
 
     std::istringstream data(file_contents);
     std::string line;
-    int line_num = 0;
-
     while (std::getline(data, line)) {
-        line_num++;
-        std::vector<std::string> words = android::base::Tokenize(line, " ");
+        std::vector<std::string> words = android::base::Split(line, " ");
+        if (words.size() != 2)
+            continue;
 
         uint64_t i;
-        if (words.size() < 2 || !android::base::ParseUint(words[1], &i)) {
-            ALOGE("File %s corrupted at line %d", path.c_str(), line_num);
-            metrics.clear();
-            break;
-        }
+        if (!android::base::ParseUint(words[1], &i))
+            continue;
 
-        if (words[0][words[0].length() - 1] == ':')
-            words[0].pop_back();
-
-        metrics[words[0]] = i;
+        vmstat_data[words[0]] = i;
     }
-
-    return metrics;
-}
-
-/**
- * Parse the output of /proc/stat or any sysfs node having the same output format.
- * The map containing pairs of {field_name, array (vector) of values} will be returned.
- */
-std::map<std::string, std::vector<uint64_t>> MmMetricsReporter::readProcStat(
-        const std::string &path) {
-    std::map<std::string, std::vector<uint64_t>> fields;
-    std::string content;
-    bool got_err = false;
-
-    // Use ReadFileToString for convenient file reading
-    if (!android::base::ReadFileToString(path, &content)) {
-        ALOGE("Error: Unable to open %s", path.c_str());
-        return fields;  // Return empty map on error
-    }
-
-    // Split the file content into lines
-    std::vector<std::string> lines = android::base::Split(content, "\n");
-
-    for (const auto &line : lines) {
-        std::vector<std::string> tokens = android::base::Tokenize(line, " ");
-        if (tokens.empty()) {
-            continue;  // Skip empty lines
-        }
-
-        const std::string &field_name = tokens[0];
-
-        // Check for duplicates
-        if (fields.find(field_name) != fields.end()) {
-            ALOGE("Duplicate field found: %s", field_name.c_str());
-            got_err = true;
-            goto exit_loop;
-        }
-
-        std::vector<uint64_t> values;
-        for (size_t i = 1; i < tokens.size(); ++i) {
-            uint64_t value;
-            if (!android::base::ParseUint(tokens[i], &value)) {
-                ALOGE("Invalid field value format in line: %s", line.c_str());
-                got_err = true;
-                goto exit_loop;
-            }
-            values.push_back(value);
-        }
-        fields[field_name] = values;
-    }
-
-exit_loop:
-    if (got_err) {
-        fields.clear();
-    }
-    return fields;
+    return vmstat_data;
 }
 
 uint64_t MmMetricsReporter::getIonTotalPools() {
@@ -486,138 +403,6 @@ bool MmMetricsReporter::fillAtomValues(const std::vector<MmMetricsInfo> &metrics
     return !err;
 }
 
-/*
- * offset -1 means to get the sum of the whole mapped array
- * otherwise get the array value at the offset.
- * return value: true for success (got the value), else false
- */
-bool MmMetricsReporter::getValueFromParsedProcStat(
-        const std::map<std::string, std::vector<uint64_t>> pstat, const std::string &name,
-        int offset, uint64_t *output) {
-    static bool log_once = false;
-
-    if (offset < -1) {
-        if (!log_once) {
-            log_once = true;
-            ALOGE("Bug: bad offset %d for entry %s", offset, name.c_str());
-        }
-        return false;
-    }
-
-    // the mapped array not found
-    auto itr = pstat.find(name);
-    if (itr == pstat.end()) {
-        return false;
-    }
-
-    const std::vector<uint64_t> &values = itr->second;
-
-    if (values.size() == 0) {
-        return false;
-    }
-
-    if (offset >= 0 && offset >= values.size()) {
-        return false;
-    }
-
-    if (offset != -1) {
-        *output = values.at(offset);
-        return true;
-    }
-
-    *output = std::accumulate(values.begin(), values.end(), 0);
-    return true;
-}
-
-/**
- *  metrics_info: see struct  ProcStatMetricsInfo for detail
- *
- *  /proc/stat was already read and parsed by readProcStat().
- *  The parsed results are stored in <cur_pstat>
- *  The previous parsed results are stored in <prev_pstat> (in case the diff value is asked)
- *
- *  A typical /proc/stat line looks like
- *      cpu  258 132 521 30 15 28 16
- *  The parsed results are a map mapping the name (i.e. the 1st token in a /proc/stat line)
- *  to an array of numbers.
- *
- *  Each element (entry) in metrics_info tells us where/how to find the corresponding
- *  value for that entry.  e.g.
- *   // name, offset,   atom_key,                                update_diff
- *    {"cpu", -1,  PixelMmMetricsPerDay::kCpuTotalTimeFieldNumber, true      }
- *  This is the entry "cpu total time".
- *  We need to look at the "cpu" line from /proc/stat (or from the parsed result, i.e. map)
- *  -1 is the offset for the value in the line.  Normally it is a zero-based
- *  number, from that we know which value to get from the array.
- *  -1 is special: it does not mean one specific offset but to sum-up everything in the array.
- *
- *  The final 'true' ask us to create a diff with the previously stored value
- *  for this same entry (e.g. cpu total time).
- *
- *  PixelMmMetricsPerDay::kCpuTotalTimeFieldNumber (.atom_key) indicate the offset
- *  in the atom field value array (i.e. <atom_values>) where we need to fill in the value.
- */
-bool MmMetricsReporter::fillProcStat(const std::vector<ProcStatMetricsInfo> &metrics_info,
-                                     const std::map<std::string, std::vector<uint64_t>> &cur_pstat,
-                                     std::map<std::string, std::vector<uint64_t>> *prev_pstat,
-                                     std::vector<VendorAtomValue> *atom_values) {
-    bool is_success = true;
-    for (const auto &entry : metrics_info) {
-        int atom_idx = entry.atom_key - kVendorAtomOffset;
-        uint64_t cur_value;
-        uint64_t prev_value = 0;
-
-        if (atom_idx < 0) {
-            // Reaching here means the data definition (.atom_key) has a problem.
-            ALOGE("Bug: should not reach here: index to fill is negative for "
-                  "entry %s offset %d",
-                  entry.name.c_str(), entry.offset);
-            is_success = false;
-            break;
-        }
-
-        if (prev_pstat == nullptr && entry.update_diff) {
-            // Reaching here means you need to provide prev_pstat or define false for .update_diff
-            ALOGE("Bug: should not reach here: asking for diff without providing "
-                  " the previous data for entry %s offset %d",
-                  entry.name.c_str(), entry.offset);
-            is_success = false;
-            break;
-        }
-
-        // Find the field value from the current read
-        if (!getValueFromParsedProcStat(cur_pstat, entry.name, entry.offset, &cur_value)) {
-            // Metric not found
-            ALOGE("Metric '%s' not found in ProcStat", entry.name.c_str());
-            printf("Error: Metric '%s' not found in ProcStat", entry.name.c_str());
-            is_success = false;
-            break;
-        }
-
-        // Find the field value from the previous read, if we need diff value
-        if (entry.update_diff) {
-            // prev_value won't change (0) if not found. So, no need to check return status.
-            getValueFromParsedProcStat(*prev_pstat, entry.name, entry.offset, &prev_value);
-        }
-
-        // Fill the atom_values array
-        VendorAtomValue tmp;
-        tmp.set<VendorAtomValue::longValue>((int64_t)cur_value - prev_value);
-        (*atom_values)[atom_idx] = tmp;
-    }
-
-    if (!is_success) {
-        prev_pstat->clear();
-        return false;
-    }
-
-    // Update prev_pstat
-    if (prev_pstat != nullptr) {
-        *prev_pstat = cur_pstat;
-    }
-    return true;
-}
-
 void MmMetricsReporter::aggregatePixelMmMetricsPer5Min() {
     aggregatePressureStall();
 }
@@ -636,12 +421,8 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerHour() {
     if (!MmMetricsSupported())
         return std::vector<VendorAtomValue>();
 
-    std::map<std::string, uint64_t> vmstat = readSysfsNameValue(getSysfsPath(kVmstatPath));
+    std::map<std::string, uint64_t> vmstat = readVmStat(getSysfsPath(kVmstatPath));
     if (vmstat.size() == 0)
-        return std::vector<VendorAtomValue>();
-
-    std::map<std::string, uint64_t> meminfo = readSysfsNameValue(getSysfsPath(kMeminfoPath));
-    if (meminfo.size() == 0)
         return std::vector<VendorAtomValue>();
 
     uint64_t ion_total_pools = getIonTotalPools();
@@ -650,11 +431,11 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerHour() {
     // allocate enough values[] entries for the metrics.
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::longValue>(0);
-    int last_value_index = PixelMmMetricsPerHour::kDmabufKbFieldNumber - kVendorAtomOffset;
+    int last_value_index =
+            PixelMmMetricsPerHour::kPsiMemSomeAvg300AvgFieldNumber - kVendorAtomOffset;
     std::vector<VendorAtomValue> values(last_value_index + 1, tmp);
 
     fillAtomValues(kMmMetricsPerHourInfo, vmstat, &prev_hour_vmstat_, &values);
-    fillAtomValues(kMmMetricsPerHourInfo, meminfo, nullptr, &values);
     tmp.set<VendorAtomValue::longValue>(ion_total_pools);
     values[PixelMmMetricsPerHour::kIonTotalPoolsFieldNumber - kVendorAtomOffset] = tmp;
     tmp.set<VendorAtomValue::longValue>(gpu_memory);
@@ -678,13 +459,8 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
     if (!MmMetricsSupported())
         return std::vector<VendorAtomValue>();
 
-    std::map<std::string, uint64_t> vmstat = readSysfsNameValue(getSysfsPath(kVmstatPath));
+    std::map<std::string, uint64_t> vmstat = readVmStat(getSysfsPath(kVmstatPath));
     if (vmstat.size() == 0)
-        return std::vector<VendorAtomValue>();
-
-    std::map<std::string, std::vector<uint64_t>> procstat =
-            readProcStat(getSysfsPath(kProcStatPath));
-    if (procstat.size() == 0)
         return std::vector<VendorAtomValue>();
 
     std::vector<long> direct_reclaim;
@@ -698,7 +474,8 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
     // allocate enough values[] entries for the metrics.
     VendorAtomValue tmp;
     tmp.set<VendorAtomValue::longValue>(0);
-    int last_value_index = PixelMmMetricsPerDay::kKswapdPageoutRunFieldNumber - kVendorAtomOffset;
+    int last_value_index =
+            PixelMmMetricsPerDay::kThpDeferredSplitPageFieldNumber - kVendorAtomOffset;
     std::vector<VendorAtomValue> values(last_value_index + 1, tmp);
 
     if (!fillAtomValues(kMmMetricsPerDayInfo, vmstat, &prev_day_vmstat_, &values)) {
@@ -708,7 +485,7 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
         return std::vector<VendorAtomValue>();
     }
 
-    std::map<std::string, uint64_t> pixel_vmstat = readSysfsNameValue(
+    std::map<std::string, uint64_t> pixel_vmstat = readVmStat(
             getSysfsPath(android::base::StringPrintf("%s/vmstat", kPixelStatMm).c_str()));
     if (!fillAtomValues(kMmMetricsPerDayInfo, pixel_vmstat, &prev_day_pixel_vmstat_, &values)) {
         // resets previous read since we reject the current one: so that we will
@@ -722,11 +499,6 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
                      &prev_kcompactd_pid_, &prev_kcompactd_stime_, &values);
     fillDirectReclaimStatAtom(direct_reclaim, &values);
     fillCompactionDurationStatAtom(compaction_duration, &values);
-
-    if (!fillProcStat(kProcStatInfo, procstat, &prev_procstat_, &values)) {
-        prev_procstat_.clear();
-        return std::vector<VendorAtomValue>();
-    }
 
     // Don't report the first atom to avoid big spike in accumulated values.
     if (is_first_atom) {
