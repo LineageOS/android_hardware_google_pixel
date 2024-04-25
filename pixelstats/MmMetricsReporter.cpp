@@ -678,14 +678,13 @@ void MmMetricsReporter::readCompactionDurationStat(std::vector<long> *store) {
 void MmMetricsReporter::fillCompactionDurationStatAtom(const std::vector<long> &store,
                                                        std::vector<VendorAtomValue> *values) {
     // first metric index
-    constexpr int start_idx =
-            PixelMmMetricsPerDay::kCompactionTotalTimeFieldNumber - kVendorAtomOffset;
+    constexpr int start_idx = PixelMmMetricsPerDay::kCompactionTotalTimeFieldNumber;
     constexpr int num_metrics = 6;
 
     if (!MmMetricsSupported())
         return;
 
-    int size = start_idx + num_metrics;
+    int size = start_idx + num_metrics - kVendorAtomOffset;
     if (values->size() < size)
         values->resize(size);
 
@@ -743,16 +742,13 @@ void MmMetricsReporter::readDirectReclaimStat(std::vector<long> *store) {
 void MmMetricsReporter::fillDirectReclaimStatAtom(const std::vector<long> &store,
                                                   std::vector<VendorAtomValue> *values) {
     // first metric index
-    constexpr int start_idx =
-            PixelMmMetricsPerDay::kDirectReclaimNativeLatencyTotalTimeFieldNumber -
-            kVendorAtomOffset;
-
+    constexpr int start_idx = PixelMmMetricsPerDay::kDirectReclaimNativeLatencyTotalTimeFieldNumber;
     constexpr int num_metrics = 20; /* num_metrics_per_file * num_file */
 
     if (!MmMetricsSupported())
         return;
 
-    int size = start_idx + num_metrics;
+    int size = start_idx + num_metrics - kVendorAtomOffset;
     if (values->size() < size)
         values->resize(size);
 
