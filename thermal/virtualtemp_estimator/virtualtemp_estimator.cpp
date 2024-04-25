@@ -273,6 +273,7 @@ VtEstimatorStatus VirtualTempEstimator::TFliteInitialize(MLModelInitData data) {
     common_instance_->use_prev_samples = data.use_prev_samples;
     common_instance_->prev_samples_order = prev_samples_order;
     tflite_instance_->support_under_sampling = data.support_under_sampling;
+    tflite_instance_->enable_input_validation = data.enable_input_validation;
     tflite_instance_->input_buffer_size = num_linked_sensors * prev_samples_order;
     tflite_instance_->input_buffer = new float[tflite_instance_->input_buffer_size];
     if (common_instance_->use_prev_samples) {
@@ -314,43 +315,21 @@ VtEstimatorStatus VirtualTempEstimator::TFliteInitialize(MLModelInitData data) {
         return kVtEstimatorInitFailed;
     }
 
-    if (data.enable_input_validation) {
-        Json::Value input_config;
-        if (!GetInputConfig(&input_config)) {
-            LOG(ERROR) << "Failed to parse tflite model input config.";
-            return kVtEstimatorInitFailed;
-        }
+    Json::Value input_config;
+    if (!GetInputConfig(&input_config)) {
+        LOG(ERROR) << "Get Input Config failed for " << model_path;
+        return kVtEstimatorInitFailed;
+    }
 
-        if (!input_config["ModelConfig"].empty() &&
-            !input_config["ModelConfig"]["sample_interval_ms"].empty()) {
-            // read input sample interval and determine predict window
-            size_t sample_interval_ms = input_config["ModelConfig"]["sample_interval_ms"].asInt(),
-                   predict_window_ms = sample_interval_ms * (output_label_count - 1);
-            tflite_instance_->sample_interval = std::chrono::milliseconds{sample_interval_ms};
-            tflite_instance_->predict_window_ms = predict_window_ms;
-            LOG(INFO) << "Parsed tflite model input sample interval: " << sample_interval_ms
-                      << " ms, max prediction window size: " << predict_window_ms << " ms";
-        }
+    if (!ParseInputConfig(input_config)) {
+        LOG(ERROR) << "Parse Input Config failed for " << model_path;
+        return kVtEstimatorInitFailed;
+    }
 
-        Json::Value input_data = input_config["InputData"];
-        if (input_data.size() != num_linked_sensors) {
-            LOG(ERROR) << "Tflite model input data size [" << input_data.size()
-                       << "] != linked sensors cnt: [" << num_linked_sensors << "]";
-            return kVtEstimatorInitFailed;
-        }
-
-        tflite_instance_->input_range.assign(input_data.size(), InputRangeInfo());
-        LOG(INFO) << "Start to parse tflite model input config.";
-        for (Json::Value::ArrayIndex i = 0; i < input_data.size(); ++i) {
-            const std::string &name = input_data[i]["Name"].asString();
-            LOG(INFO) << "Sensor[" << i << "] Name: " << name;
-            if (!getInputRangeInfoFromJsonValues(input_data[i]["Range"],
-                                                 &tflite_instance_->input_range[i])) {
-                LOG(ERROR) << "Failed to parse tflite model temp range for sensor: [" << name
-                           << "]";
-                return kVtEstimatorInitFailed;
-            }
-        }
+    if (tflite_instance_->enable_input_validation && !tflite_instance_->input_range.size()) {
+        LOG(ERROR) << "Input ranges missing when input data validation is enabled for "
+                   << common_instance_->sensor_name;
+        return kVtEstimatorInitFailed;
     }
 
     common_instance_->offset_thresholds = data.offset_thresholds;
@@ -451,12 +430,20 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
     input_data_str += "]";
     LOG(INFO) << input_data_str;
 
+    // check time gap between samples and ignore stale previous samples
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(boot_clock::now() -
+                                                              tflite_instance_->prev_sample_time) >=
+        tflite_instance_->max_sample_interval) {
+        LOG(INFO) << "Ignoring stale previous samples for " << common_instance_->sensor_name;
+        common_instance_->cur_sample_count = 0;
+    }
+
     // copy input data into input tensors
     size_t prev_samples_order = common_instance_->prev_samples_order;
     size_t cur_sample_index = common_instance_->cur_sample_count % prev_samples_order;
     size_t sample_start_index = cur_sample_index * num_linked_sensors;
     for (size_t i = 0; i < num_linked_sensors; ++i) {
-        if (!tflite_instance_->input_range.empty()) {
+        if (tflite_instance_->enable_input_validation) {
             if (thermistors[i] < tflite_instance_->input_range[i].min_threshold ||
                 thermistors[i] > tflite_instance_->input_range[i].max_threshold) {
                 LOG(INFO) << "thermistors[" << i << "] value: " << thermistors[i]
@@ -478,6 +465,7 @@ VtEstimatorStatus VirtualTempEstimator::TFliteEstimate(const std::vector<float> 
 
     // Update sample count
     common_instance_->cur_sample_count++;
+    tflite_instance_->prev_sample_time = boot_clock::now();
     if ((common_instance_->cur_sample_count < prev_samples_order) &&
         !(tflite_instance_->support_under_sampling)) {
         return kVtEstimatorUnderSampling;
@@ -728,6 +716,70 @@ VtEstimatorStatus VirtualTempEstimator::Initialize(const VtEstimationInitData &d
     return kVtEstimatorUnSupported;
 }
 
+bool VirtualTempEstimator::ParseInputConfig(const Json::Value &input_config) {
+    if (!input_config["ModelConfig"].empty()) {
+        if (!input_config["ModelConfig"]["sample_interval_ms"].empty()) {
+            // read input sample interval
+            int sample_interval_ms = input_config["ModelConfig"]["sample_interval_ms"].asInt();
+            if (sample_interval_ms <= 0) {
+                LOG(ERROR) << "Invalid sample_interval_ms: " << sample_interval_ms;
+                return false;
+            }
+
+            tflite_instance_->sample_interval = std::chrono::milliseconds{sample_interval_ms};
+            LOG(INFO) << "Parsed tflite model input sample_interval: " << sample_interval_ms
+                      << " for " << common_instance_->sensor_name;
+
+            // determine predict window
+            tflite_instance_->predict_window_ms =
+                    sample_interval_ms * (tflite_instance_->output_label_count - 1);
+            LOG(INFO) << "Max prediction window size: " << tflite_instance_->predict_window_ms
+                      << " ms for " << common_instance_->sensor_name;
+        }
+
+        if (!input_config["ModelConfig"]["max_sample_interval_ms"].empty()) {
+            // read input max sample interval
+            int max_sample_interval_ms =
+                    input_config["ModelConfig"]["max_sample_interval_ms"].asInt();
+            if (max_sample_interval_ms <= 0) {
+                LOG(ERROR) << "Invalid max_sample_interval_ms " << max_sample_interval_ms;
+                return false;
+            }
+
+            tflite_instance_->max_sample_interval =
+                    std::chrono::milliseconds{max_sample_interval_ms};
+            LOG(INFO) << "Parsed tflite model max_sample_interval: " << max_sample_interval_ms
+                      << " for " << common_instance_->sensor_name;
+        }
+    }
+
+    if (!input_config["InputData"].empty()) {
+        Json::Value input_data = input_config["InputData"];
+        if (input_data.size() != common_instance_->num_linked_sensors) {
+            LOG(ERROR) << "Input ranges size: " << input_data.size()
+                       << " does not match num_linked_sensors: "
+                       << common_instance_->num_linked_sensors;
+            return false;
+        }
+
+        LOG(INFO) << "Start to parse tflite model input config for "
+                  << common_instance_->num_linked_sensors;
+        tflite_instance_->input_range.assign(input_data.size(), InputRangeInfo());
+        for (Json::Value::ArrayIndex i = 0; i < input_data.size(); ++i) {
+            const std::string &name = input_data[i]["Name"].asString();
+            LOG(INFO) << "Sensor[" << i << "] Name: " << name;
+            if (!getInputRangeInfoFromJsonValues(input_data[i]["Range"],
+                                                 &tflite_instance_->input_range[i])) {
+                LOG(ERROR) << "Failed to parse tflite model temp range for sensor: [" << name
+                           << "]";
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool VirtualTempEstimator::GetInputConfig(Json::Value *config) {
     int config_size = 0;
     int ret = tflite_instance_->tflite_methods.get_input_config_size(
@@ -737,6 +789,10 @@ bool VirtualTempEstimator::GetInputConfig(Json::Value *config) {
                    << ") with size: " << config_size;
         return false;
     }
+
+    LOG(INFO) << "Model input config_size: " << config_size << " for "
+              << common_instance_->sensor_name;
+
     char *config_str = new char[config_size];
     ret = tflite_instance_->tflite_methods.get_input_config(tflite_instance_->tflite_wrapper,
                                                             config_str, config_size);
