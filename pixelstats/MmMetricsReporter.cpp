@@ -482,7 +482,7 @@ std::vector<VendorAtomValue> MmMetricsReporter::genPixelMmMetricsPerDay() {
     fillProcessStime(PixelMmMetricsPerDay::kKcompactdStimeClksFieldNumber, "kcompactd0",
                      &prev_kcompactd_pid_, &prev_kcompactd_stime_, &values);
     fillDirectReclaimStatAtom(direct_reclaim, &values);
-    fillCompactionDurationStatAtom(compaction_duration, &values);
+    fillCompactionDurationStatAtom(direct_reclaim, &values);
 
     // Don't report the first atom to avoid big spike in accumulated values.
     if (is_first_atom) {
