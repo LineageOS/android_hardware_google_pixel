@@ -654,9 +654,12 @@ std::unordered_map<std::string, Hint> HintManager::ParseActions(
     }                                                                                            \
     VARIABLE = adpfs[i][ENTRY].as##TYPE()
 
-#define ADPF_PARSE_OPTIONAL(VARIABLE, ENTRY, TYPE)                \
-    if (!adpfs[i][ENTRY].empty() || adpfs[i][ENTRY].is##TYPE()) { \
-        VARIABLE = adpfs[i][ENTRY].as##TYPE();                    \
+#define ADPF_PARSE_OPTIONAL(VARIABLE, ENTRY, TYPE)                     \
+    static_assert(std::is_same<decltype(adpfs[i][ENTRY].as##TYPE()),   \
+                               decltype(VARIABLE)::value_type>::value, \
+                  "Parser type mismatch");                             \
+    if (!adpfs[i][ENTRY].empty() && adpfs[i][ENTRY].is##TYPE()) {      \
+        VARIABLE = adpfs[i][ENTRY].as##TYPE();                         \
     }
 
 std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
@@ -722,6 +725,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
 
         std::optional<uint32_t> uclampMinLoadUp;
         std::optional<uint32_t> uclampMinLoadReset;
+        std::optional<int32_t> uclampMaxEfficientBase;
+        std::optional<int32_t> uclampMaxEfficientOffset;
 
         ADPF_PARSE(pidOn, "PID_On", Bool);
         ADPF_PARSE(pidPOver, "PID_Po", Double);
@@ -753,6 +758,8 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
         ADPF_PARSE_OPTIONAL(jankCheckTimeFactor, "JankCheckTimeFactor", Double);
         ADPF_PARSE_OPTIONAL(lowFrameRateThreshold, "LowFrameRateThreshold", UInt);
         ADPF_PARSE_OPTIONAL(maxRecordsNum, "MaxRecordsNum", UInt);
+        ADPF_PARSE_OPTIONAL(uclampMaxEfficientBase, "UclampMax_EfficientBase", Int);
+        ADPF_PARSE_OPTIONAL(uclampMaxEfficientOffset, "UclampMax_EfficientOffset", Int);
 
         // Check all the heuristic configurations are there if heuristic boost is going to
         // be used.
@@ -765,6 +772,12 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
                 adpfs_parsed.clear();
                 return adpfs_parsed;
             }
+        }
+
+        if (uclampMaxEfficientBase.has_value() != uclampMaxEfficientBase.has_value()) {
+            LOG(ERROR) << "Part of the power efficiency configuration is missing!";
+            adpfs_parsed.clear();
+            return adpfs_parsed;
         }
 
         if (!uclampMinLoadUp.has_value()) {
@@ -781,7 +794,7 @@ std::vector<std::shared_ptr<AdpfConfig>> HintManager::ParseAdpfConfigs(
                 targetTimeFactor, staleTimeFactor, heuristicBoostOn, hBoostOnMissedCycles,
                 hBoostOffMaxAvgRatio, hBoostOffMissedCycles, hBoostPidPuFactor, hBoostUclampMin,
                 jankCheckTimeFactor, lowFrameRateThreshold, maxRecordsNum, uclampMinLoadUp.value(),
-                uclampMinLoadReset.value()));
+                uclampMinLoadReset.value(), uclampMaxEfficientBase, uclampMaxEfficientOffset));
     }
     LOG(INFO) << adpfs_parsed.size() << " AdpfConfigs parsed successfully";
     return adpfs_parsed;

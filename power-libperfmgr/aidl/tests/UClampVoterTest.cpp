@@ -85,7 +85,7 @@ TEST(VoteRange, getUclampRange) {
               CpuVote(voteFirst.active(), voteFirst.startTime(), voteFirst.durationNs(), 11, 1024));
     UclampRange ur;
 
-    votes.getUclampRange(&ur, tNext);
+    votes.getUclampRange(ur, tNext);
     EXPECT_EQ(11, ur.uclampMin);
     EXPECT_EQ(kUclampMax, ur.uclampMax);
 }
@@ -103,17 +103,17 @@ TEST(UclampVoter, simple) {
     EXPECT_EQ(2, votes->size());
 
     UclampRange ur1;
-    votes->getUclampRange(&ur1, tNow);
+    votes->getUclampRange(ur1, tNow);
     EXPECT_EQ(22, ur1.uclampMin);
     EXPECT_EQ(kUclampMax, ur1.uclampMax);
 
     UclampRange ur2;
-    votes->getUclampRange(&ur2, tNow + 2s);
+    votes->getUclampRange(ur2, tNow + 2s);
     EXPECT_EQ(11, ur2.uclampMin);
     EXPECT_EQ(kUclampMax, ur2.uclampMax);
 
     UclampRange ur3;
-    votes->getUclampRange(&ur3, tNow + 5s);
+    votes->getUclampRange(ur3, tNow + 5s);
     EXPECT_EQ(0, ur3.uclampMin);
     EXPECT_EQ(1024, ur3.uclampMax);
 
@@ -140,12 +140,12 @@ TEST(UclampVoter, overwrite) {
     EXPECT_EQ(2, votes->size());
 
     UclampRange ucr1;
-    votes->getUclampRange(&ucr1, tNow + 1s);
+    votes->getUclampRange(ucr1, tNow + 1s);
     EXPECT_EQ(22, ucr1.uclampMin);
 
     votes->add(1, CpuVote(true, tNow, 5s, 32, 1024));
     UclampRange ucr2;
-    votes->getUclampRange(&ucr2, tNow + 1s);
+    votes->getUclampRange(ucr2, tNow + 1s);
     EXPECT_EQ(32, ucr2.uclampMin);
 }
 
@@ -178,7 +178,7 @@ TEST(UclampVoter, loadVoteTest) {
 
     // Default: min = 50 (original)
     votes->add(defaultVoteId, CpuVote(true, tNow, 400ms, uclampMinDefault, 1024));
-    votes->getUclampRange(&ucr, tNow + 100ms);
+    votes->getUclampRange(ucr, tNow + 100ms);
     EXPECT_EQ(uclampMinDefault, ucr.uclampMin);
 
     // Default: min = UclampMinInit
@@ -188,13 +188,13 @@ TEST(UclampVoter, loadVoteTest) {
 
     // Check that load is enabled
     ucr.uclampMin = 0;
-    votes->getUclampRange(&ucr, tNow + 100ns);
+    votes->getUclampRange(ucr, tNow + 100ns);
     EXPECT_EQ(uclampMinHigh, ucr.uclampMin);
 
     // Timeout or restore after 1st frame
     // Expect to get 162.
     ucr.uclampMin = 0;
-    votes->getUclampRange(&ucr, tNow + 350ns);
+    votes->getUclampRange(ucr, tNow + 350ns);
     EXPECT_EQ(uclampMinInit, ucr.uclampMin);
 }
 
@@ -215,7 +215,7 @@ TEST(GpuCapacityVoter, testIncorrectTyping) {
     EXPECT_FALSE(votes.remove(cpu_vote_id));
 
     UclampRange range;
-    votes.getUclampRange(&range, now);
+    votes.getUclampRange(range, now);
     EXPECT_EQ(range.uclampMin, 0);
     EXPECT_EQ(range.uclampMax, 1024);
 

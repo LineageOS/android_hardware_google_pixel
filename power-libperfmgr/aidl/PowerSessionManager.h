@@ -18,7 +18,7 @@
 
 #include <android-base/properties.h>
 #include <perfmgr/HintManager.h>
-#include <utils/Looper.h>
+#include <utils/Mutex.h>
 
 #include <mutex>
 #include <optional>
@@ -72,6 +72,8 @@ class PowerSessionManager : public ::android::RefBase {
                  std::chrono::nanoseconds durationNs);
 
     void disableBoosts(int64_t sessionId);
+
+    void setPreferPowerEfficiency(int64_t sessionId, bool enabled);
 
     // Singleton
     static sp<PowerSessionManager> getInstance() {

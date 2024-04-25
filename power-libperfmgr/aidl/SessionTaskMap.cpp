@@ -67,10 +67,13 @@ std::shared_ptr<SessionValueEntry> SessionTaskMap::findSession(int64_t sessionId
 }
 
 void SessionTaskMap::getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::time_point timeNow,
-                                      int *uclampMin, int *uclampMax) const {
-    UclampRange uclampRange;
+                                      UclampRange &range,
+                                      std::optional<int32_t> &uclampMaxEfficientBase,
+                                      std::optional<int32_t> &uclampMaxEfficientOffset) const {
     auto taskItr = mTasks.find(taskId);
     if (taskItr == mTasks.end()) {
+        // Assign to default range
+        range = {};
         return;
     }
 
@@ -78,10 +81,14 @@ void SessionTaskMap::getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::t
         if (!sessInTask->isActive) {
             continue;
         }
-        sessInTask->votes->getUclampRange(&uclampRange, timeNow);
+        sessInTask->votes->getUclampRange(range, timeNow);
+        if (sessInTask->isPowerEfficient && uclampMaxEfficientBase.has_value()) {
+            range.uclampMax = std::min(range.uclampMax,
+                                       sessInTask->votes->allTimedOut(timeNow)
+                                               ? *uclampMaxEfficientBase
+                                               : range.uclampMin + *uclampMaxEfficientOffset);
+        }
     }
-    *uclampMin = uclampRange.uclampMin;
-    *uclampMax = uclampRange.uclampMax;
 }
 
 std::vector<int64_t> SessionTaskMap::getSessionIds(pid_t taskId) const {

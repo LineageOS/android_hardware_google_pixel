@@ -38,8 +38,6 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-using ::android::base::StringPrintf;
-using ::android::perfmgr::AdpfConfig;
 using ::android::perfmgr::HintManager;
 
 namespace {
@@ -57,17 +55,17 @@ struct sched_attr {
     __u32 sched_util_max;
 };
 
-static int set_uclamp_min(int tid, int min) {
-    static constexpr int32_t kMinUclampValue = 0;
-    static constexpr int32_t kMaxUclampValue = 1024;
-    min = std::max(kMinUclampValue, min);
-    min = std::min(min, kMaxUclampValue);
-
+static int set_uclamp(int tid, UclampRange range) {
+    // Ensure min and max are bounded by the range limits and each other
+    range.uclampMin = std::min(std::max(kUclampMin, range.uclampMin), kUclampMax);
+    range.uclampMax = std::min(std::max(range.uclampMax, range.uclampMin), kUclampMax);
     sched_attr attr = {};
     attr.size = sizeof(attr);
 
-    attr.sched_flags = (SCHED_FLAG_KEEP_ALL | SCHED_FLAG_UTIL_CLAMP_MIN);
-    attr.sched_util_min = min;
+    attr.sched_flags =
+            (SCHED_FLAG_KEEP_ALL | SCHED_FLAG_UTIL_CLAMP_MIN | SCHED_FLAG_UTIL_CLAMP_MAX);
+    attr.sched_util_min = range.uclampMin;
+    attr.sched_util_max = range.uclampMax;
 
     const int ret = syscall(__NR_sched_setattr, tid, attr, 0);
     if (ret) {
@@ -422,8 +420,7 @@ void PowerSessionManager::handleEvent(const EventSessionTimeout &eventTimeout) {
 
 void PowerSessionManager::applyUclamp(int64_t sessionId,
                                       std::chrono::steady_clock::time_point timePoint) {
-    const bool uclampMinOn = HintManager::GetInstance()->GetAdpfProfile()->mUclampMinOn;
-
+    auto config = HintManager::GetInstance()->GetAdpfProfile();
     {
         std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
         auto sessValPtr = mSessionTaskMap.findSession(sessionId);
@@ -431,16 +428,17 @@ void PowerSessionManager::applyUclamp(int64_t sessionId,
             return;
         }
 
-        if (!uclampMinOn) {
-            ALOGV("PowerSessionManager::set_uclamp_min: skip");
+        if (!config->mUclampMinOn) {
+            ALOGV("PowerSessionManager::set_uclamp: skip");
         } else {
             auto &threadList = mSessionTaskMap.getTaskIds(sessionId);
             auto tidIter = threadList.begin();
             while (tidIter != threadList.end()) {
                 UclampRange uclampRange;
-                mSessionTaskMap.getTaskVoteRange(*tidIter, timePoint, &uclampRange.uclampMin,
-                                                 &uclampRange.uclampMax);
-                int stat = set_uclamp_min(*tidIter, uclampRange.uclampMin);
+                mSessionTaskMap.getTaskVoteRange(*tidIter, timePoint, uclampRange,
+                                                 config->mUclampMaxEfficientBase,
+                                                 config->mUclampMaxEfficientOffset);
+                int stat = set_uclamp(*tidIter, uclampRange);
                 if (stat == ESRCH) {
                     ALOGV("Removing dead thread %d from hint session %s.", *tidIter,
                           sessValPtr->idString.c_str());
@@ -473,6 +471,24 @@ void PowerSessionManager::forceSessionActive(int64_t sessionId, bool isActive) {
     // which enables apply u clamp to work correctly
     applyUclamp(sessionId, std::chrono::steady_clock::now());
     updateUniversalBoostMode();
+}
+
+void PowerSessionManager::setPreferPowerEfficiency(int64_t sessionId, bool enabled) {
+    bool updated = false;
+    {
+        std::lock_guard<std::mutex> lock(mSessionTaskMapMutex);
+        auto sessValPtr = mSessionTaskMap.findSession(sessionId);
+        if (nullptr == sessValPtr) {
+            return;
+        }
+        if (enabled != sessValPtr->isPowerEfficient) {
+            sessValPtr->isPowerEfficient = enabled;
+            updated = true;
+        }
+    }
+    if (updated) {
+        applyUclamp(sessionId, std::chrono::steady_clock::now());
+    }
 }
 
 }  // namespace pixel
