@@ -77,7 +77,7 @@ bool getIntFromJsonValues(const Json::Value &values, CdevArray *out, bool inc_ch
         LOG(ERROR) << "Values size is invalid";
         return false;
     } else {
-        int last;
+        int last = (inc_check) ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max();
         for (Json::Value::ArrayIndex i = 0; i < kThrottlingSeverityCount; ++i) {
             ret[i] = getIntFromValue(values[i]);
             if (inc_check && ret[i] < last) {
@@ -589,9 +589,11 @@ bool ParsePredictorInfo(const std::string_view name, const Json::Value &sensor,
     return true;
 }
 
-bool ParseBindedCdevInfo(const Json::Value &values,
-                         std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map,
-                         const bool support_pid, bool *support_hard_limit) {
+bool ParseBindedCdevInfo(
+        const Json::Value &values,
+        std::unordered_map<std::string, BindedCdevInfo> *binded_cdev_info_map,
+        const bool support_pid, bool *support_hard_limit,
+        const std::unordered_map<std::string, std::vector<int>> &scaling_frequency_map) {
     for (Json::Value::ArrayIndex j = 0; j < values.size(); ++j) {
         Json::Value sub_values;
         const std::string &cdev_name = values[j]["CdevRequest"].asString();
@@ -611,12 +613,55 @@ bool ParseBindedCdevInfo(const Json::Value &values,
                     return false;
                 }
             }
+
+            if (!values[j]["CdevCeiling"].empty() && !values[j]["CdevCeilingFrequency"].empty()) {
+                LOG(ERROR) << "Both CdevCeiling and CdevCeilingFrequency are configured for "
+                           << cdev_name << ", please remove one of them";
+                binded_cdev_info_map->clear();
+                return false;
+            }
+
             if (!values[j]["CdevCeiling"].empty()) {
                 LOG(INFO) << "Start to parse CdevCeiling: " << cdev_name;
                 if (!getIntFromJsonValues(values[j]["CdevCeiling"], &cdev_ceiling, false, false)) {
-                    LOG(ERROR) << "Failed to parse CdevCeiling";
+                    LOG(ERROR) << "Failed to parse CdevCeiling for " << cdev_name;
                     binded_cdev_info_map->clear();
                     return false;
+                }
+            }
+
+            if (!values[j]["CdevCeilingFrequency"].empty()) {
+                LOG(INFO) << "Start to parse CdevCeilingFrequency: " << cdev_name;
+                CdevArray cdev_ceiling_frequency;
+                if (scaling_frequency_map.find(cdev_name) == scaling_frequency_map.end()) {
+                    LOG(ERROR) << "Scaling frequency path is not found in config for " << cdev_name;
+                    binded_cdev_info_map->clear();
+                    return false;
+                }
+                const std::vector<int> &cdev_scaling_frequency =
+                        scaling_frequency_map.find(cdev_name)->second;
+                if (!getIntFromJsonValues(values[j]["CdevCeilingFrequency"],
+                                          &cdev_ceiling_frequency, false, true)) {
+                    LOG(ERROR) << "Failed to parse CdevCeilingFrequency";
+                    binded_cdev_info_map->clear();
+                    return false;
+                }
+
+                LOG(INFO) << "Start to search CdevCeiling based on frequency: " << cdev_name;
+                // Find the max frequency level that is lower than or equal to CdevCeilingFrequency
+                // value
+                for (size_t cdev_scaling_idx = 0, cdev_ceiling_idx = 0;
+                     cdev_scaling_idx < cdev_scaling_frequency.size() &&
+                     cdev_ceiling_idx < cdev_ceiling.size();) {
+                    if (cdev_scaling_frequency.at(cdev_scaling_idx) <=
+                        cdev_ceiling_frequency.at(cdev_ceiling_idx)) {
+                        cdev_ceiling[cdev_ceiling_idx] = cdev_scaling_idx;
+                        LOG(INFO) << "[" << cdev_ceiling_idx
+                                  << "]: " << cdev_ceiling[cdev_ceiling_idx];
+                        cdev_ceiling_idx += 1;
+                    } else {
+                        cdev_scaling_idx += 1;
+                    }
                 }
             }
 
@@ -647,13 +692,54 @@ bool ParseBindedCdevInfo(const Json::Value &values,
         power_thresholds.fill(NAN);
         ReleaseLogic release_logic = ReleaseLogic::NONE;
 
-        sub_values = values[j]["LimitInfo"];
-        if (sub_values.size()) {
+        if (!values[j]["LimitInfo"].empty() && !values[j]["LimitInfoFrequency"].empty()) {
+            LOG(ERROR) << "Both LimitInfo and LimitInfoFrequency are configured for " << cdev_name
+                       << ", please remove one of them";
+            binded_cdev_info_map->clear();
+            return false;
+        }
+
+        if (!values[j]["LimitInfo"].empty()) {
             LOG(INFO) << "Start to parse LimitInfo: " << cdev_name;
-            if (!getIntFromJsonValues(sub_values, &limit_info, false, false)) {
+            if (!getIntFromJsonValues(values[j]["LimitInfo"], &limit_info, false, false)) {
                 LOG(ERROR) << "Failed to parse LimitInfo";
                 binded_cdev_info_map->clear();
                 return false;
+            }
+            *support_hard_limit = true;
+        }
+
+        if (!values[j]["LimitInfoFrequency"].empty()) {
+            LOG(INFO) << "Start to parse LimitInfoFrequency: " << cdev_name;
+            CdevArray limit_info_frequency;
+            if (scaling_frequency_map.find(cdev_name) == scaling_frequency_map.end()) {
+                LOG(ERROR) << "Scaling frequency path is not found for " << cdev_name;
+                binded_cdev_info_map->clear();
+                return false;
+            }
+
+            const std::vector<int> &cdev_scaling_frequency =
+                    scaling_frequency_map.find(cdev_name)->second;
+            if (!getIntFromJsonValues(values[j]["LimitInfoFrequency"], &limit_info_frequency, false,
+                                      true)) {
+                LOG(ERROR) << "Failed to parse LimitInfoFrequency for " << cdev_name;
+                binded_cdev_info_map->clear();
+                return false;
+            }
+
+            LOG(INFO) << "Start to search LimitInfo based on frequency: " << cdev_name;
+            // Find the max frequency level that is lower than or equal to imitInfoFrequency value
+            for (size_t cdev_scaling_idx = 0, limit_info_idx = 0;
+                 cdev_scaling_idx < cdev_scaling_frequency.size() &&
+                 limit_info_idx < limit_info.size();) {
+                if (cdev_scaling_frequency.at(cdev_scaling_idx) <=
+                    limit_info_frequency.at(limit_info_idx)) {
+                    limit_info[limit_info_idx] = cdev_scaling_idx;
+                    LOG(INFO) << "[" << limit_info_idx << "]: " << limit_info[limit_info_idx];
+                    limit_info_idx += 1;
+                } else {
+                    cdev_scaling_idx += 1;
+                }
             }
             *support_hard_limit = true;
         }
@@ -739,9 +825,10 @@ bool ParseBindedCdevInfo(const Json::Value &values,
     return true;
 }
 
-bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &sensor,
-                               bool *support_throttling,
-                               std::shared_ptr<ThrottlingInfo> *throttling_info) {
+bool ParseSensorThrottlingInfo(
+        const std::string_view name, const Json::Value &sensor, bool *support_throttling,
+        std::shared_ptr<ThrottlingInfo> *throttling_info,
+        const std::unordered_map<std::string, std::vector<int>> &scaling_frequency_map) {
     std::array<float, kThrottlingSeverityCount> k_po;
     k_po.fill(0.0);
     std::array<float, kThrottlingSeverityCount> k_pu;
@@ -861,7 +948,7 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
     // Parse binded cooling device
     std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map;
     if (!ParseBindedCdevInfo(sensor["BindedCdevInfo"], &binded_cdev_info_map, support_pid,
-                             &support_hard_limit)) {
+                             &support_hard_limit, scaling_frequency_map)) {
         LOG(ERROR) << "Sensor[" << name << "]: failed to parse BindedCdevInfo";
         return false;
     }
@@ -874,7 +961,7 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
         const std::string &mode = values[j]["Mode"].asString();
         std::unordered_map<std::string, BindedCdevInfo> binded_cdev_info_map_profile;
         if (!ParseBindedCdevInfo(values[j]["BindedCdevInfo"], &binded_cdev_info_map_profile,
-                                 support_pid, &support_hard_limit)) {
+                                 support_pid, &support_hard_limit, scaling_frequency_map)) {
             LOG(ERROR) << "Sensor[" << name << " failed to parse BindedCdevInfo profile";
         }
         // Check if the binded_cdev_info_map_profile is valid
@@ -936,6 +1023,48 @@ bool ParseSensorThrottlingInfo(const std::string_view name, const Json::Value &s
 bool ParseSensorInfo(const Json::Value &config,
                      std::unordered_map<std::string, SensorInfo> *sensors_parsed) {
     Json::Value sensors = config["Sensors"];
+    Json::Value cdevs = config["CoolingDevices"];
+    std::unordered_map<std::string, std::vector<int>> scaling_frequency_map;
+
+    LOG(INFO) << "Start reading ScalingAvailableFrequenciesPath from config";
+    for (Json::Value::ArrayIndex i = 0; i < cdevs.size(); ++i) {
+        if (cdevs[i]["ScalingAvailableFrequenciesPath"].empty()) {
+            continue;
+        }
+
+        const std::string &path = cdevs[i]["ScalingAvailableFrequenciesPath"].asString();
+        const std::string &name = cdevs[i]["Name"].asString();
+        LOG(INFO) << "Cdev[" << name << "]'s scaling frequency path: " << path;
+        std::string scaling_frequency_str;
+        if (::android::base::ReadFileToString(path, &scaling_frequency_str)) {
+            std::istringstream frequencies(scaling_frequency_str);
+            int frequency;
+            while (frequencies >> frequency) {
+                LOG(INFO) << "Cdev[" << name << "]'s available frequency: " << frequency;
+                scaling_frequency_map[name].push_back(frequency);
+            }
+
+            // Reverse the vector if it starts from small value
+            if (scaling_frequency_map[name].front() < scaling_frequency_map[name].back()) {
+                std::reverse(scaling_frequency_map[name].begin(),
+                             scaling_frequency_map[name].end());
+            }
+
+            // Make sure the scaling frequencies strictly decreasing
+            if (std::adjacent_find(scaling_frequency_map[name].begin(),
+                                   scaling_frequency_map[name].end(),
+                                   std::less_equal<int>()) != scaling_frequency_map[name].end()) {
+                LOG(ERROR) << "Cdev[" << name << "]'s scaling frequencies is not monotonic";
+                sensors_parsed->clear();
+                return false;
+            }
+        } else {
+            LOG(ERROR) << "Cdev[" << name << "]'s scaling frequency path is invalid.";
+            sensors_parsed->clear();
+            return false;
+        }
+    }
+
     std::size_t total_parsed = 0;
     std::unordered_set<std::string> sensors_name_parsed;
 
@@ -1206,7 +1335,8 @@ bool ParseSensorInfo(const Json::Value &config,
 
         bool support_throttling = false;  // support pid or hard limit
         std::shared_ptr<ThrottlingInfo> throttling_info;
-        if (!ParseSensorThrottlingInfo(name, sensors[i], &support_throttling, &throttling_info)) {
+        if (!ParseSensorThrottlingInfo(name, sensors[i], &support_throttling, &throttling_info,
+                                       scaling_frequency_map)) {
             LOG(ERROR) << "Sensor[" << name << "]: failed to parse throttling info";
             sensors_parsed->clear();
             return false;
