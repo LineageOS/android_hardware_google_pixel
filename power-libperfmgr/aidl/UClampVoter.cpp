@@ -23,13 +23,13 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-static void confine(UclampRange *uclampRange, const CpuVote &cpu_vote,
+static void confine(UclampRange &uclampRange, const CpuVote &cpu_vote,
                     std::chrono::steady_clock::time_point t) {
     if (!cpu_vote.isTimeInRange(t)) {
         return;
     }
-    uclampRange->uclampMin = std::max(uclampRange->uclampMin, cpu_vote.mUclampRange.uclampMin);
-    uclampRange->uclampMax = std::min(uclampRange->uclampMax, cpu_vote.mUclampRange.uclampMax);
+    uclampRange.uclampMin = std::max(uclampRange.uclampMin, cpu_vote.mUclampRange.uclampMin);
+    uclampRange.uclampMax = std::min(uclampRange.uclampMax, cpu_vote.mUclampRange.uclampMax);
 }
 
 std::ostream &operator<<(std::ostream &o, const UclampRange &uc) {
@@ -82,11 +82,8 @@ void Votes::updateDuration(int voteId, std::chrono::nanoseconds durationNs) {
     }
 }
 
-void Votes::getUclampRange(UclampRange *uclampRange,
+void Votes::getUclampRange(UclampRange &uclampRange,
                            std::chrono::steady_clock::time_point t) const {
-    if (nullptr == uclampRange) {
-        return;
-    }
     for (auto it = mCpuVotes.begin(); it != mCpuVotes.end(); it++) {
         auto timings_it = mCpuVotes.find(it->first);
         confine(uclampRange, it->second, t);

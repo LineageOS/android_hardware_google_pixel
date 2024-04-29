@@ -55,7 +55,9 @@ class SessionTaskMap {
     std::shared_ptr<SessionValueEntry> findSession(int64_t sessionId);
 
     void getTaskVoteRange(pid_t taskId, std::chrono::steady_clock::time_point timeNow,
-                          int *uclampMin, int *uclampmax) const;
+                          UclampRange &range, std::optional<int32_t> &uclampMaxEfficientBase,
+                          std::optional<int32_t> &uclampMaxEfficientOffset) const;
+    Cycles getSessionsGpuCapacity(std::chrono::steady_clock::time_point time_point) const;
 
     // Find session ids given a task id if it exists
     std::vector<int64_t> getSessionIds(pid_t taskId) const;
@@ -84,7 +86,7 @@ class SessionTaskMap {
         if (taskSessItr == mTasks.end()) {
             return;
         }
-        for (const auto session : taskSessItr->second) {
+        for (const auto &session : taskSessItr->second) {
             auto sessionItr = mSessions.find(session->sessionId);
             if (sessionItr == mSessions.end()) {
                 continue;

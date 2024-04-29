@@ -62,6 +62,10 @@ struct AdpfConfig {
     uint32_t mUclampMinLoadUp;
     uint32_t mUclampMinLoadReset;
 
+    // Power efficient sessions
+    std::optional<int32_t> mUclampMaxEfficientBase;
+    std::optional<int32_t> mUclampMaxEfficientOffset;
+
     int64_t getPidIInitDivI();
     int64_t getPidIHighDivI();
     int64_t getPidILowDivI();
@@ -79,7 +83,9 @@ struct AdpfConfig {
                std::optional<double> hBoostPidPuFactor, std::optional<uint32_t> hBoostUclampMin,
                std::optional<double> jankCheckTimeFactor,
                std::optional<uint32_t> lowFrameRateThreshold, std::optional<uint32_t> maxRecordsNum,
-               uint32_t uclampMinLoadUp, uint32_t uclampMinLoadReset)
+               uint32_t uclampMinLoadUp, uint32_t uclampMinLoadReset,
+               std::optional<int32_t> uclampMaxEfficientBase,
+               std::optional<int32_t> uclampMaxEfficientOffset)
         : mName(std::move(name)),
           mPidOn(pidOn),
           mPidPo(pidPo),
@@ -110,7 +116,9 @@ struct AdpfConfig {
           mLowFrameRateThreshold(lowFrameRateThreshold),
           mMaxRecordsNum(maxRecordsNum),
           mUclampMinLoadUp(uclampMinLoadUp),
-          mUclampMinLoadReset(uclampMinLoadReset) {}
+          mUclampMinLoadReset(uclampMinLoadReset),
+          mUclampMaxEfficientBase(uclampMaxEfficientBase),
+          mUclampMaxEfficientOffset(uclampMaxEfficientOffset) {}
 };
 
 }  // namespace perfmgr

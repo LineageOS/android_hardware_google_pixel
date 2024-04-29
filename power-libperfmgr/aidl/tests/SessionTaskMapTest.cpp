@@ -225,10 +225,10 @@ TEST(SessionTaskMapTest, isAnyAppActive) {
 }
 
 int getVoteMin(const SessionTaskMap &m, int64_t taskId, std::chrono::steady_clock::time_point t) {
-    int uclampMin;
-    int uclampMax;
-    m.getTaskVoteRange(taskId, t, &uclampMin, &uclampMax);
-    return uclampMin;
+    UclampRange range;
+    std::optional<int32_t> fakeEfficiencyParam = std::nullopt;
+    m.getTaskVoteRange(taskId, t, range, fakeEfficiencyParam, fakeEfficiencyParam);
+    return range.uclampMin;
 }
 
 TEST(SessionTaskMapTest, votesEdgeCaseOverlap) {
@@ -315,7 +315,8 @@ TEST(SessionTaskMapTest, TwoSessionsOneInactive) {
     }
 
     UclampRange uclampRange;
-    m.getTaskVoteRange(10, tNow + 10ns, &uclampRange.uclampMin, &uclampRange.uclampMax);
+    std::optional<int32_t> fakeEfficiencyParam;
+    m.getTaskVoteRange(10, tNow + 10ns, uclampRange, fakeEfficiencyParam, fakeEfficiencyParam);
     EXPECT_EQ(222, uclampRange.uclampMin);
 
     auto sessItr = m.findSession(2001);
@@ -324,8 +325,46 @@ TEST(SessionTaskMapTest, TwoSessionsOneInactive) {
 
     uclampRange.uclampMin = 0;
     uclampRange.uclampMax = 1024;
-    m.getTaskVoteRange(10, tNow + 10ns, &uclampRange.uclampMin, &uclampRange.uclampMax);
+    m.getTaskVoteRange(10, tNow + 10ns, uclampRange, fakeEfficiencyParam, fakeEfficiencyParam);
     EXPECT_EQ(111, uclampRange.uclampMin);
+}
+
+TEST(SessionTaskMapTest, usesPowerEfficiencyValues) {
+    SessionTaskMap m;
+    SessionValueEntry entry = makeSession(2000);
+    m.add(2, entry, {20});
+    entry.isPowerEfficient = true;
+    m.add(3, entry, {30});
+
+    const auto t0 = std::chrono::steady_clock::now();
+
+    std::optional<int32_t> maxEfficientBase = 400;
+    std::optional<int32_t> maxEfficientOffset = 200;
+
+    UclampRange baseVote{.uclampMin = 100, .uclampMax = 1024};
+
+    m.addVote(2, 1, baseVote.uclampMin, baseVote.uclampMax, t0, 400ns);
+    m.addVote(3, 1, baseVote.uclampMin, baseVote.uclampMax, t0, 400ns);
+
+    UclampRange range;
+    m.getTaskVoteRange(30, t0 + 10ns, range, maxEfficientBase, maxEfficientOffset);
+    // During the boost we expect it to equal the dynamic value
+    EXPECT_EQ(range.uclampMax, baseVote.uclampMin + *maxEfficientOffset);
+
+    range = UclampRange{};
+    m.getTaskVoteRange(30, t0 + 800ns, range, maxEfficientBase, maxEfficientOffset);
+    // After the boost expires, we expect it to equal the static value
+    EXPECT_EQ(range.uclampMax, *maxEfficientBase);
+
+    range = UclampRange{};
+    m.getTaskVoteRange(20, t0 + 10ns, range, maxEfficientBase, maxEfficientOffset);
+    // We expect this to be unaffected since this session has no power efficiency set
+    EXPECT_EQ(range.uclampMax, baseVote.uclampMax);
+
+    range = UclampRange{};
+    m.getTaskVoteRange(20, t0 + 800ns, range, maxEfficientBase, maxEfficientOffset);
+    // We expect this to be unaffected since this session has no power efficiency set
+    EXPECT_EQ(range.uclampMax, baseVote.uclampMax);
 }
 
 }  // namespace pixel

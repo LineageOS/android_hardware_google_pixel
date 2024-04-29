@@ -119,7 +119,7 @@ class Votes {
     // Given input UclampRange, and a time point now, increase the min and
     // decrease max if this VoteRange is in range, return UclampRange with
     // the largest min and the smallest max
-    void getUclampRange(UclampRange *uclampRange, std::chrono::steady_clock::time_point t) const;
+    void getUclampRange(UclampRange &uclampRange, std::chrono::steady_clock::time_point t) const;
 
     std::optional<Cycles> getGpuCapacityRequest(std::chrono::steady_clock::time_point t) const;
     // Return true if any vote has timed out, otherwise return false
