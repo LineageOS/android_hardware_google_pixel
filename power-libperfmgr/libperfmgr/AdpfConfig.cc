@@ -75,6 +75,10 @@ void AdpfConfig::dumpToFd(int fd) {
         dump_buf << "LowFrameRateThreshold: " << mLowFrameRateThreshold.value() << "\n";
         dump_buf << "MaxRecordsNum: " << mMaxRecordsNum.value() << "\n";
     }
+    if (mUclampMaxEfficientBase.has_value()) {
+        dump_buf << "UclampMax_EfficientBase: " << *mUclampMaxEfficientBase << "\n";
+        dump_buf << "UclampMax_EfficientOffset: " << *mUclampMaxEfficientOffset << "\n";
+    }
     if (!android::base::WriteStringToFd(dump_buf.str(), fd)) {
         LOG(ERROR) << "Failed to dump ADPF profile to fd: " << fd;
     }

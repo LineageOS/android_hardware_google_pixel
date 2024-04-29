@@ -18,7 +18,6 @@
 
 #include <ostream>
 
-#include "AdpfTypes.h"
 #include "AppDescriptorTrace.h"
 #include "UClampVoter.h"
 
@@ -44,6 +43,7 @@ struct SessionValueEntry {
     std::chrono::steady_clock::time_point lastUpdatedTime;
     std::shared_ptr<Votes> votes;
     std::shared_ptr<AppDescriptorTrace> sessionTrace;
+    bool isPowerEfficient{false};
 
     // Write info about power session to ostream for logging and debugging
     std::ostream &dump(std::ostream &os) const;

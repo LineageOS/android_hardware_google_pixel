@@ -194,6 +194,10 @@ bool PowerHintSession::isAppSession() {
     return mDescriptor->uid >= AID_APP_START;
 }
 
+bool PowerHintSession::isModeSet(SessionMode mode) const {
+    return mModes[static_cast<size_t>(mode)];
+}
+
 void PowerHintSession::updatePidControlVariable(int pidControlVariable, bool updateVote) {
     mDescriptor->pidControlVariable = pidControlVariable;
     if (updateVote) {
@@ -459,6 +463,9 @@ ndk::ScopedAStatus PowerHintSession::sendHint(SessionHint hint) {
                                 duration_cast<nanoseconds>(mDescriptor->targetNs *
                                                            adpfConfig->mStaleTimeFactor / 2.0));
             break;
+        case SessionHint::POWER_EFFICIENCY:
+            setMode(SessionMode::POWER_EFFICIENCY, true);
+            break;
         case SessionHint::GPU_LOAD_UP:
             mPSManager->voteSet(mSessionId, AdpfVoteType::GPU_LOAD_UP,
                                 Cycles(adpfConfig->mGpuCapacityLoadUpHeadroom),
@@ -487,6 +494,7 @@ ndk::ScopedAStatus PowerHintSession::setMode(SessionMode mode, bool enabled) {
 
     switch (mode) {
         case SessionMode::POWER_EFFICIENCY:
+            mPSManager->setPreferPowerEfficiency(mSessionId, enabled);
             break;
         default:
             ALOGE("Error: mode is invalid");
