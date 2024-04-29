@@ -129,6 +129,7 @@ class VirtualTempEstimator {
 
     VtEstimatorStatus TFLiteDumpStatus(std::string_view sensor_name, std::ostringstream *dump_buf);
     bool GetInputConfig(Json::Value *config);
+    bool ParseInputConfig(const Json::Value &config);
 };
 
 }  // namespace vtestimator
