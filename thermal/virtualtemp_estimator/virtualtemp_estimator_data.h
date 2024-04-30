@@ -86,8 +86,11 @@ struct VtEstimatorTFLiteData {
         output_buffer_size = 1;
         support_under_sampling = false;
         sample_interval = std::chrono::milliseconds{0};
+        max_sample_interval = std::chrono::milliseconds{std::numeric_limits<int>::max()};
         predict_window_ms = 0;
         last_update_time = boot_clock::time_point::min();
+        prev_sample_time = boot_clock::time_point::min();
+        enable_input_validation = false;
 
         tflite_wrapper = nullptr;
         tflite_methods.create = nullptr;
@@ -111,8 +114,11 @@ struct VtEstimatorTFLiteData {
     std::vector<InputRangeInfo> input_range;
     bool support_under_sampling;
     std::chrono::milliseconds sample_interval{};
+    std::chrono::milliseconds max_sample_interval{};
     size_t predict_window_ms;
     boot_clock::time_point last_update_time;
+    boot_clock::time_point prev_sample_time;
+    bool enable_input_validation;
 
     ~VtEstimatorTFLiteData() {
         if (tflite_wrapper && tflite_methods.destroy) {

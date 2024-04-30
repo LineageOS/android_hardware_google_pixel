@@ -101,6 +101,7 @@ class PowerHintSession : public BnPowerHintSession {
     bool isTimeout();
     // Is hint session for a user application
     bool isAppSession();
+    bool isModeSet(SessionMode mode) const;
     void dumpToStream(std::ostream &stream);
     SessionTag getSessionTag() const;
 
@@ -122,7 +123,6 @@ class PowerHintSession : public BnPowerHintSession {
     std::unordered_map<std::string, std::optional<bool>> mSupportedHints;
     // Last session hint sent, used for logging
     int mLastHintSent = -1;
-    // Use the value of the last enum in enum_range +1 as array size
     std::array<bool, enum_size<SessionMode>()> mModes{};
     // Tag labeling what kind of session this is
     SessionTag mTag;
