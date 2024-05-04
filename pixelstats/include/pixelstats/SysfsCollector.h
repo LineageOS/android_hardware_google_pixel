@@ -94,9 +94,8 @@ class SysfsCollector {
         const char *const OffloadEffectsDurationPath;
         const char *const BluetoothAudioUsagePath;
         const std::vector<std::string> GMSRPath;
-        const std::vector<std::string> FGLearningPath;
         const std::vector<std::string> FGModelLoadingPath;
-        const char *const FGLogBufferPath;
+        const std::vector<std::string> FGLogBufferPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -210,9 +209,8 @@ class SysfsCollector {
     const char *const kBluetoothAudioUsagePath;
     const std::vector<std::string> kGMSRPath;
     const char *const kMaxfgHistoryPath;
-    const std::vector<std::string> kFGLearningPath;
     const std::vector<std::string> kFGModelLoadingPath;
-    const char *const kFGLogBufferPath;
+    const std::vector<std::string> kFGLogBufferPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
