@@ -188,6 +188,17 @@ void UeventListener::ReportChargeMetricsEvent(const std::shared_ptr<IStats> &sta
     charge_stats_reporter_.checkAndReport(stats_client, kChargeMetricsPath);
 }
 
+void UeventListener::ReportFGMetricsEvent(const std::shared_ptr<IStats> &stats_client,
+                                              const char *driver) {
+    if (!driver || (strcmp(driver, "DRIVER=max77779-fg") && strcmp(driver, "DRIVER=maxfg") &&
+        strcmp(driver, "DRIVER=max1720x")))
+        return;
+
+    battery_fg_reporter_.checkAndReportFGLearning(stats_client, kFGLearningPath);
+    battery_fg_reporter_.checkAndReportFwUpdate(stats_client, kFwUpdatePath);
+    battery_fg_reporter_.checkAndReportFGModelLoading(stats_client, kFGModelLoadingPath);
+}
+
 /**
  * Report raw battery capacity, system battery capacity and associated
  * battery capacity curves. This data is collected to verify the filter
@@ -479,6 +490,7 @@ bool UeventListener::ProcessUevent() {
         ReportGpuEvent(stats_client, driver, gpu_event_type, gpu_event_info);
         ReportThermalAbnormalEvent(stats_client, devpath, thermal_abnormal_event_type,
                                    thermal_abnormal_event_info);
+        ReportFGMetricsEvent(stats_client, driver);
     }
 
     if (log_fd_ > 0) {
@@ -491,7 +503,10 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
                                const std::string overheat_path,
                                const std::string charge_metrics_path,
                                const std::string typec_partner_vid_path,
-                               const std::string typec_partner_pid_path)
+                               const std::string typec_partner_pid_path,
+                               const std::vector<std::string> fg_learning_path,
+                               const std::string fw_update_path,
+                               const std::vector<std::string> fg_modelloading_path)
     : kAudioUevent(audio_uevent),
       kBatterySSOCPath(ssoc_details_path),
       kUsbPortOverheatPath(overheat_path),
@@ -499,6 +514,9 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
       kTypeCPartnerUevent(typec_partner_uevent_default),
       kTypeCPartnerVidPath(typec_partner_vid_path),
       kTypeCPartnerPidPath(typec_partner_pid_path),
+      kFGLearningPath(fg_learning_path),
+      kFwUpdatePath(fw_update_path),
+      kFGModelLoadingPath(fg_modelloading_path),
       uevent_fd_(-1),
       log_fd_(-1) {}
 
@@ -520,6 +538,10 @@ UeventListener::UeventListener(const struct UeventPaths &uevents_paths)
       kTypeCPartnerPidPath((uevents_paths.TypeCPartnerPidPath == nullptr)
                                    ? typec_partner_pid_path_default
                                    : uevents_paths.TypeCPartnerPidPath),
+      kFGLearningPath(uevents_paths.FGLearningPath),
+      kFwUpdatePath((uevents_paths.FwUpdatePath == nullptr)
+                                   ? "" : uevents_paths.FwUpdatePath),
+      kFGModelLoadingPath(uevents_paths.FGModelLoadingPath),
       uevent_fd_(-1),
       log_fd_(-1) {}
 

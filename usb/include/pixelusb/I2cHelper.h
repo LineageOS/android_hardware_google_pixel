@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,26 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef HARDWARE_GOOGLE_PIXEL_USB_I2CHELPER_H_
+#define HARDWARE_GOOGLE_PIXEL_USB_I2CHELPER_H_
 
+#include <string>
 
-#include <utils/RefBase.h>
-
-#include "MitigationThermalManager.h"
+using ::std::string;
 
 namespace android {
 namespace hardware {
 namespace google {
 namespace pixel {
+namespace usb {
 
-using ::android::sp;
+// Search the path of the i2c client
+string getI2cClientPath(const string hsi2cPath, const string devName, const string clientId);
 
-class BatteryMitigation : public RefBase {
-  public:
-    BatteryMitigation(const struct MitigationConfig::Config &cfg);
-    bool isMitigationLogTimeValid(std::chrono::system_clock::time_point startTime,
-                                  const char *const logFilePath, const char *const timestampFormat,
-                                  const std::regex pattern);
-
-  private:
-    MitigationThermalManager *mThermalMgr;
-};
-
+}  // namespace usb
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware
 }  // namespace android
+
+#endif  // HARDWARE_GOOGLE_PIXEL_USB_I2CHELPER_H_

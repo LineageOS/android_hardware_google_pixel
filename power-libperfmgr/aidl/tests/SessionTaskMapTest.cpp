@@ -198,7 +198,7 @@ TEST(SessionTaskMapTest, remove) {
     SessionValueEntry sve;
     sve.isAppSession = true;
     sve.votes = std::make_shared<Votes>();
-    sve.votes->add(sessionId, VoteRange::makeMinRange(123, tNow, 400ms));
+    sve.votes->add(sessionId, CpuVote(true, tNow, 400ms, 123, 1024));
     m.add(sessionId, sve, {10, 20, 30});
     EXPECT_TRUE(m.isAnyAppSessionActive(tNow));
     EXPECT_TRUE(m.remove(sessionId));
@@ -217,7 +217,7 @@ TEST(SessionTaskMapTest, isAnyAppActive) {
     sv.isAppSession = true;
     sv.lastUpdatedTime = tNow;
     sv.votes = std::make_shared<Votes>();
-    sv.votes->add(1, VoteRange::makeMinRange(123, tNow, 400ms));
+    sv.votes->add(1, CpuVote(true, tNow, 400ms, 123, 1024));
 
     EXPECT_TRUE(m.add(sessionId, sv, {10, 20, 30}));
     EXPECT_TRUE(m.isAnyAppSessionActive(tNow));
@@ -300,7 +300,7 @@ TEST(SessionTaskMapTest, TwoSessionsOneInactive) {
         sv.isAppSession = true;
         sv.lastUpdatedTime = tNow;
         sv.votes = std::make_shared<Votes>();
-        sv.votes->add(11, VoteRange::makeMinRange(111, tNow, 400ms));
+        sv.votes->add(11, CpuVote(true, tNow, 400ms, 111, 1024));
         EXPECT_TRUE(m.add(1001, sv, {10, 20, 30}));
     }
 
@@ -310,7 +310,7 @@ TEST(SessionTaskMapTest, TwoSessionsOneInactive) {
         sv.isAppSession = true;
         sv.lastUpdatedTime = tNow;
         sv.votes = std::make_shared<Votes>();
-        sv.votes->add(22, VoteRange::makeMinRange(222, tNow, 400ms));
+        sv.votes->add(22, CpuVote(true, tNow, 400ms, 222, 1024));
         EXPECT_TRUE(m.add(2001, sv, {10, 20, 30}));
     }
 

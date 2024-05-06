@@ -55,7 +55,7 @@ void SessionTaskMap::addVote(int64_t sessionId, int voteId, int uclampMin, int u
     }
 
     sessItr->second.val->votes->add(voteId,
-                                    VoteRange(true, uclampMin, uclampMax, startTime, durationNs));
+                                    CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
 }
 
 std::shared_ptr<SessionValueEntry> SessionTaskMap::findSession(int64_t sessionId) {

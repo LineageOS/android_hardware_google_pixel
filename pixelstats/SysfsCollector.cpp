@@ -51,11 +51,13 @@ using android::hardware::google::pixel::PixelAtoms::BatteryCapacity;
 using android::hardware::google::pixel::PixelAtoms::BlockStatsReported;
 using android::hardware::google::pixel::PixelAtoms::BootStatsInfo;
 using android::hardware::google::pixel::PixelAtoms::DisplayPanelErrorStats;
+using android::hardware::google::pixel::PixelAtoms::DisplayPortErrorStats;
 using android::hardware::google::pixel::PixelAtoms::F2fsAtomicWriteInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsSmartIdleMaintEnabledStateChanged;
 using android::hardware::google::pixel::PixelAtoms::F2fsStatsInfo;
+using android::hardware::google::pixel::PixelAtoms::HDCPAuthTypeStats;
 using android::hardware::google::pixel::PixelAtoms::PartitionsUsedSpaceReported;
 using android::hardware::google::pixel::PixelAtoms::PcieLinkStatsReported;
 using android::hardware::google::pixel::PixelAtoms::StorageUfsHealth;
@@ -120,6 +122,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kModemPcieLinkStatsPath(sysfs_paths.ModemPcieLinkStatsPath),
       kWifiPcieLinkStatsPath(sysfs_paths.WifiPcieLinkStatsPath),
       kDisplayStatsPaths(sysfs_paths.DisplayStatsPaths),
+      kDisplayPortStatsPaths(sysfs_paths.DisplayPortStatsPaths),
+      kHDCPStatsPaths(sysfs_paths.HDCPStatsPaths),
       kPDMStatePath(sysfs_paths.PDMStatePath),
       kWavesPath(sysfs_paths.WavesPath),
       kAdaptedInfoCountPath(sysfs_paths.AdaptedInfoCountPath),
@@ -204,11 +208,7 @@ void SysfsCollector::logBatteryEEPROM(const std::shared_ptr<IStats> &stats_clien
         battery_EEPROM_reporter_.checkAndReport(stats_client, kEEPROMPath);
     }
 
-    if (kGMSRPath == nullptr || strlen(kGMSRPath) == 0) {
-         ALOGV("Battery GMSR path not specified");
-    } else {
-        battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
-    }
+    battery_EEPROM_reporter_.checkAndReportGMSR(stats_client, kGMSRPath);
 
     battery_EEPROM_reporter_.checkAndReportMaxfgHistory(stats_client, kMaxfgHistoryPath);
 }
@@ -417,7 +417,18 @@ void SysfsCollector::logSpeakerHealthStats(const std::shared_ptr<IStats> &stats_
 }
 
 void SysfsCollector::logDisplayStats(const std::shared_ptr<IStats> &stats_client) {
-    display_stats_reporter_.logDisplayStats(stats_client, kDisplayStatsPaths);
+    display_stats_reporter_.logDisplayStats(stats_client, kDisplayStatsPaths,
+                                            DisplayStatsReporter::DISP_PANEL_STATE);
+}
+
+void SysfsCollector::logDisplayPortStats(const std::shared_ptr<IStats> &stats_client) {
+    display_stats_reporter_.logDisplayStats(stats_client, kDisplayPortStatsPaths,
+                                            DisplayStatsReporter::DISP_PORT_STATE);
+}
+
+void SysfsCollector::logHDCPStats(const std::shared_ptr<IStats> &stats_client) {
+    display_stats_reporter_.logDisplayStats(stats_client, kHDCPStatsPaths,
+                                            DisplayStatsReporter::HDCP_STATE);
 }
 
 void SysfsCollector::logThermalStats(const std::shared_ptr<IStats> &stats_client) {
@@ -2071,6 +2082,8 @@ void SysfsCollector::logPerDay() {
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
     logDisplayStats(stats_client);
+    logDisplayPortStats(stats_client);
+    logHDCPStats(stats_client);
     logF2fsStats(stats_client);
     logF2fsAtomicWriteInfo(stats_client);
     logF2fsCompressionInfo(stats_client);

@@ -257,6 +257,8 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         formula = FormulaOption::MINIMUM;
     } else if (sensor["Formula"].asString().compare("USE_ML_MODEL") == 0) {
         formula = FormulaOption::USE_ML_MODEL;
+    } else if (sensor["Formula"].asString().compare("USE_LINEAR_MODEL") == 0) {
+        formula = FormulaOption::USE_LINEAR_MODEL;
     } else {
         LOG(ERROR) << "Sensor[" << name << "]'s Formula is invalid";
         return false;
@@ -296,12 +298,12 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             coefficients.emplace_back(values[j].asString());
             LOG(INFO) << "Sensor[" << name << "]'s coefficient[" << j << "]: " << coefficients[j];
         }
-    } else {
+    } else if ((formula != FormulaOption::USE_ML_MODEL)) {
         LOG(ERROR) << "Sensor[" << name << "] has no Coefficient setting";
         return false;
     }
     if ((linked_sensors.size() != coefficients.size()) &&
-        (formula != FormulaOption::USE_ML_MODEL)) {
+        (formula != FormulaOption::USE_ML_MODEL) && (formula != FormulaOption::USE_LINEAR_MODEL)) {
         LOG(ERROR) << "Sensor[" << name << "] has invalid Coefficient size";
         return false;
     }
@@ -366,6 +368,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
     }
 
     if (formula == FormulaOption::USE_ML_MODEL) {
+        ::thermal::vtestimator::VtEstimationInitData init_data(::thermal::vtestimator::kUseMLModel);
         if (sensor["ModelPath"].empty()) {
             LOG(ERROR) << "Sensor[" << name << "] has no ModelPath";
             return false;
@@ -377,7 +380,7 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         }
 
         vt_estimator = std::make_unique<::thermal::vtestimator::VirtualTempEstimator>(
-                linked_sensors.size());
+                ::thermal::vtestimator::kUseMLModel, linked_sensors.size());
         if (!vt_estimator) {
             LOG(ERROR) << "Failed to create vt estimator for Sensor[" << name
                        << "] with linked sensor size : " << linked_sensors.size();
@@ -385,13 +388,79 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         }
 
         vt_estimator_model_file = "vendor/etc/" + sensor["ModelPath"].asString();
+        init_data.ml_model_init_data.model_path = vt_estimator_model_file;
+        init_data.ml_model_init_data.offset = offset;
 
-        ::thermal::vtestimator::VtEstimatorStatus ret =
-                vt_estimator->Initialize(vt_estimator_model_file.c_str());
+        if (!sensor["PreviousSampleCount"].empty()) {
+            init_data.ml_model_init_data.use_prev_samples = true;
+            init_data.ml_model_init_data.prev_samples_order = sensor["PreviousSampleCount"].asInt();
+            LOG(INFO) << "Sensor[" << name << "] takes "
+                      << init_data.ml_model_init_data.prev_samples_order << " historic samples";
+        }
+
+        if (!sensor["OutputLabelCount"].empty()) {
+            init_data.ml_model_init_data.output_label_count = sensor["OutputLabelCount"].asInt();
+            LOG(INFO) << "Sensor[" << name << "] outputs "
+                      << init_data.ml_model_init_data.output_label_count << " labels";
+        }
+
+        if (!sensor["PredictHotSpotCount"].empty()) {
+            init_data.ml_model_init_data.num_hot_spots = sensor["PredictHotSpotCount"].asInt();
+            LOG(INFO) << "Sensor[" << name << "] predicts temperature at "
+                      << init_data.ml_model_init_data.num_hot_spots << " hot spots";
+        }
+
+        ::thermal::vtestimator::VtEstimatorStatus ret = vt_estimator->Initialize(init_data);
         if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
             LOG(ERROR) << "Failed to initialize vt estimator for Sensor[" << name
                        << "] with ModelPath: " << vt_estimator_model_file
                        << " with ret code : " << ret;
+            return false;
+        }
+
+        LOG(INFO) << "Successfully created vt_estimator for Sensor[" << name
+                  << "] with input samples: " << linked_sensors.size();
+
+    } else if (formula == FormulaOption::USE_LINEAR_MODEL) {
+        ::thermal::vtestimator::VtEstimationInitData init_data(
+                ::thermal::vtestimator::kUseLinearModel);
+
+        if ((!linked_sensors.size()) || (linked_sensors.size() > coefficients.size())) {
+            LOG(ERROR) << "Sensor[" << name
+                       << "] uses USE_LINEAR_MODEL and has invalid linked_sensors size["
+                       << linked_sensors.size() << "] or coefficients size[" << coefficients.size()
+                       << "]";
+            return false;
+        }
+
+        vt_estimator = std::make_unique<::thermal::vtestimator::VirtualTempEstimator>(
+                ::thermal::vtestimator::kUseLinearModel, linked_sensors.size());
+        if (!vt_estimator) {
+            LOG(ERROR) << "Failed to create vt estimator for Sensor[" << name
+                       << "] with linked sensor size : " << linked_sensors.size();
+            return false;
+        }
+
+        init_data.linear_model_init_data.prev_samples_order =
+                coefficients.size() / linked_sensors.size();
+        init_data.linear_model_init_data.offset = offset;
+
+        for (size_t i = 0; i < coefficients.size(); ++i) {
+            float coefficient = getFloatFromValue(coefficients[i]);
+            if (std::isnan(coefficient)) {
+                LOG(ERROR) << "Nan coefficient unexpected for sensor " << name;
+                return false;
+            }
+            init_data.linear_model_init_data.coefficients.emplace_back(coefficient);
+        }
+        if (coefficients.size() > linked_sensors.size()) {
+            init_data.linear_model_init_data.use_prev_samples = true;
+        }
+
+        ::thermal::vtestimator::VtEstimatorStatus ret = vt_estimator->Initialize(init_data);
+        if (ret != ::thermal::vtestimator::kVtEstimatorOk) {
+            LOG(ERROR) << "Failed to initialize vt estimator for Sensor[" << name
+                       << "] with ret code : " << ret;
             return false;
         }
 
@@ -958,7 +1027,11 @@ bool ParseSensorInfo(const Json::Value &config,
             vr_threshold = getFloatFromValue(sensors[i]["VrThreshold"]);
             LOG(INFO) << "Sensor[" << name << "]'s VrThreshold: " << vr_threshold;
         }
-        float multiplier = sensors[i]["Multiplier"].asFloat();
+
+        float multiplier = 1.0;
+        if (!sensors[i]["Multiplier"].empty()) {
+            multiplier = sensors[i]["Multiplier"].asFloat();
+        }
         LOG(INFO) << "Sensor[" << name << "]'s Multiplier: " << multiplier;
 
         std::chrono::milliseconds polling_delay = kUeventPollTimeoutMs;

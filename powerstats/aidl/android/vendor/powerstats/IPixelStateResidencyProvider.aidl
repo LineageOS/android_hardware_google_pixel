@@ -16,10 +16,15 @@
 
 package android.vendor.powerstats;
 
+import android.hardware.power.stats.State;
 import android.vendor.powerstats.IPixelStateResidencyCallback;
 
 interface IPixelStateResidencyProvider
 {
     void registerCallback(in @utf8InCpp String entityName, in IPixelStateResidencyCallback cb);
+    void registerCallbackByStates(
+            in @utf8InCpp String entityName,
+            in IPixelStateResidencyCallback cb,
+            in State[] states);
     void unregisterCallback(in IPixelStateResidencyCallback cb);
 }
