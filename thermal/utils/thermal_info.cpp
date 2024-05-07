@@ -848,6 +848,7 @@ bool ParseSensorThrottlingInfo(
     std::array<float, kThrottlingSeverityCount> i_cutoff;
     i_cutoff.fill(NAN);
     float i_default = 0.0;
+    float i_default_pct = NAN;
     int tran_cycle = 0;
     bool support_pid = false;
     bool support_hard_limit = false;
@@ -917,9 +918,20 @@ bool ParseSensorThrottlingInfo(
             LOG(ERROR) << "Sensor[" << name << "]: Failed to parse I_Cutoff";
             return false;
         }
-        i_default = getFloatFromValue(sensor["PIDInfo"]["I_Default"]);
-        LOG(INFO) << "Sensor[" << name << "]'s I_Default: " << i_default;
 
+        if (!sensor["PIDInfo"]["I_Default"].empty() &&
+            !sensor["PIDInfo"]["I_Default_Pct"].empty()) {
+            LOG(ERROR) << "I_Default and I_Default_P cannot be applied together";
+            return false;
+        }
+
+        if (!sensor["PIDInfo"]["I_Default"].empty()) {
+            i_default = getFloatFromValue(sensor["PIDInfo"]["I_Default"]);
+            LOG(INFO) << "Sensor[" << name << "]'s I_Default: " << i_default;
+        } else if (!sensor["PIDInfo"]["I_Default_Pct"].empty()) {
+            i_default_pct = getFloatFromValue(sensor["PIDInfo"]["I_Default_Pct"]);
+            LOG(INFO) << "Sensor[" << name << "]'s I_Default_Pct: " << i_default_pct;
+        }
         tran_cycle = getFloatFromValue(sensor["PIDInfo"]["TranCycle"]);
         LOG(INFO) << "Sensor[" << name << "]'s TranCycle: " << tran_cycle;
 
@@ -1013,9 +1025,10 @@ bool ParseSensorThrottlingInfo(
         }
         excluded_power_info_map[power_rail] = power_weight;
     }
-    throttling_info->reset(new ThrottlingInfo{
-            k_po, k_pu, k_i, k_d, i_max, max_alloc_power, min_alloc_power, s_power, i_cutoff,
-            i_default, tran_cycle, excluded_power_info_map, binded_cdev_info_map, profile_map});
+    throttling_info->reset(new ThrottlingInfo{k_po, k_pu, k_i, k_d, i_max, max_alloc_power,
+                                              min_alloc_power, s_power, i_cutoff, i_default,
+                                              i_default_pct, tran_cycle, excluded_power_info_map,
+                                              binded_cdev_info_map, profile_map});
     *support_throttling = support_pid | support_hard_limit;
     return true;
 }
