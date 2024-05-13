@@ -216,7 +216,6 @@ class Vibrator : public BnVibrator {
                           const std::shared_ptr<IVibratorCallback> &callback);
     // set 'amplitude' based on an arbitrary scale determined by 'maximum'
     ndk::ScopedAStatus setEffectAmplitude(float amplitude, float maximum, bool scalable);
-    ndk::ScopedAStatus setGlobalAmplitude(bool set);
     // 'simple' effects are those precompiled and loaded into the controller
     ndk::ScopedAStatus getSimpleDetails(Effect effect, EffectStrength strength,
                                         uint32_t *outEffectIndex, uint32_t *outTimeMs,
@@ -261,7 +260,7 @@ class Vibrator : public BnVibrator {
     bool mHasHapticAlsaDevice{false};
     bool mHasPassthroughHapticDevice;
     bool mIsUnderExternalControl;
-    float mLongEffectScale = 1.0;
+    float mGlobalAmplitude = 1.0;
     bool mIsChirpEnabled;
     uint32_t mSupportedPrimitivesBits = 0x0;
     float mRedc{0};
