@@ -372,7 +372,6 @@ ndk::ScopedAStatus Vibrator::off() {
     }
 
     mActiveId = -1;
-    setGlobalAmplitude(false);
     if (mF0Offset) {
         mHwApi->setF0Offset(0);
     }
@@ -400,7 +399,6 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
     if (MAX_COLD_START_LATENCY_MS <= MAX_TIME_MS - timeoutMs) {
         timeoutMs += MAX_COLD_START_LATENCY_MS;
     }
-    setGlobalAmplitude(true);
     if (mF0Offset) {
         mHwApi->setF0Offset(mF0Offset);
     }
@@ -433,9 +431,10 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
-    mLongEffectScale = amplitude;
     if (!isUnderExternalControl()) {
-        return setGlobalAmplitude(true);
+        mGlobalAmplitude = amplitude;
+        auto volLevel = intensityToVolLevel(mGlobalAmplitude, WAVEFORM_LONG_VIBRATION_EFFECT_INDEX);
+        return setEffectAmplitude(volLevel, VOLTAGE_SCALE_MAX, true);
     } else {
         mStatsApi->logError(kUnsupportedOpError);
         return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
@@ -444,7 +443,9 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
 
 ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
     VFTRACE(enabled);
-    setGlobalAmplitude(enabled);
+    if (enabled) {
+        setEffectAmplitude(VOLTAGE_SCALE_MAX, VOLTAGE_SCALE_MAX, enabled);
+    }
 
     if (!mHasPassthroughHapticDevice) {
         if (mHasHapticAlsaDevice || mConfigHapticAlsaDeviceDone ||
@@ -664,7 +665,7 @@ ndk::ScopedAStatus Vibrator::on(uint32_t timeoutMs, uint32_t effectIndex, const 
     const std::scoped_lock<std::mutex> lock(mActiveId_mutex);
     mActiveId = effectIndex;
     /* Play the event now. */
-    VETRACE(effectIndex, mLongEffectScale, timeoutMs, ch);
+    VETRACE(effectIndex, mGlobalAmplitude, timeoutMs, ch);
     mStatsApi->logLatencyEnd();
     if (!mHwApi->setFFPlay(effectIndex, true)) {
         mStatsApi->logError(kHwApiError);
@@ -784,15 +785,6 @@ ndk::ScopedAStatus Vibrator::setEffectAmplitude(float amplitude, float maximum, 
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
     return ndk::ScopedAStatus::ok();
-}
-
-ndk::ScopedAStatus Vibrator::setGlobalAmplitude(bool set) {
-    VFTRACE(set);
-    uint8_t amplitude = set ? roundf(mLongEffectScale * mLongEffectVol[1]) : VOLTAGE_SCALE_MAX;
-    if (!set) {
-        mLongEffectScale = 1.0;  // Reset the scale for the later new effect.
-    }
-    return setEffectAmplitude(amplitude, VOLTAGE_SCALE_MAX, set);
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedAlwaysOnEffects(std::vector<Effect> * /*_aidl_return*/) {
@@ -1267,7 +1259,7 @@ binder_status_t Vibrator::dump(int fd, const char **args, uint32_t numArgs) {
 
     dprintf(fd, "AIDL:\n");
 
-    dprintf(fd, "  Global Gain: %0.2f\n", mLongEffectScale);
+    dprintf(fd, "  Global Amplitude: %0.2f\n", mGlobalAmplitude);
     dprintf(fd, "  Active Effect ID: %" PRId32 "\n", mActiveId);
     dprintf(fd, "  F0: %.02f\n", mResonantFrequency);
     dprintf(fd, "  F0 Offset: %" PRIu32 "\n", mF0Offset);
@@ -1680,6 +1672,10 @@ uint32_t Vibrator::intensityToVolLevel(float intensity, uint32_t effectIndex) {
         case WAVEFORM_LIGHT_TICK_INDEX:
             volLevel = calc(intensity, mTickEffectVol);
             break;
+        case WAVEFORM_LONG_VIBRATION_EFFECT_INDEX:
+            // fall-through
+        case WAVEFORM_SHORT_VIBRATION_EFFECT_INDEX:
+            // fall-through
         case WAVEFORM_QUICK_RISE_INDEX:
             // fall-through
         case WAVEFORM_QUICK_FALL_INDEX:
@@ -1692,6 +1688,8 @@ uint32_t Vibrator::intensityToVolLevel(float intensity, uint32_t effectIndex) {
         case WAVEFORM_SPIN_INDEX:
             // fall-through
         case WAVEFORM_SLOW_RISE_INDEX:
+            // fall-through
+        case WAVEFORM_LOW_TICK_INDEX:
             // fall-through
         default:
             volLevel = calc(intensity, mClickEffectVol);
