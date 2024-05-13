@@ -19,6 +19,7 @@
 #include <chrono>
 #include <compare>
 #include <numeric>
+#include <ostream>
 #include <type_traits>
 
 namespace aidl {
@@ -80,6 +81,14 @@ inline auto operator*(C const &other, PhysicalQuantityType<T, W> type) {
 
 using Cycles = PhysicalQuantityType<int, struct CyclesTag>;
 using Frequency = PhysicalQuantityType<int, struct FrequencyTag>;
+
+inline std::ostream &operator<<(std::ostream &os, Cycles cycles) {
+    return os << "Cycles(" << int(cycles) << ")";
+};
+
+inline std::ostream &operator<<(std::ostream &os, Frequency freq) {
+    return os << "Frequency(" << int(freq) << ")";
+};
 
 inline constexpr Frequency operator/(Cycles const &cycles, chrono_duration auto time) {
     auto const fpchrono = std::chrono::duration<float, std::chrono::seconds::period>(time);

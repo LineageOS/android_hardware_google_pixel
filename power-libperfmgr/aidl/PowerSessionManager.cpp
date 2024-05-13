@@ -309,7 +309,7 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfVoteType voteId, int uc
             return;
         }
         scheduleTimeout = shouldScheduleTimeout(*session->votes, voteIdInt, timeoutDeadline),
-        session->votes->add(voteIdInt, CpuVote(true, startTime, durationNs, uclampMin, uclampMax));
+        mSessionTaskMap.addVote(sessionId, voteIdInt, uclampMin, uclampMax, startTime, durationNs);
         if (ATRACE_ENABLED()) {
             ATRACE_INT(session->sessionTrace->trace_votes[voteIdInt].c_str(), uclampMin);
         }
@@ -338,7 +338,7 @@ void PowerSessionManager::voteSet(int64_t sessionId, AdpfVoteType voteId, Cycles
             return;
         }
         scheduleTimeout = shouldScheduleTimeout(*session->votes, voteIdInt, timeoutDeadline),
-        session->votes->add(voteIdInt, GpuVote(true, startTime, durationNs, capacity));
+        mSessionTaskMap.addGpuVote(sessionId, voteIdInt, capacity, startTime, durationNs);
         if (ATRACE_ENABLED()) {
             ATRACE_INT(session->sessionTrace->trace_votes[voteIdInt].c_str(),
                        static_cast<int>(capacity));

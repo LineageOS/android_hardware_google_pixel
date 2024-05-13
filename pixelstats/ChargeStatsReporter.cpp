@@ -75,6 +75,8 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
     VendorAtomValue val;
     int32_t i = 0, tmp[chg_fields_size] = {0}, fields_size = (chg_fields_size - wlc_fields_size);
     int32_t pca_ac[2] = {0}, pca_rs[5] = {0};
+    std::string pdo_line, file_contents;
+    std::istringstream ss;
 
     ALOGD("processing %s", line.c_str());
     if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d %d", &tmp[0], &tmp[1], &tmp[2], &tmp[3],
@@ -122,6 +124,21 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
                 tmp[8] = pca_ac[0];
                 tmp[9] = pca_ac[1];
                 tmp[13] = pca_rs[0];
+            }
+        }
+    }
+
+    if (ReadFileToString(kGChargerMetricsPath.c_str(), &file_contents)) {
+        ss.str(file_contents);
+        while (std::getline(ss, pdo_line)) {
+            if (sscanf(pdo_line.c_str(), "D:%x,%x,%x,%x,%x,%x,%x", &pca_ac[0], &pca_ac[1], &pca_rs[0],
+                   &pca_rs[1], &pca_rs[2], &pca_rs[3], &pca_rs[4]) != 7) {
+                continue;
+            } else {
+                ALOGD("processed %s, apdo:%d, pdo:%d", pdo_line.c_str(), pca_ac[1], pca_rs[4]);
+                tmp[13] = pca_ac[1]; /* APDO */
+                tmp[14] = pca_rs[4]; /* PDO */
+                break;
             }
         }
     }
