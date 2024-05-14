@@ -105,6 +105,27 @@ cc_library_static {
     ],
 }
 
+cc_library_static {
+    name: "libpixelusb-usbdp",
+    vendor: true,
+
+    srcs: [
+        "UsbDpUtils.cpp",
+    ],
+
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "libutils",
+        "android.hardware.usb-V3-ndk",
+    ],
+}
+
 cc_fuzz {
     name: "libpixelusb_gadgetutils_fuzzer",
     vendor: true,
