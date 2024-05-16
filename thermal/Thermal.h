@@ -134,7 +134,7 @@ class Thermal : public BnThermal {
     void dumpStatsRecord(std::ostringstream *dump_buf, const StatsRecord &stats_record,
                          std::string_view line_prefix);
     void dumpThermalStats(std::ostringstream *dump_buf);
-    void dumpThermalData(int fd);
+    void dumpThermalData(int fd, const char **args, uint32_t numArgs);
 };
 
 }  // namespace implementation
