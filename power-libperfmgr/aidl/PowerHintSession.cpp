@@ -32,7 +32,6 @@
 #include <atomic>
 
 #include "GpuCalculationHelpers.h"
-#include "PowerSessionManager.h"
 #include "tests/mocks/MockHintManager.h"
 #include "tests/mocks/MockPowerSessionManager.h"
 
@@ -572,7 +571,9 @@ bool PowerHintSession<HintManagerT, PowerSessionManagerT>::isTimeout() {
 template class PowerHintSession<>;
 template class PowerHintSession<testing::NiceMock<mock::pixel::MockHintManager>,
                                 testing::NiceMock<mock::pixel::MockPowerSessionManager>>;
-
+template class PowerHintSession<
+        testing::NiceMock<mock::pixel::MockHintManager>,
+        PowerSessionManager<testing::NiceMock<mock::pixel::MockHintManager>>>;
 }  // namespace pixel
 }  // namespace impl
 }  // namespace power

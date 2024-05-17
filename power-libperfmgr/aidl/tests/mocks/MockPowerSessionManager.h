@@ -64,6 +64,11 @@ class MockPowerSessionManager {
     MOCK_METHOD(void, setPreferPowerEfficiency, (int64_t sessionId, bool enabled), ());
     MOCK_METHOD(std::optional<impl::pixel::Frequency>, gpuFrequency, (), (const));
 
+    MOCK_METHOD(void, registerSession, (std::shared_ptr<void> session, int64_t sessionId), ());
+    MOCK_METHOD(void, unregisterSession, (int64_t sessionId), ());
+    MOCK_METHOD(void, clear, (), ());
+    MOCK_METHOD(std::shared_ptr<void>, getSession, (int64_t sessionId), ());
+
     static testing::NiceMock<MockPowerSessionManager> *getInstance() {
         static testing::NiceMock<MockPowerSessionManager> instance{};
         return &instance;
