@@ -22,11 +22,10 @@
 
 #include <mutex>
 #include <optional>
-#include <unordered_set>
 
+#include "AppHintDesc.h"
 #include "BackgroundWorker.h"
 #include "GpuCapacityNode.h"
-#include "PowerHintSession.h"
 #include "SessionTaskMap.h"
 
 namespace aidl {
@@ -36,15 +35,15 @@ namespace power {
 namespace impl {
 namespace pixel {
 
-using ::android::Looper;
-using ::android::Message;
 using ::android::Thread;
-using ::android::perfmgr::HintManager;
 
 constexpr char kPowerHalAdpfDisableTopAppBoost[] = "vendor.powerhal.adpf.disable.hint";
 
-class PowerSessionManager : public ::android::RefBase {
+template <class HintManagerT = ::android::perfmgr::HintManager>
+class PowerSessionManager : public Immobile {
   public:
+    ~PowerSessionManager() = default;
+
     // Update the current hint info
     void updateHintMode(const std::string &mode, bool enabled);
     void updateHintBoost(const std::string &boost, int32_t durationMs);
@@ -80,9 +79,9 @@ class PowerSessionManager : public ::android::RefBase {
     void setPreferPowerEfficiency(int64_t sessionId, bool enabled);
 
     // Singleton
-    static sp<PowerSessionManager> getInstance() {
-        static sp<PowerSessionManager> instance = new PowerSessionManager();
-        return instance;
+    static PowerSessionManager *getInstance() {
+        static PowerSessionManager instance{};
+        return &instance;
     }
 
     std::optional<Frequency> gpuFrequency() const;

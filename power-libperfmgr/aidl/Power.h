@@ -22,8 +22,7 @@
 #include <memory>
 #include <thread>
 
-#include "aidl/android/hardware/power/ChannelConfig.h"
-#include "aidl/android/hardware/power/SessionConfig.h"
+#include "AdpfTypes.h"
 #include "disp-power/DisplayLowPower.h"
 #include "disp-power/InteractionHandler.h"
 
@@ -33,13 +32,6 @@ namespace hardware {
 namespace power {
 namespace impl {
 namespace pixel {
-
-using android::hardware::power::Boost;
-using android::hardware::power::ChannelConfig;
-using android::hardware::power::IPowerHintSession;
-using android::hardware::power::Mode;
-using android::hardware::power::SessionConfig;
-using android::hardware::power::SessionTag;
 
 class Power : public ::aidl::android::hardware::power::BnPower {
   public:
