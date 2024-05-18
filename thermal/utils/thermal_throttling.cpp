@@ -547,18 +547,12 @@ bool ThermalThrottling::allocatePowerToCdev(
                                        cdev_info.state2power[curr_cdev_vote]) {
                             target_throttle_step += 1;
                         }
-
-                        const auto cdev_ceiling =
-                                binded_cdev_info_pair.second
-                                        .cdev_ceiling[static_cast<size_t>(curr_severity)];
                         const auto target_state =
-                                std::min(curr_cdev_vote + target_throttle_step, cdev_ceiling);
+                                std::min(curr_cdev_vote + target_throttle_step,
+                                         binded_cdev_info_pair.second
+                                                 .cdev_ceiling[static_cast<size_t>(curr_severity)]);
                         cdev_power_budget =
                                 std::max(cdev_power_budget, cdev_info.state2power[target_state]);
-
-                        cdev_power_budget = std::min(
-                                cdev_power_budget,
-                                cdev_info.state2power[std::min(cdev_ceiling, max_cdev_vote)]);
                     }
                 }
 
