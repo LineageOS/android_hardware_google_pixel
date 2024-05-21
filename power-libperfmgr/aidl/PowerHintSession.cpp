@@ -262,6 +262,7 @@ ndk::ScopedAStatus PowerHintSession<HintManagerT, PowerSessionManagerT>::close()
     if (mSessionClosed) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
+    mSessionClosed = true;
     // Remove the session from PowerSessionManager first to avoid racing.
     mPSManager->removePowerSession(mSessionId);
     mDescriptor->is_active.store(false);
