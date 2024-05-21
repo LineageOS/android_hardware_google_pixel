@@ -49,7 +49,7 @@ ndk::ScopedAStatus PowerExt::setMode(const std::string &mode, bool enabled) {
     }
     if (HintManager::GetInstance()->GetAdpfProfile() &&
         HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs > 0) {
-        PowerSessionManager::getInstance()->updateHintMode(mode, enabled);
+        PowerSessionManager<>::getInstance()->updateHintMode(mode, enabled);
     }
 
     return ndk::ScopedAStatus::ok();
@@ -70,7 +70,7 @@ ndk::ScopedAStatus PowerExt::setBoost(const std::string &boost, int32_t duration
     LOG(DEBUG) << "PowerExt setBoost: " << boost << " duration: " << durationMs;
     if (HintManager::GetInstance()->GetAdpfProfile() &&
         HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs > 0) {
-        PowerSessionManager::getInstance()->updateHintBoost(boost, durationMs);
+        PowerSessionManager<>::getInstance()->updateHintBoost(boost, durationMs);
     }
 
     if (durationMs > 0) {

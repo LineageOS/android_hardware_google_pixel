@@ -75,10 +75,10 @@ class PowerHintSessionTest : public ::testing::Test {
             }
         }
 
-        sess1 = ndk::SharedRefBase::make<PowerHintSession>(1, 1, session1Threads, 1000000,
-                                                           SessionTag::OTHER);
-        sess2 = ndk::SharedRefBase::make<PowerHintSession>(2, 2, session2Threads, 1000000,
-                                                           SessionTag::OTHER);
+        sess1 = ndk::SharedRefBase::make<PowerHintSession<>>(1, 1, session1Threads, 1000000,
+                                                             SessionTag::OTHER);
+        sess2 = ndk::SharedRefBase::make<PowerHintSession<>>(2, 2, session2Threads, 1000000,
+                                                             SessionTag::OTHER);
     }
 
     void TearDown() {
@@ -103,8 +103,8 @@ class PowerHintSessionTest : public ::testing::Test {
     std::mutex m;
     std::vector<int32_t> session1Threads;
     std::vector<int32_t> session2Threads;
-    std::shared_ptr<PowerHintSession> sess1;
-    std::shared_ptr<PowerHintSession> sess2;
+    std::shared_ptr<PowerHintSession<>> sess1;
+    std::shared_ptr<PowerHintSession<>> sess2;
 
     // close the i-th thread in thread list.
     void closeThread(int i) {
