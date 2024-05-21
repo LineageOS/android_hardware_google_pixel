@@ -122,6 +122,9 @@ message Atom {
       HDCPAuthTypeStats hdcp_auth_type_stats = 105067;
       DisplayPortUsage display_port_usage = 105068;
       FuelGaugeAbnormality fuel_gauge_abnormality = 105069;
+      MmProcessUsageByOomGroupSnapshot mm_process_usage_by_oom_group_snapshot = 105070;
+      MmGcmaSnapshot mm_gcma_snapshot = 105071;
+      MmGcmaStats mm_gcma_stats = 105072;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2330,3 +2333,76 @@ message FuelGaugeAbnormality {
   /* Record events have been triggered in bit flags */
   repeated Event event = 2;
 }
+
+/*
+ *  Process memory usage by Oom groups
+ */
+message MmProcessUsageByOomGroupSnapshot {
+  enum OomGroup {
+    OOMR_950 = 0;
+    OOMR_900 = 1;
+    OOMR_850 = 2;
+    OOMR_800 = 3;
+    OOMR_750 = 4;
+    OOMR_700 = 5;
+    OOMR_650 = 6;
+    OOMR_600 = 7;
+    OOMR_550 = 8;
+    OOMR_500 = 9;
+    OOMR_450 = 10;
+    OOMR_400 = 11;
+    OOMR_350 = 12;
+    OOMR_300 = 13;
+    OOMR_250 = 14;
+    OOMR_200 = 15;
+    OOMS_200 = 16;
+    OOMR_150 = 17;
+    OOMR_100 = 18;
+    OOMR_050 = 19;
+    OOMR_000 = 20;
+    OOMS_000 = 21;
+    OOMR_NEGATIVE = 22;
+    /* reserved for future error handling */
+    OOM_UNKNOWN = 999;
+  }
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+  /* Unique ID per knob read */
+  optional int32 metric_uid = 2;
+  /*
+   * This is the dimension: each knob read will create N atoms.
+   * N = number of groups defined in the enumerate above.
+   */
+  optional OomGroup oom_group = 3;
+  optional int64 nr_task = 4;
+  optional int64 file_rss = 5;
+  optional int64 anon_rss = 6;
+  optional int64 swap_ent = 7;
+  optional int64 shmem_rss = 8;
+  optional int64 pgtable = 9;
+}
+
+/*
+ * GCMA memory hourly snapshot
+ */
+message MmGcmaSnapshot {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+  /* cached memory */
+  optional int64 cached = 2;
+}
+
+/*
+ * GCMA memory daily statistics
+ */
+message MmGcmaStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+  /* statistics */
+  optional int64 discarded = 2;
+  optional int64 evicted = 3;
+  optional int64 loaded = 4;
+  optional int64 stored = 5;
+  repeated int64 latency_histogram = 6;
+}
+
