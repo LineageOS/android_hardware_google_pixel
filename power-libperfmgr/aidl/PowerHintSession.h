@@ -17,17 +17,16 @@
 #pragma once
 
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
-#include <aidl/android/hardware/power/SessionHint.h>
-#include <aidl/android/hardware/power/SessionMode.h>
-#include <aidl/android/hardware/power/SessionTag.h>
-#include <aidl/android/hardware/power/WorkDuration.h>
+#include <perfmgr/HintManager.h>
 #include <utils/Looper.h>
 #include <utils/Thread.h>
 
 #include <array>
 #include <unordered_map>
 
+#include "AdpfTypes.h"
 #include "AppDescriptorTrace.h"
+#include "PowerSessionManager.h"
 #include "SessionRecords.h"
 
 namespace aidl {
@@ -38,11 +37,6 @@ namespace impl {
 namespace pixel {
 
 using aidl::android::hardware::power::BnPowerHintSession;
-using aidl::android::hardware::power::SessionConfig;
-using aidl::android::hardware::power::SessionHint;
-using aidl::android::hardware::power::SessionMode;
-using aidl::android::hardware::power::SessionTag;
-using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
 using ::android::sp;
@@ -51,37 +45,13 @@ using std::chrono::nanoseconds;
 using std::chrono::steady_clock;
 using std::chrono::time_point;
 
-class PowerSessionManager;
-
-// The App Hint Descriptor struct manages information necessary
-// to calculate the next uclamp min value from the PID function
-// and is separate so that it can be used as a pointer for
-// easily passing to the pid function
-struct AppHintDesc {
-    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
-                SessionTag tag, std::chrono::nanoseconds pTargetNs);
-
-    std::string toString() const;
-    int64_t sessionId{0};
-    const int32_t tgid;
-    const int32_t uid;
-    nanoseconds targetNs;
-    std::vector<int32_t> thread_ids;
-    SessionTag tag;
-    int pidControlVariable;
-    // status
-    std::atomic<bool> is_active;
-    // pid
-    uint64_t update_count;
-    int64_t integral_error;
-    int64_t previous_error;
-};
-
 // The Power Hint Session is responsible for providing an
 // interface for creating, updating, and closing power hints
 // for a Session. Each sesion that is mapped to multiple
 // threads (or task ids).
-class PowerHintSession : public BnPowerHintSession {
+template <class HintManagerT = ::android::perfmgr::HintManager,
+          class PowerSessionManagerT = PowerSessionManager<>>
+class PowerHintSession : public BnPowerHintSession, public Immobile {
   public:
     explicit PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
                               int64_t durationNanos, SessionTag tag);
@@ -97,37 +67,41 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus setThreads(const std::vector<int32_t> &threadIds) override;
     ndk::ScopedAStatus getSessionConfig(SessionConfig *_aidl_return) override;
 
-    bool isActive();
-    bool isTimeout();
-    // Is hint session for a user application
-    bool isAppSession();
-    bool isModeSet(SessionMode mode) const;
     void dumpToStream(std::ostream &stream);
     SessionTag getSessionTag() const;
 
   private:
-    void tryToSendPowerHint(std::string hint);
-    void updatePidControlVariable(int pidControlVariable, bool updateVote = true);
-    int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
-    bool updateHeuristicBoost();
+    // In practice this lock should almost never get contested, but it's necessary for FMQ
+    std::mutex mPowerHintSessionLock;
+    bool isTimeout() REQUIRES(mPowerHintSessionLock);
+    // Is hint session for a user application
+    bool isAppSession() REQUIRES(mPowerHintSessionLock);
+    void tryToSendPowerHint(std::string hint) REQUIRES(mPowerHintSessionLock);
+    void updatePidControlVariable(int pidControlVariable, bool updateVote = true)
+            REQUIRES(mPowerHintSessionLock);
+    int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations)
+            REQUIRES(mPowerHintSessionLock);
+    bool updateHeuristicBoost() REQUIRES(mPowerHintSessionLock);
+
     // Data
-    sp<PowerSessionManager> mPSManager;
-    int64_t mSessionId = 0;
-    std::string mIdString;
-    std::shared_ptr<AppHintDesc> mDescriptor;
-    // Trace strings
+    PowerSessionManagerT *mPSManager;
+    const int64_t mSessionId = 0;
+    const std::string mIdString;
+    std::shared_ptr<AppHintDesc> mDescriptor GUARDED_BY(mPowerHintSessionLock);
+
+    // Trace strings, this is thread safe since only assigned during construction
     std::shared_ptr<AppDescriptorTrace> mAppDescriptorTrace;
-    std::atomic<time_point<steady_clock>> mLastUpdatedTime;
-    std::atomic<bool> mSessionClosed = false;
+    time_point<steady_clock> mLastUpdatedTime GUARDED_BY(mPowerHintSessionLock);
+    bool mSessionClosed GUARDED_BY(mPowerHintSessionLock) = false;
     // Are cpu load change related hints are supported
-    std::unordered_map<std::string, std::optional<bool>> mSupportedHints;
-    // Last session hint sent, used for logging
-    int mLastHintSent = -1;
-    std::array<bool, enum_size<SessionMode>()> mModes{};
+    std::unordered_map<std::string, std::optional<bool>> mSupportedHints
+            GUARDED_BY(mPowerHintSessionLock);
+    // Use the value of the last enum in enum_range +1 as array size
+    std::array<bool, enum_size<SessionMode>()> mModes GUARDED_BY(mPowerHintSessionLock){};
     // Tag labeling what kind of session this is
-    SessionTag mTag;
-    std::unique_ptr<SessionRecords> mSessionRecords;
-    bool mHeuristicBoostActive{false};
+    const SessionTag mTag;
+    std::unique_ptr<SessionRecords> mSessionRecords GUARDED_BY(mPowerHintSessionLock) = nullptr;
+    bool mHeuristicBoostActive GUARDED_BY(mPowerHintSessionLock){false};
 };
 
 }  // namespace pixel

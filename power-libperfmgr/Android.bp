@@ -70,6 +70,7 @@ cc_test {
     cpp_std: "gnu++20",
     static_libs: [
         "libgmock",
+        "libgtest",
         "android.hardware.common-V2-ndk",
         "android.hardware.common.fmq-V1-ndk",
     ],
@@ -83,6 +84,7 @@ cc_test {
         "libbinder_ndk",
         "libprocessgroup",
         "pixel-power-ext-V1-ndk",
+        "libfmq",
     ],
     test_suites: ["device-tests"],
 }
@@ -94,6 +96,9 @@ cc_binary {
     init_rc: ["aidl/android.hardware.power-service.pixel-libperfmgr.rc"],
     vintf_fragments: ["aidl/android.hardware.power-service.pixel.xml"],
     vendor: true,
+    cflags: [
+        "-Wthread-safety",
+    ],
     shared_libs: [
         "libbase",
         "libcutils",
@@ -106,6 +111,10 @@ cc_binary {
         "pixel-power-ext-V1-ndk",
         "android.hardware.common.fmq-V1-ndk",
         "libfmq",
+    ],
+    static_libs: [
+        "libgmock",
+        "libgtest",
     ],
     srcs: [
         "aidl/BackgroundWorker.cpp",

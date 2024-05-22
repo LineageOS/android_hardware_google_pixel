@@ -679,14 +679,13 @@ TEST_F(HintManagerTest, GetFromJSONTest) {
     TemporaryFile json_file;
     ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path))
         << strerror(errno);
-    std::unique_ptr<HintManager> hm =
-        HintManager::GetFromJSON(json_file.path, false);
-    EXPECT_NE(nullptr, hm.get());
+    HintManager *hm = HintManager::GetFromJSON(json_file.path, false);
+    EXPECT_NE(nullptr, hm);
     EXPECT_FALSE(hm->IsRunning());
     EXPECT_TRUE(hm->Start());
     EXPECT_TRUE(hm->IsRunning());
     hm = HintManager::GetFromJSON(json_file.path);
-    EXPECT_NE(nullptr, hm.get());
+    EXPECT_NE(nullptr, hm);
     EXPECT_TRUE(hm->IsRunning());
     std::this_thread::sleep_for(kSLEEP_TOLERANCE_MS);
     EXPECT_TRUE(hm->IsRunning());
@@ -884,8 +883,8 @@ TEST_F(HintManagerTest, ParseAdpfConfigsWithBrokenHBoostConfig) {
 TEST_F(HintManagerTest, GetFromJSONAdpfConfigTest) {
     TemporaryFile json_file;
     ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
-    std::unique_ptr<HintManager> hm = HintManager::GetFromJSON(json_file.path, false);
-    EXPECT_NE(nullptr, hm.get());
+    HintManager *hm = HintManager::GetFromJSON(json_file.path, false);
+    EXPECT_NE(nullptr, hm);
     EXPECT_TRUE(hm->Start());
     EXPECT_TRUE(hm->IsRunning());
 
@@ -903,8 +902,8 @@ TEST_F(HintManagerTest, GetFromJSONAdpfConfigTest) {
 TEST_F(HintManagerTest, IsAdpfProfileSupported) {
     TemporaryFile json_file;
     ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
-    std::unique_ptr<HintManager> hm = HintManager::GetFromJSON(json_file.path, false);
-    EXPECT_NE(nullptr, hm.get());
+    HintManager *hm = HintManager::GetFromJSON(json_file.path, false);
+    EXPECT_NE(nullptr, hm);
 
     // Check if given AdpfProfile supported
     EXPECT_FALSE(hm->IsAdpfProfileSupported("NoSuchProfile"));
@@ -915,7 +914,7 @@ TEST_F(HintManagerTest, IsAdpfProfileSupported) {
 TEST_F(HintManagerTest, GpuConfigSupport) {
     TemporaryFile json_file;
     ASSERT_TRUE(android::base::WriteStringToFile(json_doc_, json_file.path)) << strerror(errno);
-    auto hm = HintManager::GetFromJSON(json_file.path, false);
+    HintManager *hm = HintManager::GetFromJSON(json_file.path, false);
     ASSERT_TRUE(hm);
 
     EXPECT_THAT(hm->gpu_sysfs_config_path(), Optional(Eq("/sys/devices/platform/123.abc")));

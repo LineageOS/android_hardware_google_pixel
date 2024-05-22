@@ -281,9 +281,9 @@ bool HintManager::Start() {
     return nm_->Start();
 }
 
-std::shared_ptr<HintManager> HintManager::mInstance = nullptr;
+std::unique_ptr<HintManager> HintManager::sInstance = nullptr;
 
-std::shared_ptr<HintManager> HintManager::Reload(bool start) {
+void HintManager::Reload(bool start) {
     std::string config_path = "/vendor/etc/";
     if (android::base::GetBoolProperty(kConfigDebugPathProperty.data(), false)) {
         config_path = "/data/vendor/etc/";
@@ -295,18 +295,17 @@ std::shared_ptr<HintManager> HintManager::Reload(bool start) {
     LOG(INFO) << "Pixel Power HAL AIDL Service with Extension is starting with config: "
               << config_path;
     // Reload and start the HintManager
-    mInstance = HintManager::GetFromJSON(config_path, start);
-    if (!mInstance) {
+    HintManager::GetFromJSON(config_path, start);
+    if (!sInstance) {
         LOG(FATAL) << "Invalid config: " << config_path;
     }
-    return mInstance;
 }
 
-std::shared_ptr<HintManager> HintManager::GetInstance() {
-    if (!mInstance) {
-        mInstance = HintManager::Reload(false);
+HintManager *HintManager::GetInstance() {
+    if (sInstance == nullptr) {
+        HintManager::Reload(false);
     }
-    return mInstance;
+    return sInstance.get();
 }
 
 static std::optional<std::string> ParseGpuSysfsNode(const std::string &json_doc) {
@@ -325,8 +324,7 @@ static std::optional<std::string> ParseGpuSysfsNode(const std::string &json_doc)
     return {root["GpuSysfsPath"].asString()};
 }
 
-std::unique_ptr<HintManager> HintManager::GetFromJSON(
-    const std::string& config_path, bool start) {
+HintManager *HintManager::GetFromJSON(const std::string &config_path, bool start) {
     std::string json_doc;
 
     if (!android::base::ReadFileToString(config_path, &json_doc)) {
@@ -354,9 +352,9 @@ std::unique_ptr<HintManager> HintManager::GetFromJSON(
     auto const gpu_sysfs_node = ParseGpuSysfsNode(json_doc);
 
     sp<NodeLooperThread> nm = new NodeLooperThread(std::move(nodes));
-    auto hm = std::make_unique<HintManager>(std::move(nm), actions, adpfs, gpu_sysfs_node);
+    sInstance = std::make_unique<HintManager>(std::move(nm), actions, adpfs, gpu_sysfs_node);
 
-    if (!HintManager::InitHintStatus(hm)) {
+    if (!HintManager::InitHintStatus(sInstance)) {
         LOG(ERROR) << "Failed to initialize hint status";
         return nullptr;
     }
@@ -364,9 +362,10 @@ std::unique_ptr<HintManager> HintManager::GetFromJSON(
     LOG(INFO) << "Initialized HintManager from JSON config: " << config_path;
 
     if (start) {
-        hm->Start();
+        sInstance->Start();
     }
-    return hm;
+
+    return HintManager::GetInstance();
 }
 
 std::vector<std::unique_ptr<Node>> HintManager::ParseNodes(

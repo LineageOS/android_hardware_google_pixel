@@ -16,14 +16,34 @@
 
 #pragma once
 
+#include <aidl/android/hardware/power/Boost.h>
+#include <aidl/android/hardware/power/ChannelConfig.h>
+#include <aidl/android/hardware/power/ChannelMessage.h>
+#include <aidl/android/hardware/power/IPower.h>
+#include <aidl/android/hardware/power/IPowerHintSession.h>
+#include <aidl/android/hardware/power/Mode.h>
+#include <aidl/android/hardware/power/SessionConfig.h>
+#include <aidl/android/hardware/power/SessionTag.h>
+#include <aidl/android/hardware/power/WorkDuration.h>
+#include <android-base/thread_annotations.h>
+#include <fmq/AidlMessageQueue.h>
+#include <fmq/EventFlag.h>
+
 #include <cstdint>
 
-namespace aidl {
-namespace google {
-namespace hardware {
-namespace power {
-namespace impl {
-namespace pixel {
+namespace aidl::google::hardware::power::impl::pixel {
+
+using namespace android::hardware::power;
+
+using ::android::AidlMessageQueue;
+using ::android::hardware::EventFlag;
+using android::hardware::common::fmq::MQDescriptor;
+using android::hardware::common::fmq::SynchronizedReadWrite;
+
+using ChannelQueueDesc = MQDescriptor<ChannelMessage, SynchronizedReadWrite>;
+using ChannelQueue = AidlMessageQueue<ChannelMessage, SynchronizedReadWrite>;
+using FlagQueueDesc = MQDescriptor<int8_t, SynchronizedReadWrite>;
+using FlagQueue = AidlMessageQueue<int8_t, SynchronizedReadWrite>;
 
 enum class AdpfErrorCode : int32_t { ERR_OK = 0, ERR_BAD_STATE = -1, ERR_BAD_ARG = -2 };
 
@@ -65,12 +85,16 @@ constexpr const char *AdpfVoteTypeToStr(AdpfVoteType voteType) {
     }
 }
 
+class Immobile {
+  public:
+    Immobile() {}
+    Immobile(const Immobile &) = delete;
+    Immobile(Immobile &&) = delete;
+    Immobile &operator=(const Immobile &) = delete;
+    Immobile &operator=(Immobile &) = delete;
+};
+
 constexpr int kUclampMin{0};
 constexpr int kUclampMax{1024};
 
-}  // namespace pixel
-}  // namespace impl
-}  // namespace power
-}  // namespace hardware
-}  // namespace google
-}  // namespace aidl
+}  // namespace aidl::google::hardware::power::impl::pixel
