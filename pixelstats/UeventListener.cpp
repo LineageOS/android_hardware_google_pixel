@@ -505,7 +505,7 @@ UeventListener::UeventListener(const std::string audio_uevent, const std::string
                                const std::string typec_partner_vid_path,
                                const std::string typec_partner_pid_path,
                                const std::string fw_update_path,
-                               const std::string fg_abnl_path)
+                               const std::vector<std::string> fg_abnl_path)
     : kAudioUevent(audio_uevent),
       kBatterySSOCPath(ssoc_details_path),
       kUsbPortOverheatPath(overheat_path),
@@ -538,8 +538,7 @@ UeventListener::UeventListener(const struct UeventPaths &uevents_paths)
                                    : uevents_paths.TypeCPartnerPidPath),
       kFwUpdatePath((uevents_paths.FwUpdatePath == nullptr)
                                    ? "" : uevents_paths.FwUpdatePath),
-      kFGAbnlPath((uevents_paths.FGAbnlPath == nullptr)
-                                   ? "" : uevents_paths.FGAbnlPath),
+      kFGAbnlPath(uevents_paths.FGAbnlPath),
       uevent_fd_(-1),
       log_fd_(-1) {}
 
