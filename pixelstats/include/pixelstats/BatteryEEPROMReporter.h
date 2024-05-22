@@ -153,7 +153,7 @@ class BatteryEEPROMReporter {
                      const struct BatteryHistory &hist);
 
     const int kNum77759GMSRFields = 11;
-    const int kNum77779GMSRFields = 5;
+    const int kNum77779GMSRFields = 9;
     const int kNum17201HISTFields = 16;
 };
 
