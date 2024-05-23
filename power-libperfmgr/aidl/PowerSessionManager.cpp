@@ -166,6 +166,8 @@ void PowerSessionManager<HintManagerT>::removePowerSession(int64_t sessionId) {
             ALOGE("Failed to set NoResetUclampGrp task profile for tid:%d", tid);
         }
     }
+
+    unregisterSession(sessionId);
 }
 
 template <class HintManagerT>
@@ -565,6 +567,40 @@ void PowerSessionManager<HintManagerT>::setPreferPowerEfficiency(int64_t session
         sessValPtr->isPowerEfficient = enabled;
         applyUclampLocked(sessionId, std::chrono::steady_clock::now());
     }
+}
+
+template <class HintManagerT>
+void PowerSessionManager<HintManagerT>::registerSession(std::shared_ptr<void> session,
+                                                        int64_t sessionId) {
+    std::lock_guard<std::mutex> lock(mSessionMapMutex);
+    mSessionMap[sessionId] = session;
+}
+
+template <class HintManagerT>
+void PowerSessionManager<HintManagerT>::unregisterSession(int64_t sessionId) {
+    std::lock_guard<std::mutex> lock(mSessionMapMutex);
+    mSessionMap.erase(sessionId);
+}
+
+template <class HintManagerT>
+std::shared_ptr<void> PowerSessionManager<HintManagerT>::getSession(int64_t sessionId) {
+    std::scoped_lock lock(mSessionMapMutex);
+    auto ptr = mSessionMap.find(sessionId);
+    if (ptr == mSessionMap.end()) {
+        return nullptr;
+    }
+    std::shared_ptr<void> out = ptr->second.lock();
+    if (!out) {
+        mSessionMap.erase(sessionId);
+        return nullptr;
+    }
+    return out;
+}
+
+template <class HintManagerT>
+void PowerSessionManager<HintManagerT>::clear() {
+    std::scoped_lock lock(mSessionMapMutex);
+    mSessionMap.clear();
 }
 
 template class PowerSessionManager<>;
