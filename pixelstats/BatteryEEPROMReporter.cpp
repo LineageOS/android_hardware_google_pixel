@@ -298,28 +298,17 @@ void BatteryEEPROMReporter::checkAndReportGMSR(const std::shared_ptr<IStats> &st
         return;
     }
 
-    if (path.find("max77779") == std::string::npos &&
-        paths[0].find("max77779") == std::string::npos) {
-        num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
-                     "\nfullcaprep\t:%4" SCNx16 "\ncycles\t:%4" SCNx16 "\nfullcapnom\t:%4" SCNx16
-                     "\nqresidual00\t:%4" SCNx16 "\nqresidual10\t:%4" SCNx16
-                     "\nqresidual20\t:%4" SCNx16 "\nqresidual30\t:%4" SCNx16
-                     "\ncv_mixcap\t:%4" SCNx16 "\nhalftime\t:%4" SCNx16,
-                     &gmsr.rcomp0, &gmsr.tempco, &gmsr.full_rep, &gmsr.cycle_cnt, &gmsr.full_cap,
-                     &gmsr.max_vbatt, &gmsr.min_vbatt, &gmsr.max_ibatt, &gmsr.min_ibatt,
-                     &gmsr.esr, &gmsr.rslow);
-        if (num != kNum77759GMSRFields) {
-            ALOGE("Couldn't process 77759GMSR. num=%d\n", num);
-            return;
-        }
-    } else {
-        num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
-                     "\nfullcaprep\t:%4" SCNx16 "\ncycles\t:%4" SCNx16 "\nfullcapnom\t:%4" SCNx16,
-                     &gmsr.rcomp0, &gmsr.tempco, &gmsr.full_rep, &gmsr.cycle_cnt, &gmsr.full_cap);
-        if (num != kNum77779GMSRFields) {
-            ALOGE("Couldn't process 77779GMSR. num=%d\n", num);
-            return;
-        }
+    num = sscanf(file_contents.c_str(),  "rcomp0\t:%4" SCNx16 "\ntempco\t:%4" SCNx16
+                 "\nfullcaprep\t:%4" SCNx16 "\ncycles\t:%4" SCNx16 "\nfullcapnom\t:%4" SCNx16
+                 "\nqresidual00\t:%4" SCNx16 "\nqresidual10\t:%4" SCNx16
+                 "\nqresidual20\t:%4" SCNx16 "\nqresidual30\t:%4" SCNx16
+                 "\ncv_mixcap\t:%4" SCNx16 "\nhalftime\t:%4" SCNx16,
+                 &gmsr.rcomp0, &gmsr.tempco, &gmsr.full_rep, &gmsr.cycle_cnt, &gmsr.full_cap,
+                 &gmsr.max_vbatt, &gmsr.min_vbatt, &gmsr.max_ibatt, &gmsr.min_ibatt,
+                 &gmsr.esr, &gmsr.rslow);
+    if (num != kNum77759GMSRFields && num != kNum77779GMSRFields) {
+        ALOGE("Couldn't process GMSR. num=%d\n", num);
+        return;
     }
 
     if (gmsr.tempco == 0xFFFF || gmsr.rcomp0 == 0xFFFF || gmsr.full_cap == 0xFFFF) {
