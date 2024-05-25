@@ -86,6 +86,12 @@ class PowerSessionManager : public Immobile {
 
     std::optional<Frequency> gpuFrequency() const;
 
+    void registerSession(std::shared_ptr<void> session, int64_t sessionId);
+    void unregisterSession(int64_t sessionId);
+    // Only for testing
+    void clear();
+    std::shared_ptr<void> getSession(int64_t sessionId);
+
   private:
     std::optional<bool> isAnyAppSessionActive();
     void disableSystemTopAppBoost();
@@ -131,6 +137,9 @@ class PowerSessionManager : public Immobile {
     PowerSessionManager &operator=(PowerSessionManager const &) = delete;
 
     std::optional<std::unique_ptr<GpuCapacityNode>> const mGpuCapacityNode;
+
+    std::mutex mSessionMapMutex;
+    std::map<int, std::weak_ptr<void>> mSessionMap GUARDED_BY(mSessionMapMutex);
 };
 
 }  // namespace pixel

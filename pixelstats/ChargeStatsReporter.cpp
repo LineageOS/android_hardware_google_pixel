@@ -40,6 +40,9 @@ using android::hardware::google::pixel::PixelAtoms::ChargeStats;
 using android::hardware::google::pixel::PixelAtoms::VoltageTierStats;
 
 #define DURATION_FILTER_SECS 15
+#define CHG_STATS_FMT0 "%d,%d,%d, %d,%d,%d,%d"
+#define CHG_STATS_FMT1 "%d,%d,%d, %d,%d,%d,%d %d" /* AACR */
+#define CHG_STATS_FMT2 "%d,%d,%d, %d,%d,%d,%d %d %d,%d" /* AACR + CSI */
 
 ChargeStatsReporter::ChargeStatsReporter() {}
 
@@ -60,6 +63,8 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
             ChargeStats::kSsocOutFieldNumber,
             ChargeStats::kVoltageOutFieldNumber,
             ChargeStats::kChargeCapacityFieldNumber,
+            ChargeStats::kCsiAggregateStatusFieldNumber,
+            ChargeStats::kCsiAggregateTypeFieldNumber,
             ChargeStats::kAdapterCapabilities0FieldNumber,
             ChargeStats::kAdapterCapabilities1FieldNumber,
             ChargeStats::kAdapterCapabilities2FieldNumber,
@@ -69,7 +74,7 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
             ChargeStats::kReceiverState1FieldNumber,
     };
     const int32_t chg_fields_size = std::size(charge_stats_fields);
-    static_assert(chg_fields_size == 15, "Unexpected charge stats fields size");
+    static_assert(chg_fields_size == 17, "Unexpected charge stats fields size");
     const int32_t wlc_fields_size = 7;
     std::vector<VendorAtomValue> values(chg_fields_size);
     VendorAtomValue val;
@@ -79,14 +84,21 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
     std::istringstream ss;
 
     ALOGD("processing %s", line.c_str());
-    if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d %d", &tmp[0], &tmp[1], &tmp[2], &tmp[3],
-               &tmp[4], &tmp[5], &tmp[6], &tmp[7]) == 8) {
-        /* Age Adjusted Charge Rate (AACR) logs an additional battery capacity in order to determine
+    if (sscanf(line.c_str(), CHG_STATS_FMT2, &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5],
+               &tmp[6], &tmp[7], &tmp[8], &tmp[9]) == 10) {
+        /*
+         * Charging Speed Indicator (CSI) the sum of the reasons that limit the charging speed in
+         * this charging session.
+         */
+    } else if (sscanf(line.c_str(), CHG_STATS_FMT1, &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
+               &tmp[5], &tmp[6], &tmp[7]) == 8) {
+        /*
+         * Age Adjusted Charge Rate (AACR) logs an additional battery capacity in order to determine
          * the charge curve needed to minimize battery cycle life degradation, while also minimizing
          * impact to the user.
          */
-    } else if (sscanf(line.c_str(), "%d,%d,%d, %d,%d,%d,%d", &tmp[0], &tmp[1], &tmp[2], &tmp[3],
-                      &tmp[4], &tmp[5], &tmp[6]) != 7) {
+    } else if (sscanf(line.c_str(), CHG_STATS_FMT0, &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4],
+                      &tmp[5], &tmp[6]) != 7) {
         ALOGE("Couldn't process %s", line.c_str());
         return;
     }
@@ -99,8 +111,8 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
         } else {
             tmp[0] = wireless_charge_stats_.TranslateSysModeToAtomValue(ssoc_tmp);
             ALOGD("wlc: processing %s", wline_ac.c_str());
-            if (sscanf(wline_ac.c_str(), "D:%x,%x,%x,%x,%x, %x,%x", &tmp[8], &tmp[9], &tmp[10],
-                       &tmp[11], &tmp[12], &tmp[13], &tmp[14]) != 7)
+            if (sscanf(wline_ac.c_str(), "D:%x,%x,%x,%x,%x, %x,%x", &tmp[10], &tmp[11], &tmp[12],
+                       &tmp[13], &tmp[14], &tmp[15], &tmp[16]) != 7)
                 ALOGE("Couldn't process %s", wline_ac.c_str());
             else
                 fields_size = chg_fields_size; /* include wlc stats */
@@ -114,16 +126,16 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
             ALOGE("Couldn't process %s", pca_line.c_str());
         } else {
             fields_size = chg_fields_size; /* include pca stats */
-            tmp[10] = pca_rs[2];
-            tmp[11] = pca_rs[3];
-            tmp[12] = pca_rs[4];
-            tmp[14] = pca_rs[1];
+            tmp[12] = pca_rs[2];
+            tmp[13] = pca_rs[3];
+            tmp[14] = pca_rs[4];
+            tmp[16] = pca_rs[1];
             if (wline_at.empty()) {
                 /* force adapter type to PPS when pca log is available, but not wlc */
                 tmp[0] = PixelAtoms::ChargeStats::ADAPTER_TYPE_USB_PD_PPS;
-                tmp[8] = pca_ac[0];
-                tmp[9] = pca_ac[1];
-                tmp[13] = pca_rs[0];
+                tmp[10] = pca_ac[0];
+                tmp[11] = pca_ac[1];
+                tmp[15] = pca_rs[0];
             }
         }
     }
@@ -136,8 +148,8 @@ void ChargeStatsReporter::ReportChargeStats(const std::shared_ptr<IStats> &stats
                 continue;
             } else {
                 ALOGD("processed %s, apdo:%d, pdo:%d", pdo_line.c_str(), pca_ac[1], pca_rs[4]);
-                tmp[13] = pca_ac[1]; /* APDO */
-                tmp[14] = pca_rs[4]; /* PDO */
+                tmp[15] = pca_ac[1]; /* APDO */
+                tmp[16] = pca_rs[4]; /* PDO */
                 break;
             }
         }

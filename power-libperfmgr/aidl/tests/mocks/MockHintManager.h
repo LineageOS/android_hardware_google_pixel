@@ -24,7 +24,8 @@ namespace aidl::google::hardware::power::mock::pixel {
 
 class MockHintManager {
   public:
-    MockHintManager();
+    MockHintManager() = default;
+    ~MockHintManager() = default;
 
     MOCK_METHOD(bool, IsRunning, (), (const));
     MOCK_METHOD(bool, DoHint, (const std::string &hint_type), ());

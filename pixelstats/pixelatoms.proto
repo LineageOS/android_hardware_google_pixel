@@ -219,6 +219,10 @@ message ChargeStats {
 
     /* AACR feature to record capacity */
     optional int32 charge_capacity = 16;
+
+    /* Charging Speed Indicator(CSI) status and type */
+    optional int32 csi_aggregate_status = 17;
+    optional int32 csi_aggregate_type = 18;
 }
 
 /* A message containing stats from each charge voltage tier. */

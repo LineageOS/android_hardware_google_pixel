@@ -1324,6 +1324,12 @@ bool ParseSensorInfo(const Json::Value &config,
                 sensors_parsed->clear();
                 return false;
             }
+
+            if (sensors[i]["PassiveDelay"].empty()) {
+                LOG(ERROR) << "Sensor[" << name << "] has StepRatio but no explicit PassiveDelay";
+                sensors_parsed->clear();
+                return false;
+            }
         }
 
         if (is_hidden && send_cb) {
