@@ -24,6 +24,7 @@
 
 #include <android-base/file.h>
 #include <pixelstats/BatteryFGReporter.h>
+#include <pixelstats/StatsHelper.h>
 #include <hardware/google/pixel/pixelstats/pixelatoms.pb.h>
 
 namespace android {
@@ -35,9 +36,90 @@ using aidl::android::frameworks::stats::VendorAtom;
 using aidl::android::frameworks::stats::VendorAtomValue;
 using android::base::ReadFileToString;
 using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
+using android::hardware::google::pixel::PixelAtoms::FuelGaugeAbnormality;
 
 
 BatteryFGReporter::BatteryFGReporter() {}
+
+int64_t BatteryFGReporter::getTimeSecs() {
+    return nanoseconds_to_seconds(systemTime(SYSTEM_TIME_BOOTTIME));
+}
+
+void BatteryFGReporter::setAtomFieldValue(std::vector<VendorAtomValue> *values, int offset,
+                                          int content) {
+    std::vector<VendorAtomValue> &val = *values;
+    if (offset - kVendorAtomOffset < val.size())
+        val[offset - kVendorAtomOffset].set<VendorAtomValue::intValue>(content);
+}
+
+void BatteryFGReporter::reportAbnormalEvent(const std::shared_ptr<IStats> &stats_client,
+                                            struct BatteryFGAbnormalData data) {
+    // Load values array
+    std::vector<VendorAtomValue> values(35);
+    uint32_t duration = 0;
+
+    /* save time when trigger, calculate duration when clear */
+    if (data.state == 1 && ab_trigger_time_[data.event] == 0) {
+        ab_trigger_time_[data.event] = getTimeSecs();
+    } else {
+        duration = getTimeSecs() - ab_trigger_time_[data.event];
+        ab_trigger_time_[data.event] = 0;
+    }
+
+    ALOGD("reportEvent: event=%d,state=%d,cycles=%04X,vcel=%04X,avgv=%04X,curr=%04X,avgc=%04X,"
+          "timerh=%04X,temp=%04X,repcap=%04X,mixcap=%04X,fcrep=%04X,fcnom=%04X,qresd=%04X,"
+          "avcap=%04X,vfremcap=%04X,repsoc=%04X,vfsoc=%04X,msoc=%04X,vfocv=%04X,dpacc=%04X,"
+          "dqacc=%04X,qh=%04X,qh0=%04X,vfsoc0=%04X,qrtable20=%04X,qrtable30=%04X,status=%04X,"
+          "fstat=%04X,rcomp0=%04X,tempco=%04X,duration=%u",
+          data.event, data.state, data.cycles, data.vcel, data.avgv, data.curr, data.avgc,
+          data.timerh, data.temp, data.repcap, data.mixcap, data.fcrep, data.fcnom, data.qresd,
+          data.avcap, data.vfremcap, data.repsoc, data.vfsoc, data.msoc, data.vfocv, data.dpacc,
+          data.dqacc, data.qh, data.qh0, data.vfsoc0, data.qrtable20, data.qrtable30, data.status,
+          data.fstat, data.rcomp0, data.tempco, duration);
+
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kEventFieldNumber, data.event);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kEventStateFieldNumber, data.state);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kDurationSecsFieldNumber, duration);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress1FieldNumber, data.cycles);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData1FieldNumber, data.vcel);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress2FieldNumber, data.avgv);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData2FieldNumber, data.curr);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress3FieldNumber, data.avgc);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData3FieldNumber, data.timerh);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress4FieldNumber, data.temp);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData4FieldNumber, data.repcap);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress5FieldNumber, data.mixcap);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData5FieldNumber, data.fcrep);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress6FieldNumber, data.fcnom);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData6FieldNumber, data.qresd);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress7FieldNumber, data.avcap);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData7FieldNumber, data.vfremcap);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress8FieldNumber, data.repsoc);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData8FieldNumber, data.vfsoc);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress9FieldNumber, data.msoc);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData9FieldNumber, data.vfocv);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress10FieldNumber, data.dpacc);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData10FieldNumber, data.dqacc);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress11FieldNumber, data.qh);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData11FieldNumber, data.qh0);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress12FieldNumber, data.vfsoc0);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData12FieldNumber, data.qrtable20);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress13FieldNumber, data.qrtable30);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData13FieldNumber, data.status);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress14FieldNumber, data.fstat);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData14FieldNumber, data.rcomp0);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress15FieldNumber, data.tempco);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData15FieldNumber, 0);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterAddress16FieldNumber, 0);
+    setAtomFieldValue(&values, FuelGaugeAbnormality::kFgRegisterData16FieldNumber, 0);
+
+    VendorAtom event = {.reverseDomainName = "",
+                        .atomId = PixelAtoms::Atom::kFuelGaugeAbnormality,
+                        .values = std::move(values)};
+    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+    if (!ret.isOk())
+        ALOGE("Unable to report FuelGaugeAbnormality to Stats service");
+}
 
 void BatteryFGReporter::reportEvent(const std::shared_ptr<IStats> &stats_client,
                                     const struct BatteryFGLearningParam &params) {
@@ -159,42 +241,36 @@ void BatteryFGReporter::checkAndReportFwUpdate(const std::shared_ptr<IStats> &st
 }
 
 void BatteryFGReporter::checkAndReportFGAbnormality(const std::shared_ptr<IStats> &stats_client,
-                                                    const std::string &path) {
-    std::string file_contents;
-    unsigned int abnl;
+                                                    const std::vector<std::string> &paths) {
+    std::string path;
+    struct timespec boot_time;
+    std::vector<std::vector<uint16_t>> events;
 
-    if (path.empty())
+    if (paths.empty())
         return;
 
-    if (!ReadFileToString(path, &file_contents)) {
-        ALOGE("Unable to read FG abnormality path: %s - %s", path.c_str(), strerror(errno));
-        return;
+    for (int i = 0; i < paths.size(); i++) {
+        if (fileExists(paths[i])) {
+            path = paths[i];
+            break;
+        }
     }
 
-    if (sscanf(file_contents.c_str(), "%x", &abnl) != 1) {
-        ALOGE("Unable to parse %s from file %s to int", file_contents.c_str(), path.c_str());
-        return;
+    clock_gettime(CLOCK_MONOTONIC, &boot_time);
+    readLogbuffer(path, kNumAbnormalEventFields, EvtFGAbnormalEvent, FormatNoAddr, last_ab_check_, events);
+    for (int seq = 0; seq < events.size(); seq++) {
+        if (events[seq].size() == kNumAbnormalEventFields) {
+            struct BatteryFGAbnormalData data;
+            uint16_t *pdata = (uint16_t *)&data;
+            for (int i = 0; i < kNumAbnormalEventFields; i++)
+                *pdata++ = events[seq][i];
+            reportAbnormalEvent(stats_client, data);
+        } else {
+            ALOGE("Not support %zu fields for FG abnormal event", events[seq].size());
+        }
     }
 
-    if (abnl == last_abnl_)
-        return;
-
-    ALOGD("reportEvent: FG abnormality %x", abnl);
-
-    VendorAtomValue value;
-    std::vector<VendorAtomValue> values(1);
-    value.set<VendorAtomValue::intValue>(abnl);
-    values[PixelAtoms::FuelGaugeAbnormality::kEventFieldNumber - kVendorAtomOffset] = value;
-
-    VendorAtom atom = {.reverseDomainName = "",
-                       .atomId = PixelAtoms::Atom::kFuelGaugeAbnormality,
-                       .values = {std::move(values)}};
-    const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(atom);
-
-    if (!ret.isOk())
-        ALOGE("Unable to report FG abnormality.");
-
-    last_abnl_ = abnl;
+    last_ab_check_ = (unsigned int)boot_time.tv_sec;
 }
 
 }  // namespace pixel
