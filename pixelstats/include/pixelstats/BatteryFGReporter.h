@@ -28,13 +28,14 @@ namespace google {
 namespace pixel {
 
 using aidl::android::frameworks::stats::IStats;
+using aidl::android::frameworks::stats::VendorAtomValue;
 
 class BatteryFGReporter {
   public:
     BatteryFGReporter();
 
     void checkAndReportFwUpdate(const std::shared_ptr<IStats> &stats_client, const std::string &path);
-    void checkAndReportFGAbnormality(const std::shared_ptr<IStats> &stats_client, const std::string &path);
+    void checkAndReportFGAbnormality(const std::shared_ptr<IStats> &stats_client, const std::vector<std::string> &paths);
 
   private:
     const int kVendorAtomOffset = 2;
@@ -57,16 +58,52 @@ class BatteryFGReporter {
       uint16_t tempco;
     };
 
-    int64_t report_time_ = 0;
+    struct BatteryFGAbnormalData {
+        uint16_t event;
+        uint16_t state;
+        uint16_t cycles;
+        uint16_t vcel;
+        uint16_t avgv;
+        uint16_t curr;
+        uint16_t avgc;
+        uint16_t timerh;
+        uint16_t temp;
+        uint16_t repcap;
+        uint16_t mixcap;
+        uint16_t fcrep;
+        uint16_t fcnom;
+        uint16_t qresd;
+        uint16_t avcap;
+        uint16_t vfremcap;
+        uint16_t repsoc;
+        uint16_t vfsoc;
+        uint16_t msoc;
+        uint16_t vfocv;
+        uint16_t dpacc;
+        uint16_t dqacc;
+        uint16_t qh;
+        uint16_t qh0;
+        uint16_t vfsoc0;
+        uint16_t qrtable20;
+        uint16_t qrtable30;
+        uint16_t status;
+        uint16_t fstat;
+        uint16_t rcomp0;
+        uint16_t tempco;
+    };
+
     int64_t getTimeSecs();
 
-    unsigned int last_abnl_;
-
+    unsigned int last_ab_check_ = 0;
+    unsigned int ab_trigger_time_[8] = {0};
+    void setAtomFieldValue(std::vector<VendorAtomValue> *values, int offset, int content);
+    void reportAbnormalEvent(const std::shared_ptr<IStats> &stats_client,
+                            struct BatteryFGAbnormalData data);
     void reportEvent(const std::shared_ptr<IStats> &stats_client,
                      const struct BatteryFGLearningParam &params);
 
     const int kNumFwUpdateFields = 3;
-    const int kNumHistoryValidationFields = 4;
+    const int kNumAbnormalEventFields = sizeof(BatteryFGAbnormalData) / sizeof(uint16_t);
 };
 
 }  // namespace pixel

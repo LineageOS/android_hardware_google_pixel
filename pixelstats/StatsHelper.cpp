@@ -37,6 +37,12 @@ using android::base::ReadFileToString;
 // -2.
 const int kVendorAtomOffset = 2;
 
+bool fileExists(const std::string &path) {
+    struct stat sb;
+
+    return stat(path.c_str(), &sb) == 0;
+}
+
 std::shared_ptr<IStats> getStatsService() {
     const std::string instance = std::string() + IStats::descriptor + "/default";
     static bool isStatsDeclared = false;
@@ -230,22 +236,25 @@ void reportUsbDataSessionEvent(const std::shared_ptr<IStats> &stats_client,
 }
 
 void readLogbuffer(const std::string &buf_path, int num_fields, uint16_t code,
-                   unsigned int last_check_time, std::vector<std::vector<uint16_t>> &events) {
+                   enum ReportEventFormat format, unsigned int last_check_time,
+                   std::vector<std::vector<uint16_t>> &events) {
     char hex_str[16];
 
     snprintf(hex_str, sizeof(hex_str), "0x%X", code);
 
-    return readLogbuffer(buf_path, num_fields, hex_str, last_check_time, events);;
+    return readLogbuffer(buf_path, num_fields, hex_str, format, last_check_time, events);
 }
 
 void readLogbuffer(const std::string &buf_path, int num_fields, const char *code,
-                   unsigned int last_check_time, std::vector<std::vector<uint16_t>> &events) {
+                   enum ReportEventFormat format, unsigned int last_check_time,
+                   std::vector<std::vector<uint16_t>> &events) {
     std::istringstream ss;
     std::string file_contents, line;
     int num, field_idx, pos, read;
     unsigned int ts, reported = 0;
-    unsigned short val;
+    uint16_t addr, val;
     char type[16];
+    std::vector<uint16_t> vect(num_fields);
 
     if (!ReadFileToString(buf_path, &file_contents)) {
         ALOGE("Unable to read logbuffer path: %s - %s", buf_path.c_str(), strerror(errno));
@@ -254,8 +263,6 @@ void readLogbuffer(const std::string &buf_path, int num_fields, const char *code
 
     ss.str(file_contents);
     while (getline(ss, line)) {
-        std::vector<uint16_t> vect(num_fields);
-
         num = sscanf(line.c_str(), "[%u.%*u] %15s%n", &ts, type, &pos);
         if (num != 2 || strncmp(type, code, strlen(code)))
             continue;
@@ -266,10 +273,26 @@ void readLogbuffer(const std::string &buf_path, int num_fields, const char *code
         }
 
         for (field_idx = 0; field_idx < num_fields; field_idx++, pos += read) {
-            num = sscanf(&line.c_str()[pos], " %*2" SCNx16 ":%4" SCNx16 "%n", &val, &read);
-            if (num != 1)
+            if (format == FormatAddrWithVal) {
+                num = sscanf(&line.c_str()[pos], " %2" SCNx16 ":%4" SCNx16 "%n", &addr, &val,
+                             &read);
+                if (num != 2 || (num_fields - field_idx < 2))
+                    break;
+                vect[field_idx++] = addr;
+                vect[field_idx] = val;
+            } else if (format == FormatIgnoreAddr) {
+                num = sscanf(&line.c_str()[pos], " %*2" SCNx16 ":%4" SCNx16 "%n", &val, &read);
+                if (num != 1)
+                    break;
+                vect[field_idx] = val;
+            } else if (format == FormatNoAddr) {
+                 num = sscanf(&line.c_str()[pos], " %4" SCNx16 "%n", &val, &read);
+                if (num != 1)
+                    break;
+                vect[field_idx] = val;
+            } else {
                 break;
-            vect[field_idx] = val;
+            }
         }
 
         if (field_idx == num_fields)
