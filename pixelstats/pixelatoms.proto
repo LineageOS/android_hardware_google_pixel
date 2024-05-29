@@ -2189,12 +2189,14 @@ message PixelImpulseUsageReported {
       INTERNAL_PLATFORM_CONNECTION_CHANGE = 10003;
       INTERNAL_CLIENT_LISTENER_ADD = 10004;
       INTERNAL_CLIENT_LISTENER_REMOVE = 10005;
+      INTERNAL_WAIT = 10006;
   }
   /* Invoked API name */
   optional ApiName api_name = 4;
 
   enum Tag {
       TAG_UNKNOWN = 0;
+      TAG_TEMPERATURE_READ_DELAY = 1;
   }
   /* Tag for debugging purpose */
   optional Tag tag = 5;
