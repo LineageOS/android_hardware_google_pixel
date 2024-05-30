@@ -27,14 +27,22 @@ namespace pixel {
 
 using aidl::android::frameworks::stats::IStats;
 
+bool fileExists(const std::string &path);
 std::shared_ptr<IStats> getStatsService();
 
 enum ReportEventType {
+  EvtFGAbnormalEvent   = 0x4142, /* AB */
   EvtFGLearningHistory = 0x4C48, /* LH */
   EvtGMSR              = 0xFFFF, /* GMSR */
   EvtModelLoading      = 0x4D4C, /* ML */
   EvtHistoryValidation = 0x4856, /* HV */
   EvtFGRegularMonitor  = 0x524D, /* RM */
+};
+
+enum ReportEventFormat {
+  FormatAddrWithVal,
+  FormatIgnoreAddr,
+  FormatNoAddr,
 };
 
 void reportSpeakerImpedance(const std::shared_ptr<IStats> &stats_client,
@@ -61,10 +69,12 @@ void reportSpeakerHealthStat(const std::shared_ptr<IStats> &stats_client,
 void reportUsbDataSessionEvent(const std::shared_ptr<IStats> &stats_client,
                                const PixelAtoms::VendorUsbDataSessionEvent &usb_session);
 void readLogbuffer(const std::string &buf_path, int num_fields, uint16_t code,
-                   unsigned int last_check_time, std::vector<std::vector<uint16_t>> &events);
+                   enum ReportEventFormat format, unsigned int last_check_time,
+                   std::vector<std::vector<uint16_t>> &events);
 
 void readLogbuffer(const std::string &buf_path, int num_fields, const char *code,
-                   unsigned int last_check_time, std::vector<std::vector<uint16_t>> &events);
+                   enum ReportEventFormat format, unsigned int last_check_time,
+                   std::vector<std::vector<uint16_t>> &events);
 }  // namespace pixel
 }  // namespace google
 }  // namespace hardware

@@ -43,12 +43,6 @@ using android::hardware::google::pixel::PixelAtoms::BatteryEEPROM;
 
 BatteryEEPROMReporter::BatteryEEPROMReporter() {}
 
-static bool fileExists(const std::string &path) {
-    struct stat sb;
-
-    return stat(path.c_str(), &sb) == 0;
-}
-
 void BatteryEEPROMReporter::checkAndReport(const std::shared_ptr<IStats> &stats_client,
                                            const std::string &path) {
     std::string file_contents;
@@ -435,6 +429,7 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
                                                      const std::vector<std::string> &paths) {
     struct BatteryHistory params = {.checksum = EvtFGLearningHistory};
     struct timespec boot_time;
+    auto format = FormatIgnoreAddr;
     int fg_idx = 0;
 
     if (paths.empty())
@@ -446,11 +441,13 @@ void BatteryEEPROMReporter::checkAndReportFGLearning(const std::shared_ptr<IStat
         std::string path = paths[path_idx];
 
         if (!path.empty() && fileExists(path)) {
-            readLogbuffer(path, kNumFGLearningFieldsV2, params.checksum, last_lh_check_, events);
+            readLogbuffer(path, kNumFGLearningFieldsV2, params.checksum, format, last_lh_check_,
+                          events);
             if (events.size() == 0)
-                readLogbuffer(path, kNumFGLearningFieldsV2, "learn", last_lh_check_, events);
+                readLogbuffer(path, kNumFGLearningFieldsV2, "learn", format, last_lh_check_,
+                              events);
             if (events.size() == 0)
-                readLogbuffer(path, kNumFGLearningFields, "learn", last_lh_check_, events);
+                readLogbuffer(path, kNumFGLearningFields, "learn", format, last_lh_check_, events);
 
             for (int event_idx = 0; event_idx < events.size(); event_idx++) {
                 std::vector<uint16_t> &event = events[event_idx];
@@ -501,6 +498,7 @@ void BatteryEEPROMReporter::checkAndReportValidation(const std::shared_ptr<IStat
                                                      const std::vector<std::string> &paths) {
     struct BatteryHistory params = {.checksum = EvtHistoryValidation};
     struct timespec boot_time;
+    auto format = FormatIgnoreAddr;
     int fg_idx = 0;
 
     if (paths.empty())
@@ -512,7 +510,7 @@ void BatteryEEPROMReporter::checkAndReportValidation(const std::shared_ptr<IStat
         std::string path = paths[i];
 
         if (!path.empty() && fileExists(path)) {
-            readLogbuffer(path, kNumValidationFields, params.checksum, last_hv_check_, events);
+            readLogbuffer(path, kNumValidationFields, params.checksum, format, last_hv_check_, events);
             for (int seq = 0; seq < events.size(); seq++) {
                 std::vector<uint16_t> &event = events[seq];
                 if (event.size() == kNumValidationFields) {

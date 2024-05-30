@@ -48,7 +48,7 @@ class UeventListener {
         const char *const WirelessChargerPtmcUevent;  // Deprecated.
         const char *const WirelessChargerPtmcPath;    // Deprecated.
         const char *const FwUpdatePath;
-        const char *const FGAbnlPath;
+        const std::vector<std::string> FGAbnlPath;
     };
     constexpr static const char *const ssoc_details_path =
             "/sys/class/power_supply/battery/ssoc_details";
@@ -68,7 +68,7 @@ class UeventListener {
                    const std::string typec_partner_vid_path = typec_partner_vid_path_default,
                    const std::string typec_partner_pid_path = typec_partner_pid_path_default,
                    const std::string fw_update_path = "",
-                   const std::string fg_abnl_path = "");
+                   const std::vector<std::string> fg_abnl_path = {""});
     UeventListener(const struct UeventPaths &paths);
 
     bool ProcessUevent();  // Process a single Uevent.
@@ -107,7 +107,7 @@ class UeventListener {
     const std::string kTypeCPartnerVidPath;
     const std::string kTypeCPartnerPidPath;
     const std::string kFwUpdatePath;
-    const std::string kFGAbnlPath;
+    const std::vector<std::string> kFGAbnlPath;
 
 
     const std::unordered_map<std::string, PixelAtoms::GpuEvent::GpuEventType>
