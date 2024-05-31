@@ -125,6 +125,7 @@ message Atom {
       MmProcessUsageByOomGroupSnapshot mm_process_usage_by_oom_group_snapshot = 105070;
       MmGcmaSnapshot mm_gcma_snapshot = 105071;
       MmGcmaStats mm_gcma_stats = 105072;
+      VendorAudioUsbDeviceCapabilityStats vendor_audio_usb_device_capability_stats = 105073 [(android.os.statsd.module) = "pixelaudio"];
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2452,3 +2453,60 @@ message MmGcmaStats {
   repeated int64 latency_histogram = 6;
 }
 
+/*
+ * A message containing the USB audio capability of the connected accessories.
+ */
+message VendorAudioUsbDeviceCapabilityStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  enum UsbMode {
+    UNKNOWN_MODE = 0;
+    ASYNC_MODE = 1;
+    ADAPTIVE_MODE = 2;
+    SYNC_MODE = 3;
+  }
+  /* USB Modes */
+  repeated UsbMode playback_supported_modes = 2;
+  repeated UsbMode capture_supported_modes = 3;
+
+  enum UsbSpeed {
+    OTHER_SPEED = 0;
+    FULL_SPEED = 1;
+    HIGH_SPEED = 2;
+    SUPER_SPEED = 3;
+  }
+  /* USB Speed */
+  optional UsbSpeed usb_speed = 4;
+
+  /* Data Packets Interval in ms. Expected value is between 125 and 1000.*/
+  optional int32 playback_data_packet_interval = 5;
+  optional int32 capture_data_packet_interval = 6;
+
+  /* List of supported sample rates in increasing order. */
+  repeated int32 playback_supported_sample_rates = 7;
+  repeated int32 capture_supported_sample_rates = 8;
+
+  /* Maximum number of channels supported */
+  optional int32 playback_supported_channel_count = 9;
+  optional int32 capture_supported_channel_count = 10;
+
+  enum PcmType {
+    DEFAULT = 0;
+    INT16_BIT = 1;
+    INT32_BIT = 2;
+    FIXED_Q824 = 3;
+    FLOAT32_BIT = 4;
+    INT24_BIT = 5;
+    DSD32_BIT = 6;
+  }
+  /* Supported PCM Type */
+  repeated PcmType playback_supported_pcm_types = 11;
+  repeated PcmType capture_supported_pcm_types = 12;
+
+  /* Supported endian */
+  optional bool is_big_endian = 13;
+
+  /* Duration connected */
+  optional int32 duration_second_connected = 14;
+};
