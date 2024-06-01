@@ -25,7 +25,7 @@ option java_package = "android.hardware.google.pixel";
 option java_outer_classname = "PixelAtoms";
 
 import "frameworks/proto_logging/stats/atom_field_options.proto";
-import "frameworks/proto_logging/stats/enums/app/enums.proto";
+import "frameworks/proto_logging/stats/enums/app/app_enums.proto";
 
 /*
  * Please note that the following features are not currently supported by
