@@ -237,6 +237,13 @@ void SysfsCollector::logBatteryHealth(const std::shared_ptr<IStats> &stats_clien
 }
 
 /**
+ * Log battery time-to-full stats
+ */
+void SysfsCollector::logBatteryTTF(const std::shared_ptr<IStats> &stats_client) {
+    battery_time_to_full_reporter_.checkAndReportStats(stats_client);
+}
+
+/**
  * Check the codec for failures over the past 24hr.
  */
 void SysfsCollector::logCodecFailed(const std::shared_ptr<IStats> &stats_client) {
@@ -2094,6 +2101,7 @@ void SysfsCollector::logPerDay() {
     logBatteryChargeCycles(stats_client);
     logBatteryEEPROM(stats_client);
     logBatteryHealth(stats_client);
+    logBatteryTTF(stats_client);
     logBlockStatsReported(stats_client);
     logCodec1Failed(stats_client);
     logCodecFailed(stats_client);
