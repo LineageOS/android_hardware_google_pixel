@@ -42,7 +42,7 @@ namespace implementation {
 using ::android::base::StringPrintf;
 
 PowerHalService::PowerHalService()
-    : power_hal_aidl_exist_(true), power_hal_aidl_(nullptr), power_hal_ext_aidl_(nullptr) {
+    : power_hal_aidl_exist_(false), power_hal_aidl_(nullptr), power_hal_ext_aidl_(nullptr) {
     connect();
 }
 
