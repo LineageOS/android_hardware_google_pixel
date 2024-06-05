@@ -121,7 +121,7 @@ message Atom {
       DisplayPortErrorStats display_port_error_stats = 105066;
       HDCPAuthTypeStats hdcp_auth_type_stats = 105067;
       DisplayPortUsage display_port_usage = 105068;
-      FuelGaugeAbnormality fuel_gauge_abnormality = 105069;
+      FuelGaugeAbnormalityReported fuel_gauge_abnormality_reported = 105069;
       MmProcessUsageByOomGroupSnapshot mm_process_usage_by_oom_group_snapshot = 105070;
       MmGcmaSnapshot mm_gcma_snapshot = 105071;
       MmGcmaStats mm_gcma_stats = 105072;
@@ -2324,9 +2324,9 @@ message DisplayPortUsage {
  * Logged from:
  *    hardware/google/pixel/pixelstats/BatteryFGReporter.cpp
  */
-message FuelGaugeAbnormality {
+message FuelGaugeAbnormalityReported {
   enum Event {
-    NONE = 0;            // no abnormal event
+    UNKNOWN_EVENT = 0;
     FULLCAPNOM_LOW = 1;  // unexpected fullcapnom learning (too low)
     FULLCAPNOM_HIGH = 2; // unexpected fullcapnom learning (too high)
     REPSOC_EDET = 3;     // empty detect false alarm
@@ -2335,8 +2335,9 @@ message FuelGaugeAbnormality {
     VFOCV = 6;           // vfocv estimation wrong
   }
   enum EventState {
-    CLEAR = 0;
-    TRIGGER = 1;
+    UNKNOWN_STATE = 0;
+    UNTRIGGER = 1;
+    TRIGGER = 2;
   }
   /* Vendor reverse domain name */
   optional string reverse_domain_name = 1;
@@ -2423,9 +2424,9 @@ message MmProcessUsageByOomGroupSnapshot {
   optional int64 nr_task = 4;
   optional int64 file_rss = 5;
   optional int64 anon_rss = 6;
-  optional int64 swap_ent = 7;
-  optional int64 shmem_rss = 8;
-  optional int64 pgtable = 9;
+  optional int64 pgtable = 7;
+  optional int64 swap_ent = 8;
+  optional int64 shmem_rss = 9;
 }
 
 /*
