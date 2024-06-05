@@ -2424,9 +2424,9 @@ message MmProcessUsageByOomGroupSnapshot {
   optional int64 nr_task = 4;
   optional int64 file_rss = 5;
   optional int64 anon_rss = 6;
-  optional int64 swap_ent = 7;
-  optional int64 shmem_rss = 8;
-  optional int64 pgtable = 9;
+  optional int64 pgtable = 7;
+  optional int64 swap_ent = 8;
+  optional int64 shmem_rss = 9;
 }
 
 /*
