@@ -52,71 +52,103 @@ enum class MiscWriterActions : int32_t {
 };
 
 class MiscWriter {
- public:
-  // sync with bootloader's abl bootloader_message.h
-  static constexpr uint32_t kThemeFlagOffsetInVendorSpace = 0;
-  static constexpr char kDarkThemeFlag[] = "theme-dark";
-  static constexpr uint32_t kSotaFlagOffsetInVendorSpace = 32;
-  static constexpr char kSotaFlag[] = "enable-sota";
-  static constexpr uint32_t kPkvmFlagOffsetInVendorSpace = 64;
-  static constexpr char kEnablePkvmFlag[] = "enable-pkvm";
-  static constexpr char kDisablePkvmFlag[] = "disable-pkvm";
-  static constexpr uint32_t kWristOrientationFlagOffsetInVendorSpace = 96;
-  static constexpr char kWristOrientationFlag[] = "wrist-orientation=";
-  static constexpr uint32_t kTimeFormatValOffsetInVendorSpace = 128;
-  static constexpr char kTimeFormat[] = "timeformat=";
-  static constexpr uint32_t kTimeOffsetValOffsetInVendorSpace = 160;
-  static constexpr char kTimeOffset[] = "timeoffset=";
-  static constexpr uint32_t kMaxRamSizeOffsetInVendorSpace = 192;
-  static constexpr char kMaxRamSize[] = "max-ram-size=";
-  static constexpr uint32_t kSotaStateOffsetInVendorSpace = 224;
-  static constexpr uint32_t kRTimeRtcOffsetValOffsetInVendorSpace = 264;
-  static constexpr char kTimeRtcOffset[] = "timertcoffset=";
-  static constexpr uint32_t kRTimeMinRtcValOffsetInVendorSpace = 296;
-  static constexpr char kTimeMinRtc[] = "timeminrtc=";
-  static constexpr uint32_t kFaceauthEvalValOffsetInVendorSpace = 328;
-  static constexpr uint32_t kSotaScheduleShipmodeOffsetInVendorSpace = 360;
-  static constexpr uint32_t kDstTransitionOffsetInVendorSpace = 392;
-  static constexpr char kDstTransition[] = "dst-transition=";
-  static constexpr uint32_t kDstOffsetOffsetInVendorSpace = 424;
-  static constexpr char kDstOffset[] = "dst-offset=";
-  static constexpr uint32_t kDisplayModeOffsetInVendorSpace = 456;
-  static constexpr char kDisplayModePrefix[] = "mode=";
-  // Next available space = 488
+  public:
+    // sync with bootloader's abl bootloader_message.h
+    typedef struct bootloader_message_vendor {
+        char theme[32];
+        char sota[32];
+        char pkvm[32];
+        char wrist_orientation[32];
+        char timeformat[32];
+        char timeoffset[32];
+        char max_ram_size[32];
+        char sota_client_state[40];
+        char timertcoffset[32];
+        char timeminrtc[32];
+        char faceauth_eval[32];
+        char sota_schedule_shipmode[32];
+        char dsttransition[32];
+        char dstoffset[32];
+        char user_preferred_resolution[32];
+    } __attribute__((__packed__)) bootloader_message_vendor_t;
 
-  // Minimum and maximum valid value for max-ram-size
-  static constexpr int32_t kRamSizeDefault = -1;
-  static constexpr uint32_t kRamSizeMin = 2048;
-  static constexpr uint32_t kRamSizeMax = 65536;
+    static constexpr uint32_t kThemeFlagOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, theme);
+    static constexpr char kDarkThemeFlag[] = "theme-dark";
+    static constexpr uint32_t kSotaFlagOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, sota);
+    static constexpr char kSotaFlag[] = "enable-sota";
+    static constexpr uint32_t kPkvmFlagOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, pkvm);
+    static constexpr char kEnablePkvmFlag[] = "enable-pkvm";
+    static constexpr char kDisablePkvmFlag[] = "disable-pkvm";
+    static constexpr uint32_t kWristOrientationFlagOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, wrist_orientation);
+    static constexpr char kWristOrientationFlag[] = "wrist-orientation=";
+    static constexpr uint32_t kTimeFormatValOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, timeformat);
+    static constexpr char kTimeFormat[] = "timeformat=";
+    static constexpr uint32_t kTimeOffsetValOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, timeoffset);
+    static constexpr char kTimeOffset[] = "timeoffset=";
+    static constexpr uint32_t kMaxRamSizeOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, max_ram_size);
+    static constexpr char kMaxRamSize[] = "max-ram-size=";
+    static constexpr uint32_t kSotaStateOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, sota_client_state);
+    static constexpr uint32_t kRTimeRtcOffsetValOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, timertcoffset);
+    static constexpr char kTimeRtcOffset[] = "timertcoffset=";
+    static constexpr uint32_t kRTimeMinRtcValOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, timeminrtc);
+    static constexpr char kTimeMinRtc[] = "timeminrtc=";
+    static constexpr uint32_t kFaceauthEvalValOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, faceauth_eval);
+    static constexpr uint32_t kSotaScheduleShipmodeOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, sota_schedule_shipmode);
+    static constexpr uint32_t kDstTransitionOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, dsttransition);
+    static constexpr char kDstTransition[] = "dst-transition=";
+    static constexpr uint32_t kDstOffsetOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, dstoffset);
+    static constexpr char kDstOffset[] = "dst-offset=";
+    static constexpr uint32_t kDisplayModeOffsetInVendorSpace =
+            offsetof(bootloader_message_vendor_t, user_preferred_resolution);
+    static constexpr char kDisplayModePrefix[] = "mode=";
 
-  // Minimum and maximum time zone are -12 and 14 hours from GMT
-  static constexpr int32_t kMinTimeOffset = -12 * 60 * 60 * 1000;
-  static constexpr int32_t kMaxTimeOffset = 14 * 60 * 60 * 1000;
+    // Minimum and maximum valid value for max-ram-size
+    static constexpr int32_t kRamSizeDefault = -1;
+    static constexpr uint32_t kRamSizeMin = 2048;
+    static constexpr uint32_t kRamSizeMax = 65536;
 
-  // Maximum display mode string length
-  static constexpr size_t kDisplayModeMaxSize = 32 - sizeof(kDisplayModePrefix);
+    // Minimum and maximum time zone are -12 and 14 hours from GMT
+    static constexpr int32_t kMinTimeOffset = -12 * 60 * 60 * 1000;
+    static constexpr int32_t kMaxTimeOffset = 14 * 60 * 60 * 1000;
 
-  // Returns true of |size| bytes data starting from |offset| is fully inside the vendor space.
-  static bool OffsetAndSizeInVendorSpace(size_t offset, size_t size);
-  // Writes the given data to the vendor space in /misc partition, at the given offset. Note that
-  // offset is in relative to the start of the vendor space.
-  static bool WriteMiscPartitionVendorSpace(const void* data, size_t size, size_t offset,
-                                            std::string* err);
+    // Maximum display mode string length
+    static constexpr size_t kDisplayModeMaxSize = 32 - sizeof(kDisplayModePrefix);
 
-  explicit MiscWriter(const MiscWriterActions& action) : action_(action) {}
-  explicit MiscWriter(const MiscWriterActions &action, const char data)
-      : action_(action), chardata_(data) {}
-  explicit MiscWriter(const MiscWriterActions &action, std::string data)
-      : action_(action), stringdata_(data) {}
+    // Returns true of |size| bytes data starting from |offset| is fully inside the vendor space.
+    static bool OffsetAndSizeInVendorSpace(size_t offset, size_t size);
+    // Writes the given data to the vendor space in /misc partition, at the given offset. Note that
+    // offset is in relative to the start of the vendor space.
+    static bool WriteMiscPartitionVendorSpace(const void *data, size_t size, size_t offset,
+                                              std::string *err);
 
-  // Performs the stored MiscWriterActions. If |override_offset| is set, writes to the input offset
-  // in the vendor space of /misc instead of the default offset.
-  bool PerformAction(std::optional<size_t> override_offset = std::nullopt);
+    explicit MiscWriter(const MiscWriterActions &action) : action_(action) {}
+    explicit MiscWriter(const MiscWriterActions &action, const char data)
+        : action_(action), chardata_(data) {}
+    explicit MiscWriter(const MiscWriterActions &action, std::string data)
+        : action_(action), stringdata_(data) {}
 
- private:
-  MiscWriterActions action_{ MiscWriterActions::kUnset };
-  char chardata_{'0'};
-  std::string stringdata_;
+    // Performs the stored MiscWriterActions. If |override_offset| is set, writes to the input
+    // offset in the vendor space of /misc instead of the default offset.
+    bool PerformAction(std::optional<size_t> override_offset = std::nullopt);
+
+  private:
+    MiscWriterActions action_{MiscWriterActions::kUnset};
+    char chardata_{'0'};
+    std::string stringdata_;
 };
 
 }  // namespace pixel
