@@ -23,9 +23,6 @@ cc_benchmark {
     srcs: [
         "benchmark.cpp",
     ],
-    static_libs: [
-        "libc++fs",
-    ],
     shared_libs: [
         "libbase",
     ],
