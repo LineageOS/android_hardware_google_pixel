@@ -559,6 +559,8 @@ message VendorSpeakerStatsReported {
   optional int32 excursion = 5;
   /* The speaker's heart beat count */
   optional int32 heartbeat = 6;
+  /* The speaker's version */
+  optional int32 version = 7;
 }
 
 /* A message containing how many times of ufs host reset */

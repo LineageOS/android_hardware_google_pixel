@@ -96,6 +96,7 @@ class SysfsCollector {
         const std::vector<std::string> GMSRPath;
         const std::vector<std::string> FGModelLoadingPath;
         const std::vector<std::string> FGLogBufferPath;
+        const char *const SpeakerVersionPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -211,6 +212,7 @@ class SysfsCollector {
     const char *const kMaxfgHistoryPath;
     const std::vector<std::string> kFGModelLoadingPath;
     const std::vector<std::string> kFGLogBufferPath;
+    const char *const kSpeakerVersionPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
