@@ -2478,11 +2478,11 @@ message VendorAudioUsbDeviceCapabilityStats {
     SUPER_SPEED = 3;
   }
   /* USB Speed */
-  optional UsbSpeed usb_speed = 4;
+  optional UsbSpeed usb_speed = 4 [deprecated = true];
 
   /* Data Packets Interval in ms. Expected value is between 125 and 1000.*/
-  optional int32 playback_data_packet_interval = 5;
-  optional int32 capture_data_packet_interval = 6;
+  repeated int32 playback_data_packet_interval = 5;
+  repeated int32 capture_data_packet_interval = 6;
 
   /* List of supported sample rates in increasing order. */
   repeated int32 playback_supported_sample_rates = 7;
@@ -2508,6 +2508,9 @@ message VendorAudioUsbDeviceCapabilityStats {
   /* Supported endian */
   optional bool is_big_endian = 13;
 
+  /* Is USB device support playback */
+  optional bool is_playback = 14;
+
   /* Duration connected */
-  optional int32 duration_second_connected = 14;
+  optional int32 duration_second_connected = 15;
 };
