@@ -126,6 +126,7 @@ message Atom {
       MmGcmaSnapshot mm_gcma_snapshot = 105071;
       MmGcmaStats mm_gcma_stats = 105072;
       VendorAudioUsbDeviceCapabilityStats vendor_audio_usb_device_capability_stats = 105073 [(android.os.statsd.module) = "pixelaudio"];
+      BatteryTimeToFullStatsReported battery_time_to_full_stats_reported = 105074;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -559,6 +560,8 @@ message VendorSpeakerStatsReported {
   optional int32 excursion = 5;
   /* The speaker's heart beat count */
   optional int32 heartbeat = 6;
+  /* The speaker's version */
+  optional int32 version = 7;
 }
 
 /* A message containing how many times of ufs host reset */
@@ -2514,3 +2517,27 @@ message VendorAudioUsbDeviceCapabilityStats {
   /* Duration connected */
   optional int32 duration_second_connected = 15;
 };
+
+/*
+ * A message containing battery time to full stats
+ * Logged from:
+ *    hardware/google/pixel/pixelstats/BatteryTTFReporter.cpp
+ */
+message BatteryTimeToFullStatsReported {
+  // Vendor reverse domain name (expecting "com.google.pixel").
+  optional string reverse_domain_name = 1;
+
+  // The charge_counter and elap of each soc
+  optional int32 ttf_type = 2;
+  optional int32 ttf_range = 3;
+  optional int32 soc_0 = 4;
+  optional int32 soc_1 = 5;
+  optional int32 soc_2 = 6;
+  optional int32 soc_3 = 7;
+  optional int32 soc_4 = 8;
+  optional int32 soc_5 = 9;
+  optional int32 soc_6 = 10;
+  optional int32 soc_7 = 11;
+  optional int32 soc_8 = 12;
+  optional int32 soc_9 = 13;
+}
