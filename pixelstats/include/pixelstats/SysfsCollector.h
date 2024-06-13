@@ -22,6 +22,7 @@
 
 #include "BatteryEEPROMReporter.h"
 #include "BatteryHealthReporter.h"
+#include "BatteryTTFReporter.h"
 #include "BrownoutDetectedReporter.h"
 #include "DisplayStatsReporter.h"
 #include "MitigationDurationReporter.h"
@@ -112,6 +113,7 @@ class SysfsCollector {
 
     void logBatteryChargeCycles(const std::shared_ptr<IStats> &stats_client);
     void logBatteryHealth(const std::shared_ptr<IStats> &stats_client);
+    void logBatteryTTF(const std::shared_ptr<IStats> &stats_client);
     void logBlockStatsReported(const std::shared_ptr<IStats> &stats_client);
     void logCodecFailed(const std::shared_ptr<IStats> &stats_client);
     void logCodec1Failed(const std::shared_ptr<IStats> &stats_client);
@@ -220,10 +222,10 @@ class SysfsCollector {
     ThermalStatsReporter thermal_stats_reporter_;
     DisplayStatsReporter display_stats_reporter_;
     BatteryHealthReporter battery_health_reporter_;
+    BatteryTTFReporter battery_time_to_full_reporter_;
     TempResidencyReporter temp_residency_reporter_;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
-    // store everything in the values array at the index of the field number
-    // -2.
+    // store everything in the values array at the index of the field number    // -2.
     const int kVendorAtomOffset = 2;
 
     bool log_once_reported = false;

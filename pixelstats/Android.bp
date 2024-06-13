@@ -154,6 +154,7 @@ cc_library {
         "BatteryEEPROMReporter.cpp",
         "BatteryHealthReporter.cpp",
         "BatteryFGReporter.cpp",
+        "BatteryTTFReporter.cpp",
         "BrownoutDetectedReporter.cpp",
         "ChargeStatsReporter.cpp",
         "DisplayStatsReporter.cpp",
