@@ -75,7 +75,7 @@ static constexpr std::array<EffectLevel, 2> V_TICK_DEFAULT = {1, 100};
 static constexpr std::array<EffectLevel, 2> V_CLICK_DEFAULT{1, 100};
 static constexpr std::array<EffectLevel, 2> V_LONG_DEFAULT{1, 100};
 static constexpr std::array<EffectDuration, 14> EFFECT_DURATIONS{
-        0, 100, 12, 1000, 300, 130, 150, 500, 100, 5, 12, 1000, 1000, 1000};
+        0, 100, 12, 1000, 300, 133, 150, 500, 100, 5, 12, 1000, 1000, 1000};
 
 // Constants With Prescribed Values
 

@@ -73,6 +73,8 @@ class SysfsCollector {
         const char *const AmsRatePath;
         const std::vector<std::string> ThermalStatsPaths;
         const std::vector<std::string> DisplayStatsPaths;
+        const std::vector<std::string> DisplayPortStatsPaths;
+        const std::vector<std::string> HDCPStatsPaths;
         const char *const CCARatePath;
         const std::vector<std::pair<std::string, std::string>> TempResidencyAndResetPaths;
         const char *const LongIRQMetricsPath;
@@ -91,7 +93,7 @@ class SysfsCollector {
         const char *const OffloadEffectsIdPath;
         const char *const OffloadEffectsDurationPath;
         const char *const BluetoothAudioUsagePath;
-        const char *const GMSRPath;
+        const std::vector<std::string> GMSRPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -129,6 +131,8 @@ class SysfsCollector {
     void logThermalStats(const std::shared_ptr<IStats> &stats_client);
     void logMitigationDurationCounts(const std::shared_ptr<IStats> &stats_client);
     void logDisplayStats(const std::shared_ptr<IStats> &stats_client);
+    void logDisplayPortStats(const std::shared_ptr<IStats> &stats_client);
+    void logHDCPStats(const std::shared_ptr<IStats> &stats_client);
     void logVendorAudioPdmStatsReported(const std::shared_ptr<IStats> &stats_client);
 
     void reportSlowIoFromFile(const std::shared_ptr<IStats> &stats_client, const char *path,
@@ -188,6 +192,8 @@ class SysfsCollector {
     const char *const kModemPcieLinkStatsPath;
     const char *const kWifiPcieLinkStatsPath;
     const std::vector<std::string> kDisplayStatsPaths;
+    const std::vector<std::string> kDisplayPortStatsPaths;
+    const std::vector<std::string> kHDCPStatsPaths;
     const char *const kPDMStatePath;
     const char *const kWavesPath;
     const char *const kAdaptedInfoCountPath;
@@ -198,7 +204,7 @@ class SysfsCollector {
     const char *const kOffloadEffectsIdPath;
     const char *const kOffloadEffectsDurationPath;
     const char *const kBluetoothAudioUsagePath;
-    const char *const kGMSRPath;
+    const std::vector<std::string> kGMSRPath;
     const char *const kMaxfgHistoryPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;

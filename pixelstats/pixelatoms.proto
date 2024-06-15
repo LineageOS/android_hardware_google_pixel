@@ -116,6 +116,10 @@ message Atom {
       ThermalSensorAbnormalityDetected thermal_sensor_abnormality_detected = 105062;
       VendorAudioOffloadedEffectStatsReported vendor_audio_offloaded_effect_stats_reported = 105063;
       VendorAudioBtMediaStatsReported vendor_audio_bt_media_stats_reported = 105064;
+      PixelImpulseUsageReported pixel_impulse_usage_reported = 105065;
+      DisplayPortErrorStats display_port_error_stats = 105066;
+      HDCPAuthTypeStats hdcp_auth_type_stats = 105067;
+      DisplayPortUsage display_port_usage = 105068;
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -616,6 +620,10 @@ message PixelMmMetricsPerHour {
     optional int32 psi_mem_some_avg300_min = 58;
     optional int32 psi_mem_some_avg300_max = 59;
     optional int32 psi_mem_some_avg300_avg = 60;
+    optional int32 version = 61 [deprecated = true];
+    optional int64 shmem_pages = 62;
+    optional int64 page_tables_pages = 63;
+    optional int64 dmabuf_pages = 64;
 }
 
 /* A message containing Pixel memory metrics collected daily. */
@@ -679,6 +687,11 @@ message PixelMmMetricsPerDay {
     optional int64 thp_split_page = 57;
     optional int64 thp_migration_split = 58;
     optional int64 thp_deferred_split_page = 59;
+    optional int64 version = 60 [deprecated = true];
+    optional int64 cpu_total_time = 61;
+    optional int64 cpu_idle_time = 62;
+    optional int64 cpu_io_wait_time = 63;
+    optional int64 kswapd_pageout_run = 64;
 }
 
 /* A message containing CMA metrics collected from dogfooding only. */
@@ -1551,6 +1564,7 @@ message BrownoutDetected {
         OCP_BBS = 26;
         OCP_BCS = 27;
         OCP_BDS = 28;
+        OCP2_IF = 29;
     }
 
     // Reverse domain name. (e.g. Pixel)
@@ -1826,6 +1840,14 @@ message GpuEvent {
       MALI_PM_TIMEOUT = 13;
       MALI_CSF_RESET_OK = 14;
       MALI_CSF_RESET_FAILED = 15;
+      MALI_TILER_OOM = 16;
+      MALI_PROGRESS_TIMER = 17;
+      MALI_CS_ERROR = 18;
+      MALI_FW_ERROR = 19;
+      MALI_PMODE_EXIT_TIMEOUT = 20;
+      MALI_PMODE_ENTRY_FAILURE = 21;
+      MALI_GPU_PAGE_FAULT = 22;
+      MALI_MMU_AS_ACTIVE_STUCK = 23;
     }
 
     /* Vendor reverse domain name (expecting "com.google.pixel"). */
@@ -2102,4 +2124,128 @@ message VendorAudioBtMediaStatsReported {
   optional Codec bt_codec_type = 2;
   /* Total active seconds to record. */
   optional int32 active_seconds_per_day = 3;
+}
+
+/*
+ * Logs the usage of APIs in Pixel Impulse.
+ */
+message PixelImpulseUsageReported {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* UID of the caller package */
+  optional int32 caller_uid = 2 [(android.os.statsd.is_uid) = true];
+
+  /* UID of the callee package */
+  optional int32 callee_uid = 3 [(android.os.statsd.is_uid) = true];
+
+  enum ApiName {
+      API_UNKNOWN = 0;
+      /* Server side */
+      API_SERVICE_BIND = 1;
+      API_SERVICE_UNBIND = 2;
+      API_REGISTER = 3;
+      API_UNREGISTER = 4;
+      API_CLEAR_APP_DATA = 100;
+      /* Client side */
+      API_SERVER_START = 1001;
+      API_PIXEL_STATE_CHANGE = 1002;
+  }
+  /* Invoked API name */
+  optional ApiName api_name = 4;
+
+  enum Tag {
+      TAG_UNKNOWN = 0;
+  }
+  /* Tag for debugging purpose */
+  optional Tag tag = 5;
+
+  /* Timestamp of the usage start in epoch time */
+  optional int64 usage_start_epoch_millis = 6;
+
+  /* Timestamp of the usage start since device boot */
+  optional int64 usage_start_uptime_millis = 7;
+
+  /* Duration of the usage */
+  optional int64 usage_duration_millis = 8;
+
+  /* Whether the invocation was successful */
+  optional bool success = 9;
+
+  enum FailReason {
+      FAIL_REASON_UNKNOWN = 0;
+      FAIL_REASON_INVALID_ARGUMENT = 1;
+      FAIL_REASON_UNAUTHORIZED = 2;
+      FAIL_REASON_TIMEOUT = 3;
+      FAIL_REASON_NOT_FOUND = 4;
+      FAIL_REASON_INVALID_STATE = 5;
+  }
+  /* Fail reason (if success == false) */
+  optional FailReason fail_reason = 10;
+
+  /* Size of the arguments */
+  optional int32 request_size = 11;
+}
+
+/**
+ * Log DisplayPort link error statistics.
+ */
+message DisplayPortErrorStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* The error count due to link training failed. */
+  optional int32 link_negotiation_failures = 2;
+  /* The error count due to read EDID failed. */
+  optional int32 edid_read_failures = 3;
+  /* The error count due to read dpcd failed. */
+  optional int32 dpcd_read_failures = 4;
+  /* The error count due to EDID is invalid. */
+  optional int32 edid_invalid_failures = 5;
+  /* The error count due to sink count is invalid. */
+  optional int32 sink_count_invalid_failures = 6;
+  /* The error count due to link unstable. */
+  optional int32 link_unstable_failures = 7;
+}
+
+/**
+ * Log HDCP authentication type statistics.
+ */
+message HDCPAuthTypeStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* The count due to hdcp2 success */
+  optional int32 hdcp2_success_count = 2;
+  /* The count due to hdcp2 fallback */
+  optional int32 hdcp2_fallback_count = 3;
+  /* The count due to hdcp2 fail */
+  optional int32 hdcp2_fail_count = 4;
+  /* The count due to hdcp1 success */
+  optional int32 hdcp1_success_count = 5;
+  /* The count due to hdcp1 fail */
+  optional int32 hdcp1_fail_count = 6;
+  /* The count due to hdcp0 */
+  optional int32 hdcp0_count = 7;
+}
+
+/**
+ * A message containing how DisplayPort is being used in a day.
+ */
+message DisplayPortUsage {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* resolution width */
+  optional int32 width = 2;
+  /* resolution height */
+  optional int32 height = 3;
+  /* refresh rate */
+  optional float refresh_rate = 4;
+  /* vendor ID. */
+  optional int32 vendor_id = 5;
+  /* product ID. */
+  optional int32 product_id = 6;
+  /* indicated start/stop event of DP usage */
+  optional bool connected = 7;
 }

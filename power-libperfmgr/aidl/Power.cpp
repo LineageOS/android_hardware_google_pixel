@@ -23,10 +23,13 @@
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
+#include <fmq/AidlMessageQueue.h>
+#include <fmq/EventFlag.h>
 #include <perfmgr/HintManager.h>
 #include <utils/Log.h>
 
 #include <mutex>
+#include <optional>
 
 #include "PowerHintSession.h"
 #include "PowerSessionManager.h"
@@ -41,6 +44,11 @@ namespace pixel {
 
 using ::aidl::google::hardware::power::impl::pixel::PowerHintSession;
 using ::android::perfmgr::HintManager;
+
+using ::aidl::android::hardware::common::fmq::MQDescriptor;
+using ::aidl::android::hardware::common::fmq::SynchronizedReadWrite;
+using ::aidl::android::hardware::power::ChannelMessage;
+using ::android::AidlMessageQueue;
 
 constexpr char kPowerHalStateProp[] = "vendor.powerhal.state";
 constexpr char kPowerHalAudioProp[] = "vendor.powerhal.audio";
@@ -308,6 +316,25 @@ ndk::ScopedAStatus Power::createHintSession(int32_t tgid, int32_t uid,
                                             const std::vector<int32_t> &threadIds,
                                             int64_t durationNanos,
                                             std::shared_ptr<IPowerHintSession> *_aidl_return) {
+    SessionConfig config;
+    return createHintSessionWithConfig(tgid, uid, threadIds, durationNanos, SessionTag::OTHER,
+                                       &config, _aidl_return);
+}
+
+ndk::ScopedAStatus Power::getHintSessionPreferredRate(int64_t *outNanoseconds) {
+    *outNanoseconds = HintManager::GetInstance()->GetAdpfProfile()
+                              ? HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs
+                              : 0;
+    if (*outNanoseconds <= 0) {
+        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+    }
+
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Power::createHintSessionWithConfig(
+        int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds, int64_t durationNanos,
+        SessionTag tag, SessionConfig *config, std::shared_ptr<IPowerHintSession> *_aidl_return) {
     if (!HintManager::GetInstance()->GetAdpfProfile() ||
         HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs <= 0) {
         *_aidl_return = nullptr;
@@ -319,19 +346,29 @@ ndk::ScopedAStatus Power::createHintSession(int32_t tgid, int32_t uid,
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
     std::shared_ptr<IPowerHintSession> session =
-            ndk::SharedRefBase::make<PowerHintSession>(tgid, uid, threadIds, durationNanos);
+            ndk::SharedRefBase::make<PowerHintSession>(tgid, uid, threadIds, durationNanos, tag);
     *_aidl_return = session;
+    static_cast<PowerHintSession *>(_aidl_return->get())->getSessionConfig(config);
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus Power::getHintSessionPreferredRate(int64_t *outNanoseconds) {
-    *outNanoseconds = HintManager::GetInstance()->GetAdpfProfile()
-                              ? HintManager::GetInstance()->GetAdpfProfile()->mReportingRateLimitNs
-                              : 0;
-    if (*outNanoseconds <= 0) {
-        return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-    }
+ndk::ScopedAStatus Power::getSessionChannel(int32_t, int32_t, ChannelConfig *_aidl_return) {
+    static AidlMessageQueue<ChannelMessage, SynchronizedReadWrite> stubQueue{20, true};
+    static std::thread stubThread([&] {
+        ChannelMessage data;
+        // This loop will only run while there is data waiting
+        // to be processed, and blocks on a futex all other times
+        while (stubQueue.readBlocking(&data, 1, 0)) {
+        }
+    });
+    _aidl_return->channelDescriptor = stubQueue.dupeDesc();
+    _aidl_return->readFlagBitmask = 0x01;
+    _aidl_return->writeFlagBitmask = 0x02;
+    _aidl_return->eventFlagDescriptor = std::nullopt;
+    return ndk::ScopedAStatus::ok();
+}
 
+ndk::ScopedAStatus Power::closeSessionChannel(int32_t, int32_t) {
     return ndk::ScopedAStatus::ok();
 }
 

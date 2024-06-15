@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <aidl/android/hardware/power/SessionTag.h>
 #include <gtest/gtest.h>
 #include <sys/syscall.h>
 
@@ -72,8 +73,10 @@ class PowerHintSessionTest : public ::testing::Test {
             }
         }
 
-        sess1 = ndk::SharedRefBase::make<PowerHintSession>(1, 1, session1Threads, 1000000);
-        sess2 = ndk::SharedRefBase::make<PowerHintSession>(2, 2, session2Threads, 1000000);
+        sess1 = ndk::SharedRefBase::make<PowerHintSession>(1, 1, session1Threads, 1000000,
+                                                           SessionTag::OTHER);
+        sess2 = ndk::SharedRefBase::make<PowerHintSession>(2, 2, session2Threads, 1000000,
+                                                           SessionTag::OTHER);
     }
 
     void TearDown() {

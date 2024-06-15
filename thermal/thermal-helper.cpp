@@ -418,7 +418,7 @@ bool ThermalHelperImpl::readTemperature(
         std::pair<ThrottlingSeverity, ThrottlingSeverity> *throttling_status,
         const bool force_no_cache) {
     // Return fail if the thermal sensor cannot be read.
-    float temp;
+    float temp = NAN;
     std::map<std::string, float> sensor_log_map;
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
@@ -770,7 +770,7 @@ void ThermalHelperImpl::initializeTrip(const std::unordered_map<std::string, std
                 if (!std::isnan(sensor_info.second.hot_thresholds[i]) &&
                     !std::isnan(sensor_info.second.hot_hysteresis[i])) {
                     // Update trip_point_0_temp threshold
-                    std::string threshold = std::to_string(static_cast<int>(
+                    std::string threshold = std::to_string(std::lround(
                             sensor_info.second.hot_thresholds[i] / sensor_info.second.multiplier));
                     path = ::android::base::StringPrintf("%s/%s", (tz_path.data()),
                                                          kSensorTripPointTempZeroFile.data());
@@ -781,8 +781,8 @@ void ThermalHelperImpl::initializeTrip(const std::unordered_map<std::string, std
                         break;
                     }
                     // Update trip_point_0_hyst threshold
-                    threshold = std::to_string(static_cast<int>(
-                            sensor_info.second.hot_hysteresis[i] / sensor_info.second.multiplier));
+                    threshold = std::to_string(std::lround(sensor_info.second.hot_hysteresis[i] /
+                                                           sensor_info.second.multiplier));
                     path = ::android::base::StringPrintf("%s/%s", (tz_path.data()),
                                                          kSensorTripPointHystZeroFile.data());
                     if (!::android::base::WriteStringToFile(threshold, path)) {
@@ -910,7 +910,6 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
                                                  std::map<std::string, float> *sensor_log_map) {
     std::vector<float> model_inputs;
     float estimated_vt = NAN;
-    constexpr int kCelsius2mC = 1000;
 
     ATRACE_NAME(StringPrintf("ThermalHelper::runVirtualTempEstimator - %s", sensor_name.data())
                         .c_str());
@@ -933,7 +932,7 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
 
         if ((*sensor_log_map).count(linked_sensor.data())) {
             float value = (*sensor_log_map)[linked_sensor.data()];
-            model_inputs.push_back(value / kCelsius2mC);
+            model_inputs.push_back(value);
         } else {
             LOG(ERROR) << "failed to read sensor: " << linked_sensor;
             return NAN;
@@ -947,7 +946,7 @@ float ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
         return NAN;
     }
 
-    return (estimated_vt * kCelsius2mC);
+    return estimated_vt;
 }
 
 constexpr int kTranTimeoutParam = 2;
@@ -971,6 +970,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         std::shared_lock<std::shared_mutex> _lock(sensor_status_map_mutex_);
         if (sensor_status.override_status.emul_temp != nullptr) {
             *temp = sensor_status.override_status.emul_temp->temp;
+            (*sensor_log_map)[sensor_name.data()] = *temp;
             return true;
         }
     }
@@ -999,7 +999,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         *temp = std::stof(::android::base::Trim(file_reading));
     } else {
         const auto &linked_sensors_size = sensor_info.virtual_sensor_info->linked_sensors.size();
-        std::vector<float> sensor_readings(linked_sensors_size, 0.0);
+        std::vector<float> sensor_readings(linked_sensors_size, NAN);
 
         // Calculate temperature of each of the linked sensor
         for (size_t i = 0; i < linked_sensors_size; i++) {
@@ -1017,7 +1017,8 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
             }
         }
 
-        if (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) {
+        if ((sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) ||
+            (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_LINEAR_MODEL)) {
             *temp = runVirtualTempEstimator(sensor_name, sensor_log_map);
 
             if (std::isnan(*temp)) {
@@ -1027,7 +1028,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         } else {
             float temp_val = 0.0;
             for (size_t i = 0; i < linked_sensors_size; i++) {
-                float coefficient = 0.0;
+                float coefficient = NAN;
                 if (!readDataByType(sensor_info.virtual_sensor_info->coefficients[i], &coefficient,
                                     sensor_info.virtual_sensor_info->coefficients_type[i],
                                     force_no_cache, sensor_log_map)) {

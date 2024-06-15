@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/power/BnPowerHintSession.h>
 #include <aidl/android/hardware/power/SessionHint.h>
 #include <aidl/android/hardware/power/SessionMode.h>
+#include <aidl/android/hardware/power/SessionTag.h>
 #include <aidl/android/hardware/power/WorkDuration.h>
 #include <utils/Looper.h>
 #include <utils/Thread.h>
@@ -36,8 +37,10 @@ namespace impl {
 namespace pixel {
 
 using aidl::android::hardware::power::BnPowerHintSession;
+using aidl::android::hardware::power::SessionConfig;
 using aidl::android::hardware::power::SessionHint;
 using aidl::android::hardware::power::SessionMode;
+using aidl::android::hardware::power::SessionTag;
 using aidl::android::hardware::power::WorkDuration;
 using ::android::Message;
 using ::android::MessageHandler;
@@ -54,13 +57,17 @@ class PowerSessionManager;
 // and is separate so that it can be used as a pointer for
 // easily passing to the pid function
 struct AppHintDesc {
-    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, std::chrono::nanoseconds pTargetNs);
+    AppHintDesc(int64_t sessionId, int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
+                SessionTag tag, std::chrono::nanoseconds pTargetNs);
+
     std::string toString() const;
     int64_t sessionId{0};
     const int32_t tgid;
     const int32_t uid;
     nanoseconds targetNs;
-    int pidSetPoint;
+    std::vector<int32_t> thread_ids;
+    SessionTag tag;
+    int pidControlVariable;
     // status
     std::atomic<bool> is_active;
     // pid
@@ -76,7 +83,7 @@ struct AppHintDesc {
 class PowerHintSession : public BnPowerHintSession {
   public:
     explicit PowerHintSession(int32_t tgid, int32_t uid, const std::vector<int32_t> &threadIds,
-                              int64_t durationNanos);
+                              int64_t durationNanos, SessionTag tag);
     ~PowerHintSession();
     ndk::ScopedAStatus close() override;
     ndk::ScopedAStatus pause() override;
@@ -87,15 +94,18 @@ class PowerHintSession : public BnPowerHintSession {
     ndk::ScopedAStatus sendHint(SessionHint hint) override;
     ndk::ScopedAStatus setMode(SessionMode mode, bool enabled) override;
     ndk::ScopedAStatus setThreads(const std::vector<int32_t> &threadIds) override;
+    ndk::ScopedAStatus getSessionConfig(SessionConfig *_aidl_return) override;
+
     bool isActive();
     bool isTimeout();
     // Is hint session for a user application
     bool isAppSession();
     void dumpToStream(std::ostream &stream);
+    SessionTag getSessionTag() const;
 
   private:
     void tryToSendPowerHint(std::string hint);
-    void updatePidSetPoint(int pidSetPoint, bool updateVote = true);
+    void updatePidControlVariable(int pidControlVariable, bool updateVote = true);
     int64_t convertWorkDurationToBoostByPid(const std::vector<WorkDuration> &actualDurations);
     // Data
     sp<PowerSessionManager> mPSManager;
@@ -112,6 +122,8 @@ class PowerHintSession : public BnPowerHintSession {
     int mLastHintSent = -1;
     // Use the value of the last enum in enum_range +1 as array size
     std::array<bool, enum_size<SessionMode>()> mModes{};
+    // Tag labeling what kind of session this is
+    SessionTag mTag;
 };
 
 }  // namespace pixel
