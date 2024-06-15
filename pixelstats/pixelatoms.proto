@@ -127,6 +127,8 @@ message Atom {
       MmGcmaStats mm_gcma_stats = 105072;
       VendorAudioUsbDeviceCapabilityStats vendor_audio_usb_device_capability_stats = 105073 [(android.os.statsd.module) = "pixelaudio"];
       BatteryTimeToFullStatsReported battery_time_to_full_stats_reported = 105074;
+      VendorAudioDirectUsbAccessUsageStats vendor_audio_direct_usb_access_usage_stats = 105075 [(android.os.statsd.module) = "pixelaudio"];
+      VendorAudioUsbConfigStats vendor_audio_usb_config_stats = 105076 [(android.os.statsd.module) = "pixelaudio"];
     }
     // AOSP atom ID range ends at 109999
     reserved 109997; // reserved for VtsVendorAtomJavaTest test atom
@@ -2541,3 +2543,39 @@ message BatteryTimeToFullStatsReported {
   optional int32 soc_8 = 12;
   optional int32 soc_9 = 13;
 }
+
+/*
+ * A message containing Direct USB Access event.
+ */
+message VendorAudioDirectUsbAccessUsageStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  optional int32 duration_second = 2;
+};
+
+/*
+ * A message containing Usb Config event.
+ */
+message VendorAudioUsbConfigStats {
+  /* Vendor reverse domain name */
+  optional string reverse_domain_name = 1;
+
+  /* Is config for playback or capture */
+  optional bool is_playback = 2;
+
+  /* Is config for hifi */
+  optional bool has_hifi = 3;
+
+  /* Sample rate used */
+  optional int32 sample_rate = 4;
+
+  /* Channel used */
+  optional int32 channel = 5;
+
+  /* Pcm Type used */
+  optional int32 pcm_type = 6;
+
+  /* Duration in second */
+  optional int32 duration_second = 7;
+};
