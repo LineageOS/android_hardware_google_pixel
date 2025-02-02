@@ -314,7 +314,7 @@ void HintManager::Reload(bool start) {
 
 HintManager *HintManager::GetInstance() {
     if (sInstance == nullptr) {
-        HintManager::Reload(false);
+        HintManager::Reload(true);
     }
     return sInstance.get();
 }
