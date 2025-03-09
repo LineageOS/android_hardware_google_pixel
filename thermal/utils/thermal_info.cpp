@@ -358,8 +358,11 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
         formula = FormulaOption::USE_ML_MODEL;
     } else if (sensor["Formula"].asString().compare("USE_LINEAR_MODEL") == 0) {
         formula = FormulaOption::USE_LINEAR_MODEL;
+    } else if (sensor["Formula"].asString().compare("PREVIOUSLY_PREDICTED") == 0) {
+        formula = FormulaOption::PREVIOUSLY_PREDICTED;
     } else {
-        LOG(ERROR) << "Sensor[" << name << "]'s Formula is invalid";
+        LOG(ERROR) << "Sensor[" << name << "]'s Formula: " << sensor["Formula"].asString()
+                   << " is invalid";
         return false;
     }
 
@@ -399,12 +402,14 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
             coefficients.emplace_back(values[j].asString());
             LOG(INFO) << "Sensor[" << name << "]'s coefficient[" << j << "]: " << coefficients[j];
         }
-    } else if ((formula != FormulaOption::USE_ML_MODEL)) {
+    } else if ((formula != FormulaOption::USE_ML_MODEL) &&
+               (formula != FormulaOption::PREVIOUSLY_PREDICTED)) {
         LOG(ERROR) << "Sensor[" << name << "] has no Coefficient setting";
         return false;
     }
     if ((linked_sensors.size() != coefficients.size()) &&
-        (formula != FormulaOption::USE_ML_MODEL) && (formula != FormulaOption::USE_LINEAR_MODEL)) {
+        (formula != FormulaOption::USE_ML_MODEL) && (formula != FormulaOption::USE_LINEAR_MODEL) &&
+        (formula != FormulaOption::PREVIOUSLY_PREDICTED)) {
         LOG(ERROR) << "Sensor[" << name << "] has invalid Coefficient size";
         return false;
     }
@@ -604,47 +609,88 @@ bool ParseVirtualSensorInfo(const std::string_view name, const Json::Value &sens
 bool ParsePredictorInfo(const std::string_view name, const Json::Value &sensor,
                         std::unique_ptr<PredictorInfo> *predictor_info) {
     Json::Value predictor = sensor["PredictorInfo"];
-    if (predictor.empty()) {
-        return true;
-    }
-
-    LOG(INFO) << "Start to parse Sensor[" << name << "]'s PredictorInfo";
-    if (predictor["Sensor"].empty()) {
-        LOG(ERROR) << "Failed to parse Sensor [" << name << "]'s PredictorInfo";
-        return false;
-    }
-
     std::string predict_sensor;
     bool support_pid_compensation = false;
     std::vector<float> prediction_weights;
     ThrottlingArray k_p_compensate;
-    predict_sensor = predictor["Sensor"].asString();
-    LOG(INFO) << "Sensor [" << name << "]'s predictor name is " << predict_sensor;
-    // parse pid compensation configuration
-    if ((!predictor["PredictionWeight"].empty()) && (!predictor["KPCompensate"].empty())) {
-        support_pid_compensation = true;
-        if (!predictor["PredictionWeight"].size()) {
-            LOG(ERROR) << "Failed to parse PredictionWeight";
+
+    bool supports_predictions = false;
+    int prediction_sample_interval = 0;
+    int num_prediction_samples = 0;
+    int prediction_duration = 0;
+    bool set_predictor_info = false;
+
+    if (!predictor.empty()) {
+        set_predictor_info = true;
+        LOG(INFO) << "Start to parse Sensor[" << name << "]'s PredictorInfo";
+        if (predictor["Sensor"].empty()) {
+            LOG(ERROR) << "Failed to parse Sensor [" << name << "]'s PredictorInfo";
             return false;
         }
-        prediction_weights.reserve(predictor["PredictionWeight"].size());
-        for (Json::Value::ArrayIndex i = 0; i < predictor["PredictionWeight"].size(); ++i) {
-            float weight = predictor["PredictionWeight"][i].asFloat();
-            if (std::isnan(weight)) {
-                LOG(ERROR) << "Unexpected NAN prediction weight for sensor [" << name << "]";
+
+        predict_sensor = predictor["Sensor"].asString();
+        LOG(INFO) << "Sensor [" << name << "]'s predictor name is " << predict_sensor;
+        // parse pid compensation configuration
+        if ((!predictor["PredictionWeight"].empty()) && (!predictor["KPCompensate"].empty())) {
+            support_pid_compensation = true;
+            if (!predictor["PredictionWeight"].size()) {
+                LOG(ERROR) << "Failed to parse PredictionWeight";
+                return false;
             }
-            prediction_weights.emplace_back(weight);
-            LOG(INFO) << "Sensor[" << name << "]'s prediction weights [" << i << "]: " << weight;
-        }
-        if (!getFloatFromJsonValues(predictor["KPCompensate"], &k_p_compensate, false, false)) {
-            LOG(ERROR) << "Failed to parse KPCompensate";
-            return false;
+            prediction_weights.reserve(predictor["PredictionWeight"].size());
+            for (Json::Value::ArrayIndex i = 0; i < predictor["PredictionWeight"].size(); ++i) {
+                float weight = predictor["PredictionWeight"][i].asFloat();
+                if (std::isnan(weight)) {
+                    LOG(ERROR) << "Unexpected NAN prediction weight for sensor [" << name << "]";
+                }
+                prediction_weights.emplace_back(weight);
+                LOG(INFO) << "Sensor[" << name << "]'s prediction weights [" << i
+                          << "]: " << weight;
+            }
+            if (!getFloatFromJsonValues(predictor["KPCompensate"], &k_p_compensate, false, false)) {
+                LOG(ERROR) << "Failed to parse KPCompensate";
+                return false;
+            }
         }
     }
 
-    LOG(INFO) << "Successfully created PredictorInfo for Sensor[" << name << "]";
-    predictor_info->reset(new PredictorInfo{predict_sensor, support_pid_compensation,
-                                            prediction_weights, k_p_compensate});
+    if (sensor["SupportPrediction"].asBool()) {
+        set_predictor_info = true;
+        supports_predictions = true;
+        LOG(INFO) << "Sensor[" << name << "] supports predictions.";
+
+        if (sensor["SampleDuration"].empty()) {
+            LOG(ERROR) << "SampleDuration is empty for predictor sensor: " << name;
+            return false;
+        }
+
+        if (sensor["OutputLabelCount"].empty()) {
+            LOG(ERROR) << "OutputLabelCount is empty for predictor sensor: " << name;
+            return false;
+        }
+
+        prediction_sample_interval = sensor["SampleDuration"].asInt();
+        num_prediction_samples = sensor["OutputLabelCount"].asInt();
+    }
+
+    if (sensor["Formula"].asString().compare("PREVIOUSLY_PREDICTED") == 0) {
+        set_predictor_info = true;
+        if (sensor["PredictionDuration"].empty()) {
+            LOG(ERROR) << "Sensor[" << name
+                       << "] is a PREVIOUSLY_PREDICTED sensor and has no PredictionDuration";
+            return false;
+        }
+
+        prediction_duration = sensor["PredictionDuration"].asInt();
+    }
+
+    if (set_predictor_info) {
+        LOG(INFO) << "Successfully created PredictorInfo for Sensor[" << name << "]";
+        predictor_info->reset(new PredictorInfo{predict_sensor, support_pid_compensation,
+                                                prediction_weights, k_p_compensate,
+                                                supports_predictions, prediction_sample_interval,
+                                                num_prediction_samples, prediction_duration});
+    }
 
     return true;
 }

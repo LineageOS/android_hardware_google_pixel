@@ -21,6 +21,7 @@
 #include <sys/syscall.h>
 
 #include <chrono>
+#include <iostream>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -158,19 +159,19 @@ class PowerHintSessionTest : public ::testing::Test {
 
         // Extract our sched dump entry.
         std::string threadEntry = schedDump.substr(pid_position, entry_end_position - pid_position);
-        if (threadEntry.size() < 3) {
-            std::cerr << "Error: sched dump entry invalid." << std::endl;
+
+        std::istringstream thread_dump_info(threadEntry);
+        std::vector<std::string> thread_vendor_attrs;
+        std::string attr;
+        while (thread_dump_info >> attr) {
+            thread_vendor_attrs.push_back(attr);
+        }
+
+        const int32_t tag_word_pos = 10;  // The adpf attribute position in dump log.
+        if (thread_vendor_attrs.size() < tag_word_pos + 1) {
             return false;
         }
-
-        // We do reverse array access since the first entries have variable length.
-        char powerSessionActiveFlag = threadEntry[threadEntry.size() - 3];
-        if (powerSessionActiveFlag == '1') {
-            *isActive = true;
-        }
-
-        // At this point, we have found a valid entry with SessionAllowed == bool, so we return
-        // success status.
+        *isActive = thread_vendor_attrs[tag_word_pos] == "1";
         return true;
     }
 };

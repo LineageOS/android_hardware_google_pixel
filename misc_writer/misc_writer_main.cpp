@@ -58,7 +58,8 @@ static int Usage(std::string_view name) {
   std::cerr << "  --set-display-mode <mode>     Write the display mode at boot\n";
   std::cerr << "  --clear-display-mode          Clear the display mode at boot\n";
   std::cerr << "  --set-trending-issue-pattern <string within 2000 byte> Write a regex string";
-  std::cerr << "  --read-trending-issue-pattern Read eagleEye misc portion";
+  std::cerr << "  --set-disable-faceauth-eval   Write disable-faceauth-eval flag\n";
+  std::cerr << "  --clear-disable-faceauth-eval Clear disable-faceauth-eval flag\n";
   std::cerr << "Writes the given hex string to the specified offset in vendor space in /misc "
                "partition.\nDefault offset is used for each action unless "
                "--override-vendor-space-offset is specified.\n";
@@ -87,8 +88,9 @@ int main(int argc, char** argv) {
     { "set-dstoffset", required_argument, nullptr, 0 },
     { "set-display-mode", required_argument, nullptr, 0 },
     { "clear-display-mode", no_argument, nullptr, 0 },
+    { "set-disable-faceauth-eval", no_argument, nullptr, 0 },
+    { "clear-disable-faceauth-eval", no_argument, nullptr, 0 },
     { "set-trending-issue-pattern", required_argument, nullptr, 0 },
-    { "read-trending-issue-pattern", no_argument, nullptr, 0 },
     { nullptr, 0, nullptr, 0 },
   };
 
@@ -102,6 +104,8 @@ int main(int argc, char** argv) {
     { "clear-wrist-orientation", MiscWriterActions::kClearWristOrientationFlag },
     { "set-sota-config", MiscWriterActions::kSetSotaConfig },
     { "clear-display-mode", MiscWriterActions::kClearDisplayMode },
+    { "set-disable-faceauth-eval", MiscWriterActions::kSetDisableFaceauthEval },
+    { "clear-disable-faceauth-eval", MiscWriterActions::kClearDisableFaceauthEval },
   };
 
   std::unique_ptr<MiscWriter> misc_writer;
@@ -236,10 +240,6 @@ int main(int argc, char** argv) {
       misc_writer = std::make_unique<MiscWriter>(iter->second);
     } else if (option_name == "set-dsttransition"s) {
       long long int dst_transition = strtoll(optarg, NULL, 10);
-      if (0 == dst_transition) {
-        LOG(ERROR) << "Failed to parse the dst transition:" << optarg;
-        return Usage(argv[0]);
-      }
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";
         return Usage(argv[0]);
@@ -266,18 +266,11 @@ int main(int argc, char** argv) {
       if (misc_writer) {
         LOG(ERROR) << "Misc writer action has already been set";
         return Usage(argv[0]);
-      } else if (sizeof(argv[2]) >= 2000) {
-        std::cerr << "String is too large, we only take strings smaller than 2000, but you provide " << sizeof(argv[2]);
+      } else if (sizeof(argv[2]) >= 32) {
+        std::cerr << "String is too large, we only take strings smaller than 32, but you provide " << sizeof(argv[2]);
         return Usage(argv[0]);
       }
       misc_writer = std::make_unique<MiscWriter>(MiscWriterActions::kWriteEagleEyePatterns, argv[2]);
-    } else if (option_name == "read-trending-issue-pattern"s) {
-      if (misc_writer) {
-        LOG(ERROR) << "Misc writer action has already been set";
-        return Usage(argv[0]);
-      }
-      std::cerr << "function is not yet implemented";
-      return EXIT_SUCCESS;
     } else {
       LOG(FATAL) << "Unreachable path, option_name: " << option_name;
     }

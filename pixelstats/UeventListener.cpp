@@ -72,6 +72,7 @@ using android::hardware::google::pixel::PixelAtoms::PdVidPid;
 using android::hardware::google::pixel::PixelAtoms::ThermalSensorAbnormalityDetected;
 using android::hardware::google::pixel::PixelAtoms::VendorHardwareFailed;
 using android::hardware::google::pixel::PixelAtoms::VendorUsbPortOverheat;
+using android::hardware::google::pixel::PixelAtoms::WaterEventReported;
 
 constexpr int32_t UEVENT_MSG_LEN = 2048;  // it's 2048 in all other users.
 constexpr int32_t PRODUCT_TYPE_OFFSET = 23;
@@ -395,6 +396,15 @@ void UeventListener::ReportThermalAbnormalEvent(const std::shared_ptr<IStats> &s
         ALOGE("Unable to report Thermal Abnormal event.");
 }
 
+void UeventListener::ReportWaterEvent(const std::shared_ptr<IStats> &stats_client,
+                                      const char *driver, const char *devpath)
+{
+    if (!stats_client || !driver || !devpath || !water_event_reporter_.ueventDriverMatch(driver))
+        return;
+
+    water_event_reporter_.logUevent(stats_client, devpath);
+}
+
 bool UeventListener::ProcessUevent() {
     char msg[UEVENT_MSG_LEN + 2];
     char *cp;
@@ -491,6 +501,7 @@ bool UeventListener::ProcessUevent() {
         ReportThermalAbnormalEvent(stats_client, devpath, thermal_abnormal_event_type,
                                    thermal_abnormal_event_info);
         ReportFGMetricsEvent(stats_client, driver);
+        ReportWaterEvent(stats_client, driver, devpath);
     }
 
     if (log_fd_ > 0) {

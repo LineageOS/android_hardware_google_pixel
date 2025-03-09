@@ -38,7 +38,7 @@ class MockThermalHelper : public ThermalHelper {
     MOCK_METHOD(bool, emulSeverity, (std::string_view, const int, const bool), (override));
     MOCK_METHOD(bool, emulClear, (std::string_view), (override));
     MOCK_METHOD(bool, isInitializedOk, (), (const, override));
-    MOCK_METHOD(bool, readTemperature, (std::string_view, Temperature *out, const bool),
+    MOCK_METHOD(SensorReadStatus, readTemperature, (std::string_view, Temperature *out, const bool),
                 (override));
     MOCK_METHOD(bool, readTemperatureThreshold, (std::string_view, TemperatureThreshold *),
                 (const, override));

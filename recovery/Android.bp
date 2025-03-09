@@ -49,6 +49,5 @@ cc_library_static {
     shared_libs: [
         "libbase",
         "librecovery_ui",
-        "libboot_control_client",
     ],
 }

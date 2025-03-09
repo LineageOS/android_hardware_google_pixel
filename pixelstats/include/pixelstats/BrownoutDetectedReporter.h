@@ -62,6 +62,49 @@ enum CsvIdx {
     MAX_CURR,
     IDX_VIMON_V,
     IDX_VIMON_I,
+    PRE_OCP_CPU1_BCKUP_IDX,
+    PRE_OCP_CPU2_BCKUP_IDX,
+    PRE_OCP_TPU_BCKUP_IDX,
+    PRE_OCP_GPU_BCKUP_IDX,
+    PRE_UVLO_HIT_CNT_M_IDX,
+    PRE_UVLO_HIT_CNT_S_IDX,
+    UVLO_DUR_IDX,
+    ODPM_IRQ_STAT_0_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_1_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_2_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_3_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_4_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_5_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_6_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_7_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_8_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_9_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_10_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_11_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_0_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_1_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_2_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_3_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_4_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_5_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_6_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_7_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_8_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_9_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_10_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_11_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_0_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_1_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_2_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_3_SYS_EVT_MAIN_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_0_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_1_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_2_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_EXT_3_SYS_EVT_SUB_BCKUP_IDX,
+    ODPM_IRQ_STAT_GPU_BCKUP_IDX,
+    ODPM_IRQ_STAT_TPU_BCKUP_IDX,
+    ODPM_IRQ_STAT_CPU1_BCKUP_IDX,
+    ODPM_IRQ_STAT_CPU2_BCKUP_IDX,
 };
 
 enum Irq {
@@ -118,9 +161,52 @@ class BrownoutDetectedReporter {
         int evt_cnt_oilo2_;
         int vimon_vbatt_;
         int vimon_ibatt_;
+        int pre_ocp_cpu1_bckup_;
+        int pre_ocp_cpu2_bckup_;
+        int pre_ocp_tpu_bckup_;
+        int pre_ocp_gpu_bckup_;
+        int pre_uvlo_hit_cnt_m_;
+        int pre_uvlo_hit_cnt_s_;
+        int uvlo_dur_;
+        int odpm_irq_stat_0_sys_evt_main_bckup_;
+        int odpm_irq_stat_1_sys_evt_main_bckup_;
+        int odpm_irq_stat_2_sys_evt_main_bckup_;
+        int odpm_irq_stat_3_sys_evt_main_bckup_;
+        int odpm_irq_stat_4_sys_evt_main_bckup_;
+        int odpm_irq_stat_5_sys_evt_main_bckup_;
+        int odpm_irq_stat_6_sys_evt_main_bckup_;
+        int odpm_irq_stat_7_sys_evt_main_bckup_;
+        int odpm_irq_stat_8_sys_evt_main_bckup_;
+        int odpm_irq_stat_9_sys_evt_main_bckup_;
+        int odpm_irq_stat_10_sys_evt_main_bckup_;
+        int odpm_irq_stat_11_sys_evt_main_bckup_;
+        int odpm_irq_stat_0_sys_evt_sub_bckup_;
+        int odpm_irq_stat_1_sys_evt_sub_bckup_;
+        int odpm_irq_stat_2_sys_evt_sub_bckup_;
+        int odpm_irq_stat_3_sys_evt_sub_bckup_;
+        int odpm_irq_stat_4_sys_evt_sub_bckup_;
+        int odpm_irq_stat_5_sys_evt_sub_bckup_;
+        int odpm_irq_stat_6_sys_evt_sub_bckup_;
+        int odpm_irq_stat_7_sys_evt_sub_bckup_;
+        int odpm_irq_stat_8_sys_evt_sub_bckup_;
+        int odpm_irq_stat_9_sys_evt_sub_bckup_;
+        int odpm_irq_stat_10_sys_evt_sub_bckup_;
+        int odpm_irq_stat_11_sys_evt_sub_bckup_;
+        int odpm_irq_stat_ext_0_sys_evt_main_bckup_;
+        int odpm_irq_stat_ext_1_sys_evt_main_bckup_;
+        int odpm_irq_stat_ext_2_sys_evt_main_bckup_;
+        int odpm_irq_stat_ext_3_sys_evt_main_bckup_;
+        int odpm_irq_stat_ext_0_sys_evt_sub_bckup_;
+        int odpm_irq_stat_ext_1_sys_evt_sub_bckup_;
+        int odpm_irq_stat_ext_2_sys_evt_sub_bckup_;
+        int odpm_irq_stat_ext_3_sys_evt_sub_bckup_;
+        int odpm_irq_stat_gpu_bckup_;
+        int odpm_irq_stat_tpu_bckup_;
+        int odpm_irq_stat_cpu1_bckup_;
+        int odpm_irq_stat_cpu2_bckup_;
     };
 
-    void setAtomFieldValue(std::vector<VendorAtomValue> *values, int offset, int content);
+    void setAtomFieldValue(std::vector<VendorAtomValue> &values, int offset, int content);
     long parseTimestamp(std::string timestamp);
     bool updateIfFound(std::string line, std::regex pattern, int *current_value, Update flag);
     void uploadData(const std::shared_ptr<IStats> &stats_client,

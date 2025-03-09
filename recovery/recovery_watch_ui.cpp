@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-#include <BootControlClient.h>
-#include <android-base/endian.h>
-#include <android-base/logging.h>
-#include <android-base/strings.h>
 #include <dlfcn.h>
-#include <misc_writer/misc_writer.h>
-#include <recovery_ui/device.h>
-#include <recovery_ui/wear_ui.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <android-base/endian.h>
+#include <android-base/logging.h>
+#include <android-base/strings.h>
+#include <misc_writer/misc_writer.h>
+#include <recovery_ui/device.h>
+#include <recovery_ui/wear_ui.h>
 
 namespace android {
 namespace hardware {
@@ -67,24 +67,6 @@ class PixelWatchDevice : public ::Device {
   public:
     explicit PixelWatchDevice(::WearRecoveryUI* const ui) : ::Device(ui) {}
 
-    bool PreWipeData() override {
-        uint32_t currentSlot = 0;
-        const auto module = android::hal::BootControlClient::WaitForService();
-        if (module == nullptr) {
-            LOG(ERROR) << "Error getting bootctrl module, slot attributes not reset";
-        } else {
-            // Reset current slot attributes
-            currentSlot = module->GetCurrentSlot();
-            LOG(INFO) << "Slot attributes reset for slot " << currentSlot;
-            const auto result = module->SetActiveBootSlot(currentSlot);
-            if (!result.IsOk()) {
-                LOG(ERROR) << "Unable to call SetActiveBootSlot for slot " << currentSlot;
-            }
-        }
-
-        // Loogging errors is sufficient, we don't want to block Wipe Data on this.
-        return true;
-    }
     /** Hook to wipe user data not stored in /data */
     bool PostWipeData() override {
         // Try to do everything but report a failure if anything wasn't successful

@@ -189,6 +189,11 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
         ret = false;
     }
 
+    if (!thermal_predictions_helper_.initializePredictionSensors(sensor_info_map_)) {
+        LOG(ERROR) << "Failed to initialize prediction sensors";
+        ret = false;
+    }
+
     if (ret) {
         if (!thermal_stats_helper_.initializeStats(config, sensor_info_map_,
                                                    cooling_device_info_map_, this)) {
@@ -289,7 +294,8 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
             }
         }
         // Check predictor info config
-        if (name_status_pair.second.predictor_info != nullptr) {
+        if ((name_status_pair.second.predictor_info != nullptr) &&
+            name_status_pair.second.predictor_info->support_pid_compensation) {
             std::string predict_sensor_name = name_status_pair.second.predictor_info->sensor;
             if (!(sensor_info_map_.count(predict_sensor_name))) {
                 LOG(ERROR) << name_status_pair.first << "'s predictor " << predict_sensor_name
@@ -307,31 +313,29 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
                 break;
             }
 
-            if (name_status_pair.second.predictor_info->support_pid_compensation) {
-                std::vector<float> output_template;
-                size_t prediction_weight_count =
-                        name_status_pair.second.predictor_info->prediction_weights.size();
-                // read predictor out to get the size of output vector
-                ::thermal::vtestimator::VtEstimatorStatus predict_check =
-                        predictor_sensor_info.virtual_sensor_info->vt_estimator->GetAllPredictions(
-                                &output_template);
+            std::vector<float> output_template;
+            size_t prediction_weight_count =
+                    name_status_pair.second.predictor_info->prediction_weights.size();
+            // read predictor out to get the size of output vector
+            ::thermal::vtestimator::VtEstimatorStatus predict_check =
+                    predictor_sensor_info.virtual_sensor_info->vt_estimator->GetAllPredictions(
+                            &output_template);
 
-                if (predict_check != ::thermal::vtestimator::kVtEstimatorOk) {
-                    LOG(ERROR) << "Failed to get output size of " << name_status_pair.first
-                               << "'s predictor " << predict_sensor_name
-                               << " GetAllPredictions ret: " << ret << ")";
-                    ret = false;
-                    break;
-                }
+            if (predict_check != ::thermal::vtestimator::kVtEstimatorOk) {
+                LOG(ERROR) << "Failed to get output size of " << name_status_pair.first
+                           << "'s predictor " << predict_sensor_name
+                           << " GetAllPredictions ret: " << ret << ")";
+                ret = false;
+                break;
+            }
 
-                if (prediction_weight_count != output_template.size()) {
-                    LOG(ERROR) << "Sensor [" << name_status_pair.first << "]: "
-                               << "prediction weights size (" << prediction_weight_count
-                               << ") doesn't match predictor [" << predict_sensor_name
-                               << "]'s output size (" << output_template.size() << ")";
-                    ret = false;
-                    break;
-                }
+            if (prediction_weight_count != output_template.size()) {
+                LOG(ERROR) << "Sensor [" << name_status_pair.first
+                           << "]: " << "prediction weights size (" << prediction_weight_count
+                           << ") doesn't match predictor [" << predict_sensor_name
+                           << "]'s output size (" << output_template.size() << ")";
+                ret = false;
+                break;
             }
         }
     }
@@ -517,23 +521,29 @@ bool ThermalHelperImpl::readCoolingDevice(std::string_view cooling_device,
     return true;
 }
 
-bool ThermalHelperImpl::readTemperature(std::string_view sensor_name, Temperature *out,
-                                        const bool force_no_cache) {
+SensorReadStatus ThermalHelperImpl::readTemperature(std::string_view sensor_name, Temperature *out,
+                                                    const bool force_no_cache) {
     // Return fail if the thermal sensor cannot be read.
     float temp = NAN;
     std::map<std::string, float> sensor_log_map;
     auto &sensor_status = sensor_status_map_.at(sensor_name.data());
 
-    if (!readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map)) {
+    const auto ret = readThermalSensor(sensor_name, &temp, force_no_cache, &sensor_log_map);
+    if (ret == SensorReadStatus::ERROR) {
         LOG(ERROR) << "Failed to read thermal sensor " << sensor_name.data();
         thermal_stats_helper_.reportThermalAbnormality(
                 ThermalSensorAbnormalityDetected::TEMP_READ_FAIL, sensor_name, std::nullopt);
-        return false;
+        return SensorReadStatus::ERROR;
+    }
+
+    if (ret == SensorReadStatus::UNDER_COLLECTING) {
+        LOG(INFO) << "Thermal sensor " << sensor_name.data() << " is under collecting";
+        return SensorReadStatus::UNDER_COLLECTING;
     }
 
     if (std::isnan(temp)) {
         LOG(INFO) << "Sensor " << sensor_name.data() << " temperature is nan.";
-        return false;
+        return SensorReadStatus::ERROR;
     }
     const auto severity_reference = getSeverityReference(sensor_name.data());
 
@@ -547,7 +557,7 @@ bool ThermalHelperImpl::readTemperature(std::string_view sensor_name, Temperatur
 
     // Only update status if the thermal sensor is being monitored
     if (!sensor_info.is_watch) {
-        return true;
+        return SensorReadStatus::OKAY;
     }
     ThrottlingSeverity prev_hot_severity, prev_cold_severity;
     {
@@ -599,7 +609,7 @@ bool ThermalHelperImpl::readTemperature(std::string_view sensor_name, Temperatur
     ATRACE_INT((sensor_name.data() + std::string("-severity")).c_str(),
                static_cast<int>(out->throttlingStatus));
 
-    return true;
+    return SensorReadStatus::OKAY;
 }
 
 bool ThermalHelperImpl::readTemperatureThreshold(std::string_view sensor_name,
@@ -832,7 +842,6 @@ bool ThermalHelperImpl::initializeCoolingDevices(
                            << cooling_device_info_pair.second.state2power.size()
                            << ", number should be " << cooling_device_info_pair.second.max_state + 1
                            << " (max_state + 1)";
-                return false;
             }
         }
 
@@ -951,9 +960,11 @@ bool ThermalHelperImpl::fillCurrentTemperatures(bool filterType, bool filterCall
         if (filterCallback && !name_info_pair.second.send_cb) {
             continue;
         }
-        if (readTemperature(name_info_pair.first, &temp, false)) {
+
+        const auto status = readTemperature(name_info_pair.first, &temp, false);
+        if (status == SensorReadStatus::OKAY) {
             ret.emplace_back(std::move(temp));
-        } else {
+        } else if (status == SensorReadStatus::ERROR) {
             LOG(ERROR) << __func__
                        << ": error reading temperature for sensor: " << name_info_pair.first;
         }
@@ -1016,7 +1027,7 @@ ThrottlingSeverity ThermalHelperImpl::getSeverityReference(std::string_view sens
     }
 
     Temperature temp;
-    if (!readTemperature(severity_reference, &temp, false)) {
+    if (readTemperature(severity_reference, &temp, false) != SensorReadStatus::OKAY) {
         return ThrottlingSeverity::NONE;
     }
     LOG(VERBOSE) << sensor_name << "'s severity reference " << severity_reference
@@ -1029,8 +1040,8 @@ bool ThermalHelperImpl::readDataByType(std::string_view sensor_data, float *read
                                        std::map<std::string, float> *sensor_log_map) {
     switch (type) {
         case SensorFusionType::SENSOR:
-            if (!readThermalSensor(sensor_data.data(), reading_value, force_no_cache,
-                                   sensor_log_map)) {
+            if (readThermalSensor(sensor_data.data(), reading_value, force_no_cache,
+                                  sensor_log_map) == SensorReadStatus::ERROR) {
                 LOG(ERROR) << "Failed to get " << sensor_data.data() << " data";
                 return false;
             }
@@ -1106,6 +1117,9 @@ bool ThermalHelperImpl::runVirtualTempEstimator(std::string_view sensor_name,
             sensor_info.virtual_sensor_info->vt_estimator->Estimate(model_inputs, &model_outputs);
 
     if (ret == ::thermal::vtestimator::kVtEstimatorOk) {
+        if (sensor_info.predictor_info && sensor_info.predictor_info->supports_predictions) {
+            thermal_predictions_helper_.updateSensor(sensor_name, model_outputs);
+        }
         *outputs = model_outputs;
         return true;
     } else if (ret == ::thermal::vtestimator::kVtEstimatorLowConfidence ||
@@ -1251,16 +1265,16 @@ bool ThermalHelperImpl::readTemperaturePredictions(std::string_view sensor_name,
 
 constexpr int kTranTimeoutParam = 2;
 
-bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *temp,
-                                          const bool force_no_cache,
-                                          std::map<std::string, float> *sensor_log_map) {
+SensorReadStatus ThermalHelperImpl::readThermalSensor(
+        std::string_view sensor_name, float *temp, const bool force_no_cache,
+        std::map<std::string, float> *sensor_log_map) {
     std::string file_reading;
     boot_clock::time_point now = boot_clock::now();
 
     ATRACE_NAME(StringPrintf("ThermalHelper::readThermalSensor - %s", sensor_name.data()).c_str());
     if (!(sensor_info_map_.count(sensor_name.data()) &&
           sensor_status_map_.count(sensor_name.data()))) {
-        return false;
+        return SensorReadStatus::ERROR;
     }
 
     const auto &sensor_info = sensor_info_map_.at(sensor_name.data());
@@ -1271,7 +1285,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         if (sensor_status.override_status.emul_temp != nullptr) {
             *temp = sensor_status.override_status.emul_temp->temp;
             (*sensor_log_map)[sensor_name.data()] = *temp;
-            return true;
+            return SensorReadStatus::OKAY;
         }
     }
 
@@ -1286,7 +1300,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         *temp = sensor_status.thermal_cached.temp;
         (*sensor_log_map)[sensor_name.data()] = *temp;
         ATRACE_INT((sensor_name.data() + std::string("-cached")).c_str(), static_cast<int>(*temp));
-        return true;
+        return SensorReadStatus::OKAY;
     }
 
     // Reading thermal sensor according to it's composition
@@ -1294,7 +1308,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
         if (!thermal_sensors_.readThermalFile(sensor_name.data(), &file_reading) ||
             file_reading.empty()) {
             LOG(ERROR) << "failed to read sensor: " << sensor_name;
-            return false;
+            return SensorReadStatus::ERROR;
         }
         *temp = std::stof(::android::base::Trim(file_reading));
     } else {
@@ -1309,21 +1323,26 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
                                 force_no_cache, sensor_log_map)) {
                 LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s linked sensor "
                            << sensor_info.virtual_sensor_info->linked_sensors[i];
-                return false;
+                return SensorReadStatus::ERROR;
             }
             if (std::isnan(sensor_readings[i])) {
                 LOG(INFO) << sensor_name << " data is under collecting";
-                return true;
+                return SensorReadStatus::UNDER_COLLECTING;
             }
         }
 
-        if ((sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) ||
-            (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_LINEAR_MODEL)) {
+        if (sensor_info.virtual_sensor_info->formula == FormulaOption::PREVIOUSLY_PREDICTED) {
+            const auto ret = thermal_predictions_helper_.readSensor(sensor_name, temp);
+            if (ret != SensorReadStatus::OKAY) {
+                return ret;
+            }
+        } else if ((sensor_info.virtual_sensor_info->formula == FormulaOption::USE_ML_MODEL) ||
+                   (sensor_info.virtual_sensor_info->formula == FormulaOption::USE_LINEAR_MODEL)) {
             std::vector<float> vt_estimator_out;
             if (!runVirtualTempEstimator(sensor_name, sensor_log_map, force_no_cache,
                                          &vt_estimator_out)) {
                 LOG(ERROR) << "Failed running VirtualEstimator for " << sensor_name;
-                return false;
+                return SensorReadStatus::ERROR;
             }
             *temp = vt_estimator_out[0];
         } else {
@@ -1335,11 +1354,11 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
                                     force_no_cache, sensor_log_map)) {
                     LOG(ERROR) << "Failed to read " << sensor_name.data() << "'s coefficient "
                                << sensor_info.virtual_sensor_info->coefficients[i];
-                    return false;
+                    return SensorReadStatus::ERROR;
                 }
                 if (std::isnan(coefficient)) {
                     LOG(INFO) << sensor_name << " data is under collecting";
-                    return true;
+                    return SensorReadStatus::UNDER_COLLECTING;
                 }
                 switch (sensor_info.virtual_sensor_info->formula) {
                     case FormulaOption::COUNT_THRESHOLD:
@@ -1364,7 +1383,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
                         break;
                     default:
                         LOG(ERROR) << "Unknown formula type for sensor " << sensor_name.data();
-                        return false;
+                        return SensorReadStatus::ERROR;
                 }
             }
             *temp = (temp_val + sensor_info.virtual_sensor_info->offset);
@@ -1387,7 +1406,7 @@ bool ThermalHelperImpl::readThermalSensor(std::string_view sensor_name, float *t
     }
     auto real_temp = (*temp) * sensor_info.multiplier;
     thermal_stats_helper_.updateSensorTempStatsByThreshold(sensor_name, real_temp);
-    return true;
+    return SensorReadStatus::OKAY;
 }
 
 // This is called in the different thread context and will update sensor_status
@@ -1503,9 +1522,16 @@ std::chrono::milliseconds ThermalHelperImpl::thermalWatcherCallbackFunc(
         }
 
         std::pair<ThrottlingSeverity, ThrottlingSeverity> throttling_status;
-        if (!readTemperature(name_status_pair.first, &temp, force_no_cache)) {
+        const auto ret = readTemperature(name_status_pair.first, &temp, force_no_cache);
+        if (ret == SensorReadStatus::ERROR) {
             LOG(ERROR) << __func__
                        << ": error reading temperature for sensor: " << name_status_pair.first;
+            continue;
+        }
+
+        if (ret == SensorReadStatus::UNDER_COLLECTING) {
+            LOG(INFO) << __func__
+                      << ": data under collecting for sensor: " << name_status_pair.first;
             continue;
         }
 

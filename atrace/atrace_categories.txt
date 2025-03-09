@@ -44,6 +44,8 @@ sched
  systrace/0
 freq
  msm_bus/bus_rules_matches
+cpm
+ cpm_trace/param_set_value_cpm
 thermal_tj
  lmh/lmh_dcvs_freq
  thermal_exynos/thermal_cpu_pressure

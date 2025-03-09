@@ -191,12 +191,31 @@ float ThermalThrottling::updatePowerBudget(
     float p = 0, d = 0;
     float power_budget = std::numeric_limits<float>::max();
     bool target_changed = false;
+    bool is_fully_throttle = true;
+    bool is_fully_release = true;
     float budget_transient = 0.0;
     auto &throttling_status = thermal_throttling_status_map_.at(temp.name);
+    const auto &profile = throttling_status.profile;
     std::string sensor_name = temp.name;
 
     if (curr_severity == ThrottlingSeverity::NONE) {
         return power_budget;
+    }
+
+    // Go through the binded cdev, check current throttle status
+    for (const auto &binded_cdev_info_pair :
+         ((sensor_info.throttling_info->profile_map.empty() ||
+           !sensor_info.throttling_info->profile_map.contains(profile))
+                  ? sensor_info.throttling_info->binded_cdev_info_map
+                  : sensor_info.throttling_info->profile_map.at(profile))) {
+        if (throttling_status.pid_cdev_request_map.at(binded_cdev_info_pair.first) >
+            binded_cdev_info_pair.second.limit_info[static_cast<size_t>(curr_severity)]) {
+            is_fully_release = false;
+        }
+        if (throttling_status.pid_cdev_request_map.at(binded_cdev_info_pair.first) <
+            binded_cdev_info_pair.second.cdev_ceiling[static_cast<size_t>(curr_severity)]) {
+            is_fully_throttle = false;
+        }
     }
 
     const auto target_state = getTargetStateOfPID(sensor_info, curr_severity);
@@ -216,9 +235,11 @@ float ThermalThrottling::updatePowerBudget(
         return sensor_info.throttling_info->min_alloc_power[target_state];
     }
 
+    // Calculate P budget
     p = err * (err < 0 ? sensor_info.throttling_info->k_po[target_state]
                        : sensor_info.throttling_info->k_pu[target_state]);
 
+    // Calculate I budget
     if (std::isnan(throttling_status.i_budget)) {
         if (std::isnan(sensor_info.throttling_info->i_default_pct)) {
             throttling_status.i_budget = sensor_info.throttling_info->i_default;
@@ -237,15 +258,16 @@ float ThermalThrottling::updatePowerBudget(
     }
 
     if (err < sensor_info.throttling_info->i_cutoff[target_state]) {
-        if (!(throttling_status.prev_power_budget <=
-                      sensor_info.throttling_info->min_alloc_power[target_state] &&
-              err < 0) &&
-            !(throttling_status.prev_power_budget >=
-                      sensor_info.throttling_info->max_alloc_power[target_state] &&
-              err > 0)) {
-            throttling_status.i_budget +=
-                    err * (err < 0 ? sensor_info.throttling_info->k_io[target_state]
-                                   : sensor_info.throttling_info->k_iu[target_state]);
+        if (err < 0 &&
+            throttling_status.prev_power_budget >
+                    sensor_info.throttling_info->min_alloc_power[target_state] &&
+            !is_fully_throttle) {
+            throttling_status.i_budget += err * sensor_info.throttling_info->k_io[target_state];
+        } else if (err > 0 &&
+                   throttling_status.prev_power_budget <
+                           sensor_info.throttling_info->max_alloc_power[target_state] &&
+                   !is_fully_release) {
+            throttling_status.i_budget += err * sensor_info.throttling_info->k_iu[target_state];
         }
     }
 
@@ -254,6 +276,7 @@ float ThermalThrottling::updatePowerBudget(
                                      (throttling_status.i_budget > 0 ? 1 : -1);
     }
 
+    // Calculate D budget
     if (!std::isnan(throttling_status.prev_err) &&
         time_elapsed_ms != std::chrono::milliseconds::zero()) {
         d = sensor_info.throttling_info->k_d[target_state] * (err - throttling_status.prev_err) /
@@ -392,7 +415,7 @@ bool ThermalThrottling::allocatePowerToCdev(
         }
     }
 
-    // Compute total cdev weight
+    // Go through binded cdev, compute total cdev weight
     for (const auto &binded_cdev_info_pair :
          (sensor_info.throttling_info->profile_map.count(profile)
                   ? sensor_info.throttling_info->profile_map.at(profile)

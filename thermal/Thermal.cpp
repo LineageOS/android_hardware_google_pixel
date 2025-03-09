@@ -307,6 +307,10 @@ ndk::ScopedAStatus Thermal::unregisterCoolingDeviceChangedCallback(
     return ndk::ScopedAStatus::ok();
 }
 
+ndk::ScopedAStatus Thermal::forecastSkinTemperature(int32_t, float *) {
+    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
 void Thermal::dumpVirtualSensorInfo(std::ostringstream *dump_buf) {
     *dump_buf << "getVirtualSensorInfo:" << std::endl;
     const auto &map = thermal_helper_->GetSensorInfoMap();

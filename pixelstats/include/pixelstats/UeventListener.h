@@ -22,6 +22,8 @@
 #include <pixelstats/BatteryCapacityReporter.h>
 #include <pixelstats/ChargeStatsReporter.h>
 #include <pixelstats/BatteryFGReporter.h>
+#include <pixelstats/WaterEventReporter.h>
+
 
 namespace android {
 namespace hardware {
@@ -98,6 +100,8 @@ class UeventListener {
                                     const char *devpath, const char *thermal_abnormal_event_type,
                                     const char *thermal_abnormal_event_info);
     void ReportFGMetricsEvent(const std::shared_ptr<IStats> &stats_client, const char *driver);
+    void ReportWaterEvent(const std::shared_ptr<IStats> &stats_client,
+                          const char *driver, const char *devpath);
 
     const std::string kAudioUevent;
     const std::string kBatterySSOCPath;
@@ -195,6 +199,7 @@ class UeventListener {
     BatteryCapacityReporter battery_capacity_reporter_;
     ChargeStatsReporter charge_stats_reporter_;
     BatteryFGReporter battery_fg_reporter_;
+    WaterEventReporter water_event_reporter_;
 
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number

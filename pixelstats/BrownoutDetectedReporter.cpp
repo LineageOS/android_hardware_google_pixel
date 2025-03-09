@@ -112,11 +112,11 @@ bool BrownoutDetectedReporter::updateIfFound(std::string line, std::regex patter
     return found;
 }
 
-void BrownoutDetectedReporter::setAtomFieldValue(std::vector<VendorAtomValue> *values, int offset,
+void BrownoutDetectedReporter::setAtomFieldValue(std::vector<VendorAtomValue> &values, int offset,
                                                  int content) {
-    std::vector<VendorAtomValue> &val = *values;
-    if (offset - kVendorAtomOffset < val.size()) {
-        val[offset - kVendorAtomOffset].set<VendorAtomValue::intValue>(content);
+    if (offset - kVendorAtomOffset < values.size()) {
+        ALOGW("VendorAtomValue size is smaller than offset");
+        values[offset - kVendorAtomOffset].set<VendorAtomValue::intValue>(content);
     }
 }
 
@@ -124,96 +124,179 @@ void BrownoutDetectedReporter::uploadData(const std::shared_ptr<IStats> &stats_c
                                           const struct BrownoutDetectedInfo max_value) {
     // Load values array
     VendorAtomValue tmp;
-    std::vector<VendorAtomValue> values(47);
-    setAtomFieldValue(&values, BrownoutDetected::kTriggeredIrqFieldNumber,
-                      max_value.triggered_irq_);
-    setAtomFieldValue(&values, BrownoutDetected::kTriggeredTimestampFieldNumber,
+    std::vector<VendorAtomValue> values(90);
+    setAtomFieldValue(values, BrownoutDetected::kTriggeredIrqFieldNumber, max_value.triggered_irq_);
+    setAtomFieldValue(values, BrownoutDetected::kTriggeredTimestampFieldNumber,
                       max_value.triggered_timestamp_);
-    setAtomFieldValue(&values, BrownoutDetected::kBatteryTempFieldNumber, max_value.battery_temp_);
-    setAtomFieldValue(&values, BrownoutDetected::kBatterySocFieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kBatteryTempFieldNumber, max_value.battery_temp_);
+    setAtomFieldValue(values, BrownoutDetected::kBatterySocFieldNumber,
                       100 - max_value.battery_soc_);
-    setAtomFieldValue(&values, BrownoutDetected::kBatteryCycleFieldNumber,
-                      max_value.battery_cycle_);
-    setAtomFieldValue(&values, BrownoutDetected::kVoltageNowFieldNumber, max_value.voltage_now_);
+    setAtomFieldValue(values, BrownoutDetected::kBatteryCycleFieldNumber, max_value.battery_cycle_);
+    setAtomFieldValue(values, BrownoutDetected::kVoltageNowFieldNumber, max_value.voltage_now_);
 
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel01FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel01FieldNumber,
                       max_value.odpm_value_[0]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel02FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel02FieldNumber,
                       max_value.odpm_value_[1]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel03FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel03FieldNumber,
                       max_value.odpm_value_[2]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel04FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel04FieldNumber,
                       max_value.odpm_value_[3]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel05FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel05FieldNumber,
                       max_value.odpm_value_[4]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel06FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel06FieldNumber,
                       max_value.odpm_value_[5]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel07FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel07FieldNumber,
                       max_value.odpm_value_[6]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel08FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel08FieldNumber,
                       max_value.odpm_value_[7]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel09FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel09FieldNumber,
                       max_value.odpm_value_[8]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel10FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel10FieldNumber,
                       max_value.odpm_value_[9]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel11FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel11FieldNumber,
                       max_value.odpm_value_[10]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel12FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel12FieldNumber,
                       max_value.odpm_value_[11]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel13FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel13FieldNumber,
                       max_value.odpm_value_[12]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel14FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel14FieldNumber,
                       max_value.odpm_value_[13]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel15FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel15FieldNumber,
                       max_value.odpm_value_[14]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel16FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel16FieldNumber,
                       max_value.odpm_value_[15]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel17FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel17FieldNumber,
                       max_value.odpm_value_[16]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel18FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel18FieldNumber,
                       max_value.odpm_value_[17]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel19FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel19FieldNumber,
                       max_value.odpm_value_[18]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel20FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel20FieldNumber,
                       max_value.odpm_value_[19]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel21FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel21FieldNumber,
                       max_value.odpm_value_[20]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel22FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel22FieldNumber,
                       max_value.odpm_value_[21]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel23FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel23FieldNumber,
                       max_value.odpm_value_[22]);
-    setAtomFieldValue(&values, BrownoutDetected::kOdpmChannel24FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kOdpmChannel24FieldNumber,
                       max_value.odpm_value_[23]);
 
-    setAtomFieldValue(&values, BrownoutDetected::kDvfsChannel1FieldNumber,
-                      max_value.dvfs_value_[0]);
-    setAtomFieldValue(&values, BrownoutDetected::kDvfsChannel2FieldNumber,
-                      max_value.dvfs_value_[1]);
-    setAtomFieldValue(&values, BrownoutDetected::kDvfsChannel3FieldNumber,
-                      max_value.dvfs_value_[2]);
-    setAtomFieldValue(&values, BrownoutDetected::kDvfsChannel4FieldNumber,
-                      max_value.dvfs_value_[3]);
-    setAtomFieldValue(&values, BrownoutDetected::kDvfsChannel5FieldNumber,
-                      max_value.dvfs_value_[4]);
-    setAtomFieldValue(&values, BrownoutDetected::kDvfsChannel6FieldNumber,
-                      max_value.dvfs_value_[5]);
-    setAtomFieldValue(&values, BrownoutDetected::kBrownoutReasonFieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kDvfsChannel1FieldNumber, max_value.dvfs_value_[0]);
+    setAtomFieldValue(values, BrownoutDetected::kDvfsChannel2FieldNumber, max_value.dvfs_value_[1]);
+    setAtomFieldValue(values, BrownoutDetected::kDvfsChannel3FieldNumber, max_value.dvfs_value_[2]);
+    setAtomFieldValue(values, BrownoutDetected::kDvfsChannel4FieldNumber, max_value.dvfs_value_[3]);
+    setAtomFieldValue(values, BrownoutDetected::kDvfsChannel5FieldNumber, max_value.dvfs_value_[4]);
+    setAtomFieldValue(values, BrownoutDetected::kDvfsChannel6FieldNumber, max_value.dvfs_value_[5]);
+    setAtomFieldValue(values, BrownoutDetected::kBrownoutReasonFieldNumber,
                       max_value.brownout_reason_);
 
-    setAtomFieldValue(&values, BrownoutDetected::kMaxCurrentFieldNumber, max_value.max_curr_);
-    setAtomFieldValue(&values, BrownoutDetected::kEvtCntUvlo1FieldNumber, max_value.evt_cnt_uvlo1_);
-    setAtomFieldValue(&values, BrownoutDetected::kEvtCntUvlo2FieldNumber, max_value.evt_cnt_uvlo2_);
-    setAtomFieldValue(&values, BrownoutDetected::kEvtCntOilo1FieldNumber, max_value.evt_cnt_oilo1_);
-    setAtomFieldValue(&values, BrownoutDetected::kEvtCntOilo2FieldNumber, max_value.evt_cnt_oilo2_);
-    setAtomFieldValue(&values, BrownoutDetected::kVimonVbattFieldNumber, max_value.vimon_vbatt_);
-    setAtomFieldValue(&values, BrownoutDetected::kVimonIbattFieldNumber, max_value.vimon_ibatt_);
+    setAtomFieldValue(values, BrownoutDetected::kMaxCurrentFieldNumber, max_value.max_curr_);
+    setAtomFieldValue(values, BrownoutDetected::kEvtCntUvlo1FieldNumber, max_value.evt_cnt_uvlo1_);
+    setAtomFieldValue(values, BrownoutDetected::kEvtCntUvlo2FieldNumber, max_value.evt_cnt_uvlo2_);
+    setAtomFieldValue(values, BrownoutDetected::kEvtCntOilo1FieldNumber, max_value.evt_cnt_oilo1_);
+    setAtomFieldValue(values, BrownoutDetected::kEvtCntOilo2FieldNumber, max_value.evt_cnt_oilo2_);
+    setAtomFieldValue(values, BrownoutDetected::kVimonVbattFieldNumber, max_value.vimon_vbatt_);
+    setAtomFieldValue(values, BrownoutDetected::kVimonIbattFieldNumber, max_value.vimon_ibatt_);
 
-    setAtomFieldValue(&values, BrownoutDetected::kMitigationMethod0FieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kMitigationMethod0FieldNumber,
                       max_value.mitigation_method_0_);
-    setAtomFieldValue(&values, BrownoutDetected::kMitigationMethod0CountFieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kMitigationMethod0CountFieldNumber,
                       max_value.mitigation_method_0_count_);
-    setAtomFieldValue(&values, BrownoutDetected::kMitigationMethod0TimeUsFieldNumber,
+    setAtomFieldValue(values, BrownoutDetected::kMitigationMethod0TimeUsFieldNumber,
                       max_value.mitigation_method_0_time_us_);
+
+    setAtomFieldValue(values, BrownoutDetected::kPreOcpCpu1BckupFieldNumber,
+                      max_value.pre_ocp_cpu1_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kPreOcpCpu2BckupFieldNumber,
+                      max_value.pre_ocp_cpu2_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kPreOcpTpuBckupFieldNumber,
+                      max_value.pre_ocp_tpu_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kPreOcpGpuBckupFieldNumber,
+                      max_value.pre_ocp_gpu_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kPreUvloHitCntMFieldNumber,
+                      max_value.pre_uvlo_hit_cnt_m_);
+    setAtomFieldValue(values, BrownoutDetected::kPreUvloHitCntSFieldNumber,
+                      max_value.pre_uvlo_hit_cnt_s_);
+    setAtomFieldValue(values, BrownoutDetected::kPreUvloDurFieldNumber, max_value.uvlo_dur_);
+
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat0SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_0_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat1SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_1_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat2SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_2_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat3SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_3_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat4SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_4_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat5SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_5_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat6SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_6_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat7SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_7_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat8SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_8_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat9SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_9_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat10SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_10_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat11SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_11_sys_evt_main_bckup_);
+
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat0SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_0_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat1SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_1_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat2SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_2_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat3SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_3_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat4SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_4_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat5SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_5_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat6SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_6_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat7SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_7_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat8SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_8_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat9SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_9_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat10SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_10_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStat11SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_11_sys_evt_sub_bckup_);
+
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt0SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_0_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt1SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_1_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt2SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_2_sys_evt_main_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt3SysEvtMainBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_3_sys_evt_main_bckup_);
+
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt0SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_0_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt1SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_1_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt2SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_2_sys_evt_sub_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatExt3SysEvtSubBckupFieldNumber,
+                      max_value.odpm_irq_stat_ext_3_sys_evt_sub_bckup_);
+
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatGpuBckupFieldNumber,
+                      max_value.odpm_irq_stat_gpu_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatTpuBckupFieldNumber,
+                      max_value.odpm_irq_stat_tpu_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatCpu1BckupFieldNumber,
+                      max_value.odpm_irq_stat_cpu1_bckup_);
+    setAtomFieldValue(values, BrownoutDetected::kOdpmIrqStatCpu2BckupFieldNumber,
+                      max_value.odpm_irq_stat_cpu2_bckup_);
 
     // Send vendor atom to IStats HAL
     VendorAtom event = {.reverseDomainName = "",
@@ -322,6 +405,87 @@ void BrownoutDetectedReporter::logBrownoutCsv(const std::shared_ptr<IStats> &sta
         if (row.size() > IDX_VIMON_I) {
             max_value.vimon_vbatt_ = atoi(row[IDX_VIMON_V].c_str());
             max_value.vimon_ibatt_ = atoi(row[IDX_VIMON_I].c_str());
+        }
+        if (row.size() > UVLO_DUR_IDX) {
+            max_value.pre_ocp_cpu1_bckup_ = atoi(row[PRE_OCP_CPU1_BCKUP_IDX].c_str());
+            max_value.pre_ocp_cpu2_bckup_ = atoi(row[PRE_OCP_CPU2_BCKUP_IDX].c_str());
+            max_value.pre_ocp_tpu_bckup_ = atoi(row[PRE_OCP_TPU_BCKUP_IDX].c_str());
+            max_value.pre_ocp_gpu_bckup_ = atoi(row[PRE_OCP_GPU_BCKUP_IDX].c_str());
+            max_value.pre_uvlo_hit_cnt_m_ = atoi(row[PRE_UVLO_HIT_CNT_M_IDX].c_str());
+            max_value.pre_uvlo_hit_cnt_s_ = atoi(row[PRE_UVLO_HIT_CNT_S_IDX].c_str());
+            max_value.uvlo_dur_ = atoi(row[UVLO_DUR_IDX].c_str());
+        }
+        if (row.size() > ODPM_IRQ_STAT_CPU2_BCKUP_IDX) {
+            max_value.pre_ocp_cpu1_bckup_ = atoi(row[PRE_OCP_CPU1_BCKUP_IDX].c_str());
+            max_value.pre_ocp_cpu2_bckup_ = atoi(row[PRE_OCP_CPU2_BCKUP_IDX].c_str());
+
+            max_value.odpm_irq_stat_0_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_0_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_1_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_1_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_2_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_2_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_3_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_3_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_4_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_4_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_5_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_5_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_6_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_6_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_7_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_7_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_8_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_8_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_9_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_9_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_10_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_10_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_11_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_11_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+
+            max_value.odpm_irq_stat_0_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_0_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_1_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_1_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_2_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_2_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_3_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_3_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_4_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_4_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_5_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_5_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_6_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_6_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_7_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_7_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_8_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_8_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_9_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_9_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_10_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_10_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_11_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_11_SYS_EVT_SUB_BCKUP_IDX].c_str());
+
+            max_value.odpm_irq_stat_ext_0_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_0_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_ext_1_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_1_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_ext_2_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_2_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_ext_3_sys_evt_main_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_3_SYS_EVT_MAIN_BCKUP_IDX].c_str());
+
+            max_value.odpm_irq_stat_ext_0_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_0_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_ext_1_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_1_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_ext_2_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_2_SYS_EVT_SUB_BCKUP_IDX].c_str());
+            max_value.odpm_irq_stat_ext_3_sys_evt_sub_bckup_ =
+                    atoi(row[ODPM_IRQ_STAT_EXT_3_SYS_EVT_SUB_BCKUP_IDX].c_str());
         }
     }
     if (!isAlreadyUpdated && max_value.battery_temp_ != DEFAULT_BATTERY_TEMP) {

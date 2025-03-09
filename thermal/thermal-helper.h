@@ -33,6 +33,7 @@
 #include "utils/powerhal_helper.h"
 #include "utils/thermal_files.h"
 #include "utils/thermal_info.h"
+#include "utils/thermal_predictions_helper.h"
 #include "utils/thermal_stats_helper.h"
 #include "utils/thermal_throttling.h"
 #include "utils/thermal_watcher.h"
@@ -91,8 +92,8 @@ class ThermalHelper {
                               const bool max_throttling) = 0;
     virtual bool emulClear(std::string_view target_sensor) = 0;
     virtual bool isInitializedOk() const = 0;
-    virtual bool readTemperature(std::string_view sensor_name, Temperature *out,
-                                 const bool force_sysfs = false) = 0;
+    virtual SensorReadStatus readTemperature(std::string_view sensor_name, Temperature *out,
+                                             const bool force_sysfs = false) = 0;
     virtual bool readTemperatureThreshold(std::string_view sensor_name,
                                           TemperatureThreshold *out) const = 0;
     virtual bool readCoolingDevice(std::string_view cooling_device, CoolingDevice *out) const = 0;
@@ -140,8 +141,8 @@ class ThermalHelperImpl : public ThermalHelper {
     bool isInitializedOk() const override { return is_initialized_; }
 
     // Read the temperature of a single sensor.
-    bool readTemperature(std::string_view sensor_name, Temperature *out,
-                         const bool force_sysfs = false) override;
+    SensorReadStatus readTemperature(std::string_view sensor_name, Temperature *out,
+                                     const bool force_sysfs = false) override;
 
     bool readTemperatureThreshold(std::string_view sensor_name,
                                   TemperatureThreshold *out) const override;
@@ -213,8 +214,9 @@ class ThermalHelperImpl : public ThermalHelper {
     bool readDataByType(std::string_view sensor_data, float *reading_value,
                         const SensorFusionType type, const bool force_no_cache,
                         std::map<std::string, float> *sensor_log_map);
-    bool readThermalSensor(std::string_view sensor_name, float *temp, const bool force_sysfs,
-                           std::map<std::string, float> *sensor_log_map);
+    SensorReadStatus readThermalSensor(std::string_view sensor_name, float *temp,
+                                       const bool force_sysfs,
+                                       std::map<std::string, float> *sensor_log_map);
     bool runVirtualTempEstimator(std::string_view sensor_name,
                                  std::map<std::string, float> *sensor_log_map,
                                  const bool force_no_cache, std::vector<float> *outputs);
@@ -241,6 +243,7 @@ class ThermalHelperImpl : public ThermalHelper {
             supported_powerhint_map_;
     PowerHalService power_hal_service_;
     ThermalStatsHelper thermal_stats_helper_;
+    ThermalPredictionsHelper thermal_predictions_helper_;
     mutable std::shared_mutex sensor_status_map_mutex_;
     std::unordered_map<std::string, SensorStatus> sensor_status_map_;
 };

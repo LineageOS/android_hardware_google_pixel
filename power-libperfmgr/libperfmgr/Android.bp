@@ -60,13 +60,16 @@ cc_library {
         "HintManager.cc",
         "AdpfConfig.cc",
         "EventNode.cc",
-    ]
+    ],
 }
 
 cc_test {
     name: "libperfmgr_test",
     defaults: ["libperfmgr_defaults"],
-    static_libs: ["libperfmgr", "libgmock" ],
+    static_libs: [
+        "libperfmgr",
+        "libgmock",
+    ],
     srcs: [
         "tests/RequestGroupTest.cc",
         "tests/FileNodeTest.cc",
@@ -75,7 +78,10 @@ cc_test {
         "tests/HintManagerTest.cc",
         "tests/EventNodeTest.cc",
     ],
-    test_suites: ["device-tests"],
+    test_suites: [
+        "device-tests",
+        "device-pixel-tests",
+    ],
     require_root: true,
 }
 
@@ -85,5 +91,5 @@ cc_binary {
     static_libs: ["libperfmgr"],
     srcs: [
         "tools/ConfigVerifier.cc",
-    ]
+    ],
 }

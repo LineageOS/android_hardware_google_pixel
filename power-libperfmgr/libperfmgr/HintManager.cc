@@ -268,14 +268,27 @@ void HintManager::DumpToFd(int fd) {
         LOG(ERROR) << "Failed to dump fd: " << fd;
     }
 
-    // Dump current ADPF profile
+    // Dump current ADPF profiles
     if (IsAdpfSupported()) {
         header = "========== ADPF Tag Profile begin ==========\n";
         if (!android::base::WriteStringToFd(header, fd)) {
             LOG(ERROR) << "Failed to dump fd: " << fd;
         }
-        // TODO(jimmyshiu@/guibing@): Update it when fully switched to the tag based adpf profiles.
+
+        header = "---- Default non-tagged adpf profile ----\n";
+        if (!android::base::WriteStringToFd(header, fd)) {
+            LOG(ERROR) << "Failed to dump fd: " << fd;
+        }
         GetAdpfProfileFromDoHint()->dumpToFd(fd);
+
+        for (const auto &tag_profile : tag_profile_map_) {
+            header = StringPrintf("---- Tagged ADPF Profile: %s ----\n", tag_profile.first.c_str());
+            if (!android::base::WriteStringToFd(header, fd)) {
+                LOG(ERROR) << "Failed to dump fd: " << fd;
+            }
+            tag_profile.second->dumpToFd(fd);
+        }
+
         footer = "========== ADPF Tag Profile end ==========\n";
         if (!android::base::WriteStringToFd(footer, fd)) {
             LOG(ERROR) << "Failed to dump fd: " << fd;

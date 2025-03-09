@@ -41,6 +41,11 @@ class TestCallback : public BnThermalChangedCallback {
         return ndk::ScopedAStatus::ok();
     }
 
+    ndk::ScopedAStatus notifyThresholdChanged(const TemperatureThreshold &) override {
+        // no impl for threshold change
+        return ndk::ScopedAStatus::ok();
+    }
+
     std::vector<Temperature> getTemperatures() {
         std::lock_guard<std::mutex> lock_guard(mMutex);
         return mTemperatures;

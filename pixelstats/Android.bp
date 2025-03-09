@@ -171,6 +171,7 @@ cc_library {
         "ThermalStatsReporter.cpp",
         "TempResidencyReporter.cpp",
         "UeventListener.cpp",
+        "WaterEventReporter.cpp",
         "WirelessChargeStats.cpp",
     ],
     cflags: [

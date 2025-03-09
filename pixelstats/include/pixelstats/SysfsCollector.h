@@ -30,6 +30,7 @@
 #include "MmMetricsReporter.h"
 #include "TempResidencyReporter.h"
 #include "ThermalStatsReporter.h"
+#include "WaterEventReporter.h"
 
 namespace android {
 namespace hardware {
@@ -100,6 +101,7 @@ class SysfsCollector {
         const std::vector<std::string> FGModelLoadingPath;
         const std::vector<std::string> FGLogBufferPath;
         const char *const SpeakerVersionPath;
+        const char *const WaterEventPath;
     };
 
     SysfsCollector(const struct SysfsPaths &paths);
@@ -111,6 +113,7 @@ class SysfsCollector {
     void aggregatePer5Min();
     void logOnce();
     void logBrownout();
+    void logWater();
     void logPerDay();
     void logPerHour();
 
@@ -161,6 +164,7 @@ class SysfsCollector {
     void logOffloadEffectsStats(const std::shared_ptr<IStats> &stats_client);
     void logBluetoothAudioUsage(const std::shared_ptr<IStats> &stats_client);
     void logBatteryGMSR(const std::shared_ptr<IStats> &stats_client);
+    void logDmVerityPartitionReadAmount(const std::shared_ptr<IStats> &stats_client);
     void logBatteryHistoryValidation();
 
     const char *const kSlowioReadCntPath;
@@ -221,6 +225,7 @@ class SysfsCollector {
     const std::vector<std::string> kFGModelLoadingPath;
     const std::vector<std::string> kFGLogBufferPath;
     const char *const kSpeakerVersionPath;
+    const char *const kWaterEventPath;
 
     BatteryEEPROMReporter battery_EEPROM_reporter_;
     MmMetricsReporter mm_metrics_reporter_;
@@ -232,6 +237,7 @@ class SysfsCollector {
     BatteryHealthReporter battery_health_reporter_;
     BatteryTTFReporter battery_time_to_full_reporter_;
     TempResidencyReporter temp_residency_reporter_;
+    WaterEventReporter water_event_reporter_;
     // Proto messages are 1-indexed and VendorAtom field numbers start at 2, so
     // store everything in the values array at the index of the field number    // -2.
     const int kVendorAtomOffset = 2;

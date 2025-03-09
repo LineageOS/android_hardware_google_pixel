@@ -56,12 +56,20 @@ class ChargeStatsReporter {
     // -2.
     const int kVendorAtomOffset = 2;
 
+    const int kNumChgStatsFormat00Fields = 7;   // "%d,%d,%d, %d,%d,%d,%d"
+    const int kNumChgStatsFormat01Fields = 8;   // "%d,%d,%d, %d,%d,%d,%d %d" AACR
+    const int kNumChgStatsFormat02Fields = 10;  // "%d,%d,%d, %d,%d,%d,%d %d %d,%d" AACR + CSI
+    const int kNumChgStatsFormat03Fields =
+            12;  // "%d,%d,%d, %d,%d,%d,%d %d %d,%d, %d,%d" AACR + CSI + AACP
+
     const std::string kThermalChargeMetricsPath =
             "/sys/devices/platform/google,charger/thermal_stats";
 
     const std::string kGChargerMetricsPath = "/sys/devices/platform/google,charger/charge_stats";
 
     const std::string kGDualBattMetricsPath = "/sys/class/power_supply/dualbatt/dbatt_stats";
+
+    const std::string kGAacrAlgoPath = "/sys/class/power_supply/battery/aacr_algo";
 };
 
 }  // namespace pixel

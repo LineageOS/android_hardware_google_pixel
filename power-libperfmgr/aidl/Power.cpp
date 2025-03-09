@@ -21,19 +21,21 @@
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
-#include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include <fmq/AidlMessageQueue.h>
 #include <fmq/EventFlag.h>
 #include <perfmgr/HintManager.h>
 #include <utils/Log.h>
 
-#include <mutex>
+#include <cstdint>
+#include <memory>
 #include <optional>
 
 #include "AdpfTypes.h"
+#include "ChannelManager.h"
 #include "PowerHintSession.h"
 #include "PowerSessionManager.h"
+#include "SupportManager.h"
 #include "disp-power/DisplayLowPower.h"
 
 namespace aidl {
@@ -88,6 +90,8 @@ Power::Power(std::shared_ptr<DisplayLowPower> dlpw)
 
     auto status = this->getInterfaceVersion(&mServiceVersion);
     LOG(INFO) << "PowerHAL InterfaceVersion:" << mServiceVersion << " isOK: " << status.isOk();
+
+    mSupportInfo = SupportManager::makeSupportInfo();
 }
 
 ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
@@ -140,15 +144,6 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
                 mVRModeOn = false;
             }
             break;
-        case Mode::AUTOMOTIVE_PROJECTION:
-            mDisplayLowPower->SetAAMode(enabled);
-            if (enabled) {
-                HintManager::GetInstance()->DoHint("AUTOMOTIVE_PROJECTION");
-            } else {
-                HintManager::GetInstance()->EndHint("AUTOMOTIVE_PROJECTION");
-                HintManager::GetInstance()->EndHint("DISPLAY_IDLE_AA");
-            }
-            break;
         case Mode::LAUNCH:
             if (mVRModeOn || mSustainedPerfModeOn) {
                 break;
@@ -191,36 +186,8 @@ ndk::ScopedAStatus Power::setMode(Mode type, bool enabled) {
 }
 
 ndk::ScopedAStatus Power::isModeSupported(Mode type, bool *_aidl_return) {
-    switch (mServiceVersion) {
-        case 5:
-            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Mode::AUTOMOTIVE_PROJECTION))
-                break;
-            [[fallthrough]];
-        case 4:
-            [[fallthrough]];
-        case 3:
-            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Mode::GAME_LOADING))
-                break;
-            [[fallthrough]];
-        case 2:
-            [[fallthrough]];
-        case 1:
-            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Mode::CAMERA_STREAMING_HIGH))
-                break;
-            [[fallthrough]];
-        default:
-            *_aidl_return = false;
-            return ndk::ScopedAStatus::ok();
-    }
-    bool supported = HintManager::GetInstance()->IsHintSupported(toString(type));
-    // LOW_POWER handled insides PowerHAL specifically
-    if (type == Mode::LOW_POWER) {
-        supported = true;
-    }
-    if (!supported && HintManager::GetInstance()->IsAdpfProfileSupported(toString(type))) {
-        supported = true;
-    }
-    LOG(INFO) << "Power mode " << toString(type) << " isModeSupported: " << supported;
+    bool supported = supportFromBitset(mSupportInfo.modes, type);
+    LOG(INFO) << "Power Mode " << toString(type) << " isModeSupported: " << supported;
     *_aidl_return = supported;
     return ndk::ScopedAStatus::ok();
 }
@@ -263,28 +230,8 @@ ndk::ScopedAStatus Power::setBoost(Boost type, int32_t durationMs) {
 }
 
 ndk::ScopedAStatus Power::isBoostSupported(Boost type, bool *_aidl_return) {
-    switch (mServiceVersion) {
-        case 5:
-            [[fallthrough]];
-        case 4:
-            [[fallthrough]];
-        case 3:
-            [[fallthrough]];
-        case 2:
-            [[fallthrough]];
-        case 1:
-            if (static_cast<int32_t>(type) <= static_cast<int32_t>(Boost::CAMERA_SHOT))
-                break;
-            [[fallthrough]];
-        default:
-            *_aidl_return = false;
-            return ndk::ScopedAStatus::ok();
-    }
-    bool supported = HintManager::GetInstance()->IsHintSupported(toString(type));
-    if (!supported && HintManager::GetInstance()->IsAdpfProfileSupported(toString(type))) {
-        supported = true;
-    }
-    LOG(INFO) << "Power boost " << toString(type) << " isBoostSupported: " << supported;
+    bool supported = supportFromBitset(mSupportInfo.boosts, type);
+    LOG(INFO) << "Power oost " << toString(type) << " isBoostSupported: " << supported;
     *_aidl_return = supported;
     return ndk::ScopedAStatus::ok();
 }
@@ -308,6 +255,14 @@ binder_status_t Power::dump(int fd, const char **, uint32_t) {
     }
     fsync(fd);
     return STATUS_OK;
+}
+
+ndk::ScopedAStatus Power::getCpuHeadroom(const CpuHeadroomParams &_, CpuHeadroomResult *) {
+    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
+}
+
+ndk::ScopedAStatus Power::getGpuHeadroom(const GpuHeadroomParams &_, GpuHeadroomResult *) {
+    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
 }
 
 ndk::ScopedAStatus Power::createHintSession(int32_t tgid, int32_t uid,
@@ -352,23 +307,32 @@ ndk::ScopedAStatus Power::createHintSessionWithConfig(
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus Power::getSessionChannel(int32_t, int32_t, ChannelConfig *_aidl_return) {
-    static AidlMessageQueue<ChannelMessage, SynchronizedReadWrite> stubQueue{20, true};
-    static std::thread stubThread([&] {
-        ChannelMessage data;
-        // This loop will only run while there is data waiting
-        // to be processed, and blocks on a futex all other times
-        while (stubQueue.readBlocking(&data, 1, 0)) {
-        }
-    });
-    _aidl_return->channelDescriptor = stubQueue.dupeDesc();
-    _aidl_return->readFlagBitmask = 0x01;
-    _aidl_return->writeFlagBitmask = 0x02;
-    _aidl_return->eventFlagDescriptor = std::nullopt;
+ndk::ScopedAStatus Power::getSessionChannel(int32_t tgid, int32_t uid,
+                                            ChannelConfig *_aidl_return) {
+    if (ChannelManager<>::getInstance()->getChannelConfig(tgid, uid, _aidl_return)) {
+        return ndk::ScopedAStatus::ok();
+    }
+    return ndk::ScopedAStatus::fromStatus(EX_ILLEGAL_STATE);
+}
+
+ndk::ScopedAStatus Power::closeSessionChannel(int32_t tgid, int32_t uid) {
+    ChannelManager<>::getInstance()->closeChannel(tgid, uid);
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus Power::closeSessionChannel(int32_t, int32_t) {
+ndk::ScopedAStatus Power::getSupportInfo(SupportInfo *_aidl_return) {
+    // Copy the support object into the binder
+    *_aidl_return = mSupportInfo;
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Power::sendCompositionData(const std::vector<CompositionData> &) {
+    LOG(INFO) << "Composition data received!";
+    return ndk::ScopedAStatus::ok();
+}
+
+ndk::ScopedAStatus Power::sendCompositionUpdate(const CompositionUpdate &) {
+    LOG(INFO) << "Composition update received!";
     return ndk::ScopedAStatus::ok();
 }
 

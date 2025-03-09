@@ -78,6 +78,8 @@ class Thermal : public BnThermal {
             CoolingType type) override;
     ndk::ScopedAStatus unregisterCoolingDeviceChangedCallback(
             const std::shared_ptr<ICoolingDeviceChangedCallback> &callback) override;
+    ndk::ScopedAStatus forecastSkinTemperature(int32_t forecastSeconds,
+                                               float *_aidl_return) override;
 
     binder_status_t dump(int fd, const char **args, uint32_t numArgs) override;
 

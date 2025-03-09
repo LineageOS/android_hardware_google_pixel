@@ -32,6 +32,7 @@
 #include <sys/vfs.h>
 #include <cinttypes>
 #include <string>
+#include <filesystem>
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
@@ -54,6 +55,7 @@ using android::hardware::google::pixel::PixelAtoms::DisplayPanelErrorStats;
 using android::hardware::google::pixel::PixelAtoms::DisplayPortDSCSupportCountStatsReported;
 using android::hardware::google::pixel::PixelAtoms::DisplayPortErrorStats;
 using android::hardware::google::pixel::PixelAtoms::DisplayPortMaxResolutionCountStatsReported;
+using android::hardware::google::pixel::PixelAtoms::DmVerityPartitionReadAmountReported;
 using android::hardware::google::pixel::PixelAtoms::F2fsAtomicWriteInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsCompressionInfo;
 using android::hardware::google::pixel::PixelAtoms::F2fsGcSegmentInfo;
@@ -81,6 +83,7 @@ using android::hardware::google::pixel::PixelAtoms::VendorSpeakerImpedance;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeakerStatsReported;
 using android::hardware::google::pixel::PixelAtoms::VendorSpeechDspStat;
 using android::hardware::google::pixel::PixelAtoms::VendorTempResidencyStats;
+using android::hardware::google::pixel::PixelAtoms::WaterEventReported;
 using android::hardware::google::pixel::PixelAtoms::ZramBdStat;
 using android::hardware::google::pixel::PixelAtoms::ZramMmStat;
 
@@ -142,7 +145,8 @@ SysfsCollector::SysfsCollector(const struct SysfsPaths &sysfs_paths)
       kMaxfgHistoryPath("/dev/maxfg_history"),
       kFGModelLoadingPath(sysfs_paths.FGModelLoadingPath),
       kFGLogBufferPath(sysfs_paths.FGLogBufferPath),
-      kSpeakerVersionPath(sysfs_paths.SpeakerVersionPath) {}
+      kSpeakerVersionPath(sysfs_paths.SpeakerVersionPath),
+      kWaterEventPath(sysfs_paths.WaterEventPath){}
 
 bool SysfsCollector::ReadFileToInt(const std::string &path, int *val) {
     return ReadFileToInt(path.c_str(), val);
@@ -924,6 +928,90 @@ void SysfsCollector::logF2fsSmartIdleMaintEnabled(const std::shared_ptr<IStats> 
     if (!ret.isOk()) {
         ALOGE("Unable to report F2fsSmartIdleMaintEnabled to Stats service");
     }
+}
+
+void SysfsCollector::logDmVerityPartitionReadAmount(const std::shared_ptr<IStats> &stats_client) {
+    //  Array of partition names corresponding to the DmPartition enum.
+    static constexpr std::array<std::string_view, 4>
+        partitionNames = {"system", "system_ext", "product", "vendor"};
+
+    // These index comes from kernel Document
+    // Documentation/ABI/stable/sysfs-block
+    constexpr int READ_SEC_IDX = 2;
+
+    // Get the slot suffix from system property
+    std::string slotSuffix = android::base::GetProperty("ro.boot.slot_suffix", "");
+
+    size_t partitionIndex = 0;
+    for (const auto& partitionName : partitionNames) {
+        ++partitionIndex;
+
+        // Construct the partition name with slot suffix
+        std::string fullPartitionName = std::string(partitionName) + slotSuffix;
+
+        // Construct the path using std::string
+        std::string relativePathStr = "/dev/block/mapper/" + fullPartitionName;
+
+        // Create the std::filesystem::path from the string
+        std::filesystem::path relativePath(relativePathStr);
+        std::error_code ec;
+        std::filesystem::path absolutePath = std::filesystem::canonical(relativePath, ec);
+
+        if (ec) {
+          ALOGE("Failed to get canonical path for %s: %s",
+            fullPartitionName.c_str(),
+            ec.message().c_str());
+          continue;
+        }
+
+        // If canonical path is found, extract the filename (e.g., "dm-0")
+        std::string dmDeviceName = absolutePath.filename();
+        dmDeviceName = android::base::Trim(dmDeviceName);
+
+        // Directly process the dmDeviceName here
+        std::string statPath = "/sys/block/" + dmDeviceName + "/stat";
+        std::string statContent;
+        if (!android::base::ReadFileToString(statPath, &statContent)) {
+            ALOGE("Failed to read symbolic link: %s", statPath.c_str());
+            continue; // Skip to the next partitionName
+        }
+
+        std::vector<std::string> statFields;
+        std::istringstream iss(statContent);
+        std::string field;
+        while (iss >> field) {
+            statFields.push_back(field);
+        }
+        if (statFields.size() < 3) {
+            ALOGE("Invalid block statistics format: %s", statPath.c_str());
+            continue; // Skip to the next partitionName
+        }
+
+        int64_t readSectors;
+        if (!android::base::ParseInt(statFields[READ_SEC_IDX], &readSectors)) {
+            // Handle the error, e.g., log an error message, set a default value, etc.
+            ALOGE("Failed to parse read sectors value: %s", statFields[READ_SEC_IDX].c_str());
+            readSectors = -1; // Or another appropriate default/error value
+        }
+        std::vector<VendorAtomValue> values(2);
+        // Use partitionIndex for kDmPartitionFieldNumber
+        values[DmVerityPartitionReadAmountReported::kDmPartitionFieldNumber - kVendorAtomOffset] =
+            VendorAtomValue::make<VendorAtomValue::intValue>(static_cast<int32_t>(partitionIndex));
+
+        // Use converted readSectors for kReadSectorsFieldNumber
+        values[DmVerityPartitionReadAmountReported::kReadSectorsFieldNumber - kVendorAtomOffset] =
+            VendorAtomValue::make<VendorAtomValue::longValue>(readSectors);
+
+        // Send vendor atom to IStats HAL
+        VendorAtom event = {.reverseDomainName = PixelAtoms::ReverseDomainNames().pixel(),
+                            .atomId = PixelAtoms::Atom::kDmVerityPartitionReadAmountReported,
+                            .values = std::move(values)};
+        const ndk::ScopedAStatus ret = stats_client->reportVendorAtom(event);
+        if (!ret.isOk()) {
+            ALOGE("Unable to report DmVerityPartitionReadAmountReported to Stats service");
+        }
+    }
+    return;
 }
 
 void SysfsCollector::logBlockStatsReported(const std::shared_ptr<IStats> &stats_client) {
@@ -2135,6 +2223,7 @@ void SysfsCollector::logPerDay() {
     logDisplayPortStats(stats_client);
     logDisplayPortDSCStats(stats_client);
     logDisplayPortMaxResolutionStats(stats_client);
+    logDmVerityPartitionReadAmount(stats_client);
     logHDCPStats(stats_client);
     logF2fsStats(stats_client);
     logF2fsAtomicWriteInfo(stats_client);
@@ -2184,8 +2273,22 @@ void SysfsCollector::logBrownout() {
                                                 kBrownoutReasonProp);
 }
 
+void SysfsCollector::logWater() {
+    const std::shared_ptr<IStats> stats_client = getStatsService();
+    if (!stats_client) {
+        ALOGE("Unable to get AIDL Stats service");
+        return;
+    }
+    if (kWaterEventPath == nullptr || strlen(kWaterEventPath) == 0)
+        return;
+    PixelAtoms::WaterEventReported::EventPoint event_point =
+            PixelAtoms::WaterEventReported::EventPoint::WaterEventReported_EventPoint_BOOT;
+    water_event_reporter_.logEvent(stats_client, event_point, kWaterEventPath);
+}
+
 void SysfsCollector::logOnce() {
     logBrownout();
+    logWater();
 }
 
 void SysfsCollector::logPerHour() {

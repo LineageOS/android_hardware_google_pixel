@@ -51,14 +51,6 @@ ndk::ScopedAStatus PowerExt::setMode(const std::string &mode, bool enabled) {
         PowerSessionManager<>::getInstance()->updateHintMode(mode, enabled);
     }
 
-    if (mode == "DISPLAY_IDLE" && mDisplayLowPower->IsAAModeOn()) {
-        if (enabled) {
-            HintManager::GetInstance()->DoHint("DISPLAY_IDLE_AA");
-        } else {
-            HintManager::GetInstance()->EndHint("DISPLAY_IDLE_AA");
-        }
-    }
-
     return ndk::ScopedAStatus::ok();
 }
 
