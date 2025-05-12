@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c41e390b_c39ee3e3",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 16185
+      },
+      "writtenOn": "2025-05-12T14:56:19Z",
+      "side": 1,
+      "message": "To revert, just until fix is merged",
+      "revId": "bab95e4292ce467cdf7fc00dd1aead3672a609de",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    }
+  ]
+}
