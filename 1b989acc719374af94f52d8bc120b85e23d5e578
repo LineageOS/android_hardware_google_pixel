@@ -16,6 +16,24 @@
       "message": "You need to set \"_aidl_return\" here.",
       "revId": "1b989acc719374af94f52d8bc120b85e23d5e578",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4352e803_0b99d4b5",
+        "filename": "touch/GloveMode.cpp",
+        "patchSetId": 1
+      },
+      "lineNbr": 26,
+      "author": {
+        "id": 13648
+      },
+      "writtenOn": "2025-06-07T17:44:03Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1e4169d8_19a1e3ca",
+      "revId": "1b989acc719374af94f52d8bc120b85e23d5e578",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
