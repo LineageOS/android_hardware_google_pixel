@@ -17,13 +17,12 @@
 #pragma once
 
 #include <PowerStatsAidl.h>
-#include <aidl/android/vendor/powerstats/BnPixelStateResidencyCallback.h>
-#include <aidl/android/vendor/powerstats/BnPixelStateResidencyProvider.h>
-
+#include <aidl/android/vendor/powerstats/BnPixelPowerStatsCallback.h>
+#include <aidl/android/vendor/powerstats/BnPixelPowerStatsProvider.h>
 #include <android/binder_manager.h>
 
-using ::aidl::android::vendor::powerstats::BnPixelStateResidencyProvider;
-using ::aidl::android::vendor::powerstats::IPixelStateResidencyCallback;
+using ::aidl::android::vendor::powerstats::BnPixelPowerStatsProvider;
+using ::aidl::android::vendor::powerstats::IPixelPowerStatsCallback;
 
 namespace aidl {
 namespace android {
@@ -31,10 +30,10 @@ namespace hardware {
 namespace power {
 namespace stats {
 
-class PixelStateResidencyDataProvider : public PowerStats::IStateResidencyDataProvider {
+class PixelPowerStatsDataProvider : public PowerStats::IStateResidencyDataProvider {
   public:
-    PixelStateResidencyDataProvider();
-    ~PixelStateResidencyDataProvider() = default;
+    PixelPowerStatsDataProvider();
+    ~PixelPowerStatsDataProvider() = default;
     void addEntity(std::string name, std::vector<State> states);
     void start();
 
@@ -44,30 +43,30 @@ class PixelStateResidencyDataProvider : public PowerStats::IStateResidencyDataPr
     std::unordered_map<std::string, std::vector<State>> getInfo() override;
 
   private:
-    class ProviderService : public BnPixelStateResidencyProvider {
+    class ProviderService : public BnPixelPowerStatsProvider {
       public:
-        ProviderService(PixelStateResidencyDataProvider *enclosed) : mEnclosed(enclosed) {}
-        // Methods from BnPixelStateResidencyProvider
+        ProviderService(PixelPowerStatsDataProvider *enclosed) : mEnclosed(enclosed) {}
+        // Methods from BnPixelPowerStatsProvider
         ::ndk::ScopedAStatus registerCallback(
                 const std::string &in_entityName,
-                const std::shared_ptr<IPixelStateResidencyCallback> &in_cb) override {
+                const std::shared_ptr<IPixelPowerStatsCallback> &in_cb) override {
             return mEnclosed->registerCallback(in_entityName, in_cb);
         }
 
         ::ndk::ScopedAStatus registerCallbackByStates(
                 const std::string &in_entityName,
-                const std::shared_ptr<IPixelStateResidencyCallback> &in_cb,
+                const std::shared_ptr<IPixelPowerStatsCallback> &in_cb,
                 const std::vector<State> &in_states) override {
             return mEnclosed->registerCallbackByStates(in_entityName, in_cb, in_states);
         }
 
         ::ndk::ScopedAStatus unregisterCallback(
-                const std::shared_ptr<IPixelStateResidencyCallback> &in_cb) override {
+                const std::shared_ptr<IPixelPowerStatsCallback> &in_cb) override {
             return mEnclosed->unregisterCallback(in_cb);
         }
 
       private:
-        PixelStateResidencyDataProvider *mEnclosed;
+        PixelPowerStatsDataProvider *mEnclosed;
     };
 
     struct Entry {
@@ -75,24 +74,22 @@ class PixelStateResidencyDataProvider : public PowerStats::IStateResidencyDataPr
             : mName(name), mStates(states), mCallback(nullptr) {}
         std::string mName;
         std::vector<State> mStates;
-        std::shared_ptr<IPixelStateResidencyCallback> mCallback;
+        std::shared_ptr<IPixelPowerStatsCallback> mCallback;
     };
 
     void registerStatesUpdateCallback(
             std::function<void(const std::string &, const std::vector<State> &)>
                     statesUpdateCallback) override;
 
-    ::ndk::ScopedAStatus registerCallback(
-            const std::string &in_entityName,
-            const std::shared_ptr<IPixelStateResidencyCallback> &in_cb);
+    ::ndk::ScopedAStatus registerCallback(const std::string &in_entityName,
+                                          const std::shared_ptr<IPixelPowerStatsCallback> &in_cb);
 
     ::ndk::ScopedAStatus registerCallbackByStates(
             const std::string &in_entityName,
-            const std::shared_ptr<IPixelStateResidencyCallback> &in_cb,
+            const std::shared_ptr<IPixelPowerStatsCallback> &in_cb,
             const std::vector<State> &in_states);
 
-    ::ndk::ScopedAStatus unregisterCallback(
-            const std::shared_ptr<IPixelStateResidencyCallback> &in_cb);
+    ::ndk::ScopedAStatus unregisterCallback(const std::shared_ptr<IPixelPowerStatsCallback> &in_cb);
 
     ::ndk::ScopedAStatus getStateResidenciesTimed(const Entry &entry,
                                                   std::vector<StateResidency> *residency);
