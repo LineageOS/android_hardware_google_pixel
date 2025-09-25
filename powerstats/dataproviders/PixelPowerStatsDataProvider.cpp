@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <dataproviders/PixelStateResidencyDataProvider.h>
-
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <android/binder_status.h>
+#include <dataproviders/PixelPowerStatsDataProvider.h>
 
 namespace aidl {
 namespace android {
@@ -26,16 +25,16 @@ namespace hardware {
 namespace power {
 namespace stats {
 
-PixelStateResidencyDataProvider::PixelStateResidencyDataProvider()
+PixelPowerStatsDataProvider::PixelPowerStatsDataProvider()
     : mProviderService(ndk::SharedRefBase::make<ProviderService>(this)) {}
 
-void PixelStateResidencyDataProvider::addEntity(std::string name, std::vector<State> states) {
+void PixelPowerStatsDataProvider::addEntity(std::string name, std::vector<State> states) {
     std::lock_guard<std::mutex> lock(mLock);
 
     mEntries.emplace_back(name, states);
 }
 
-void PixelStateResidencyDataProvider::start() {
+void PixelPowerStatsDataProvider::start() {
     binder_status_t status =
             AServiceManager_addService(mProviderService->asBinder().get(), kInstance.c_str());
     if (status != STATUS_OK) {
@@ -43,7 +42,7 @@ void PixelStateResidencyDataProvider::start() {
     }
 }
 
-::ndk::ScopedAStatus PixelStateResidencyDataProvider::getStateResidenciesTimed(
+::ndk::ScopedAStatus PixelPowerStatsDataProvider::getStateResidenciesTimed(
         const Entry &entry, std::vector<StateResidency> *residency) {
     const uint64_t MAX_LATENCY_US = 2000;
 
@@ -69,7 +68,7 @@ void PixelStateResidencyDataProvider::start() {
     return status;
 }
 
-bool PixelStateResidencyDataProvider::getStateResidencies(
+bool PixelPowerStatsDataProvider::getStateResidencies(
         std::unordered_map<std::string, std::vector<StateResidency>> *residencies) {
     std::lock_guard<std::mutex> lock(mLock);
 
@@ -96,7 +95,7 @@ bool PixelStateResidencyDataProvider::getStateResidencies(
     return (numResultsFound == numResults);
 }
 
-std::unordered_map<std::string, std::vector<State>> PixelStateResidencyDataProvider::getInfo() {
+std::unordered_map<std::string, std::vector<State>> PixelPowerStatsDataProvider::getInfo() {
     std::lock_guard<std::mutex> lock(mLock);
 
     std::unordered_map<std::string, std::vector<State>> ret;
@@ -107,15 +106,14 @@ std::unordered_map<std::string, std::vector<State>> PixelStateResidencyDataProvi
     return ret;
 }
 
-void PixelStateResidencyDataProvider::registerStatesUpdateCallback(
+void PixelPowerStatsDataProvider::registerStatesUpdateCallback(
         std::function<void(const std::string &, const std::vector<State> &in_states)>
                 statesUpdateCallback) {
     mStatesUpdateCallback = statesUpdateCallback;
 }
 
-::ndk::ScopedAStatus PixelStateResidencyDataProvider::registerCallbackByStates(
-        const std::string &in_entityName,
-        const std::shared_ptr<IPixelStateResidencyCallback> &in_cb,
+::ndk::ScopedAStatus PixelPowerStatsDataProvider::registerCallbackByStates(
+        const std::string &in_entityName, const std::shared_ptr<IPixelPowerStatsCallback> &in_cb,
         const std::vector<State> &in_states) {
     std::lock_guard<std::mutex> lock(mLock);
 
@@ -143,14 +141,13 @@ void PixelStateResidencyDataProvider::registerStatesUpdateCallback(
     return ::ndk::ScopedAStatus::ok();
 }
 
-::ndk::ScopedAStatus PixelStateResidencyDataProvider::registerCallback(
-        const std::string &in_entityName,
-        const std::shared_ptr<IPixelStateResidencyCallback> &in_cb) {
+::ndk::ScopedAStatus PixelPowerStatsDataProvider::registerCallback(
+        const std::string &in_entityName, const std::shared_ptr<IPixelPowerStatsCallback> &in_cb) {
     return registerCallbackByStates(in_entityName, in_cb, {});
 }
 
-::ndk::ScopedAStatus PixelStateResidencyDataProvider::unregisterCallback(
-        const std::shared_ptr<IPixelStateResidencyCallback> &in_cb) {
+::ndk::ScopedAStatus PixelPowerStatsDataProvider::unregisterCallback(
+        const std::shared_ptr<IPixelPowerStatsCallback> &in_cb) {
     std::lock_guard<std::mutex> lock(mLock);
 
     if (!in_cb) {
