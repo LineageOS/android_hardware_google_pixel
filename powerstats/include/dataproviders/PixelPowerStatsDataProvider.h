@@ -19,10 +19,12 @@
 #include <PowerStatsAidl.h>
 #include <aidl/android/vendor/powerstats/BnPixelPowerStatsCallback.h>
 #include <aidl/android/vendor/powerstats/BnPixelPowerStatsProvider.h>
+#include <aidl/android/vendor/powerstats/StateResidencyData.h>
 #include <android/binder_manager.h>
 
 using ::aidl::android::vendor::powerstats::BnPixelPowerStatsProvider;
 using ::aidl::android::vendor::powerstats::IPixelPowerStatsCallback;
+using ::aidl::android::vendor::powerstats::StateResidencyData;
 
 namespace aidl {
 namespace android {
@@ -51,13 +53,6 @@ class PixelPowerStatsDataProvider : public PowerStats::IStateResidencyDataProvid
                 const std::string &in_entityName,
                 const std::shared_ptr<IPixelPowerStatsCallback> &in_cb) override {
             return mEnclosed->registerCallback(in_entityName, in_cb);
-        }
-
-        ::ndk::ScopedAStatus registerCallbackByStates(
-                const std::string &in_entityName,
-                const std::shared_ptr<IPixelPowerStatsCallback> &in_cb,
-                const std::vector<State> &in_states) override {
-            return mEnclosed->registerCallbackByStates(in_entityName, in_cb, in_states);
         }
 
         ::ndk::ScopedAStatus unregisterCallback(
@@ -91,8 +86,10 @@ class PixelPowerStatsDataProvider : public PowerStats::IStateResidencyDataProvid
 
     ::ndk::ScopedAStatus unregisterCallback(const std::shared_ptr<IPixelPowerStatsCallback> &in_cb);
 
-    ::ndk::ScopedAStatus getStateResidenciesTimed(const Entry &entry,
-                                                  std::vector<StateResidency> *residency);
+    ::ndk::ScopedAStatus getStatsTimed(const Entry &entry, std::vector<StateResidencyData> *stats);
+
+    bool buildResidency(const Entry &entry, const std::vector<StateResidencyData> &stats,
+                        std::vector<StateResidency> &residency);
 
     const std::string kInstance = "power.stats-vendor";
     std::mutex mLock;
