@@ -42,8 +42,8 @@ void PixelPowerStatsDataProvider::start() {
     }
 }
 
-::ndk::ScopedAStatus PixelPowerStatsDataProvider::getStateResidenciesTimed(
-        const Entry &entry, std::vector<StateResidency> *residency) {
+::ndk::ScopedAStatus PixelPowerStatsDataProvider::getStatsTimed(
+        const Entry &entry, std::vector<StateResidencyData> *stats) {
     const uint64_t MAX_LATENCY_US = 2000;
 
     if (!entry.mCallback) {
@@ -55,7 +55,7 @@ void PixelPowerStatsDataProvider::start() {
     struct timespec now;
 
     clock_gettime(CLOCK_BOOTTIME, &then);
-    ::ndk::ScopedAStatus status = entry.mCallback->getStateResidency(residency);
+    ::ndk::ScopedAStatus status = entry.mCallback->getStats(stats);
     clock_gettime(CLOCK_BOOTTIME, &now);
 
     uint64_t timeElapsedUs =
@@ -68,6 +68,32 @@ void PixelPowerStatsDataProvider::start() {
     return status;
 }
 
+bool PixelPowerStatsDataProvider::buildResidency(const Entry &entry,
+                                                 const std::vector<StateResidencyData> &stats,
+                                                 std::vector<StateResidency> &residency) {
+    size_t numStates = entry.mStates.size();
+    residency.resize(numStates);
+    size_t numStatesFound = 0;
+    for (auto stat = stats.begin(); (numStatesFound < numStates) && (stat != stats.end()); stat++) {
+        auto state = std::find_if(entry.mStates.begin(), entry.mStates.end(),
+                                  [&stat](const State &s) { return s.name == stat->state; });
+        if (state != entry.mStates.end()) {
+            StateResidency stateResidency;
+            stateResidency.id = state->id;
+            stateResidency.totalTimeInStateMs = static_cast<uint64_t>(stat->totalTimeInStateMs);
+            stateResidency.totalStateEntryCount = static_cast<uint64_t>(stat->totalStateEntryCount);
+            stateResidency.lastEntryTimestampMs = static_cast<uint64_t>(stat->lastEntryTimestampMs);
+            residency.push_back(stateResidency);
+            numStatesFound++;
+        } else {
+            LOG(WARNING) << "getStats for " << entry.mName << " returned data for unknown state "
+                         << stat->state;
+        }
+    }
+
+    return (numStatesFound == numStates);
+}
+
 bool PixelPowerStatsDataProvider::getStateResidencies(
         std::unordered_map<std::string, std::vector<StateResidency>> *residencies) {
     std::lock_guard<std::mutex> lock(mLock);
@@ -76,7 +102,8 @@ bool PixelPowerStatsDataProvider::getStateResidencies(
     size_t numResults = mEntries.size();
     for (auto &entry : mEntries) {
         std::vector<StateResidency> residency;
-        ::ndk::ScopedAStatus status = getStateResidenciesTimed(entry, &residency);
+        std::vector<StateResidencyData> stats;
+        ::ndk::ScopedAStatus status = getStatsTimed(entry, &stats);
 
         if (!status.isOk()) {
             LOG(ERROR) << "getStateResidency for " << entry.mName << " failed";
@@ -86,6 +113,11 @@ bool PixelPowerStatsDataProvider::getStateResidencies(
                 entry.mCallback = nullptr;
             }
         }
+
+        if (!buildResidency(entry, stats, residency)) {
+            LOG(ERROR) << "State residency data missing for " << entry.mName;
+        }
+
         if (!residency.empty()) {
             residencies->emplace(entry.mName, residency);
             numResultsFound++;
