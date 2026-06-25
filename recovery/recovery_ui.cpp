@@ -100,7 +100,7 @@ bool WipeTrustyUserdata() {
 
 /** Call device-specifc WipeKeys function, if any. */
 bool WipeKeysHook(::RecoveryUI *const ui) {
-    bool *(*WipeKeysFunc)(::RecoveryUI *const);
+    bool (*WipeKeysFunc)(::RecoveryUI *const);
     reinterpret_cast<void *&>(WipeKeysFunc) = dlsym(RTLD_DEFAULT, "WipeKeys");
     if (WipeKeysFunc == nullptr) {
         LOG(INFO) << "No WipeKeys implementation";
