@@ -16,7 +16,6 @@
 soong_namespace {
     imports: [
         "hardware/google/interfaces",
-        "hardware/google/pixel/pixelstats",
     ],
 }
 
@@ -162,14 +161,12 @@ cc_binary {
         "libaconfig_storage_read_api_cc",
         "libgmock",
         "libgtest",
-        "libpixelstats",
         "powerhal_flags-aconfig-cc",
     ],
     srcs: [
         "aidl/BackgroundWorker.cpp",
         "aidl/ChannelGroup.cpp",
         "aidl/ChannelManager.cpp",
-        "aidl/MetricUploader.cpp",
         "aidl/GpuCalculationHelpers.cpp",
         "aidl/GpuCapacityNode.cpp",
         "aidl/service.cpp",
