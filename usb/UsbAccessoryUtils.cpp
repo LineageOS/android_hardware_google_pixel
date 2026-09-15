@@ -34,13 +34,20 @@ bool isPixel8Series() {
     return device == "shiba" || device == "husky" || device == "akita";
 }
 
+bool isPixel10Series() {
+    std::string device = to_lower(android::base::GetProperty("ro.product.device", ""));
+    return device == "frankel" || device == "blazer" || device == "mustang" || device == "rango" || device == "stallion";
+}
+
 int main() {
     bool aoa_userspace_enabled;
 
-    if (isPixel8Series()) {
+    if (isPixel10Series()) {
+        aoa_userspace_enabled = usb_flags::enable_uaoa_p10();
+    } else if (isPixel8Series()) {
         aoa_userspace_enabled = usb_flags::enable_uaoa_p8();
     } else {
-        aoa_userspace_enabled = usb_flags::enable_uaoa_all_pixels_except_p8();
+        aoa_userspace_enabled = usb_flags::enable_uaoa_p6();
     }
 
     if (!android::base::SetProperty("ro.vendor.usb.userspace.aoa.enabled",
