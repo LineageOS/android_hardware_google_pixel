@@ -3,6 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+cc_library_shared {
+    name: "libusb_policy_bridge",
+    vendor: true,
+    srcs: ["usb_policy_bridge.cpp"],
+    shared_libs: [
+        "libbase",
+        "libbinder_ndk",
+        "android.hardware.usb-V4-ndk",
+    ],
+    required: [
+        "init.pixel.usb-policy.rc",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+}
+
 prebuilt_etc {
     name: "init.pixel.usb-policy.rc",
     src: "init.pixel.usb-policy.rc",
