@@ -85,16 +85,38 @@ Status addGenericAndroidFunctions(MonitorFfs *monitorFfs, uint64_t functions, bo
             return Status::ERROR;
     }
 
-    if ((functions & GadgetFunction::ACCESSORY) != 0) {
-        ALOGI("setCurrentUsbFunctions Accessory");
-        if (linkFunction("accessory.gs2", (*functionCount)++))
+    if ((functions & GadgetFunction::CTRL) != 0) {
+        *ffsEnabled = true;
+        ALOGI("setCurrentUsbFunctions Ctrl");
+        if (!WriteStringToFile("1", DESC_USE_PATH))
             return Status::ERROR;
+
+        if (!monitorFfs->addInotifyFd("/dev/usb-ffs/ctrl/"))
+            return Status::ERROR;
+
+        if (linkFunction("ffs.ctrl", (*functionCount)++))
+            return Status::ERROR;
+
+        // Add endpoints to be monitored.
+        monitorFfs->addEndPoint("/dev/usb-ffs/ctrl/ep1");
+        monitorFfs->addEndPoint("/dev/usb-ffs/ctrl/ep2");
     }
 
-    if ((functions & GadgetFunction::AUDIO_SOURCE) != 0) {
-        ALOGI("setCurrentUsbFunctions Audio Source");
-        if (linkFunction("audio_source.gs3", (*functionCount)++))
+    if ((functions & GadgetFunction::ACCESSORY) != 0) {
+        *ffsEnabled = true;
+        ALOGI("setCurrentUsbFunctions Accessory");
+        if (!WriteStringToFile("1", DESC_USE_PATH))
             return Status::ERROR;
+
+        if (!monitorFfs->addInotifyFd("/dev/usb-ffs/aoa/"))
+            return Status::ERROR;
+
+        if (linkFunction("ffs.aoa", (*functionCount)++))
+            return Status::ERROR;
+
+        // Add endpoints to be monitored.
+        monitorFfs->addEndPoint("/dev/usb-ffs/aoa/ep1");
+        monitorFfs->addEndPoint("/dev/usb-ffs/aoa/ep2");
     }
 
     if ((functions & GadgetFunction::RNDIS) != 0) {
