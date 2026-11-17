@@ -417,6 +417,21 @@ ThermalHelperImpl::ThermalHelperImpl(const NotificationCallback &cb)
     }
     is_initialized_ = ret;
 
+    // Start from a known state. The HAL only writes a cooling device when its
+    // request changes, so after a restart (crash or ctl.restart) in the middle
+    // of a throttling episode the previous instance's sysfs states would stay
+    // in place until the next change. Nothing is requested yet at this point:
+    // write the unthrottled state once, before the watcher starts.
+    for (const auto &[cdev_name, cdev_info] : cooling_device_info_map_) {
+        const auto idle = cdev_info.apply_powercap
+                                  ? std::to_string(static_cast<int>(std::lround(
+                                            cdev_info.state2power[0] / cdev_info.multiplier)))
+                                  : std::string("0");
+        if (!cooling_devices_.writeCdevFile(cdev_name, idle)) {
+            LOG(ERROR) << "Failed to reset cdev " << cdev_name << " to " << idle;
+        }
+    }
+
     const bool thermal_genl_enabled =
             ::android::base::GetBoolProperty(kThermalGenlProperty.data(), false);
 
