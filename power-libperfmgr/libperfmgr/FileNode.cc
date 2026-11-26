@@ -87,6 +87,7 @@ std::chrono::milliseconds FileNode::Update(bool log_error) {
                     // Retry in 500ms or sooner
                     expire_time = std::min(expire_time, std::chrono::milliseconds(500));
                     successfullyUpdated = false;
+                    reset_on_init_ = true;
                 }
             } else {
                 // For regular file system, we need fsync
